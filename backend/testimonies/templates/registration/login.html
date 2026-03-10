@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login — Raise the Voices</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'PT Sans', Arial, sans-serif; background: #f4f7f6; color: #333; }
+    .header { background: #25646a; padding: 20px; text-align: center; }
+    .header h1 { color: #fafafa; font-size: 1.4rem; text-transform: uppercase; letter-spacing: 0.08rem; }
+    .login-box { max-width: 400px; margin: 60px auto; background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .login-box h2 { margin-bottom: 20px; color: #25646a; }
+    .login-box label { display: block; margin-bottom: 4px; font-weight: bold; font-size: 0.9rem; }
+    .login-box input[type="text"],
+    .login-box input[type="password"] { width: 100%; padding: 10px; margin-bottom: 16px; border: 1px solid #ccc; border-radius: 3px; font-size: 1rem; }
+    .login-box button { width: 100%; padding: 12px; background: #25646a; color: #fff; border: none; border-radius: 3px; font-size: 1rem; font-weight: bold; cursor: pointer; text-transform: uppercase; letter-spacing: 0.05rem; }
+    .login-box button:hover { background: #477c81; }
+    .error { color: #c0392b; margin-bottom: 16px; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <div class="header"><h1>Raise the Voices — Cases</h1></div>
+  <div class="login-box">
+    <h2>Login</h2>
+    {% if form.errors %}
+      <p class="error">Invalid username or password.</p>
+    {% endif %}
+    <form method="post" action="{% url 'login' %}?next={{ next }}">
+      {% csrf_token %}
+      <label for="id_username">Username</label>
+      <input type="text" name="username" id="id_username" autofocus required>
+      <label for="id_password">Password</label>
+      <input type="password" name="password" id="id_password" required>
+      <input type="hidden" name="next" value="{{ next }}">
+      <button type="submit">Log in</button>
+    </form>
+  </div>
+</body>
+</html>

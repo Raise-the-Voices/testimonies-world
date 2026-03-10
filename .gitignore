@@ -1,0 +1,27 @@
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/.env
+backend/db.sqlite3
+backend/staticfiles/
+backend/media/
+backend/sensitive_media/
+backend/logs/
+
+# Node
+frontend/node_modules/
+frontend/build/
+frontend/.svelte-kit/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+*.swp
+
+# Ansible vault password
+ansible/.vault_pass

@@ -1,0 +1,250 @@
+/* Testimonies.world — based on Marturia design language */
+@import url('https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap');
+
+:root {
+	--color-primary: #25646a;
+	--color-primary-light: #477c81;
+	--color-bg: #f4f7f6;
+	--color-bg-white: #fff;
+	--color-text: #1a1a1a;
+	--color-text-muted: #666;
+	--color-text-light: #fafafa;
+	--color-border: darkgray;
+	--color-border-light: #ddd;
+	--color-danger: #d91616;
+	--color-success: #2f855a;
+	--color-section-bg: rgba(0, 0, 0, 0.1);
+	--color-sidebar-header: #5f9ea0; /* cadetblue from Marturia view */
+	--max-width: 1140px;
+}
+
+/* normalize basics */
+html {
+	box-sizing: border-box;
+	line-height: 1.15;
+	-webkit-text-size-adjust: 100%;
+}
+*, *:before, *:after {
+	box-sizing: inherit;
+}
+
+body {
+	margin: 0;
+	font-family: 'PT Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+		'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	background: var(--color-bg);
+	color: var(--color-text);
+	line-height: 1.6;
+}
+
+ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+a {
+	color: var(--color-primary);
+	text-decoration: none;
+}
+a:hover {
+	color: #1a1a1a;
+}
+
+h1, h2, h3, h4 {
+	line-height: 1.3;
+	margin-bottom: 0.5rem;
+}
+h1 { font-size: 1.75rem; }
+h2 { font-size: 1.4rem; }
+h3 { font-size: 1.15rem; }
+
+/* Buttons — Marturia style */
+.btn {
+	background: var(--color-primary);
+	border: none;
+	color: var(--color-text-light);
+	padding: 10px 20px;
+	text-transform: uppercase;
+	letter-spacing: 0.05rem;
+	cursor: pointer;
+	display: inline-block;
+	font-size: 0.9rem;
+	border-radius: 2px;
+	text-decoration: none;
+}
+.btn:hover {
+	background: var(--color-primary-light);
+	color: var(--color-text-light);
+	text-decoration: none;
+}
+.btn-primary {
+	background: var(--color-primary);
+	color: var(--color-text-light);
+}
+.btn-primary:hover {
+	background: var(--color-primary-light);
+}
+.btn-secondary {
+	background: var(--color-bg-white);
+	color: var(--color-text);
+	border: 1px solid var(--color-border);
+}
+.btn-secondary:hover {
+	background: var(--color-bg);
+}
+button {
+	font-family: inherit;
+	cursor: pointer;
+}
+
+/* Forms — Marturia style */
+form section {
+	margin-bottom: 30px;
+}
+form section h1, form section h2 {
+	font-size: 1.3rem;
+	background: var(--color-section-bg);
+	color: rgb(20, 20, 20);
+	display: inline-block;
+	padding: 10px 15px;
+	position: relative;
+	left: -15px;
+}
+
+input, textarea, select {
+	border-radius: 2px;
+	border: 1px solid var(--color-border);
+	padding: 10px 15px;
+	width: 100%;
+	font-family: inherit;
+	font-size: 0.95rem;
+}
+textarea {
+	height: 120px;
+	resize: vertical;
+}
+label {
+	display: inline-block;
+	margin-bottom: 8px;
+	font-weight: bold;
+	color: #171717;
+	font-size: 0.9rem;
+}
+
+.field {
+	margin-bottom: 18px;
+}
+
+/* Page layout — Marturia style */
+.page {
+	padding: 40px 0;
+	max-width: var(--max-width);
+	margin: 0 auto;
+}
+.container {
+	width: 85%;
+	max-width: var(--max-width);
+	margin: 0 auto;
+	padding: 0 1rem;
+}
+
+/* Cards — Marturia victim list style */
+.card {
+	background: var(--color-bg-white);
+	border-radius: 4px;
+	border: 1px solid var(--color-border);
+	box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
+	padding: 10px;
+}
+
+/* Status badges — retained from our app, colors adjusted for Marturia palette */
+.badge {
+	display: inline-block;
+	padding: 0.15rem 0.5rem;
+	border-radius: 3px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	text-transform: uppercase;
+}
+.badge-detained { background: #fed7d7; color: #c53030; }
+.badge-disappeared { background: #feebc8; color: #c05621; }
+.badge-restricted_movement { background: #fefcbf; color: #975a16; }
+.badge-released { background: #c6f6d5; color: #276749; }
+.badge-deceased { background: #e2e8f0; color: #4a5568; }
+.badge-unknown { background: #edf2f7; color: #718096; }
+.badge-stateless { background: #e9d8fd; color: #6b46c1; }
+.badge-rights_restricted { background: #bee3f8; color: #2b6cb0; }
+
+/* Grid */
+.grid {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: stretch;
+	justify-content: space-between;
+	gap: 20px;
+}
+.grid-2 > * {
+	width: 48%;
+}
+@media (max-width: 800px) {
+	.grid-2 > * {
+		width: 100%;
+	}
+}
+
+/* View section headers — Marturia cadetblue */
+.view-title {
+	display: flex;
+	justify-content: space-between;
+	width: 100%;
+	border-bottom: 1px solid black;
+	padding: 5px;
+	margin-top: 10px;
+	background-color: var(--color-sidebar-header);
+	color: var(--color-text-light);
+}
+
+/* Incident / report cards — Marturia style */
+.incident-container {
+	margin-top: 10px;
+	border: thin solid black;
+	border-radius: 4px;
+	padding: 10px;
+}
+.incident-top {
+	border-bottom: thin solid black;
+	padding-bottom: 5px;
+	margin-bottom: 5px;
+}
+
+/* Utilities */
+.muted { color: var(--color-text-muted); }
+.small { font-size: 0.85rem; }
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+.mt-3 { margin-top: 1.5rem; }
+.mb-1 { margin-bottom: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+.flex { display: flex; }
+.flex-wrap { flex-wrap: wrap; }
+.gap-1 { gap: 0.5rem; }
+.gap-2 { gap: 1rem; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.text-center { text-align: center; }
+.white-space-pre-line { white-space: pre-line; }
+
+/* Error */
+.error {
+	color: var(--color-danger);
+	margin: 3px 0 0 0;
+}
+.error-banner {
+	background: #fed7d7;
+	color: #c53030;
+	padding: 0.75rem;
+	border-radius: 4px;
+}
