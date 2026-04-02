@@ -142,7 +142,7 @@ CORS_ALLOW_CREDENTIALS = True
 # CSRF — trust SvelteKit origin
 CSRF_TRUSTED_ORIGINS = config(
     'CSRF_TRUSTED_ORIGINS',
-    default='http://localhost:3040,http://127.0.0.1:3040,https://demos.linkedtrust.us'
+    default='http://localhost:3040,http://127.0.0.1:3040,https://demos.linkedtrust.us,https://cases.raisethevoices.org'
 ).split(',')
 
 # Auth — allauth with Google OAuth

@@ -120,6 +120,11 @@
 
 		<!-- Sidebar -->
 		<div class="sidebar-container">
+			{#if isVolunteer(currentUser)}
+				<div class="mb-1">
+					<a href="{base}/persons/{person.id}/edit" class="btn btn-primary" style="width:100%;text-align:center;display:block;">Edit Case</a>
+				</div>
+			{/if}
 			<div class="sidebar-top">
 				<div class="sidebar-header-2">
 					<p><strong>{person.name}</strong></p>
