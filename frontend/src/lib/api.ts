@@ -54,6 +54,13 @@ export async function createPerson(data: Record<string, unknown>) {
 	});
 }
 
+export async function updatePerson(id: number | string, data: Record<string, unknown>) {
+	return request(`/persons/${id}/`, {
+		method: 'PATCH',
+		body: JSON.stringify(data),
+	});
+}
+
 export async function createReport(data: Record<string, unknown>) {
 	return request('/reports/', {
 		method: 'POST',
