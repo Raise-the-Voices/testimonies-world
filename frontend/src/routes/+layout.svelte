@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import { user, loadSession, isVolunteer, isAdvocate } from '$lib/session';
 	import '../app.css';
+	import { page } from '$app/stores';
 
 	let { children } = $props();
 	let currentUser = $derived($user);
@@ -20,15 +21,15 @@
 		</a>
 		<nav class="main-navigation">
 			<ul>
-				<li><a href="{base}/persons">Cases</a></li>
-				<li><a href="{base}/statistics">Statistics</a></li>
+				<li><a href="{base}/persons" class:active={$page.url.pathname.startsWith(`${base}/persons`)}>Cases</a></li>
+				<li><a href="{base}/statistics" class:active={$page.url.pathname.startsWith(`${base}/statistics`)}>Statistics</a></li>
 				{#if isVolunteer(currentUser)}
-					<li><a href="{base}/submit">Submit</a></li>
-					<li><a href="{base}/watchdog">Watchdog</a></li>
+					<li><a href="{base}/submit" class:active={$page.url.pathname.startsWith(`${base}/submit`)}>Submit</a></li>
+					<li><a href="{base}/watchdog" class:active={$page.url.pathname.startsWith(`${base}/watchdog`)}>Watchdog</a></li>
 				{/if}
 				{#if isAdvocate(currentUser)}
-					<li><a href="{base}/casework">Casework</a></li>
-					<li><a href="{base}/contacts">Contacts</a></li>
+					<li><a href="{base}/casework" class:active={$page.url.pathname.startsWith(`${base}/casework`)}>Casework</a></li>
+					<li><a href="{base}/contacts" class:active={$page.url.pathname.startsWith(`${base}/contacts`)}>Contacts</a></li>
 				{/if}
 				{#if currentUser.authenticated}
 					<li><span class="nav-avatar" title={currentUser.username}>{currentUser.username?.charAt(0).toUpperCase()}</span></li>
@@ -114,6 +115,18 @@
 		background: rgba(0, 0, 0, 0.16);
 		color: #fafafa;
 	}
+
+    .main-navigation a:hover,
+    .main-navigation a.active {
+        background: rgba(0, 0, 0, 0.25); 
+        color: #ffffff;
+        border-bottom: 3px solid #fff; 
+    }
+
+    .main-navigation a.active {
+        cursor: default;
+    }
+
 	.nav-user {
 		padding: 20px;
 		color: rgba(250, 250, 250, 0.7);
