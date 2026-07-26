@@ -17,6 +17,19 @@
 	let filterCountry = $state('');
 	let filterStatus = $state('');
 	let filterCategory = $state('');
+	let sort = $state('-created_at');
+
+	// View mode: 'cards' or 'list'. Remembered per browser.
+	let viewMode = $state<'cards' | 'list'>('cards');
+
+	const sorts = [
+		{ value: '-created_at', label: 'Newest submitted' },
+		{ value: 'created_at', label: 'Oldest submitted' },
+		{ value: '-updated_at', label: 'Recently updated' },
+		{ value: 'name', label: 'Name (A–Z)' },
+		{ value: 'country', label: 'Country' },
+		{ value: 'current_status', label: 'Status' },
+	];
 
 	const statuses = [
 		{ value: 'detained', label: 'Detained' },
@@ -49,7 +62,13 @@
 		if (filterCountry) params.country = filterCountry;
 		if (filterStatus) params.current_status = filterStatus;
 		if (filterCategory) params.category = filterCategory;
+		if (sort) params.ordering = sort;
 		loadPersons(params);
+	}
+
+	function setView(mode: 'cards' | 'list') {
+		viewMode = mode;
+		try { localStorage.setItem('rtv-cases-view', mode); } catch {}
 	}
 
 	function clearFilters() {
@@ -57,12 +76,17 @@
 		filterCountry = '';
 		filterStatus = '';
 		filterCategory = '';
-		loadPersons();
+		sort = '-created_at';
+		applyFilters();
 	}
 
 	onMount(async () => {
+		try {
+			const saved = localStorage.getItem('rtv-cases-view');
+			if (saved === 'cards' || saved === 'list') viewMode = saved;
+		} catch {}
 		const [, countriesData, catsData] = await Promise.all([
-			loadPersons(),
+			applyFilters(),
 			getCountries(),
 			getCategories(),
 		]);
@@ -84,19 +108,19 @@
 			<input type="text" class="search" placeholder="Search by name..." bind:value={search} />
 		</form>
 		<div class="select-submit">
-			<select bind:value={filterStatus}>
+			<select bind:value={filterStatus} onchange={applyFilters}>
 				<option value="">All statuses</option>
 				{#each statuses as s}
 					<option value={s.value}>{s.label}</option>
 				{/each}
 			</select>
-			<select bind:value={filterCountry}>
+			<select bind:value={filterCountry} onchange={applyFilters}>
 				<option value="">All countries</option>
 				{#each countries as c}
 					<option value={c.country}>{c.country} ({c.count})</option>
 				{/each}
 			</select>
-			<select bind:value={filterCategory}>
+			<select bind:value={filterCategory} onchange={applyFilters}>
 				<option value="">All categories</option>
 				{#each categories as cat}
 					<option value={cat.id}>{cat.name}</option>
@@ -106,10 +130,55 @@
 		</div>
 	</div>
 
+	<div class="toolbar">
+		<label class="sort">
+			Sort:
+			<select bind:value={sort} onchange={applyFilters}>
+				{#each sorts as s}
+					<option value={s.value}>{s.label}</option>
+				{/each}
+			</select>
+		</label>
+		<div class="view-toggle">
+			<button class:active={viewMode === 'cards'} onclick={() => setView('cards')}>Cards</button>
+			<button class:active={viewMode === 'list'} onclick={() => setView('list')}>List</button>
+		</div>
+		{#if search || filterCountry || filterStatus || filterCategory}
+			<button class="link-btn" onclick={clearFilters}>Clear filters</button>
+		{/if}
+	</div>
+
 	{#if loading}
 		<p class="muted">Loading...</p>
 	{:else if persons.length === 0}
 		<p class="muted">No cases found matching your criteria.</p>
+	{:else if viewMode === 'list'}
+		<table class="cases-table">
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>Country</th>
+					<th>Location</th>
+					<th>Status</th>
+					<th>Last known</th>
+					<th class="num">Reports</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each persons as person}
+					<tr>
+						<td><a href="{base}/persons/{person.id}">{person.name}</a></td>
+						<td>{person.country || '—'}</td>
+						<td class="muted">{person.rough_location || '—'}</td>
+						<td><StatusBadge status={person.current_status} /></td>
+						<td class="muted">{person.last_known_date || '—'}</td>
+						<td class="num">{person.report_count || 0}</td>
+						<td><a href="{base}/persons/{person.id}">View &raquo;</a></td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
 	{:else}
 		<ul class="list">
 			{#each persons as person}
@@ -174,6 +243,72 @@
 	.select-submit select {
 		padding: 8px 15px;
 		width: auto;
+	}
+	.toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 12px;
+		margin: 4px 0 8px;
+	}
+	.toolbar .sort {
+		font-size: 0.9rem;
+		color: #444;
+	}
+	.toolbar .sort select {
+		padding: 6px 10px;
+		margin-left: 4px;
+	}
+	.view-toggle {
+		display: inline-flex;
+		border: 1px solid darkgray;
+		border-radius: 4px;
+		overflow: hidden;
+	}
+	.view-toggle button {
+		border: none;
+		background: white;
+		padding: 6px 14px;
+		cursor: pointer;
+		font-size: 0.9rem;
+	}
+	.view-toggle button.active {
+		background: #2b3a55;
+		color: white;
+	}
+	.link-btn {
+		border: none;
+		background: none;
+		color: #2b3a55;
+		text-decoration: underline;
+		cursor: pointer;
+		font-size: 0.9rem;
+		padding: 0;
+	}
+	.cases-table {
+		width: 100%;
+		border-collapse: collapse;
+		background: white;
+		margin-top: 12px;
+		font-size: 0.92rem;
+	}
+	.cases-table th,
+	.cases-table td {
+		text-align: left;
+		padding: 8px 10px;
+		border-bottom: 1px solid #e0e0e0;
+		vertical-align: middle;
+	}
+	.cases-table thead th {
+		border-bottom: 2px solid #ccc;
+		font-weight: 600;
+		white-space: nowrap;
+	}
+	.cases-table tbody tr:hover {
+		background: #f6f8fb;
+	}
+	.cases-table .num {
+		text-align: right;
 	}
 	.list {
 		display: flex;
