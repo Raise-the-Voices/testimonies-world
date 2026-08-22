@@ -71,8 +71,13 @@ else
     sudo systemctl reload nginx || sudo systemctl restart nginx
 fi
 
-# Restart the SvelteKit Node server. On this host we run it under
-# systemd unit `cases-svelte` (or via nohup if no unit exists).
+# IMPORTANT: always restart the SvelteKit Node server. The Node
+# server caches the HTML in memory after build; if we change the
+# build/ output without restarting, the new HTML references asset
+# hashes that exist in build/client/_app/, but the server keeps
+# serving the OLD HTML referencing hashes that no longer exist,
+# causing 404s on every CSS and JS file. This is the root cause of
+# the "stuck on Loading..." bug seen on production.
 if systemctl list-unit-files cases-svelte.service >/dev/null 2>&1 && \
    systemctl is-enabled --quiet cases-svelte.service 2>/dev/null; then
     sudo systemctl restart cases-svelte
