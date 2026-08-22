@@ -39,8 +39,9 @@ export async function getStatistics() {
 	return request('/persons/statistics/');
 }
 
-export async function getCountries() {
-	return request('/persons/countries/');
+export async function getCountries(params: Record<string, string> = {}) {
+	const qs = new URLSearchParams(params).toString();
+	return request(`/persons/countries/${qs ? '?' + qs : ''}`);
 }
 
 export async function getCategories() {
