@@ -9,8 +9,13 @@
 	let categories: any[] = $state([]);
 	let loading = $state(true);
 	let totalCount = $state(0);
-	let nextPage = $state<string | null>(null);
-	let prevPage = $state<string | null>(null);
+
+	// Pagination — backend returns PAGE_SIZE per page; we track our
+	// current page so we can render Prev/Next and a "Page N of M"
+	// indicator. Resets to 1 on any filter change.
+	const PAGE_SIZE = 10;
+	let currentPage = $state(1);
+	let totalPages = $derived(Math.max(1, Math.ceil(totalCount / PAGE_SIZE)));
 
 	// Filters
 	let search = $state('');
@@ -44,33 +49,45 @@
 
 	async function loadPersons(
 		params: Record<string, string> = {},
-		countryParams: Record<string, string> = {}
+		countryParams: Record<string, string> = {},
+		page: number = currentPage
 	) {
 		loading = true;
 		try {
+			const pageParams = { ...params, page: String(page) };
 			const [data, countriesData] = await Promise.all([
-				getPersons(params),
+				getPersons(pageParams),
 				getCountries(countryParams),
 			]);
 			persons = data.results;
 			totalCount = data.count;
-			nextPage = data.next;
-			prevPage = data.previous;
+			currentPage = page;
 			countries = countriesData;
+			// Scroll the list back to the top so users don't lose context
+			// when paging through results.
+			if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
 		} catch (e) {
 			console.error(e);
 		}
 		loading = false;
 	}
 
-	function applyFilters() {
+	function goToPage(page: number) {
+		if (page < 1 || page > totalPages || page === currentPage) return;
+		loadPersons(currentFilterParams(), currentCountryParams(), page);
+	}
+
+	function currentFilterParams(): Record<string, string> {
 		const params: Record<string, string> = {};
 		if (search) params.search = search;
 		if (filterCountry) params.country = filterCountry;
 		if (filterStatus) params.current_status = filterStatus;
 		if (filterCategory) params.category = filterCategory;
 		if (sort) params.ordering = sort;
+		return params;
+	}
 
+	function currentCountryParams(): Record<string, string> {
 		// Build separate params for the countries dropdown so its counts
 		// are dynamic: when status/category/search change, the count next
 		// to each country updates to reflect the filtered subset.
@@ -80,8 +97,13 @@
 		if (filterStatus) countryParams.current_status = filterStatus;
 		if (filterCategory) countryParams.category = filterCategory;
 		if (search) countryParams.search = search;
+		return countryParams;
+	}
 
-		loadPersons(params, countryParams);
+	function applyFilters() {
+		// Filters always reset to page 1 so users don't land on an empty
+		// or out-of-range page that no longer matches their criteria.
+		loadPersons(currentFilterParams(), currentCountryParams(), 1);
 	}
 
 	function setView(mode: 'cards' | 'list') {
@@ -237,6 +259,31 @@
 			{/each}
 		</ul>
 	{/if}
+
+	{#if totalCount > 0 && totalPages > 1}
+		<nav class="pagination" aria-label="Pagination">
+			<button
+				class="page-btn"
+				disabled={currentPage <= 1 || loading}
+				onclick={() => goToPage(currentPage - 1)}
+				aria-label="Previous page"
+			>
+				‹ Prev
+			</button>
+			<span class="page-indicator">
+				Page <strong>{currentPage}</strong> of {totalPages}
+				<span class="muted">— showing {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, totalCount)} of {totalCount}</span>
+			</span>
+			<button
+				class="page-btn"
+				disabled={currentPage >= totalPages || loading}
+				onclick={() => goToPage(currentPage + 1)}
+				aria-label="Next page"
+			>
+				Next ›
+			</button>
+		</nav>
+	{/if}
 </div>
 
 <style>
@@ -308,6 +355,40 @@
 		cursor: pointer;
 		font-size: 0.9rem;
 		padding: 0;
+	}
+	.pagination {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 1rem;
+		margin-top: 1.5rem;
+		padding: 1rem 0;
+	}
+	.page-btn {
+		border: 1px solid #2b3a55;
+		background: white;
+		color: #2b3a55;
+		padding: 6px 14px;
+		border-radius: 4px;
+		cursor: pointer;
+		font-size: 0.9rem;
+	}
+	.page-btn:hover:not(:disabled) {
+		background: #2b3a55;
+		color: white;
+	}
+	.page-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+	.page-indicator {
+		font-size: 0.9rem;
+		color: #2b3a55;
+	}
+	.page-indicator .muted {
+		color: #666;
+		font-size: 0.85rem;
+		margin-left: 4px;
 	}
 	.cases-table {
 		width: 100%;
