@@ -42,14 +42,21 @@
 		{ value: 'rights_restricted', label: 'Rights Restricted' },
 	];
 
-	async function loadPersons(params: Record<string, string> = {}) {
+	async function loadPersons(
+		params: Record<string, string> = {},
+		countryParams: Record<string, string> = {}
+	) {
 		loading = true;
 		try {
-			const data = await getPersons(params);
+			const [data, countriesData] = await Promise.all([
+				getPersons(params),
+				getCountries(countryParams),
+			]);
 			persons = data.results;
 			totalCount = data.count;
 			nextPage = data.next;
 			prevPage = data.previous;
+			countries = countriesData;
 		} catch (e) {
 			console.error(e);
 		}
@@ -63,7 +70,18 @@
 		if (filterStatus) params.current_status = filterStatus;
 		if (filterCategory) params.category = filterCategory;
 		if (sort) params.ordering = sort;
-		loadPersons(params);
+
+		// Build separate params for the countries dropdown so its counts
+		// are dynamic: when status/category/search change, the count next
+		// to each country updates to reflect the filtered subset.
+		// `country` itself is excluded so the dropdown always shows all
+		// options regardless of which one is selected.
+		const countryParams: Record<string, string> = {};
+		if (filterStatus) countryParams.current_status = filterStatus;
+		if (filterCategory) countryParams.category = filterCategory;
+		if (search) countryParams.search = search;
+
+		loadPersons(params, countryParams);
 	}
 
 	function setView(mode: 'cards' | 'list') {
@@ -114,7 +132,13 @@
 					<option value={s.value}>{s.label}</option>
 				{/each}
 			</select>
-			<select bind:value={filterCountry} onchange={applyFilters}>
+			<select
+				value={filterCountry}
+				onchange={(e) => {
+					filterCountry = (e.currentTarget as HTMLSelectElement).value;
+					applyFilters();
+				}}
+			>
 				<option value="">All countries</option>
 				{#each countries as c}
 					<option value={c.country}>{c.country} ({c.count})</option>
