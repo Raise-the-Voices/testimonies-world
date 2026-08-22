@@ -16,6 +16,52 @@ from .serializers import (
 )
 
 
+def _normalize_country(raw: str) -> str:
+    """Canonicalize a country name so 'Pakistan', 'PAKISTAN', 'pakistan'
+    all collapse to one. Strips whitespace, title-cases the result.
+
+    Keeps an internal allowlist of well-known abbreviations / multi-word
+    names that don't title-case well so the dropdown reads naturally
+    (e.g. 'USA', 'UAE', 'UK', 'South Korea'). Extend as needed.
+    """
+    if not raw:
+        return ''
+    cleaned = raw.strip()
+    upper = cleaned.upper()
+    overrides = {
+        'USA': 'USA',
+        'U.S.A.': 'USA',
+        'US': 'USA',
+        'UAE': 'UAE',
+        'U.A.E.': 'UAE',
+        'UK': 'UK',
+        'U.K.': 'UK',
+        'DRC': 'DRC',
+        'DPRK': 'DPRK',
+    }
+    if upper in overrides:
+        return overrides[upper]
+    return cleaned.title()
+
+
+def _aggregate_countries(qs):
+    """Group persons by normalized country name, summing counts.
+
+    Done in Python (not SQL) so we can normalize the label at the same
+    time — Django ORM can't easily GROUP BY LOWER(country) AND pick a
+    canonical display label in one query across SQLite/Postgres.
+
+    Returns a list of (country, count) sorted by count desc, then name.
+    """
+    counts = {}
+    for raw in qs.values_list('country', flat=True):
+        norm = _normalize_country(raw)
+        if not norm:
+            continue
+        counts[norm] = counts.get(norm, 0) + 1
+    return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+
+
 class PersonFilter(filters.FilterSet):
     country = filters.CharFilter(lookup_expr='iexact')
     status = filters.CharFilter(field_name='current_status')
@@ -77,9 +123,7 @@ class PersonViewSet(viewsets.ModelViewSet):
             'by_status': dict(
                 qs.values_list('current_status').annotate(c=Count('id')).values_list('current_status', 'c')
             ),
-            'by_country': dict(
-                qs.values_list('country').annotate(c=Count('id')).order_by('-c').values_list('country', 'c')[:20]
-            ),
+            'by_country': _aggregate_countries(qs),
             'by_category': list(
                 CaseCategory.objects.annotate(
                     count=Count('person')
@@ -92,11 +136,14 @@ class PersonViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def countries(self, request):
-        """List of countries with case counts."""
-        data = Person.objects.filter(is_published=True).values(
-            'country'
-        ).annotate(count=Count('id')).order_by('-count')
-        return Response(list(data))
+        """List of countries with case counts — case-insensitive merge."""
+        rows = _aggregate_countries(
+            Person.objects.filter(is_published=True)
+        )
+        return Response([
+            {'country': name, 'count': count}
+            for name, count in rows
+        ])
 
 
 class ReportViewSet(viewsets.ModelViewSet):
