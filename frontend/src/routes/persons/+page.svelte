@@ -4,6 +4,30 @@
 	import { getPersons, getCountries, getCategories } from '$lib/api';
 	import StatusBadge from '$lib/StatusBadge.svelte';
 
+	// Debounce helper — calls `fn` only after `delay` ms of silence.
+	// Without this, every keystroke in the search box fires a full API
+	// round-trip; with it, we wait until the user stops typing.
+	const SEARCH_DEBOUNCE_MS = 300;
+
+	function debounce<T extends (...args: any[]) => void>(fn: T, delay: number) {
+		let timer: ReturnType<typeof setTimeout> | null = null;
+		const wrapped = (...args: Parameters<T>) => {
+			if (timer) clearTimeout(timer);
+			timer = setTimeout(() => {
+				timer = null;
+				fn(...args);
+			}, delay);
+		};
+		wrapped.flush = () => {
+			if (timer) {
+				clearTimeout(timer);
+				timer = null;
+				fn();
+			}
+		};
+		return wrapped;
+	}
+
 	let persons: any[] = $state([]);
 	let countries: any[] = $state([]);
 	let categories: any[] = $state([]);
@@ -16,6 +40,10 @@
 	const PAGE_SIZE = 10;
 	let currentPage = $state(1);
 	let totalPages = $derived(Math.max(1, Math.ceil(totalCount / PAGE_SIZE)));
+	let pageStart = $derived(((currentPage - 1) * PAGE_SIZE) + 1);
+	let pageEnd = $derived(Math.min(currentPage * PAGE_SIZE, totalCount));
+	let canPrev = $derived(currentPage > 1);
+	let canNext = $derived(currentPage < totalPages);
 
 	// Filters
 	let search = $state('');
@@ -47,22 +75,25 @@
 		{ value: 'rights_restricted', label: 'Rights Restricted' },
 	];
 
+	async function loadCountries(countryParams: Record<string, string> = {}) {
+		try {
+			countries = await getCountries(countryParams);
+		} catch (e) {
+			console.error(e);
+		}
+	}
+
 	async function loadPersons(
 		params: Record<string, string> = {},
-		countryParams: Record<string, string> = {},
 		page: number = currentPage
 	) {
 		loading = true;
 		try {
 			const pageParams = { ...params, page: String(page) };
-			const [data, countriesData] = await Promise.all([
-				getPersons(pageParams),
-				getCountries(countryParams),
-			]);
+			const data = await getPersons(pageParams);
 			persons = data.results;
 			totalCount = data.count;
 			currentPage = page;
-			countries = countriesData;
 			// Scroll the list back to the top so users don't lose context
 			// when paging through results.
 			if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -74,7 +105,7 @@
 
 	function goToPage(page: number) {
 		if (page < 1 || page > totalPages || page === currentPage) return;
-		loadPersons(currentFilterParams(), currentCountryParams(), page);
+		loadPersons(currentFilterParams(), page);
 	}
 
 	function currentFilterParams(): Record<string, string> {
@@ -103,8 +134,27 @@
 	function applyFilters() {
 		// Filters always reset to page 1 so users don't land on an empty
 		// or out-of-range page that no longer matches their criteria.
-		loadPersons(currentFilterParams(), currentCountryParams(), 1);
+		loadPersons(currentFilterParams(), 1);
+		// Countries dropdown doesn't depend on the `country` filter itself,
+		// so we don't need to refetch it when only country changes — but
+		// we do when status/category/search change because those affect
+		// the per-country counts.
+		const cp = currentCountryParams();
+		const keys = Object.keys(cp).sort().join(',');
+		if (keys !== lastCountryParamKey) {
+			lastCountryParamKey = keys;
+			loadCountries(cp);
+		}
 	}
+
+	// Tracks the last country-dropdown query signature so we only refetch
+	// the dropdown when its inputs actually change.
+	let lastCountryParamKey = '';
+
+	// Debounced wrapper around applyFilters for the search input. Without
+	// this, every keystroke fires a full API round-trip; with it, we
+	// wait until the user pauses for SEARCH_DEBOUNCE_MS before firing.
+	const debouncedSearch = debounce(() => applyFilters(), SEARCH_DEBOUNCE_MS);
 
 	function setView(mode: 'cards' | 'list') {
 		viewMode = mode;
@@ -145,7 +195,13 @@
 
 	<div class="search-select">
 		<form onsubmit={(e) => { e.preventDefault(); applyFilters(); }}>
-			<input type="text" class="search" placeholder="Search by name..." bind:value={search} />
+			<input
+				type="text"
+				class="search"
+				placeholder="Search by name..."
+				bind:value={search}
+				oninput={debouncedSearch}
+			/>
 		</form>
 		<div class="select-submit">
 			<select bind:value={filterStatus} onchange={applyFilters}>
@@ -264,7 +320,7 @@
 		<nav class="pagination" aria-label="Pagination">
 			<button
 				class="page-btn"
-				disabled={currentPage <= 1 || loading}
+				disabled={!canPrev || loading}
 				onclick={() => goToPage(currentPage - 1)}
 				aria-label="Previous page"
 			>
@@ -272,11 +328,11 @@
 			</button>
 			<span class="page-indicator">
 				Page <strong>{currentPage}</strong> of {totalPages}
-				<span class="muted">— showing {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, totalCount)} of {totalCount}</span>
+				<span class="muted">— showing {pageStart}–{pageEnd} of {totalCount}</span>
 			</span>
 			<button
 				class="page-btn"
-				disabled={currentPage >= totalPages || loading}
+				disabled={!canNext || loading}
 				onclick={() => goToPage(currentPage + 1)}
 				aria-label="Next page"
 			>
