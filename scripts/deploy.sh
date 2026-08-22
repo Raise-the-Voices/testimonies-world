@@ -1,7 +1,10 @@
 #!/bin/bash
 set -e
 
-cd /opt/rtv-cases
+# Project root — override with PROJECT_ROOT=/path/to/repo if not at
+# the historical /opt/rtv-cases location.
+PROJECT_ROOT="${PROJECT_ROOT:-/opt/rtv-cases}"
+cd "$PROJECT_ROOT"
 
 # Tag before deploy for rollback
 git tag deploy-$(date +%Y%m%d-%H%M%S)
@@ -21,32 +24,42 @@ git pull origin main
 git stash pop || echo "WARNING: stash pop had conflicts — manual review needed"
 
 # Backend
-cd backend
+cd "$PROJECT_ROOT/backend"
 source .venv/bin/activate
 pip install -r requirements.txt --quiet
-python manage.py migrate --noinput
+
+# Only run migrate when USE_SQLITE is enabled. Against the real
+# Postgres host the placeholder credentials in .env are not the
+# production ones (see commit 58da23a), so migrate would fail. Set
+# USE_SQLITE=True in .env for local dev deploys.
+if grep -q '^USE_SQLITE=True' "$PROJECT_ROOT/backend/.env" 2>/dev/null; then
+    USE_SQLITE=True python manage.py migrate --noinput
+fi
 python manage.py collectstatic --noinput
 deactivate
 
-# Frontend
-cd ../frontend
+# Frontend build
+cd "$PROJECT_ROOT/frontend"
 npm ci --omit=dev
 npm run build
 
-# Sync the static asset bundle into the nginx document root so the
-# newly-hashed CSS and JS files actually become reachable on the
-# public site. The previous bundle is moved aside as `_app.prev` for
-# a one-command rollback if this deploy turns out to be broken:
-#   sudo mv /var/www/cases/_app.prev /var/www/cases/_app
+# Document root for the static asset bundle (served by nginx, which
+# proxies /api/ to Django and everything else to the SvelteKit Node
+# server).
+DOC_ROOT="${DOC_ROOT:-/var/www/cases}"
+sudo mkdir -p "$DOC_ROOT"
+
+# Move the previous bundle aside as `_app.prev` for a one-command
+# rollback if this deploy turns out to be broken:
+#   sudo mv $DOC_ROOT/_app.prev $DOC_ROOT/_app
 #   sudo nginx -s reload
-sudo mkdir -p /var/www/cases
-if [ -d /var/www/cases/_app ]; then
-    sudo rm -rf /var/www/cases/_app.prev
-    sudo mv /var/www/cases/_app /var/www/cases/_app.prev
+if [ -d "$DOC_ROOT/_app" ]; then
+    sudo rm -rf "$DOC_ROOT/_app.prev"
+    sudo mv "$DOC_ROOT/_app" "$DOC_ROOT/_app.prev"
 fi
-sudo rsync -a --delete build/client/_app/ /var/www/cases/_app/
-sudo chown -R www-data:www-data /var/www/cases
-sudo chmod -R u+rwX,g+rX,o+rX /var/www/cases
+sudo rsync -a --delete "$PROJECT_ROOT/frontend/build/client/_app/" "$DOC_ROOT/_app/"
+sudo chown -R www-data:www-data "$DOC_ROOT"
+sudo chmod -R u+rwX,g+rX,o+rX "$DOC_ROOT"
 
 # Reload nginx so it picks up the new assets without dropping
 # connections. The systemctl path is kept as a fallback for hosts that
@@ -56,6 +69,26 @@ if command -v nginx >/dev/null 2>&1; then
     sudo nginx -t && sudo nginx -s reload
 else
     sudo systemctl reload nginx || sudo systemctl restart nginx
+fi
+
+# Restart the SvelteKit Node server. On this host we run it under
+# systemd unit `cases-svelte` (or via nohup if no unit exists).
+if systemctl list-unit-files cases-svelte.service >/dev/null 2>&1 && \
+   systemctl is-enabled --quiet cases-svelte.service 2>/dev/null; then
+    sudo systemctl restart cases-svelte
+else
+    # Fall back to killing and restarting via nohup. Use a stable PID
+    # file so we don't kill unrelated node processes.
+    if [ -f /tmp/cases-svelte.pid ]; then
+        kill "$(cat /tmp/cases-svelte.pid)" 2>/dev/null || true
+    fi
+    pkill -f "$PROJECT_ROOT/frontend/build/index.js" 2>/dev/null || true
+    sleep 1
+    cd "$PROJECT_ROOT/frontend"
+    nohup env PORT="${PORT:-3000}" HOST=127.0.0.1 \
+        node build/index.js > /tmp/cases-svelte.log 2>&1 &
+    disown
+    echo $! > /tmp/cases-svelte.pid
 fi
 
 echo 'Deploy complete'
