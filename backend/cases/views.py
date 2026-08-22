@@ -136,10 +136,30 @@ class PersonViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def countries(self, request):
-        """List of countries with case counts — case-insensitive merge."""
-        rows = _aggregate_countries(
-            Person.objects.filter(is_published=True)
-        )
+        """List of countries with case counts — case-insensitive merge.
+
+        Counts are dynamic: when other filters are active in the query
+        string (current_status, medical_status, quality_tier, gender,
+        category, etc.), counts reflect the filtered subset. The `country`
+        filter itself is intentionally excluded so the dropdown keeps
+        showing every country regardless of which one is selected.
+        """
+        qs = Person.objects.all()
+        if not request.user.is_authenticated:
+            qs = qs.filter(is_published=True)
+
+        # Apply every query param EXCEPT `country` (we're aggregating by
+        # country — applying a country filter would only return that
+        # country). Empty values are skipped so the absence of a filter
+        # behaves as "no filter".
+        filter_params = {
+            k: v for k, v in request.query_params.items()
+            if k != 'country' and v
+        }
+        if filter_params:
+            qs = PersonFilter(filter_params, queryset=qs).qs
+
+        rows = _aggregate_countries(qs)
         return Response([
             {'country': name, 'count': count}
             for name, count in rows
