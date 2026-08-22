@@ -15,4 +15,17 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
           port: ${{ secrets.DEPLOY_PORT }}
-          script: /opt/rtv-cases/scripts/deploy.sh
+          script: |
+            set -e
+            cd /opt/rtv-cases
+
+            # Bootstrap deploy.sh to the latest tracked version.
+            # The workflow can't depend on the host's deploy.sh being
+            # up to date — otherwise an out-of-date script can fail
+            # the very pull that would have fixed it.
+            git fetch origin main
+            git checkout origin/main -- scripts/deploy.sh
+
+            # Now run the (latest) deploy.sh, which autostashes local
+            # edits before pulling.
+            bash scripts/deploy.sh
