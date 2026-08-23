@@ -80,3 +80,17 @@ sudo systemctl start tmp-testimonies-backend tmp-testimonies-frontend
   `Media.file` row is updated to the new `{visibility}/` layout. A data
   migration can re-key old paths if needed.
 - Sensitive files served through Django, never direct URL
+
+## Error handling
+- `testimonies/urls.py` defines `handler404` / `handler500` so unhandled
+  errors don't leak Django's default HTML pages (which expose template
+  variables, request paths, and (in `DEBUG=True`) full stack traces).
+- `/api/*` paths return JSON: `{"detail": "...", "path": "..."}` for 404,
+  `{"detail": "Internal server error"}` for 500. Stack traces are
+  **never** included in the 500 body — they go to the logs (see `LOGGING`).
+- Everything else (`/admin/`, `/accounts/`, the SvelteKit frontend, etc.)
+  keeps Django's default HTML behavior so admin and browser-driven flows
+  work unchanged.
+- Custom handlers are tested at `backend/testimonies/tests.py` with
+  `override_settings(DEBUG=False)` since Django only invokes them when
+  `DEBUG=False`.
