@@ -115,3 +115,19 @@ sudo systemctl start tmp-testimonies-backend tmp-testimonies-frontend
   `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`.
 - `.gitignore` ignores `backend/.env`, `**/.env`, `.env`, `.env.*` —
   do not commit secrets even if the file was renamed.
+
+## Nginx
+- `deploy/nginx/rtv-cases.conf` is the version-controlled site config.
+  `scripts/deploy.sh` rsyncs it to `/etc/nginx/sites-available/rtv-cases`
+  on every deploy (same bootstrap pattern as `scripts/deploy.sh` itself),
+  then runs `nginx -t && nginx -s reload`.
+- **Media protection** uses `auth_request`: nginx sends an internal
+  sub-request to Django's `/media/_auth_check` (handled by
+  `cases.views.media_auth_check`) which returns 200 (allowed) or 403
+  (denied). On 200, nginx serves the file body from
+  `MEDIA_ROOT/<visibility>/` directly via `alias` — the bytes
+  never traverse Django.
+- The previous `MediaDownloadView` stays as a safety net for direct
+  Django access (local dev, when nginx is bypassed).
+- Validate the config locally before merging:
+  `sudo nginx -t -c <(echo "events{}http{include $(pwd)/deploy/nginx/rtv-cases.conf;}")`.

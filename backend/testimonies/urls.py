@@ -11,6 +11,7 @@ from cases.views import (
     MediaViewSet,
     PersonViewSet,
     ReportViewSet,
+    media_auth_check,
 )
 from casework.views import CaseworkRecordViewSet
 from contacts.views import ContactViewSet
@@ -44,9 +45,14 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path('api/session/', session_info),
     path('accounts/', include('allauth.urls')),
+    # nginx auth_request sub-request endpoint (C4). Declared BEFORE the
+    # catch-all /media/<path> so that /media/_auth_check resolves here,
+    # not to MediaDownloadView with path='_auth_check'.
+    path('media/_auth_check', media_auth_check, name='media_auth_check'),
     # Permission-gated media download. Replaces Django's static() helper so
     # visibility (PUBLIC / RESTRICTED / SENSITIVE) is enforced at fetch time
-    # instead of relying on file-path secrecy.
+    # instead of relying on file-path secrecy. Also used as a safety net
+    # when nginx auth_request is bypassed (e.g. local dev server).
     re_path(r'^media/(?P<path>.*)$', MediaDownloadView.as_view(), name='media_download'),
 ]
 

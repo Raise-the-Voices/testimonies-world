@@ -92,6 +92,15 @@ sudo rsync -a --delete build/client/ /var/www/cases/
 sudo chown -R www-data:www-data /var/www/cases
 sudo chmod -R u+rwX,g+rX,o+rX /var/www/cases
 
+# Install the version-controlled nginx site config from deploy/nginx/
+# to /etc/nginx/sites-available/rtv-cases. Bootstrap pattern: don't
+# trust the host's copy to be current (same idea as the deploy.sh
+# self-bootstrap earlier in this script).
+sudo install -m 644 "$PROJECT_ROOT/deploy/nginx/rtv-cases.conf" \
+    /etc/nginx/sites-available/rtv-cases
+sudo ln -sf /etc/nginx/sites-available/rtv-cases \
+    /etc/nginx/sites-enabled/rtv-cases
+
 # Restart the app services. This is not optional: both processes hold their
 # build in memory, so without a restart the node service keeps emitting HTML
 # that references the *previous* build's asset hashes, and every one of those

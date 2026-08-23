@@ -4,7 +4,7 @@ from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.core.exceptions import PermissionDenied
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 from django.views import View
 
 from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report
@@ -268,4 +268,54 @@ class MediaDownloadView(View):
         if not media.file:
             raise Http404('Media has no file')
         return FileResponse(media.file.open('rb'))
+
+
+def media_auth_check(request):
+    """Auth sub-request endpoint for nginx ``auth_request`` directive.
+
+    Called by nginx via the internal ``/__media_auth`` location (see
+    ``deploy/nginx/rtv-cases.conf``) **before** serving any
+    ``/media/<path>`` request. Resolves the URL path to a ``Media``
+    row, checks the user's visibility against
+    ``_can_view_visibility``, and returns:
+
+      * ``200`` — the request is allowed. nginx proceeds to serve the
+        file from disk via ``alias``.
+      * ``403`` — the request is denied. nginx returns 403 to the
+        client.
+
+    The body is always empty (nginx discards it). Sensitive-tier
+    accesses are recorded in ``AuditLog`` here too, so the audit trail
+    covers both nginx-fronted and direct downloads.
+    """
+    # nginx sets X-Original-URI on the auth sub-request; fall back to
+    # the ?path= query string if a different caller ever hits this.
+    path = request.headers.get('X-Original-URI') or request.GET.get('path', '')
+    # Strip the /media/ prefix to get the storage-relative path
+    # (e.g. "public/abc.jpg"). MediaDownloadView does the same thing.
+    if path.startswith('/media/'):
+        path = path[len('/media/'):]
+    # Defensive: collapse any URL-decoded traversal attempts before
+    # they hit the DB lookup.
+    path = path.lstrip('/')
+
+    try:
+        media = Media.objects.get(file=path)
+    except Media.DoesNotExist:
+        raise PermissionDenied
+
+    if not _can_view_visibility(request.user, media.visibility):
+        raise PermissionDenied
+
+    if (media.visibility == Media.Visibility.SENSITIVE
+            and request.user.is_authenticated):
+        AuditLog.objects.create(
+            user=request.user,
+            action=AuditLog.Action.DOWNLOADED,
+            target_type='media',
+            target_id=media.id,
+            ip_address=request.META.get('REMOTE_ADDR') or None,
+        )
+
+    return HttpResponse(status=200)
 
