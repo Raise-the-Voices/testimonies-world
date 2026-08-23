@@ -130,8 +130,17 @@ for attempt in 1 2 3 4 5 6 7 8 9 10; do
     fi
     if [ "$attempt" = 10 ]; then
         echo "  WARNING: backend did not respond on :8040 after 30s"
-        echo "  Check:  journalctl -u rtv-cases-backend --no-pager -n 50"
-        echo "          /opt/rtv-cases/backend/.env (SECRET_KEY, ALLOWED_HOSTS)"
+        echo "  --- systemctl status rtv-cases-backend ---"
+        sudo systemctl status rtv-cases-backend --no-pager -n 20 2>&1 \
+            | sed 's/^/    /' || true
+        echo "  --- last 30 journal lines for rtv-cases-backend ---"
+        sudo journalctl -u rtv-cases-backend --no-pager -n 30 2>&1 \
+            | sed 's/^/    /' || true
+        echo "  --- /opt/rtv-cases/backend/.env (relevant lines) ---"
+        grep -E '^(SECRET_KEY|DEBUG|ALLOWED_HOSTS|DJANGO_SETTINGS_MODULE)' \
+            /opt/rtv-cases/backend/.env 2>&1 | sed 's/^/    /' \
+            || echo "    (no .env or no matching lines)"
+        echo "  END DIAGNOSTICS"
     else
         sleep 3
     fi
