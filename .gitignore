@@ -4,6 +4,10 @@ backend/__pycache__/
 backend/**/__pycache__/
 backend/**/*.pyc
 backend/.env
+# Defensive: ignore .env anywhere in the tree, regardless of who adds it.
+.env
+.env.*
+**/.env
 backend/db.sqlite3
 backend/staticfiles/
 backend/media/
