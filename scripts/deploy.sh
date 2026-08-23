@@ -93,9 +93,10 @@ sudo chown -R www-data:www-data /var/www/cases
 sudo chmod -R u+rwX,g+rX,o+rX /var/www/cases
 
 # Install the version-controlled nginx site config from deploy/nginx/
-# to /etc/nginx/sites-available/rtv-cases. Bootstrap pattern: don't
-# trust the host's copy to be current (same idea as the deploy.sh
-# self-bootstrap earlier in this script).
+# to /etc/nginx/sites-available/rtv-cases. Bootstrap pattern: pull the
+# file from origin/main first so the host's working tree has it (same
+# idea as the deploy.sh self-bootstrap in the workflow).
+git checkout origin/main -- deploy/nginx/rtv-cases.conf
 sudo install -m 644 "$PROJECT_ROOT/deploy/nginx/rtv-cases.conf" \
     /etc/nginx/sites-available/rtv-cases
 sudo ln -sf /etc/nginx/sites-available/rtv-cases \
