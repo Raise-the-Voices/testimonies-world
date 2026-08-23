@@ -61,5 +61,22 @@ sudo systemctl start tmp-testimonies-backend tmp-testimonies-frontend
 ## Privacy model
 - Fields marked PRIVATE in models are excluded from public API responses
 - `is_private` on Report hides entire report from unauthenticated users
-- Media.visibility controls access tier
+- `Media.visibility` controls access tier (`public` / `restricted` / `sensitive`):
+  - Files are uploaded into `MEDIA_ROOT/{visibility}/` by `cases.storage.VisibilityRouterStorage`
+    via the `upload_to` callable `cases.models._media_upload_to`.
+  - Downloads go through `cases.views.MediaDownloadView` (route `/media/<path>`),
+    which resolves the path to a `Media` row, enforces visibility, and writes
+    an `AuditLog(action=DOWNLOADED)` row for every sensitive fetch.
+  - **Production nginx MUST proxy `/media/` to Django (gunicorn).** It must not
+    serve files directly from disk — doing so bypasses the permission gate.
+    The view replaces Django's `static()` helper (which was removed in the same
+    commit because it served files with no check).
+  - Visibility rules (mirrors `MediaViewSet.get_queryset`):
+    - `public`      — anyone, including anonymous
+    - `restricted`  — any authenticated user
+    - `sensitive`   — `is_staff=True` OR member of `Advocate` / `Admin` group
+- Existing media uploaded before this change still live under the old
+  flat `MEDIA_ROOT/uploads/` prefix; they remain reachable only until their
+  `Media.file` row is updated to the new `{visibility}/` layout. A data
+  migration can re-key old paths if needed.
 - Sensitive files served through Django, never direct URL

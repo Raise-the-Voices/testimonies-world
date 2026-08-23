@@ -3,8 +3,11 @@ from django_filters import rest_framework as filters
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.core.exceptions import PermissionDenied
+from django.http import FileResponse, Http404
+from django.views import View
 
-from .models import CaseCategory, FamilyRelationship, Media, Person, Report
+from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report
 from .serializers import (
     CaseCategorySerializer,
     FamilyRelationshipSerializer,
@@ -207,3 +210,62 @@ class CaseCategoryViewSet(viewsets.ReadOnlyModelViewSet):
 class FamilyRelationshipViewSet(viewsets.ModelViewSet):
     queryset = FamilyRelationship.objects.select_related('person_a', 'person_b')
     serializer_class = FamilyRelationshipSerializer
+
+
+# --- Media download (permission-gated) -------------------------------------
+
+_SENSITIVE_GROUPS = frozenset({'Advocate', 'Admin'})
+
+
+def _can_view_visibility(user, visibility: str) -> bool:
+    """Return True if ``user`` may fetch a Media row of the given visibility.
+
+    Mirrors the rules used by ``MediaViewSet.get_queryset``:
+      * PUBLIC       — anyone, including anonymous
+      * RESTRICTED   — any authenticated user
+      * SENSITIVE    — staff or member of Advocate/Admin groups
+    """
+    if visibility == Media.Visibility.PUBLIC:
+        return True
+    if not user.is_authenticated:
+        return False
+    if visibility == Media.Visibility.RESTRICTED:
+        return True
+    # SENSITIVE
+    return user.is_staff or user.groups.filter(name__in=_SENSITIVE_GROUPS).exists()
+
+
+class MediaDownloadView(View):
+    """Serve ``Media.file`` only after a per-row visibility check.
+
+    Replaces Django's ``static()`` helper for ``/media/`` so that the
+    visibility flag stored on each ``Media`` row is actually enforced at
+    download time. Every download of a SENSITIVE file is recorded in
+    ``AuditLog`` (action=DOWNLOADED) for accountability.
+    """
+
+    http_method_names = ['get', 'head']
+
+    def get(self, request, path):
+        try:
+            media = Media.objects.get(file=path)
+        except Media.DoesNotExist:
+            raise Http404('Media not found')
+
+        if not _can_view_visibility(request.user, media.visibility):
+            raise PermissionDenied
+
+        if (media.visibility == Media.Visibility.SENSITIVE
+                and request.user.is_authenticated):
+            AuditLog.objects.create(
+                user=request.user,
+                action=AuditLog.Action.DOWNLOADED,
+                target_type='media',
+                target_id=media.id,
+                ip_address=request.META.get('REMOTE_ADDR') or None,
+            )
+
+        if not media.file:
+            raise Http404('Media has no file')
+        return FileResponse(media.file.open('rb'))
+
