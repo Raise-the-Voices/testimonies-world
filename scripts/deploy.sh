@@ -14,8 +14,12 @@ git tag deploy-$(date +%Y%m%d-%H%M%S)
 # this is a no-op.
 git stash push -u -m "deploy-autostash-$(date +%s)" || true
 
-# Pull latest
-git pull origin main
+# Pull latest. Use `fetch + reset --hard` rather than `pull` so this
+# stays correct after a force-push (pull would error with "divergent
+# branches" if origin/main was rewritten). Local-only files (settings.py,
+# .env, etc.) are preserved by the autostash above.
+git fetch origin main
+git reset --hard origin/main
 
 # Re-apply local customizations. If there are real merge conflicts
 # (rare, only when both local and upstream changed the same lines),
