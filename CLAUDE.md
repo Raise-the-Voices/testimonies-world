@@ -94,3 +94,24 @@ sudo systemctl start tmp-testimonies-backend tmp-testimonies-frontend
 - Custom handlers are tested at `backend/testimonies/tests.py` with
   `override_settings(DEBUG=False)` since Django only invokes them when
   `DEBUG=False`.
+
+## Production settings
+- `backend/testimonies/settings.py` is the base module. Defaults are
+  dev-friendly but `DEBUG=False` raises `ImproperlyConfigured` if
+  `SECRET_KEY` is empty or `ALLOWED_HOSTS` contains `*` — fails loud
+  rather than silently insecure.
+- `backend/testimonies/settings_prod.py` is the **strict production
+  module**. Import with `DJANGO_SETTINGS_MODULE=testimonies.settings_prod`
+  in the gunicorn invocation (or systemd unit, or wherever the prod
+  process is launched). It forces `DEBUG=False`, requires `ALLOWED_HOSTS`
+  to be set explicitly (no default), and asserts the secure-cookie /
+  HSTS / `SECURE_PROXY_SSL_HEADER` block.
+- Local dev keeps using `testimonies.settings`; values come from
+  `backend/.env` (auto-read by `python-decouple` when the cwd is
+  `backend/`).
+- Required env vars in production: `SECRET_KEY` (strong random),
+  `ALLOWED_HOSTS` (CSV, no wildcards), `PG_*`, plus `DJANGO_SETTINGS_MODULE=testimonies.settings_prod`.
+- Generate a strong `SECRET_KEY` with
+  `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`.
+- `.gitignore` ignores `backend/.env`, `**/.env`, `.env`, `.env.*` —
+  do not commit secrets even if the file was renamed.

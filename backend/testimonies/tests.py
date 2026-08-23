@@ -83,3 +83,185 @@ class HandlerUnitTest(TestCase):
         """Sanity check on the module-level Django handler bindings."""
         self.assertEqual(project_urls.handler404, 'testimonies.urls.api_not_found')
         self.assertEqual(project_urls.handler500, 'testimonies.urls.api_server_error')
+
+
+# ---------------------------------------------------------------------------
+# C3 — Production security defaults
+# ---------------------------------------------------------------------------
+# The base settings module is loaded once and cached for the lifetime of
+# the test process, so to verify the validation in different env-var
+# configurations we run small Python scripts in subprocesses with
+# PYTHONPATH pointed at backend/ and cwd outside it (so decouple doesn't
+# pick up our local backend/.env).
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+_BACKEND_DIR = Path(__file__).resolve().parents[1]
+
+
+def _import_settings_subprocess(env_overrides, settings_module='testimonies.settings',
+                               inspect_attrs=()):
+    """Spawn a fresh Python that imports django.conf.settings with the
+    given env overrides; returns the completed subprocess.
+
+    When ``inspect_attrs`` is non-empty, the subprocess prints those
+    attribute names (one per line) so tests can assert on the actual
+    loaded values without poking the cached parent-process settings.
+    """
+    env = os.environ.copy()
+    # Strip whatever the parent shell / .env provided so the subprocess
+    # only sees what we explicitly set.
+    for key in ('SECRET_KEY', 'DEBUG', 'ALLOWED_HOSTS'):
+        env.pop(key, None)
+    env.update(env_overrides)
+    env['DJANGO_SETTINGS_MODULE'] = settings_module
+    env['PYTHONPATH'] = str(_BACKEND_DIR)
+    # Run from /tmp so decouple does not pick up backend/.env.
+    if inspect_attrs:
+        attr_expr = '", "'.join(inspect_attrs)
+        script = (
+            'import django, json; django.setup()\n'
+            'from django.conf import settings\n'
+            'print(json.dumps({a: getattr(settings, a) for a in ("' + attr_expr + '")}))\n'
+        )
+    else:
+        script = 'import django; django.setup()'
+    return subprocess.run(
+        [sys.executable, '-c', script],
+        env=env,
+        cwd='/tmp',
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+class ProdSettingsValidationTest(TestCase):
+    """settings.py refuses to start when DEBUG=False and a critical
+    invariant is missing — fails loud rather than silently insecure."""
+
+    def test_no_secret_key_raises(self):
+        result = _import_settings_subprocess({
+            'DEBUG': 'False',
+            'SECRET_KEY': '',
+            'ALLOWED_HOSTS': 'cases.raisethevoices.org',
+        })
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('SECRET_KEY must be set', result.stderr)
+
+    def test_wildcard_allowed_hosts_raises(self):
+        result = _import_settings_subprocess({
+            'DEBUG': 'False',
+            'SECRET_KEY': 'a-real-key-just-for-testing',
+            'ALLOWED_HOSTS': '*',
+        })
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('ALLOWED_HOSTS must not contain', result.stderr)
+
+
+class SettingsProdTest(TestCase):
+    """settings_prod.py layers strict prod invariants on top of base."""
+
+    def test_empty_allowed_hosts_raises(self):
+        result = _import_settings_subprocess(
+            {
+                'SECRET_KEY': 'a-real-key-just-for-testing',
+                'ALLOWED_HOSTS': '',
+            },
+            settings_module='testimonies.settings_prod',
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('ALLOWED_HOSTS must be set explicitly', result.stderr)
+
+    def test_wildcard_allowed_hosts_raises(self):
+        result = _import_settings_subprocess(
+            {
+                'SECRET_KEY': 'a-real-key-just-for-testing',
+                'ALLOWED_HOSTS': '*',
+            },
+            settings_module='testimonies.settings_prod',
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('ALLOWED_HOSTS must not contain', result.stderr)
+
+    def test_empty_secret_key_raises(self):
+        result = _import_settings_subprocess(
+            {
+                'SECRET_KEY': '',
+                'ALLOWED_HOSTS': 'cases.raisethevoices.org',
+            },
+            settings_module='testimonies.settings_prod',
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('SECRET_KEY must be set', result.stderr)
+
+    def test_valid_prod_env_loads_and_sets_secure_flags(self):
+        result = _import_settings_subprocess(
+            {
+                'SECRET_KEY': 'a-real-key-just-for-testing',
+                'ALLOWED_HOSTS': 'cases.raisethevoices.org',
+            },
+            settings_module='testimonies.settings_prod',
+            inspect_attrs=(
+                'DEBUG',
+                'SESSION_COOKIE_SECURE',
+                'CSRF_COOKIE_SECURE',
+                'SECURE_SSL_REDIRECT',
+                'SECURE_HSTS_SECONDS',
+                'SECURE_HSTS_INCLUDE_SUBDOMAINS',
+                'SECURE_HSTS_PRELOAD',
+                'SECURE_REFERRER_POLICY',
+                'SECURE_PROXY_SSL_HEADER',
+                'ALLOWED_HOSTS',
+            ),
+        )
+        self.assertEqual(
+            result.returncode, 0,
+            msg=f'settings_prod refused a valid prod env:\n{result.stderr}',
+        )
+        observed = json.loads(result.stdout.strip())
+        self.assertEqual(observed['DEBUG'], False)
+        self.assertEqual(observed['SESSION_COOKIE_SECURE'], True)
+        self.assertEqual(observed['CSRF_COOKIE_SECURE'], True)
+        self.assertEqual(observed['SECURE_SSL_REDIRECT'], True)
+        self.assertEqual(observed['SECURE_HSTS_SECONDS'], 31536000)
+        self.assertEqual(observed['SECURE_HSTS_INCLUDE_SUBDOMAINS'], True)
+        self.assertEqual(observed['SECURE_HSTS_PRELOAD'], True)
+        self.assertEqual(observed['ALLOWED_HOSTS'], ['cases.raisethevoices.org'])
+
+
+class UnsafeDefaultsRemovedTest(TestCase):
+    """Source-level checks that the known-insecure defaults are gone."""
+
+    def test_settings_source_no_insecure_secret_key_default(self):
+        # The unsafe default string should not appear as an actual default
+        # value anywhere in settings.py. We allow it to appear in the
+        # module docstring (which describes what was removed) but not in
+        # any executable line.
+        import re
+        source = (_BACKEND_DIR / 'testimonies' / 'settings.py').read_text()
+        # Strip the docstring(s) so we only inspect executable code.
+        stripped = re.sub(r'"""[\s\S]*?"""', '', source)
+        self.assertNotIn("'dev-insecure-change-in-production'", stripped)
+        self.assertNotIn('"dev-insecure-change-in-production"', stripped)
+        # And: the `config('SECRET_KEY', ...)` call must not pass a `default=`.
+        self.assertNotRegex(stripped, r"config\(\s*'SECRET_KEY'\s*,\s*default\s*=")
+
+    def test_settings_source_debug_default_is_false(self):
+        source = (_BACKEND_DIR / 'testimonies' / 'settings.py').read_text()
+        # DEBUG default must be False, not True.
+        import re
+        match = re.search(r"DEBUG\s*=\s*config\(\s*'DEBUG'\s*,\s*default\s*=\s*(\w+)", source)
+        self.assertIsNotNone(match, 'DEBUG config() call not found in settings.py')
+        self.assertEqual(match.group(1), 'False')
+
+    def test_settings_source_allowed_hosts_default_is_not_wildcard(self):
+        source = (_BACKEND_DIR / 'testimonies' / 'settings.py').read_text()
+        # The literal string "default='*'" must not appear anywhere in settings.py.
+        self.assertNotIn("default='*'", source)
+
+    def test_settings_prod_file_exists(self):
+        self.assertTrue((_BACKEND_DIR / 'testimonies' / 'settings_prod.py').exists())

@@ -1,17 +1,61 @@
 """
 Django settings for testimonies project (testimonies.world).
+
+The unsafe defaults previously baked in here (`SECRET_KEY='dev-insecure-change-in-production'`,
+`DEBUG=True`, `ALLOWED_HOSTS='*'`) have been removed:
+
+* `SECRET_KEY` has NO default — Django will raise on startup if it's not set
+  in the environment / `.env`. Generating a strong key is a one-time setup
+  task documented in CLAUDE.md.
+* `DEBUG` defaults to `False`. Local dev opts in via `.env` (`DEBUG=True`).
+* `ALLOWED_HOSTS` defaults to `localhost,127.0.0.1` (dev-friendly). Production
+  hosts must override via env.
+
+For production deploys, use `testimonies.settings_prod` instead (set
+`DJANGO_SETTINGS_MODULE=testimonies.settings_prod`). It imports this module
+and enforces stricter invariants (no `*`, secure cookies, HSTS, etc.) on top.
 """
 
 import os
 from pathlib import Path
 
-from decouple import config
+from decouple import Csv, config
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config('SECRET_KEY', default='dev-insecure-change-in-production')
-DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',')
+# --- Core security ---------------------------------------------------------
+# Required value: no default. If unset, Django fails loud on startup
+# instead of booting with a publicly-known weak key.
+SECRET_KEY = config('SECRET_KEY')
+
+DEBUG = config('DEBUG', default=False, cast=bool)
+
+# Dev-friendly default; production overrides via ALLOWED_HOSTS env var.
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
+
+# --- Production-only validation -------------------------------------------
+# When DEBUG=False we enforce the bare minimum invariants every prod deploy
+# must satisfy. settings_prod.py layers even more on top.
+if not DEBUG:
+    if not SECRET_KEY:
+        raise ImproperlyConfigured(
+            'SECRET_KEY must be set in the environment when DEBUG=False.'
+        )
+    if '*' in ALLOWED_HOSTS:
+        raise ImproperlyConfigured(
+            'ALLOWED_HOSTS must not contain "*" when DEBUG=False.'
+        )
+    # Run behind nginx in production — trust its X-Forwarded-Proto so
+    # Django sees HTTPS (and the Secure cookie flags below actually fire).
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 
 SCRIPT_NAME = config('SCRIPT_NAME', default='')
 FORCE_SCRIPT_NAME = SCRIPT_NAME or None
