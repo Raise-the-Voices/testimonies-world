@@ -143,17 +143,24 @@ def _import_settings_subprocess(env_overrides, settings_module='testimonies.sett
 
 
 class ProdSettingsValidationTest(TestCase):
-    """settings.py refuses to start when DEBUG=False and a critical
-    invariant is missing — fails loud rather than silently insecure."""
+    """settings.py enforces the bare minimum when DEBUG=False.
 
-    def test_no_secret_key_raises(self):
+    SECRET_KEY was relaxed to a self-heal fallback (per-process random
+    key with a stderr WARNING) so a missing env var doesn't 502 the
+    whole site. ALLOWED_HOSTS='*' is still a hard error — wildcard
+    in prod is never acceptable.
+    """
+
+    def test_no_secret_key_falls_back_to_random(self):
         result = _import_settings_subprocess({
             'DEBUG': 'False',
             'SECRET_KEY': '',
             'ALLOWED_HOSTS': 'cases.raisethevoices.org',
-        })
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('SECRET_KEY must be set', result.stderr)
+        }, inspect_attrs=('SECRET_KEY',))
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        observed = json.loads(result.stdout.strip())
+        self.assertGreaterEqual(len(observed['SECRET_KEY']), 30)
+        self.assertIn('SECRET_KEY not set', result.stderr)
 
     def test_wildcard_allowed_hosts_raises(self):
         result = _import_settings_subprocess({
@@ -268,8 +275,11 @@ class UnsafeDefaultsRemovedTest(TestCase):
         stripped = re.sub(r'"""[\s\S]*?"""', '', source)
         self.assertNotIn("'dev-insecure-change-in-production'", stripped)
         self.assertNotIn('"dev-insecure-change-in-production"', stripped)
-        # And: the `config('SECRET_KEY', ...)` call must not pass a `default=`.
-        self.assertNotRegex(stripped, r"config\(\s*'SECRET_KEY'\s*,\s*default\s*=")
+        # After C5 the SECRET_KEY config call may pass default='' (an empty
+        # string), which enables the per-process random fallback in the
+        # `if not SECRET_KEY:` block below. What we don't want is any
+        # actual weak *string* being passed as default.
+        self.assertNotRegex(stripped, r"config\(\s*'SECRET_KEY'\s*,\s*default\s*=\s*['\"][^'\"]+['\"]")
 
     def test_settings_source_debug_default_is_false(self):
         source = (_BACKEND_DIR / 'testimonies' / 'settings.py').read_text()
