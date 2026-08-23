@@ -58,8 +58,72 @@ sudo chmod -R u+rwX,g+rX,o+rX /var/www/cases
 # build in memory, so without a restart the node service keeps emitting HTML
 # that references the *previous* build's asset hashes, and every one of those
 # assets 404s. Django likewise keeps running the old code.
-sudo systemctl restart rtv-cases-backend
-sudo systemctl restart rtv-cases-frontend
+#
+# Defensive restart sequence: systemd may have the unit in a failed state
+# from earlier deploys, or the unit file may have drifted on the host.
+# `reset-failed` clears the failure flag; if the unit still won't come
+# up, we fall back to nohup so the deploy can self-heal instead of
+# leaving prod 502.
+sudo systemctl reset-failed rtv-cases-backend 2>/dev/null || true
+sudo systemctl reset-failed rtv-cases-frontend 2>/dev/null || true
+
+# Kill any stray gunicorn / Node processes from previous deploys that
+# might be holding port 8040 / 3000.
+pkill -f 'gunicorn.*testimonies.wsgi' 2>/dev/null || true
+pkill -f 'node .*build/index.js' 2>/dev/null || true
+sleep 1
+
+sudo systemctl restart rtv-cases-backend 2>/dev/null || true
+sudo systemctl restart rtv-cases-frontend 2>/dev/null || true
+sleep 3
+
+# --- Backend fallback: nohup gunicorn if systemd didn't bring it up -----
+# We only fire this if neither systemd says the service is active nor :8040
+# is listening. Without this, a broken systemd unit on prod keeps the
+# site 502'd indefinitely.
+backend_up=0
+if curl -s -o /dev/null --max-time 2 http://127.0.0.1:8040/api/persons/; then
+    backend_up=1
+elif sudo systemctl is-active --quiet rtv-cases-backend 2>/dev/null \
+      && curl -s -o /dev/null --max-time 2 http://127.0.0.1:8040/api/persons/; then
+    backend_up=1
+fi
+if [ "$backend_up" != 1 ]; then
+    echo "  systemd restart did not bring up the backend; falling back to nohup gunicorn"
+    cd /opt/rtv-cases/backend
+    if [ -f .venv/bin/activate ]; then
+        # shellcheck disable=SC1091
+        source .venv/bin/activate
+    fi
+    nohup .venv/bin/gunicorn testimonies.wsgi:application \
+        --bind 127.0.0.1:8040 \
+        --workers 2 \
+        --access-logfile - \
+        --error-logfile - \
+        > /tmp/cases-backend.log 2>&1 &
+    disown
+    echo $! > /tmp/cases-backend.pid
+    cd "$PROJECT_ROOT"
+fi
+
+# --- Frontend fallback: nohup node if systemd didn't bring it up ------
+frontend_up=0
+if curl -s -o /dev/null --max-time 2 http://127.0.0.1:3000/; then
+    frontend_up=1
+elif sudo systemctl is-active --quiet rtv-cases-frontend 2>/dev/null \
+      && curl -s -o /dev/null --max-time 2 http://127.0.0.1:3000/; then
+    frontend_up=1
+fi
+if [ "$frontend_up" != 1 ]; then
+    echo "  systemd restart did not bring up the frontend; falling back to nohup node"
+    cd /opt/rtv-cases/frontend
+    nohup env PORT="${PORT:-3000}" HOST=127.0.0.1 \
+        node build/index.js \
+        > /tmp/cases-frontend.log 2>&1 &
+    disown
+    echo $! > /tmp/cases-frontend.pid
+    cd "$PROJECT_ROOT"
+fi
 
 # Reload nginx so it picks up the new bundle without dropping connections.
 sudo nginx -t && sudo nginx -s reload
@@ -73,9 +137,12 @@ echo 'Verifying deploy...'
 ok=0
 for attempt in 1 2 3 4 5 6 7 8 9 10; do
     html=$(curl -fsS --max-time 15 "$SITE/" || true)
+    # `|| true` swallows grep's exit-1 on no match — without it, set -eo
+    # pipefail would abort the script on the first 502 and the retry loop
+    # would only ever run once.
     entry=$(printf '%s' "$html" \
         | grep -o '[./]*_app/immutable/entry/start\.[A-Za-z0-9_-]*\.js' \
-        | head -1)
+        | head -1 || true)
     if [ -n "$entry" ]; then
         asset_url="$SITE/$(printf '%s' "$entry" | sed 's|^[./]*||')"
         code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$asset_url" || true)
