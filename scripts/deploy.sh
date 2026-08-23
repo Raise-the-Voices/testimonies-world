@@ -94,11 +94,15 @@ sudo chmod -R u+rwX,g+rX,o+rX /var/www/cases
 
 # Install the version-controlled nginx site config from deploy/nginx/
 # to /etc/nginx/sites-available/rtv-cases. Bootstrap pattern: pull the
-# file from origin/main first so the host's working tree has it (same
-# idea as the deploy.sh self-bootstrap in the workflow).
-git checkout origin/main -- deploy/nginx/rtv-cases.conf
-sudo install -m 644 "$PROJECT_ROOT/deploy/nginx/rtv-cases.conf" \
-    /etc/nginx/sites-available/rtv-cases
+# file from origin/main explicitly because the host's working tree may
+# not have it (e.g. when a previous deploy failed before checkout).
+# `git show origin/main:<path>` writes the file content to stdout
+# without touching the working tree's index — more robust than
+# `git checkout <ref> -- <path>` which can fail if the index doesn't
+# yet know about the path.
+git fetch origin main
+git show origin/main:deploy/nginx/rtv-cases.conf > /tmp/rtv-cases.conf
+sudo install -m 644 /tmp/rtv-cases.conf /etc/nginx/sites-available/rtv-cases
 sudo ln -sf /etc/nginx/sites-available/rtv-cases \
     /etc/nginx/sites-enabled/rtv-cases
 
