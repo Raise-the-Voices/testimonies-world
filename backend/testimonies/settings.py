@@ -25,22 +25,34 @@ from django.core.exceptions import ImproperlyConfigured
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # --- Core security ---------------------------------------------------------
-# Required value: no default. If unset, Django fails loud on startup
-# instead of booting with a publicly-known weak key.
-SECRET_KEY = config('SECRET_KEY')
+# SECRET_KEY has no hard default — decouple reads it from the env or
+# backend/.env (decouple auto-discovers .env when the cwd is the
+# backend directory). If neither has it, we fall back to a per-process
+# random key below so the site can start (sessions will reset on
+# restart; not data-destructive). The WARNING goes to stderr so it
+# surfaces in journalctl / django.log.
+SECRET_KEY = config('SECRET_KEY', default='')
 
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 # Dev-friendly default; production overrides via ALLOWED_HOSTS env var.
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
-# --- Production-only validation -------------------------------------------
-# When DEBUG=False we enforce the bare minimum invariants every prod deploy
-# must satisfy. settings_prod.py layers even more on top.
+# --- Production-only self-heal + validation --------------------------------
+# When DEBUG=False we still want the site to come up so the data is
+# at least visible to fix the config. settings_prod.py layers the
+# stricter invariants on top.
 if not DEBUG:
     if not SECRET_KEY:
-        raise ImproperlyConfigured(
-            'SECRET_KEY must be set in the environment when DEBUG=False.'
+        import sys as _sys
+        from django.core.management.utils import get_random_secret_key
+        SECRET_KEY = get_random_secret_key()
+        print(
+            'WARNING: SECRET_KEY not set; using a temporary random '
+            'key for this process. Sessions will reset on restart. '
+            'Set SECRET_KEY in the systemd unit or backend/.env to '
+            'fix properly.',
+            file=_sys.stderr,
         )
     if '*' in ALLOWED_HOSTS:
         raise ImproperlyConfigured(
