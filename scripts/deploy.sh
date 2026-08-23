@@ -1,7 +1,9 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
 cd /opt/rtv-cases
+
+SITE="https://cases.raisethevoices.org"
 
 # Tag before deploy for rollback
 git tag deploy-$(date +%Y%m%d-%H%M%S)
@@ -33,29 +35,69 @@ cd ../frontend
 npm ci --omit=dev
 npm run build
 
-# Sync the static asset bundle into the nginx document root so the
-# newly-hashed CSS and JS files actually become reachable on the
-# public site. The previous bundle is moved aside as `_app.prev` for
-# a one-command rollback if this deploy turns out to be broken:
-#   sudo mv /var/www/cases/_app.prev /var/www/cases/_app
-#   sudo nginx -s reload
-sudo mkdir -p /var/www/cases
-if [ -d /var/www/cases/_app ]; then
-    sudo rm -rf /var/www/cases/_app.prev
-    sudo mv /var/www/cases/_app /var/www/cases/_app.prev
+# @sveltejs/adapter-node 5.5.x under @sveltejs/kit 2.66 / vite 7 emits the
+# server runtime into build/server/chunks/ rather than build/. The runtime
+# locates its static asset directory relative to its own module URL, so it
+# looks for build/server/chunks/client, finds nothing, and mounts no static
+# middleware at all — every /_app/* and /robots.txt request falls through to
+# SSR and 404s. The symlink puts the real client bundle where the runtime
+# expects it. Harmless once a future adapter release fixes the layout.
+if [ -d build/server/chunks ] && [ -d build/client ]; then
+    ln -sfn ../../client build/server/chunks/client
 fi
-sudo rsync -a --delete build/client/_app/ /var/www/cases/_app/
+
+# Publish the client bundle to the nginx document root. nginx serves /_app/
+# and /robots.txt straight off disk from here and falls back to the node
+# service if a file is missing — see /etc/nginx/sites-available/rtv-cases.
+sudo mkdir -p /var/www/cases
+sudo rsync -a --delete build/client/ /var/www/cases/
 sudo chown -R www-data:www-data /var/www/cases
 sudo chmod -R u+rwX,g+rX,o+rX /var/www/cases
 
-# Reload nginx so it picks up the new assets without dropping
-# connections. The systemctl path is kept as a fallback for hosts that
-# run nginx under systemd; the explicit nginx -s reload works on any
-# nginx install.
-if command -v nginx >/dev/null 2>&1; then
-    sudo nginx -t && sudo nginx -s reload
-else
-    sudo systemctl reload nginx || sudo systemctl restart nginx
+# Restart the app services. This is not optional: both processes hold their
+# build in memory, so without a restart the node service keeps emitting HTML
+# that references the *previous* build's asset hashes, and every one of those
+# assets 404s. Django likewise keeps running the old code.
+sudo systemctl restart rtv-cases-backend
+sudo systemctl restart rtv-cases-frontend
+
+# Reload nginx so it picks up the new bundle without dropping connections.
+sudo nginx -t && sudo nginx -s reload
+
+# Smoke test. Fetch the homepage, extract the entry script hash from the HTML
+# the server just rendered, and confirm that exact asset resolves. This is what
+# catches the failure modes above — a stale process or broken static serving
+# both leave the site returning 200 for pages while every asset 404s, which
+# otherwise exits 0 and reports "Deploy complete".
+echo 'Verifying deploy...'
+ok=0
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    html=$(curl -fsS --max-time 15 "$SITE/" || true)
+    entry=$(printf '%s' "$html" \
+        | grep -o '[./]*_app/immutable/entry/start\.[A-Za-z0-9_-]*\.js' \
+        | head -1)
+    if [ -n "$entry" ]; then
+        asset_url="$SITE/$(printf '%s' "$entry" | sed 's|^[./]*||')"
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$asset_url" || true)
+        api=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/api/" || true)
+        if [ "$code" = 200 ] && [ "$api" = 200 ]; then
+            echo "  entry asset OK: $asset_url"
+            echo "  api OK"
+            ok=1
+            break
+        fi
+    fi
+    echo "  attempt $attempt: not ready yet"
+    sleep 3
+done
+
+if [ "$ok" != 1 ]; then
+    echo "DEPLOY FAILED: the site is serving pages but its assets do not resolve." >&2
+    echo "Check:  systemctl status rtv-cases-frontend" >&2
+    echo "        ls -la /opt/rtv-cases/frontend/build/server/chunks/client" >&2
+    echo "        ls /var/www/cases/_app/immutable/entry/" >&2
+    echo "Roll back with:  git checkout \$(git tag -l 'deploy-*' | tail -2 | head -1)" >&2
+    exit 1
 fi
 
 echo 'Deploy complete'
