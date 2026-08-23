@@ -122,12 +122,32 @@ sudo nginx -t && sudo nginx -s reload
 # both leave the site returning 200 for pages while every asset 404s, which
 # otherwise exits 0 and reports "Deploy complete".
 echo 'Verifying deploy...'
+
+# systemctl restart is asynchronous; wait for the frontend service to start
+# listening before hammering it. 10 attempts × 2s = 20s ceiling.
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if curl -s -o /dev/null -w '%{http_code}' --max-time 3 \
+            "http://127.0.0.1:3000/" 2>/dev/null \
+            | grep -qE '^[1-5][0-9][0-9]$'; then
+        echo "  Node listening on :3000 (attempt $attempt)"
+        break
+    fi
+    if [ "$attempt" = 10 ]; then
+        echo "  WARNING: Node did not respond on :3000 after 20s; continuing anyway"
+    else
+        sleep 2
+    fi
+done
+
 ok=0
 for attempt in 1 2 3 4 5 6 7 8 9 10; do
     html=$(curl -fsS --max-time 15 "$SITE/" || true)
+    # `|| true` after the pipe catches grep's exit-1-on-no-match; without
+    # it, set -eo pipefail aborts the script on the first 502 (the loop
+    # never reaches its second iteration).
     entry=$(printf '%s' "$html" \
         | grep -o '[./]*_app/immutable/entry/start\.[A-Za-z0-9_-]*\.js' \
-        | head -1)
+        | head -1 || true)
     if [ -n "$entry" ]; then
         asset_url="$SITE/$(printf '%s' "$entry" | sed 's|^[./]*||')"
         code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$asset_url" || true)
@@ -139,7 +159,7 @@ for attempt in 1 2 3 4 5 6 7 8 9 10; do
             break
         fi
     fi
-    echo "  attempt $attempt: not ready yet"
+    echo "  attempt $attempt: not ready yet (html=${#html}B)"
     sleep 3
 done
 
