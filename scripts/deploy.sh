@@ -113,6 +113,30 @@ sudo ln -sf /etc/nginx/sites-available/rtv-cases \
 sudo systemctl restart rtv-cases-backend
 sudo systemctl restart rtv-cases-frontend
 
+# Wait for the backend to be serving the API. systemctl restart is
+# asynchronous and gunicorn workers take a moment to spawn; if the
+# backend's settings module is broken (e.g. settings_prod.py can't
+# import because of missing env vars), gunicorn crashes immediately
+# and the API 502s — which is the failure mode we want to catch here
+# rather than discover via the public-facing 502 on cases.raisethevoices.org.
+# 10 attempts × 3s = 30s ceiling; we don't abort the deploy on failure
+# (the frontend smoke test will catch it), but we do log loudly.
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if curl -s -o /dev/null -w '%{http_code}' --max-time 3 \
+            "http://127.0.0.1:8040/api/persons/" 2>/dev/null \
+            | grep -qE '^[1-5][0-9][0-9]$'; then
+        echo "  Backend ready on :8040 (attempt $attempt)"
+        break
+    fi
+    if [ "$attempt" = 10 ]; then
+        echo "  WARNING: backend did not respond on :8040 after 30s"
+        echo "  Check:  journalctl -u rtv-cases-backend --no-pager -n 50"
+        echo "          /opt/rtv-cases/backend/.env (SECRET_KEY, ALLOWED_HOSTS)"
+    else
+        sleep 3
+    fi
+done
+
 # Reload nginx so it picks up the new bundle without dropping connections.
 sudo nginx -t && sudo nginx -s reload
 

@@ -121,11 +121,14 @@ def _import_settings_subprocess(env_overrides, settings_module='testimonies.sett
     env['PYTHONPATH'] = str(_BACKEND_DIR)
     # Run from /tmp so decouple does not pick up backend/.env.
     if inspect_attrs:
-        attr_expr = '", "'.join(inspect_attrs)
+        # Build a literal list — `[*inspect_attrs]` would also work, but
+        # doing it this way makes the script self-contained.
+        attrs_literal = '[' + ', '.join(repr(a) for a in inspect_attrs) + ']'
         script = (
             'import django, json; django.setup()\n'
             'from django.conf import settings\n'
-            'print(json.dumps({a: getattr(settings, a) for a in ("' + attr_expr + '")}))\n'
+            'attrs = ' + attrs_literal + '\n'
+            'print(json.dumps({a: getattr(settings, a) for a in attrs}))\n'
         )
     else:
         script = 'import django; django.setup()'
@@ -163,18 +166,31 @@ class ProdSettingsValidationTest(TestCase):
 
 
 class SettingsProdTest(TestCase):
-    """settings_prod.py layers strict prod invariants on top of base."""
+    """settings_prod.py layers strict prod invariants on top of base.
 
-    def test_empty_allowed_hosts_raises(self):
+    The strict-mode behavior was relaxed to self-heal fallbacks so the
+    site can come up even when the systemd unit forgets to export
+    SECRET_KEY / ALLOWED_HOSTS. The remaining hard requirement is that
+    ALLOWED_HOSTS must not contain '*'.
+    """
+
+    def test_empty_allowed_hosts_falls_back_to_safe_defaults(self):
         result = _import_settings_subprocess(
             {
                 'SECRET_KEY': 'a-real-key-just-for-testing',
                 'ALLOWED_HOSTS': '',
             },
             settings_module='testimonies.settings_prod',
+            inspect_attrs=(
+                'ALLOWED_HOSTS', 'DEBUG', 'SECRET_KEY',
+            ),
         )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('ALLOWED_HOSTS must be set explicitly', result.stderr)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        observed = json.loads(result.stdout.strip())
+        self.assertIn('cases.raisethevoices.org', observed['ALLOWED_HOSTS'])
+        self.assertIn('localhost', observed['ALLOWED_HOSTS'])
+        # Warning is logged to stderr at import time.
+        self.assertIn('ALLOWED_HOSTS not set', result.stderr)
 
     def test_wildcard_allowed_hosts_raises(self):
         result = _import_settings_subprocess(
@@ -187,16 +203,21 @@ class SettingsProdTest(TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('ALLOWED_HOSTS must not contain', result.stderr)
 
-    def test_empty_secret_key_raises(self):
+    def test_empty_secret_key_falls_back_to_random(self):
         result = _import_settings_subprocess(
             {
                 'SECRET_KEY': '',
                 'ALLOWED_HOSTS': 'cases.raisethevoices.org',
             },
             settings_module='testimonies.settings_prod',
+            inspect_attrs=('SECRET_KEY',),  # trailing comma — must stay a tuple
         )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('SECRET_KEY must be set', result.stderr)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        observed = json.loads(result.stdout.strip())
+        # Fallback key is generated per-process; just verify it's
+        # non-empty and has reasonable entropy.
+        self.assertGreaterEqual(len(observed['SECRET_KEY']), 30)
+        self.assertIn('SECRET_KEY not set', result.stderr)
 
     def test_valid_prod_env_loads_and_sets_secure_flags(self):
         result = _import_settings_subprocess(
