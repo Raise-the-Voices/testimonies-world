@@ -71,16 +71,24 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'testimonies.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('PG_DB', default='testimonies_world'),
-        'USER': config('PG_USER', default='testimonies'),
-        'PASSWORD': config('PG_PASSWORD', default=''),
-        'HOST': config('PG_HOST', default='10.0.0.100'),
-        'PORT': config('PG_PORT', default='5432'),
+if config('USE_SQLITE', default=False, cast=bool):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / config('SQLITE_PATH', default='db.sqlite3'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('PG_DB', default='testimonies_world'),
+            'USER': config('PG_USER', default='testimonies'),
+            'PASSWORD': config('PG_PASSWORD', default=''),
+            'HOST': config('PG_HOST', default='10.0.0.100'),
+            'PORT': config('PG_PORT', default='5432'),
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -109,9 +117,6 @@ STORAGES = {
 # Media files
 MEDIA_URL = f'{SCRIPT_NAME}/media/' if SCRIPT_NAME else '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
-
-# Sensitive media stored separately
-SENSITIVE_MEDIA_ROOT = BASE_DIR / 'sensitive_media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -200,4 +205,3 @@ LOGGING = {
 
 # Create log directory
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
-os.makedirs(SENSITIVE_MEDIA_ROOT, exist_ok=True)

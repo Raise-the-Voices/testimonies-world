@@ -1,13 +1,12 @@
-from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
 from django.http import JsonResponse
-from django.urls import include, path
+from django.urls import include, path, re_path
 from rest_framework.routers import DefaultRouter
 
 from cases.views import (
     CaseCategoryViewSet,
     FamilyRelationshipViewSet,
+    MediaDownloadView,
     MediaViewSet,
     PersonViewSet,
     ReportViewSet,
@@ -44,10 +43,11 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path('api/session/', session_info),
     path('accounts/', include('allauth.urls')),
+    # Permission-gated media download. Replaces Django's static() helper so
+    # visibility (PUBLIC / RESTRICTED / SENSITIVE) is enforced at fetch time
+    # instead of relying on file-path secrecy.
+    re_path(r'^media/(?P<path>.*)$', MediaDownloadView.as_view(), name='media_download'),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 admin.site.site_header = 'Raise the Voices — Admin'
 admin.site.site_title = 'Raise the Voices'
