@@ -3,6 +3,29 @@ set -eo pipefail
 
 cd /opt/rtv-cases
 
+# Recover from a previous deploy that left the working tree mid-merge.
+# Without this, the next `git stash` silently no-ops (stash refuses
+# unmerged paths) and `git pull` aborts with "Pulling is not possible
+# because you have unmerged files" — every deploy hits the same wall.
+# `git merge --abort` resets to the pre-merge state, preserving the
+# host's uncommitted local edits (settings.py / .env per-host tweaks)
+# so the regular stash/pop dance below still applies them.
+if [ -f .git/MERGE_HEAD ] || [ -f .git/REBASE_HEAD ] || [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
+    echo "Recovering from a previous failed deploy (in-progress merge/rebase)..."
+    git merge --abort 2>/dev/null || true
+    git rebase --abort 2>/dev/null || true
+    # Anything still flagged unmerged gets the upstream version; this
+    # is the right call for a deploy (main wins), and the per-host
+    # customizations live in settings.py/.env which are unstaged and
+    # get re-stashed in the next step regardless.
+    unmerged=$(git diff --name-only --diff-filter=U 2>/dev/null || true)
+    if [ -n "$unmerged" ]; then
+        echo "  Resetting unmerged paths to upstream:"
+        echo "$unmerged" | sed 's/^/    /'
+        echo "$unmerged" | xargs git checkout --theirs 2>/dev/null || true
+    fi
+fi
+
 SITE="https://cases.raisethevoices.org"
 
 # Tag before deploy for rollback
