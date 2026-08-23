@@ -3,27 +3,42 @@ set -eo pipefail
 
 cd /opt/rtv-cases
 
-# Recover from a previous deploy that left the working tree mid-merge.
-# Without this, the next `git stash` silently no-ops (stash refuses
-# unmerged paths) and `git pull` aborts with "Pulling is not possible
-# because you have unmerged files" — every deploy hits the same wall.
-# `git merge --abort` resets to the pre-merge state, preserving the
-# host's uncommitted local edits (settings.py / .env per-host tweaks)
-# so the regular stash/pop dance below still applies them.
-if [ -f .git/MERGE_HEAD ] || [ -f .git/REBASE_HEAD ] || [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
-    echo "Recovering from a previous failed deploy (in-progress merge/rebase)..."
+# Recover from a previous deploy that left the working tree mid-merge
+# (or with unmerged index entries from a partial reset). Without this,
+# the next `git stash` silently no-ops (stash refuses unmerged paths)
+# and `git pull` aborts with "Pulling is not possible because you have
+# unmerged files" — every deploy hits the same wall.
+#
+# Three layers of recovery, in order:
+#   1. Abort any in-progress merge (MERGE_HEAD set).
+#   2. Abort any in-progress rebase (REBASE_HEAD / .git/rebase-{merge,apply}).
+#   3. Sweep any remaining unmerged files via `git ls-files --unmerged`.
+#
+# For each unmerged path we take HEAD's version (`git checkout HEAD --`),
+# which on a deploy is main. The per-host customizations in settings.py /
+# .env are uncommitted local edits and get re-stashed by the regular
+# stash/pop dance below regardless.
+
+# 1) In-progress merge?
+if [ -f .git/MERGE_HEAD ]; then
+    echo "Aborting in-progress merge from previous deploy..."
     git merge --abort 2>/dev/null || true
+fi
+
+# 2) In-progress rebase?
+if [ -f .git/REBASE_HEAD ] || [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
+    echo "Aborting in-progress rebase from previous deploy..."
     git rebase --abort 2>/dev/null || true
-    # Anything still flagged unmerged gets the upstream version; this
-    # is the right call for a deploy (main wins), and the per-host
-    # customizations live in settings.py/.env which are unstaged and
-    # get re-stashed in the next step regardless.
-    unmerged=$(git diff --name-only --diff-filter=U 2>/dev/null || true)
-    if [ -n "$unmerged" ]; then
-        echo "  Resetting unmerged paths to upstream:"
-        echo "$unmerged" | sed 's/^/    /'
-        echo "$unmerged" | xargs git checkout --theirs 2>/dev/null || true
-    fi
+fi
+
+# 3) Any leftover unmerged index entries (can exist even without the
+#    MERGE_HEAD/REBASE_HEAD markers, e.g. after a partial `git reset`).
+unmerged=$(git ls-files --unmerged 2>/dev/null | awk '{print $4}' | sort -u || true)
+if [ -n "$unmerged" ]; then
+    echo "Clearing unmerged files from previous deploy (taking HEAD's version):"
+    echo "$unmerged" | sed 's/^/  /'
+    echo "$unmerged" | xargs git checkout HEAD -- 2>/dev/null || true
+    echo "$unmerged" | xargs git add 2>/dev/null || true
 fi
 
 SITE="https://cases.raisethevoices.org"
