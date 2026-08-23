@@ -1,6 +1,19 @@
 from django.conf import settings
 from django.db import models
 
+from .storage import VisibilityRouterStorage
+
+
+def _media_upload_to(instance, filename):
+    """Route uploads into ``MEDIA_ROOT/{visibility}/`` for permission enforcement.
+
+    The leading directory segment matches ``Media.Visibility`` so that
+    ``MediaDownloadView`` can resolve a request path back to a ``Media`` row
+    and decide whether the caller may fetch it.
+    """
+    vis = getattr(instance, 'visibility', Media.Visibility.PUBLIC) or Media.Visibility.PUBLIC
+    return f'{vis}/{filename}'
+
 
 class CaseCategory(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -205,7 +218,12 @@ class Media(models.Model):
         Report, on_delete=models.CASCADE,
         null=True, blank=True, related_name='media_files'
     )
-    file = models.FileField(upload_to='uploads/', null=True, blank=True)
+    file = models.FileField(
+        upload_to=_media_upload_to,
+        storage=VisibilityRouterStorage(),
+        null=True,
+        blank=True,
+    )
     url = models.URLField(max_length=1000, blank=True, default='')
     media_type = models.CharField(
         max_length=20, choices=MediaType.choices, default=MediaType.PHOTO

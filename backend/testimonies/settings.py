@@ -118,9 +118,6 @@ STORAGES = {
 MEDIA_URL = f'{SCRIPT_NAME}/media/' if SCRIPT_NAME else '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# Sensitive media stored separately
-SENSITIVE_MEDIA_ROOT = BASE_DIR / 'sensitive_media'
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Sites framework (required by allauth)
@@ -208,4 +205,3 @@ LOGGING = {
 
 # Create log directory
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
-os.makedirs(SENSITIVE_MEDIA_ROOT, exist_ok=True)
