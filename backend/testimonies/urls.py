@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import include, path, re_path
+from django.views.defaults import page_not_found, server_error
 from rest_framework.routers import DefaultRouter
 
 from cases.views import (
@@ -48,6 +49,43 @@ urlpatterns = [
     # instead of relying on file-path secrecy.
     re_path(r'^media/(?P<path>.*)$', MediaDownloadView.as_view(), name='media_download'),
 ]
+
+
+# --- Error handlers -------------------------------------------------------
+# Django's default 404/500 pages are HTML and leak template variables, request
+# paths, and (in DEBUG=True) full stack traces. For /api/* we return JSON so
+# the SvelteKit frontend can parse the error instead of receiving an HTML
+# blob; for everything else (/admin/, /accounts/, ...) we keep Django's
+# default behavior so the admin and browser-driven flows keep working.
+
+
+def _wants_json(request) -> bool:
+    """True for /api/* paths where the SPA expects JSON responses."""
+    return request.path.startswith('/api/')
+
+
+def api_not_found(request, exception=None):
+    if _wants_json(request):
+        return JsonResponse(
+            {'detail': 'Not found', 'path': request.path},
+            status=404,
+        )
+    return page_not_found(request, exception)
+
+
+def api_server_error(request):
+    if _wants_json(request):
+        # Never include the exception text or traceback in the response body.
+        return JsonResponse(
+            {'detail': 'Internal server error'},
+            status=500,
+        )
+    return server_error(request)
+
+
+handler404 = 'testimonies.urls.api_not_found'
+handler500 = 'testimonies.urls.api_server_error'
+
 
 admin.site.site_header = 'Raise the Voices — Admin'
 admin.site.site_title = 'Raise the Voices'
