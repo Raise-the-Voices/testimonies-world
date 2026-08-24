@@ -253,17 +253,34 @@
 				<div class="view-title">
 					<span class="view-item-title">Media</span>
 				</div>
-				<div class="media-grid mt-1 fade-in-stagger">
+				<div class="media-list fade-in-stagger">
 					{#each person.media_files as media}
-						<div class="media-card">
+						<div class="media-item-card">
 							{#if media.media_type === 'photo' && media.file}
-								<img src={media.file} alt={media.description || 'Photo'} class="photo" />
-							{:else if media.url}
-								<a href={media.url} target="_blank" rel="noopener">{media.description || media.url}</a>
+								<img src={media.file} alt={media.description || 'Photo'} class="media-item-thumb" />
 							{/if}
-							{#if media.description}
-								<p class="small muted mt-1">{media.description}</p>
-							{/if}
+							<div class="media-item-body">
+								<div class="media-item-meta">
+									<span class="media-item-type">{media.media_type}</span>
+									{#if media.visibility && media.visibility !== 'public'}
+										<span class="media-item-visibility">{media.visibility}</span>
+									{/if}
+								</div>
+								{#if media.description}
+									<p class="media-item-description">{media.description}</p>
+								{/if}
+								{#if media.url}
+									<a
+										href={media.url}
+										target="_blank"
+										rel="noopener noreferrer"
+										class="media-item-action"
+									>
+										<span>View Source</span>
+										<span class="media-item-action-icon" aria-hidden="true">↗</span>
+									</a>
+								{/if}
+							</div>
 						</div>
 					{/each}
 				</div>
@@ -575,44 +592,92 @@
 		font-size: 0.7rem;
 		opacity: 0.7;
 	}
-	.media-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	/* Media list — vertical stack of polished cards (replaces old grid + .media-card) */
+	.media-list {
+		display: flex;
+		flex-direction: column;
 		gap: 1rem;
+		margin-top: 10px;
 	}
-
-	/* Media card — unified design system */
-	.media-card {
+	.media-item-card {
 		background: var(--color-bg-white);
 		border: 1px solid var(--color-border-light);
 		border-radius: var(--radius-card);
 		box-shadow: var(--shadow-card);
 		padding: var(--card-padding);
 		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		line-height: 1.65;
+		align-items: flex-start;
+		gap: 1.25rem;
 		color: var(--color-text);
 	}
-	.media-card img {
-		display: block;
-		max-width: 100%;
-		height: auto;
-		margin: 0 auto;
+	.media-item-thumb {
+		width: 120px;
+		height: 120px;
+		object-fit: cover;
 		border-radius: 4px;
+		flex-shrink: 0;
+		border: 1px solid var(--color-border-light);
 	}
-	.media-card p {
-		margin: 0;
-		font-size: 0.85rem;
+	.media-item-body {
+		flex: 1 1 auto;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		line-height: 1.6;
+	}
+	.media-item-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+	.media-item-type {
+		font-size: 0.72rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
 		color: var(--color-text-muted);
 	}
-	.media-card a {
-		color: var(--color-primary);
-		text-decoration: none;
+	.media-item-visibility {
+		font-size: 0.68rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		padding: 0.1rem 0.45rem;
+		border-radius: 3px;
+		background: var(--color-bg);
+		color: var(--color-text-muted);
+	}
+	.media-item-description {
+		margin: 0;
+		font-size: 0.92rem;
+		color: var(--color-text);
+		line-height: 1.6;
 		word-break: break-word;
 	}
-	.media-card a:hover {
-		text-decoration: underline;
+	.media-item-action {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.4rem 0.95rem;
+		margin-top: 0.25rem;
+		border: 1px solid var(--color-primary);
+		border-radius: 999px;
+		background: var(--color-primary);
+		color: var(--color-text-light);
+		font-size: 0.8rem;
+		font-weight: 600;
+		text-decoration: none;
+		align-self: flex-start;
+		transition: background 0.15s ease, border-color 0.15s ease;
+	}
+	.media-item-action:hover {
+		background: var(--color-primary-light);
+		border-color: var(--color-primary-light);
+	}
+	.media-item-action-icon {
+		font-size: 0.75rem;
 	}
 
 	/* Metadata cards — refined versions of .sidebar-bot for Categories, Evidence Tier, dates */
