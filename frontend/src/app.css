@@ -10,12 +10,19 @@
 	--color-text-muted: #666;
 	--color-text-light: #fafafa;
 	--color-border: darkgray;
-	--color-border-light: #ddd;
+	--color-border-light: #e2e8f0;
 	--color-danger: #d91616;
 	--color-success: #2f855a;
 	--color-section-bg: rgba(0, 0, 0, 0.1);
 	--color-sidebar-header: #5f9ea0; /* cadetblue from Marturia view */
 	--max-width: 1140px;
+
+	/* Design system — card tokens (unified across all Case Details sections) */
+	--radius-card: 8px;
+	--shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+	--shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+	--transition-card: 0.2s ease;
+	--card-padding: 1.25rem 1.5rem;
 }
 
 /* normalize basics */
@@ -94,6 +101,83 @@ h3 { font-size: 1.15rem; }
 }
 .btn-secondary:hover {
 	background: var(--color-bg);
+}
+
+/* === Design system: card animations + transitions === */
+@keyframes fadeSlideUp {
+	from { opacity: 0; transform: translateY(8px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeSlideUpSmall {
+	from { opacity: 0; transform: translateY(4px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+/* Entrance animation for all major card sections.
+   Targets existing class names — no template changes required. */
+.summary-card,
+.media-item-card,
+.meta-card,
+.incident-container,
+.sidebar-top,
+.sidebar-bot,
+.profile-photo,
+.profile-photo-placeholder {
+	animation: fadeSlideUp 0.4s ease both;
+}
+
+/* Staggered cascade for the media list (only repeated item list on the page).
+   .fade-in-stagger applied via class on the wrapper. */
+.fade-in-stagger > * {
+	animation: fadeSlideUpSmall 0.35s ease both;
+}
+.fade-in-stagger > *:nth-child(1) { animation-delay: 0s; }
+.fade-in-stagger > *:nth-child(2) { animation-delay: 0.05s; }
+.fade-in-stagger > *:nth-child(3) { animation-delay: 0.10s; }
+.fade-in-stagger > *:nth-child(4) { animation-delay: 0.15s; }
+.fade-in-stagger > *:nth-child(5) { animation-delay: 0.20s; }
+.fade-in-stagger > *:nth-child(6) { animation-delay: 0.25s; }
+.fade-in-stagger > *:nth-child(7) { animation-delay: 0.30s; }
+.fade-in-stagger > *:nth-child(8) { animation-delay: 0.35s; }
+
+/* Hover transitions + subtle elevation on cards.
+   Skip .incident-container — it has its own accordion click behavior. */
+.summary-card,
+.media-item-card,
+.meta-card,
+.sidebar-top,
+.sidebar-bot {
+	transition: box-shadow var(--transition-card), border-color var(--transition-card);
+}
+.summary-card:hover,
+.media-item-card:hover,
+.meta-card:hover,
+.sidebar-top:hover,
+.sidebar-bot:hover {
+	box-shadow: var(--shadow-card-hover);
+	border-color: var(--color-primary-light);
+}
+
+/* Respect user's reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+	.summary-card,
+	.media-item-card,
+	.meta-card,
+	.incident-container,
+	.sidebar-top,
+	.sidebar-bot,
+	.profile-photo,
+	.profile-photo-placeholder,
+	.fade-in-stagger > * {
+		animation: none;
+	}
+	.summary-card,
+	.media-item-card,
+	.meta-card,
+	.sidebar-top,
+	.sidebar-bot {
+		transition: none;
+	}
 }
 button {
 	font-family: inherit;
@@ -297,31 +381,33 @@ label {
 	color: var(--color-text-light);
 }
 
-/* Incident / report cards — Marturia style */
+/* Incident / report cards — unified design system */
 .incident-container {
 	margin-top: 10px;
-	border: thin solid black;
-	border-radius: 4px;
-	padding: 10px;
+	background: var(--color-bg-white);
+	border: 1px solid var(--color-border-light);
+	border-radius: var(--radius-card);
+	box-shadow: var(--shadow-card);
+	padding: var(--card-padding);
 }
 .incident-top {
-	border-bottom: thin solid black;
+	border-bottom: 1px solid var(--color-border-light);
 	padding-bottom: 5px;
 	margin-bottom: 5px;
 }
 
-/* Summary card — refined version of .incident-container for the Summary section only */
+/* Summary card — unified design system */
 .summary-card {
 	border: 1px solid var(--color-border-light);
-	border-radius: 6px;
+	border-radius: var(--radius-card);
 	padding: 0;
 	margin-top: 10px;
 	background: var(--color-bg-white);
-	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+	box-shadow: var(--shadow-card);
 	overflow: hidden;
 }
 .summary-card-body {
-	padding: 1.25rem 1.5rem;
+	padding: var(--card-padding);
 	color: var(--color-text);
 }
 .summary-narrative p {

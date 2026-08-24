@@ -253,7 +253,7 @@
 				<div class="view-title">
 					<span class="view-item-title">Media</span>
 				</div>
-				<div class="media-grid mt-1">
+				<div class="media-grid mt-1 fade-in-stagger">
 					{#each person.media_files as media}
 						<div class="media-card">
 							{#if media.media_type === 'photo' && media.file}
@@ -435,14 +435,18 @@
 		flex-basis: 30%;
 	}
 	.sidebar-top {
-		border: thin solid black;
-		border-radius: 4px;
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-light);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
 		position: relative;
 		padding-bottom: 10px;
 	}
 	.sidebar-bot {
-		border: thin solid black;
-		border-radius: 4px;
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-light);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
 		margin-top: 15px;
 	}
 	.sidebar-header-2 {
@@ -478,16 +482,18 @@
 		height: 180px;
 		object-fit: cover;
 		margin: 0 auto;
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 		border: 1px solid var(--color-border-light);
+		box-shadow: var(--shadow-card);
 	}
 	.profile-photo-placeholder {
 		width: 180px;
 		height: 180px;
 		background: var(--color-bg);
 		margin: 0 auto;
-		border-radius: 8px;
+		border-radius: var(--radius-card);
 		border: 1px dashed var(--color-border-light);
+		box-shadow: var(--shadow-card);
 	}
 
 	/* Aliases — differentiated from legal name */
@@ -575,13 +581,13 @@
 		gap: 1rem;
 	}
 
-	/* Media card — refined version of .incident-container for the Media section only */
+	/* Media card — unified design system */
 	.media-card {
 		background: var(--color-bg-white);
 		border: 1px solid var(--color-border-light);
-		border-radius: 6px;
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-		padding: 1.25rem 1.5rem;
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
+		padding: var(--card-padding);
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
@@ -613,8 +619,8 @@
 	.meta-card {
 		background: var(--color-bg-white);
 		border: 1px solid var(--color-border-light);
-		border-radius: 6px;
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
 		margin-top: 15px;
 		overflow: hidden;
 	}
@@ -632,7 +638,7 @@
 		margin: 0;
 	}
 	.meta-card-body {
-		padding: 1.25rem 1.5rem;
+		padding: var(--card-padding);
 		color: var(--color-text);
 		font-size: 0.92rem;
 		line-height: 1.65;
