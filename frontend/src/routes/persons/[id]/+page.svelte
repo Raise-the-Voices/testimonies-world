@@ -283,9 +283,9 @@
 				</div>
 				<div class="sidebar-pic">
 					{#if person.profile_image_url}
-						<img src={person.profile_image_url} alt={person.name} class="photo" />
+						<img src={person.profile_image_url} alt={person.name} class="profile-photo" />
 					{:else}
-						<div class="photo-placeholder-sidebar"></div>
+						<div class="profile-photo-placeholder"></div>
 					{/if}
 				</div>
 				<div class="sidebar-content">
@@ -293,36 +293,65 @@
 						<p class="small muted">Legal name: {person.legal_name}</p>
 					{/if}
 					{#if person.aliases}
-						<p class="small muted">Aliases: {person.aliases}</p>
+						<p class="sidebar-aliases">{person.aliases}</p>
 					{/if}
-					<div class="mt-1">
+					<div class="sidebar-status">
 						<StatusBadge status={person.current_status} />
 					</div>
-					<p class="small mt-1"><strong>Country:</strong> {person.country}</p>
-					{#if person.rough_location}
-						<p class="small"><strong>Location:</strong> {person.rough_location}</p>
-					{/if}
-					{#if person.last_known_date}
-						<p class="small"><strong>Last known:</strong> {person.last_known_date}</p>
-					{/if}
-					{#if person.ethnicity}
-						<p class="small"><strong>Ethnicity:</strong> {person.ethnicity}</p>
-					{/if}
-					{#if person.gender}
-						<p class="small"><strong>Gender:</strong> {person.gender}</p>
-					{/if}
-					{#if person.date_of_birth}
-						<p class="small"><strong>DOB:</strong> {person.date_of_birth}</p>
-					{/if}
-					<p class="small mt-1"><strong>Medical:</strong> {medicalLabels[person.medical_status] || person.medical_status}</p>
+					<dl class="sidebar-fields">
+						<div class="sidebar-field">
+							<dt>Country</dt>
+							<dd>{person.country}</dd>
+						</div>
+						{#if person.rough_location}
+							<div class="sidebar-field">
+								<dt>Location</dt>
+								<dd>{person.rough_location}</dd>
+							</div>
+						{/if}
+						{#if person.last_known_date}
+							<div class="sidebar-field">
+								<dt>Last known</dt>
+								<dd>{person.last_known_date}</dd>
+							</div>
+						{/if}
+						{#if person.ethnicity}
+							<div class="sidebar-field">
+								<dt>Ethnicity</dt>
+								<dd>{person.ethnicity}</dd>
+							</div>
+						{/if}
+						{#if person.gender}
+							<div class="sidebar-field">
+								<dt>Gender</dt>
+								<dd>{person.gender}</dd>
+							</div>
+						{/if}
+						{#if person.date_of_birth}
+							<div class="sidebar-field">
+								<dt>DOB</dt>
+								<dd>{person.date_of_birth}</dd>
+							</div>
+						{/if}
+						{#if medicalLabels[person.medical_status] !== 'Deceased'}
+							<div class="sidebar-field">
+								<dt>Medical</dt>
+								<dd>{medicalLabels[person.medical_status] || person.medical_status}</dd>
+							</div>
+						{/if}
+					</dl>
 					{#if person.authoritative_source}
-						<p class="small mt-1"><strong>Source:</strong>
+						<div class="sidebar-source">
+							<span class="sidebar-source-label">Source</span>
 							{#if person.authoritative_url}
-								<a href={person.authoritative_url} target="_blank" rel="noopener">{person.authoritative_source}</a>
+								<a href={person.authoritative_url} target="_blank" rel="noopener noreferrer" class="sidebar-source-link">
+									<span>{person.authoritative_source}</span>
+									<span class="sidebar-source-icon" aria-hidden="true">↗</span>
+								</a>
 							{:else}
-								{person.authoritative_source}
+								<span>{person.authoritative_source}</span>
 							{/if}
-						</p>
+						</div>
 					{/if}
 				</div>
 			</div>
@@ -432,6 +461,105 @@
 		background: var(--color-bg);
 		margin: 0 auto;
 		border-radius: 4px;
+	}
+
+	/* Profile photo */
+	.profile-photo {
+		display: block;
+		width: 180px;
+		height: 180px;
+		object-fit: cover;
+		margin: 0 auto;
+		border-radius: 8px;
+		border: 1px solid var(--color-border-light);
+	}
+	.profile-photo-placeholder {
+		width: 180px;
+		height: 180px;
+		background: var(--color-bg);
+		margin: 0 auto;
+		border-radius: 8px;
+		border: 1px dashed var(--color-border-light);
+	}
+
+	/* Aliases — differentiated from legal name */
+	.sidebar-aliases {
+		font-size: 0.75rem;
+		font-style: italic;
+		color: var(--color-text-muted);
+		margin: 0.15rem 0 0 0;
+	}
+
+	/* Status badge wrapper — small breathing room */
+	.sidebar-status {
+		margin: 0.75rem 0 1rem 0;
+	}
+
+	/* Field rows — semantic label/value pairs */
+	.sidebar-fields {
+		margin: 0;
+		padding: 0;
+	}
+	.sidebar-field {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 0.75rem;
+		padding: 0.4rem 0;
+		border-bottom: 1px solid var(--color-border-light);
+		font-size: 0.88rem;
+	}
+	.sidebar-field:last-child {
+		border-bottom: none;
+	}
+	.sidebar-field dt {
+		font-size: 0.72rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-muted);
+		flex: 0 0 auto;
+		min-width: 5.5rem;
+	}
+	.sidebar-field dd {
+		margin: 0;
+		text-align: right;
+		color: var(--color-text);
+		flex: 1 1 auto;
+		word-break: break-word;
+	}
+
+	/* Source footer — subtle separation from the metadata fields */
+	.sidebar-source {
+		margin-top: 0.75rem;
+		padding-top: 0.6rem;
+		border-top: 1px solid var(--color-border-light);
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+		font-size: 0.8rem;
+		color: var(--color-text-muted);
+	}
+	.sidebar-source-label {
+		font-size: 0.72rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+	.sidebar-source-link {
+		color: var(--color-primary);
+		text-decoration: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+	}
+	.sidebar-source-link:hover {
+		text-decoration: underline;
+	}
+	.sidebar-source-icon {
+		font-size: 0.7rem;
+		opacity: 0.7;
 	}
 	.media-grid {
 		display: grid;
