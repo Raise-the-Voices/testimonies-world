@@ -91,3 +91,56 @@ Before merging any change to the Reports section:
     appear when the user has the right role — the accordion does not affect them.
 11. Keyboard: `Tab` reaches each report header, `Enter`/`Space` toggles it,
     `aria-expanded` reflects state.
+
+## Summary section (Case Details view)
+
+The Summary card on the Case Details page renders `person.summary_narrative`
+in a **polished, scannable** layout:
+
+- Each newline-separated block is rendered as its own `<p>` with a 1rem
+  bottom margin and `line-height: 1.65` (≈ Tailwind's `leading-relaxed`).
+  The last paragraph has no bottom margin.
+- Detected dates are wrapped in `<strong class="summary-date">` (teal,
+  bold) for quick scanning. Covered formats:
+  - `July 25, 2025` / `Jul 25 2025` / `July 25th, 2025` (US, with ordinals)
+  - `25 July 2025` (international)
+  - `2025-07-25` (ISO)
+  Numeric dates like `7/25/2025` and bare years like `2025` are
+  **not** auto-bolded (too ambiguous / too aggressive).
+- If `person.authoritative_source` is set, a muted footer strip renders
+  below the body: `Source: <name>` with a `↗` link to
+  `person.authoritative_url` when present.
+
+### Classes added in `src/app.css`
+
+| Class                  | Purpose                                            |
+|------------------------|----------------------------------------------------|
+| `.summary-card`        | Refined card wrapper (lighter border, subtle shadow) |
+| `.summary-card-body`   | Inner padding (`1.25rem 1.5rem`)                   |
+| `.summary-narrative p` | Paragraph spacing + line-height                    |
+| `.summary-date`        | Teal bold for detected dates                       |
+| `.summary-footer`      | Muted footer strip with source attribution         |
+| `.summary-footer-link` | External link styling                              |
+| `.summary-footer-icon` | `↗` arrow icon                                     |
+
+### Manual verification checklist
+
+Before merging any change to the Summary section:
+
+1. Narrative with one paragraph renders as a single `<p>` with no extra bottom margin.
+2. Narrative with multiple newline-separated paragraphs renders multiple `<p>` elements,
+   each with `1rem` bottom margin except the last.
+3. `July 25, 2025` inside narrative is wrapped in `<strong class="summary-date">`
+   and styled teal + bold.
+4. `25 July 2025` (international) and `2025-07-25` (ISO) are also detected and bolded.
+5. `7/25/2025` is **not** bolded (numeric ambiguity).
+6. Year-only mentions like `2025` are **not** bolded.
+7. Ordinals like `1st`, `25th` are detected (`April 1, 2026`).
+8. Narrative with no dates renders unchanged (no false positives).
+9. Case with `authoritative_source` + `authoritative_url` → footer renders
+   with `Source:` label, link text, and `�` icon.
+10. Case with `authoritative_source` but no URL → footer renders the text
+    without a link.
+11. Case with no `authoritative_source` → footer is absent (no empty box).
+12. Card border + shadow render on white background; not affected by `.incident-container`
+    styling of Reports/Media cards.

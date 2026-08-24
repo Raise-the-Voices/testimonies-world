@@ -46,6 +46,46 @@
 		return url.startsWith('http') ? url : 'https://' + url;
 	}
 
+	// Paragraph split — narrative uses newlines between paragraphs.
+	// Returns trimmed non-empty paragraphs.
+	function paragraphs(text: string): string[] {
+		if (!text) return [];
+		return text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+	}
+
+	// Date detection — bold temporal milestones for scannability.
+	// Covers: "July 25, 2025", "25 July 2025", "Jul 25, 2025", "2025-07-25",
+	// plus ordinal suffixes (1st, 2nd, 3rd, 4th, ...).
+	const MONTH_RE =
+		'(?:January|February|March|April|May|June|July|August|' +
+		'September|October|November|December|' +
+		'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)';
+	const DATE_RE = new RegExp(
+		'\\b(?:' +
+			// Month-name + day + year: "July 25, 2025" or "Jul 25 2025"
+			MONTH_RE + '\\s+\\d{1,2}(?:st|nd|rd|th)?,?\\s+\\d{4}' +
+			// Day + month-name + year: "25 July 2025"
+			'|\\d{1,2}\\s+' + MONTH_RE + '\\s+\\d{4}' +
+			// ISO: "2025-07-25"
+			'|\\d{4}-\\d{2}-\\d{2}' +
+		')\\b',
+		'gi'
+	);
+	function scanNarrativeDates(text: string): Array<{ kind: 'text' | 'date'; value: string }> {
+		if (!text) return [];
+		const out: Array<{ kind: 'text' | 'date'; value: string }> = [];
+		let last = 0;
+		let m: RegExpExecArray | null;
+		DATE_RE.lastIndex = 0;
+		while ((m = DATE_RE.exec(text)) !== null) {
+			if (m.index > last) out.push({ kind: 'text', value: text.slice(last, m.index) });
+			out.push({ kind: 'date', value: m[0] });
+			last = m.index + m[0].length;
+		}
+		if (last < text.length) out.push({ kind: 'text', value: text.slice(last) });
+		return out;
+	}
+
 	let person: any = $state(null);
 	let loading = $state(true);
 	let error = $state('');
@@ -86,8 +126,40 @@
 				<div class="view-title">
 					<span class="view-item-title">Summary</span>
 				</div>
-				<div class="incident-container">
-					<p class="white-space-pre-line">{person.summary_narrative}</p>
+				<div class="summary-card">
+					<div class="summary-card-body">
+						<div class="summary-narrative">
+							{#each paragraphs(person.summary_narrative) as para, i (i)}
+								<p>
+									{#each scanNarrativeDates(para) as part, j (j)}
+										{#if part.kind === 'date'}
+											<strong class="summary-date">{part.value}</strong>
+										{:else}
+											{part.value}
+										{/if}
+									{/each}
+								</p>
+							{/each}
+						</div>
+					</div>
+					{#if person.authoritative_source}
+						<div class="summary-footer">
+							<span>Source:</span>
+							{#if person.authoritative_url}
+								<a
+									href={person.authoritative_url}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="summary-footer-link"
+								>
+									<span>{person.authoritative_source}</span>
+									<span class="summary-footer-icon" aria-hidden="true">↗</span>
+								</a>
+							{:else}
+								<span>{person.authoritative_source}</span>
+							{/if}
+						</div>
+					{/if}
 				</div>
 			{/if}
 
