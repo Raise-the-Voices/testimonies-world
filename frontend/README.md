@@ -207,3 +207,57 @@ Before merging any change to the profile sidebar:
 13. Case with no `authoritative_source` → footer is absent (no empty strip).
 14. The other sidebar blocks (Categories, Evidence Tier, Family, Created/Updated)
     are untouched and still render with the old `.sidebar-bot` styling.
+
+## Sidebar metadata cards (Case Details view)
+
+The three lower sidebar blocks — **Categories**, **Evidence Tier**, and
+**Created/Updated** — now use a refined `.meta-card` wrapper that matches
+the Summary card's visual language:
+
+- White background, `--color-border-light` border, 6px radius,
+  subtle `box-shadow: 0 1px 2px rgba(0,0,0,0.04)`.
+- Internal padding `1.25rem 1.5rem`, `line-height: 1.65`.
+- Header strip in `--color-primary` teal (same family as `.view-title` and
+  `.sidebar-header-2`), uppercase letterspaced.
+- Categories rendered as a semantic `<ul>` with bottom-border separators.
+- Evidence Tier value rendered in primary teal at 1rem / 600 weight.
+- Created/Updated rendered as `.meta-row` label/value pairs — the same
+  pattern as the profile sidebar's field rows, so the whole sidebar reads
+  as one design system.
+
+### Scope
+
+- **Categories**, **Evidence Tier**, and **Created/Updated** are polished.
+- The **Family** block is intentionally left untouched (still uses the old
+  `.sidebar-bot` styling). Follow-up if you want Family to match.
+
+### Classes added to the file-level `<style>` block
+
+| Class                | Purpose                                            |
+|----------------------|----------------------------------------------------|
+| `.meta-card`         | Card wrapper (white bg, light border, subtle shadow) |
+| `.meta-card-header`  | Primary teal uppercase header strip                |
+| `.meta-card-body`    | Inner padding + line-height                        |
+| `.meta-list` + `li`  | Categories list (no bullets, bottom-border rows)   |
+| `.meta-tier`         | Evidence Tier value styling                        |
+| `.meta-row`          | Created/Updated flex row                           |
+| `.meta-label`        | Small uppercase muted label                        |
+| `.meta-value`        | Right-aligned value text                           |
+
+### Manual verification checklist
+
+Before merging any change to the sidebar metadata cards:
+
+1. Categories card has white background, light border, subtle shadow, 6px radius.
+2. Categories card has a primary teal uppercase header strip ("CATEGORIES").
+3. Each category renders as an `<li>` in a `<ul>`, with no bullet markers.
+4. Each category has a thin bottom border; the last one has none.
+5. Evidence Tier card uses the same wrapper as Categories.
+6. Evidence Tier value renders in primary teal at 1rem / bold.
+7. Created/Updated card has no header strip (just body padding).
+8. Created and Updated each render as a label/value row with the same pattern
+   as the profile sidebar fields.
+9. Labels (CREATED / UPDATED) are small uppercase muted; values right-aligned.
+10. The Family block still uses the old `.sidebar-bot` styling (intentional).
+11. No changes to `.summary-card`, `.incident-container`, `.media-card`, or
+    `.view-title` (all other sections still render exactly as before).
