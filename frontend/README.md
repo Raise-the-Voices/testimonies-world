@@ -210,52 +210,78 @@ Before merging any change to the profile sidebar:
 
 ## Media section (Case Details view)
 
-The Media grid on the Case Details page renders each `person.media_files`
-entry in a **refined card** that matches the Summary card's visual language:
+The Media list on the Case Details page renders each `person.media_files`
+entry as a polished **vertical card** in a stacked list:
 
-- White background, light border (`--color-border-light`), 6px radius,
-  subtle `box-shadow: 0 1px 2px rgba(0,0,0,0.04)`.
-- Comfortable inner padding: `1.25rem 1.5rem`.
-- `line-height: 1.65` for readable text.
-- Cards are arranged in the existing `.media-grid` (200px min column, 1rem gap).
-- Header still uses `.view-title` — consistent with Summary / Reports / Media.
-- Images inside cards are capped at `max-width: 100%`, centered, with a 4px radius.
-- Description text is muted (`var(--color-text-muted)`), 0.85rem.
-- Links use the primary teal color, no underline until hover.
-
-### Scope
-
-This is a **CSS + structural** change only. The underlying data flow
-(photo vs. URL rendering, description duplication, link targets) is
-left exactly as it was for a separate fix.
+- **Vertical stack layout** (`.media-list` flex column, 1rem gap) — replaces
+  the previous grid layout. Reads as a clean list rather than a chaotic gallery.
+- Each item is a `.media-item-card`: white background, `--color-border-light`
+  border, 6px radius, subtle `box-shadow: 0 1px 2px rgba(0,0,0,0.04)`, padding
+  `1.25rem 1.5rem`.
+- **Two-column inside each card** (only when the media has a photo file):
+  120×120 thumbnail on the left (`.media-item-thumb`), body block on the right.
+  Non-photo media takes just the body block at full width.
+- **Body block** (`.media-item-body`):
+  - **Meta row** (`.media-item-meta`): small uppercase `media_type` label +
+    a `visibility` badge (only shown when not `public`, to avoid noise).
+  - **Description** (`.media-item-description`): the media's `description`
+    text at `line-height: 1.6`, `font-size: 0.92rem`. Appears once.
+  - **Action button** (`.media-item-action`): a pill-shaped primary teal
+    button labeled **"View Source ↗"**. Opens the URL in a new tab with
+    `target="_blank"` and `rel="noopener noreferrer"`. Only renders when
+    `media.url` is set.
+- **No more raw URLs anywhere in the card body** — the URL is hidden
+  inside the action button.
+- **No more URL+description duplication** — previously the URL was rendered
+  as `<a>{description}</a>` AND the description appeared again as `<p>`. The
+  new structure renders each only once.
+- **Header still uses `.view-title`** — consistent with Summary / Reports /
+  Metadata section headers.
 
 ### Classes added to the file-level `<style>` block
 
-| Selector          | Purpose                                          |
-|-------------------|--------------------------------------------------|
-| `.media-card`     | Card wrapper (white bg, light border, subtle shadow) |
-| `.media-card img` | Photo styling (centered, max-width, 4px radius)  |
-| `.media-card p`   | Muted description text                           |
-| `.media-card a`   | External link styling                            |
-| `.media-card a:hover` | Underline on hover                          |
+| Selector                | Purpose                                              |
+|-------------------------|------------------------------------------------------|
+| `.media-list`           | Vertical stack wrapper (flex column, 1rem gap)       |
+| `.media-item-card`      | Card wrapper (white bg, light border, subtle shadow) |
+| `.media-item-thumb`     | 120×120 photo thumbnail                              |
+| `.media-item-body`      | Right-side body block                                |
+| `.media-item-meta`      | Meta row (type + visibility badges)                  |
+| `.media-item-type`      | Small uppercase media-type label                     |
+| `.media-item-visibility`| Visibility badge (only for restricted/sensitive)     |
+| `.media-item-description` | Description text (line-height 1.6, 0.92rem)        |
+| `.media-item-action`    | Pill-shaped "View Source ↗" button (primary teal)    |
+| `.media-item-action-icon` | Icon font-size tweak                              |
+
+### Removed (dead code after this PR)
+
+- `.media-grid` — old grid wrapper, no longer used
+- `.media-card` + `.media-card img/p/a/a:hover` — old card rules, replaced
+  by `.media-item-card` family
 
 ### Manual verification checklist
 
 Before merging any change to the Media section:
 
-1. Photo media cards render with white background, light border, 6px radius,
-   and a subtle shadow (not heavy/harsh borders).
-2. URL-only media cards render with the same refined wrapper.
-3. Photo inside a card is centered, never exceeds the card width, and has a
-   subtle 4px radius.
-4. Description text below a photo/link is muted and not crowded against edges.
-5. Cards in the grid have a 1rem gap between them.
-6. Long URLs inside cards wrap cleanly (no overflow).
-7. Hovering a URL link shows an underline.
-8. The "Media" header still uses `.view-title` (primary-tone background).
-9. No changes to `.incident-container` styling (Reports still use it).
-10. No template/data logic changed — the existing URL+description duplication
-    still renders exactly as before.
+1. Media items render as a vertical stack (one card per row), not a grid.
+2. Each card has white background, light border, 6px radius, subtle shadow,
+   padding `1.25rem 1.5rem`.
+3. Photo media shows a 120×120 thumbnail on the left of the card body.
+4. Non-photo media (no file but URL) shows just the body block, full width
+   — no empty thumbnail column.
+5. Meta row shows the media type label (e.g. `photo`, `document`) in small
+   uppercase muted text.
+6. Visibility badge (`restricted` or `sensitive`) only renders when not
+   `public` — no badge for public media.
+7. Description renders once as a `<p>` with `line-height: 1.6`. Never
+   duplicated.
+8. When `media.url` is set, a **"View Source �"** pill button appears below
+   the description, opens the URL in a new tab.
+9. **No raw URL text appears anywhere in the card body.**
+10. Long descriptions wrap cleanly inside the body block.
+11. The "Media" header still uses `.view-title` (primary-tone background).
+12. The old `.media-grid` and `.media-card*` classes are gone from the
+    codebase (dead CSS removed).
 
 ## Sidebar metadata cards (Case Details view)
 
