@@ -144,3 +144,66 @@ Before merging any change to the Summary section:
 11. Case with no `authoritative_source` → footer is absent (no empty box).
 12. Card border + shadow render on white background; not affected by `.incident-container`
     styling of Reports/Media cards.
+
+## Profile sidebar (Case Details view)
+
+The right-hand profile sidebar (`<div class="sidebar-top">` in
+`src/routes/persons/[id]/+page.svelte`) renders the person's identifying
+metadata in a polished **label/value profile sheet**:
+
+- **Profile photo**: 180×180, `border-radius: 8px` (≈ Tailwind `rounded-lg`),
+  `object-fit: cover`. Placeholder (no image) is a same-size box with a
+  dashed border so layout doesn't shift.
+- **Aliases**: rendered italic at `0.75rem` with muted color — clearly
+  differentiated from the legal name above.
+- **Status badge**: own breathing room (`0.75rem 0 1rem 0` margin).
+- **Field rows**: semantic `<dl>`/`<dt>`/`<dd>` pairs. Labels are small
+  uppercase muted (`0.72rem`), values are right-aligned with
+  `word-break: break-word` so long URLs/locations wrap.
+- **Medical row**: hidden when `medicalLabels[person.medical_status] === 'Deceased'`
+  to avoid duplicating the "DECEASED" status badge above. Other statuses
+  (Healthy, Critical, Health Concerns, Unknown) still render.
+- **Source footer**: separated from the field list by a top border,
+  styled as a small uppercase label + the source name (with a `↗`
+  external link when `authoritative_url` is present).
+
+### Classes added in the file-level `<style>` block
+
+| Class                       | Purpose                                    |
+|-----------------------------|--------------------------------------------|
+| `.profile-photo`            | 180×180 rounded photo                      |
+| `.profile-photo-placeholder`| Matching rounded placeholder (dashed border) |
+| `.sidebar-aliases`          | Italic muted aliases                       |
+| `.sidebar-status`           | Margin around the status badge             |
+| `.sidebar-fields`           | `<dl>` wrapper, resets default margins     |
+| `.sidebar-field`            | Row flex container with bottom border      |
+| `.sidebar-field dt`         | Small uppercase muted label                |
+| `.sidebar-field dd`         | Right-aligned value                        |
+| `.sidebar-source`           | Footer strip with top border separator     |
+| `.sidebar-source-label`     | Small uppercase "SOURCE" label             |
+| `.sidebar-source-link`      | External link styling                      |
+| `.sidebar-source-icon`      | `↗` arrow icon                             |
+
+### Manual verification checklist
+
+Before merging any change to the profile sidebar:
+
+1. Profile image renders rounded (8px), no stray border lines on the wrapper.
+2. Placeholder (no image) renders a same-size box with a dashed border.
+3. Aliases are italic, smaller (`0.75rem`), and visually subordinate to legal name.
+4. Status badge has clear breathing room above the field list.
+5. Each label (`Country`, `Location`, etc.) is small uppercase muted; each
+   value is regular weight and right-aligned.
+6. Each field row has a thin bottom border; the last field has none.
+7. Long values wrap cleanly (no overflow off the sidebar edge).
+8. Case with `medical_status: deceased` → the **Medical** row is **not**
+   rendered (the DECEASED status badge above conveys it).
+9. Case with `medical_status: critical` → the **Medical** row **is**
+   rendered with label "Critical".
+10. Case with no `medical_status` → the **Medical** row is **not** rendered.
+11. Case with `authoritative_source` + URL → footer renders with `SOURCE`
+    label, link, and `↗` icon.
+12. Case with `authoritative_source` only (no URL) → footer renders plain text.
+13. Case with no `authoritative_source` → footer is absent (no empty strip).
+14. The other sidebar blocks (Categories, Evidence Tier, Family, Created/Updated)
+    are untouched and still render with the old `.sidebar-bot` styling.
