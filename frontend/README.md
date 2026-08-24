@@ -208,6 +208,55 @@ Before merging any change to the profile sidebar:
 14. The other sidebar blocks (Categories, Evidence Tier, Family, Created/Updated)
     are untouched and still render with the old `.sidebar-bot` styling.
 
+## Media section (Case Details view)
+
+The Media grid on the Case Details page renders each `person.media_files`
+entry in a **refined card** that matches the Summary card's visual language:
+
+- White background, light border (`--color-border-light`), 6px radius,
+  subtle `box-shadow: 0 1px 2px rgba(0,0,0,0.04)`.
+- Comfortable inner padding: `1.25rem 1.5rem`.
+- `line-height: 1.65` for readable text.
+- Cards are arranged in the existing `.media-grid` (200px min column, 1rem gap).
+- Header still uses `.view-title` — consistent with Summary / Reports / Media.
+- Images inside cards are capped at `max-width: 100%`, centered, with a 4px radius.
+- Description text is muted (`var(--color-text-muted)`), 0.85rem.
+- Links use the primary teal color, no underline until hover.
+
+### Scope
+
+This is a **CSS + structural** change only. The underlying data flow
+(photo vs. URL rendering, description duplication, link targets) is
+left exactly as it was for a separate fix.
+
+### Classes added to the file-level `<style>` block
+
+| Selector          | Purpose                                          |
+|-------------------|--------------------------------------------------|
+| `.media-card`     | Card wrapper (white bg, light border, subtle shadow) |
+| `.media-card img` | Photo styling (centered, max-width, 4px radius)  |
+| `.media-card p`   | Muted description text                           |
+| `.media-card a`   | External link styling                            |
+| `.media-card a:hover` | Underline on hover                          |
+
+### Manual verification checklist
+
+Before merging any change to the Media section:
+
+1. Photo media cards render with white background, light border, 6px radius,
+   and a subtle shadow (not heavy/harsh borders).
+2. URL-only media cards render with the same refined wrapper.
+3. Photo inside a card is centered, never exceeds the card width, and has a
+   subtle 4px radius.
+4. Description text below a photo/link is muted and not crowded against edges.
+5. Cards in the grid have a 1rem gap between them.
+6. Long URLs inside cards wrap cleanly (no overflow).
+7. Hovering a URL link shows an underline.
+8. The "Media" header still uses `.view-title` (primary-tone background).
+9. No changes to `.incident-container` styling (Reports still use it).
+10. No template/data logic changed — the existing URL+description duplication
+    still renders exactly as before.
+
 ## Sidebar metadata cards (Case Details view)
 
 The three lower sidebar blocks — **Categories**, **Evidence Tier**, and

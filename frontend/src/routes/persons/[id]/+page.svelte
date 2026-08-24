@@ -255,7 +255,7 @@
 				</div>
 				<div class="media-grid mt-1">
 					{#each person.media_files as media}
-						<div class="incident-container">
+						<div class="media-card">
 							{#if media.media_type === 'photo' && media.file}
 								<img src={media.file} alt={media.description || 'Photo'} class="photo" />
 							{:else if media.url}
@@ -573,6 +573,40 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 		gap: 1rem;
+	}
+
+	/* Media card — refined version of .incident-container for the Media section only */
+	.media-card {
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-light);
+		border-radius: 6px;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+		padding: 1.25rem 1.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		line-height: 1.65;
+		color: var(--color-text);
+	}
+	.media-card img {
+		display: block;
+		max-width: 100%;
+		height: auto;
+		margin: 0 auto;
+		border-radius: 4px;
+	}
+	.media-card p {
+		margin: 0;
+		font-size: 0.85rem;
+		color: var(--color-text-muted);
+	}
+	.media-card a {
+		color: var(--color-primary);
+		text-decoration: none;
+		word-break: break-word;
+	}
+	.media-card a:hover {
+		text-decoration: underline;
 	}
 
 	/* Metadata cards — refined versions of .sidebar-bot for Categories, Evidence Tier, dates */
