@@ -310,3 +310,81 @@ Before merging any change to the sidebar metadata cards:
 10. The Family block still uses the old `.sidebar-bot` styling (intentional).
 11. No changes to `.summary-card`, `.incident-container`, `.media-card`, or
     `.view-title` (all other sections still render exactly as before).
+
+## Design system (global)
+
+The Case Details page uses a **single unified design system** for all
+card-like surfaces (Summary, Reports, Media, Profile sidebar, Metadata
+cards, Profile photo). Single source of truth via CSS variables in
+`:root` of `src/app.css`.
+
+### Tokens
+
+| Variable               | Value                                       | Purpose                    |
+|------------------------|---------------------------------------------|----------------------------|
+| `--color-border-light` | `#e2e8f0`                                   | All light card borders     |
+| `--radius-card`        | `8px`                                       | All card corner radius     |
+| `--shadow-card`        | `0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06)` | Default subtle elevation   |
+| `--shadow-card-hover`  | `0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)` | Hover shadow elevation     |
+| `--transition-card`    | `0.2s ease`                                 | Card transition timing     |
+| `--card-padding`       | `1.25rem 1.5rem`                            | Standard inner card padding|
+
+### Unified rules
+
+All card surfaces:
+- **Background**: pure white `#ffffff` (`var(--color-bg-white)`)
+- **Border**: `1px solid var(--color-border-light)` (was `#ddd`, now `#e2e8f0`)
+- **Radius**: `var(--radius-card)` (8px — was mixed 4px/6px/8px)
+- **Shadow**: `var(--shadow-card)` (was `0 1px 2px rgba(0,0,0,0.04)` hardcoded)
+- **Padding**: `var(--card-padding)` (where applicable)
+- **Entrance animation**: `fadeSlideUp` 0.4s ease (opacity 0 → 1, translateY 8px → 0)
+- **Hover** (except `.incident-container`): shadow elevation + border-color shift to
+  primary teal, both at `0.2s ease`
+
+### Cards covered
+
+| Class                  | Where                  | What changed                          |
+|------------------------|------------------------|---------------------------------------|
+| `.summary-card`        | Summary                | Switched to `var(--shadow-card)` etc. |
+| `.incident-container`  | Reports accordion      | Was `thin solid black`/`4px`/no shadow → unified white/light/8px/shadow |
+| `.media-card`          | Media cards            | Switched to `var(--shadow-card)` etc. |
+| `.sidebar-top`         | Profile sidebar        | Was `thin solid black`/`4px`/no shadow → unified |
+| `.sidebar-bot`         | Family sidebar block   | Was `thin solid black`/`4px`/no shadow → unified |
+| `.meta-card`           | Categories/Evidence Tier/Dates | Switched to `var(--shadow-card)` etc. |
+| `.profile-photo` + `.profile-photo-placeholder` | Profile image | Switched to `var(--radius-card)` etc. |
+
+### Animation rules
+
+- `@keyframes fadeSlideUp` (0.4s) — major card sections
+- `@keyframes fadeSlideUpSmall` (0.35s) — staggered list items
+- `.fade-in-stagger > *:nth-child(N)` — applies 0.05s delay per item (up to 8)
+- `@media (prefers-reduced-motion: reduce)` — all animations + transitions
+  disabled for users who opt out at the OS level
+
+### Scope notes
+
+- **No template logic changes** (one CSS class added on the media grid wrapper
+  for the staggered cascade; everything else is class-targeting in CSS).
+- **Reports accordion hover is intentionally skipped** — the accordion has
+  its own click behavior via `.report-card-header`; outer hover would
+  confuse the expand/collapse mental model.
+- **Sidebar `.sidebar-bot` (Family block) does get hover** — it has no
+  internal interactivity so the elevation is purely informative.
+
+### Manual verification checklist
+
+Before merging any change to the design system:
+
+1. `--color-border-light` value is `#e2e8f0` (not `#ddd`).
+2. All major cards (Summary, Reports, Media, Profile sidebar, Metadata) render
+   with **identical** white background, 8px radius, and subtle shadow.
+3. No card uses `thin solid black` borders anywhere.
+4. On page load, cards fade in from below (opacity 0 → 1, translateY 8px → 0).
+5. Media list items fade in cascade (each item delayed 0.05s after the previous).
+6. Hovering Summary / Media / Profile sidebar / Metadata cards elevates the
+   shadow and shifts the border to teal — both transitions are smooth (0.2s).
+7. Hovering a Reports accordion card does **not** elevate the shadow (intentional).
+8. With OS-level "Reduce motion" enabled, no animations or hover transitions play.
+9. CSS variables (`var(--radius-card)`, `var(--shadow-card)`, etc.) are
+   defined exactly once in `:root` — no hardcoded duplicates in component styles.
+10. Build succeeds with `PUBLIC_BASE_PATH=""` (production env).
