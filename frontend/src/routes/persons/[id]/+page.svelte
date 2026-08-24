@@ -357,25 +357,27 @@
 			</div>
 
 			{#if person.categories?.length > 0}
-				<div class="sidebar-bot">
-					<div class="sidebar-header-2">
-						<p><strong>Categories</strong></p>
+				<div class="meta-card">
+					<div class="meta-card-header">
+						<p>Categories</p>
 					</div>
-					<div class="sidebar-content">
-						{#each person.categories as cat}
-							<p class="small">{cat.name}</p>
-						{/each}
+					<div class="meta-card-body">
+						<ul class="meta-list">
+							{#each person.categories as cat}
+								<li>{cat.name}</li>
+							{/each}
+						</ul>
 					</div>
 				</div>
 			{/if}
 
 			{#if person.quality_tier}
-				<div class="sidebar-bot">
-					<div class="sidebar-header-2">
-						<p><strong>Evidence Tier</strong></p>
+				<div class="meta-card">
+					<div class="meta-card-header">
+						<p>Evidence Tier</p>
 					</div>
-					<div class="sidebar-content">
-						<p class="small">{person.quality_tier}</p>
+					<div class="meta-card-body">
+						<p class="meta-tier">{person.quality_tier}</p>
 					</div>
 				</div>
 			{/if}
@@ -396,10 +398,16 @@
 				</div>
 			{/if}
 
-			<div class="sidebar-bot">
-				<div class="sidebar-content">
-					<p class="small muted mt-1">Created: {new Date(person.created_at).toLocaleDateString()}</p>
-					<p class="small muted">Updated: {new Date(person.updated_at).toLocaleDateString()}</p>
+			<div class="meta-card">
+				<div class="meta-card-body">
+					<div class="meta-row">
+						<span class="meta-label">Created</span>
+						<span class="meta-value">{new Date(person.created_at).toLocaleDateString()}</span>
+					</div>
+					<div class="meta-row">
+						<span class="meta-label">Updated</span>
+						<span class="meta-value">{new Date(person.updated_at).toLocaleDateString()}</span>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -565,5 +573,81 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 		gap: 1rem;
+	}
+
+	/* Metadata cards — refined versions of .sidebar-bot for Categories, Evidence Tier, dates */
+	.meta-card {
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-light);
+		border-radius: 6px;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+		margin-top: 15px;
+		overflow: hidden;
+	}
+	.meta-card-header {
+		background-color: var(--color-primary);
+		color: var(--color-text-light);
+		text-align: center;
+		padding: 0.55rem 1rem;
+		font-size: 0.85rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+	.meta-card-header p {
+		margin: 0;
+	}
+	.meta-card-body {
+		padding: 1.25rem 1.5rem;
+		color: var(--color-text);
+		font-size: 0.92rem;
+		line-height: 1.65;
+	}
+	.meta-card-body p {
+		margin: 0;
+	}
+	.meta-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.meta-list li {
+		padding: 0.4rem 0;
+		border-bottom: 1px solid var(--color-border-light);
+	}
+	.meta-list li:last-child {
+		border-bottom: none;
+	}
+	.meta-tier {
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--color-primary);
+	}
+	.meta-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 0.75rem;
+		padding: 0.4rem 0;
+		border-bottom: 1px solid var(--color-border-light);
+		font-size: 0.88rem;
+	}
+	.meta-row:last-child {
+		border-bottom: none;
+	}
+	.meta-row .meta-label {
+		font-size: 0.72rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-muted);
+		flex: 0 0 auto;
+		min-width: 5.5rem;
+	}
+	.meta-row .meta-value {
+		text-align: right;
+		color: var(--color-text);
+		flex: 1 1 auto;
+		word-break: break-word;
 	}
 </style>
