@@ -6,9 +6,50 @@
 	import { user, isVolunteer } from '$lib/session';
 	import StatusBadge from '$lib/StatusBadge.svelte';
 
+	// Source-type display labels (mirror backend Report.SourceType.choices)
+	const sourceTypeLabels: Record<string, string> = {
+		firsthand: 'Firsthand',
+		secondhand: 'Secondhand',
+		news: 'News',
+		document: 'Document',
+	};
+
+	// URL extraction — finds http(s):// and bare www. links in narrative text,
+	// trims trailing punctuation users commonly leave after pasting URLs.
+	const URL_RE = /\b((?:https?:\/\/|www\.)[^\s<>"']+)/gi;
+	function scanNarrative(text: string): Array<{ kind: 'text' | 'url'; value: string }> {
+		if (!text) return [];
+		const out: Array<{ kind: 'text' | 'url'; value: string }> = [];
+		let last = 0;
+		let m: RegExpExecArray | null;
+		URL_RE.lastIndex = 0;
+		while ((m = URL_RE.exec(text)) !== null) {
+			if (m.index > last) out.push({ kind: 'text', value: text.slice(last, m.index) });
+			let url = m[0];
+			const trail = url.match(/[),.;]+$/);
+			if (trail) url = url.slice(0, -trail[0].length);
+			out.push({ kind: 'url', value: url });
+			last = m.index + m[0].length;
+		}
+		if (last < text.length) out.push({ kind: 'text', value: text.slice(last) });
+		return out;
+	}
+	function domainOf(url: string): string {
+		try {
+			const u = new URL(url.startsWith('http') ? url : 'http://' + url);
+			return u.hostname.replace(/^www\./, '');
+		} catch {
+			return url;
+		}
+	}
+	function normalizeUrl(url: string): string {
+		return url.startsWith('http') ? url : 'https://' + url;
+	}
+
 	let person: any = $state(null);
 	let loading = $state(true);
 	let error = $state('');
+	let expandedId: number | null = $state(null);
 	let currentUser = $derived($user);
 
 	const medicalLabels: Record<string, string> = {
@@ -57,38 +98,77 @@
 				{/if}
 			</div>
 			{#if person.reports?.length > 0}
-				{#each person.reports as report}
+				{#each person.reports as report (report.id)}
+					{@const open = expandedId === report.id}
+					{@const title = report.source_attribution || sourceTypeLabels[report.source_type] || 'Report'}
 					<div class="incident-container">
-						<div class="incident-top">
-							<span class="badge">{report.source_type}</span>
-							{#if report.source_attribution}
-								<span class="muted small"> — {report.source_attribution}</span>
-							{/if}
-							<span class="small muted" style="float:right;">
+						<button
+							type="button"
+							class="report-card-header"
+							aria-expanded={open}
+							aria-controls="report-body-{report.id}"
+							onclick={() => (expandedId = open ? null : report.id)}
+						>
+							<span class="badge badge-source-{report.source_type}">
+								{sourceTypeLabels[report.source_type] || report.source_type}
+							</span>
+							<span class="report-card-title">{title}</span>
+							<span class="report-card-date small muted">
 								{#if report.date_start}
 									{report.date_start}{#if report.date_end} — {report.date_end}{/if}
 								{:else}
 									{new Date(report.created_at).toLocaleDateString()}
 								{/if}
 							</span>
-						</div>
-						{#if report.rough_location}
-							<p class="small muted mt-1">Location: {report.rough_location}</p>
-						{/if}
-						<p class="mt-1 white-space-pre-line">{report.narrative}</p>
-						{#if report.suspected_reason}
-							<p class="mt-1"><strong>Suspected reason:</strong> {report.suspected_reason}</p>
-						{/if}
-						{#if report.official_reason}
-							<p class="mt-1"><strong>Official reason:</strong> {report.official_reason}</p>
-						{/if}
-						{#if report.media_files?.length > 0}
-							<div class="mt-1">
-								{#each report.media_files as media}
-									{#if media.url}
-										<a href={media.url} target="_blank" rel="noopener" class="small">{media.description || media.url}</a>
-									{/if}
-								{/each}
+							<span class="report-card-chevron" class:open aria-hidden="true">▸</span>
+						</button>
+						{#if open}
+							<div id="report-body-{report.id}" class="report-card-body">
+								{#if report.rough_location}
+									<p class="small muted">Location: {report.rough_location}</p>
+								{/if}
+								<p class="report-card-narrative">
+									{#each scanNarrative(report.narrative) as part, i (i)}
+										{#if part.kind === 'url'}
+											<a
+												href={normalizeUrl(part.value)}
+												target="_blank"
+												rel="noopener noreferrer"
+												class="report-link-btn"
+												title={part.value}
+											>
+												<span>{domainOf(part.value)}</span>
+												<span class="report-link-icon" aria-hidden="true">↗</span>
+											</a>
+										{:else}
+											{part.value}
+										{/if}
+									{/each}
+								</p>
+								{#if report.suspected_reason}
+									<p class="mt-1"><strong>Suspected reason:</strong> {report.suspected_reason}</p>
+								{/if}
+								{#if report.official_reason}
+									<p class="mt-1"><strong>Official reason:</strong> {report.official_reason}</p>
+								{/if}
+								{#if report.media_files?.length > 0}
+									<div class="report-card-media">
+										{#each report.media_files as media}
+											{#if media.url}
+												<a
+													href={media.url}
+													target="_blank"
+													rel="noopener noreferrer"
+													class="report-link-btn"
+													title={media.description || media.url}
+												>
+													<span>{domainOf(media.url)}</span>
+													<span class="report-link-icon" aria-hidden="true">↗</span>
+												</a>
+											{/if}
+										{/each}
+									</div>
+								{/if}
 							</div>
 						{/if}
 					</div>
