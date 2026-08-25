@@ -2,6 +2,8 @@
 set -eo pipefail
 
 cd /opt/rtv-cases
+PROJECT_ROOT="$(pwd)"   # Used by the nohup fallbacks below to return here
+                        # after `cd`ing into backend/ or frontend/.
 
 SITE="https://cases.raisethevoices.org"
 
