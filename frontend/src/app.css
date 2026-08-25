@@ -1,7 +1,23 @@
-/* Testimonies.world — based on Marturia design language */
+/* ============================================================================
+   Testimonies.world — design system tokens
+   --------------------------------------------------------------------------
+   Every visible surface of the app should pull from this list, not from
+   ad-hoc values. If you need a new color / radius / spacing, add a token
+   here first; don't reach for the raw value in a component.
+   --------------------------------------------------------------------------
+   COLOR      primary / primary-light / bg / bg-white / text / text-muted /
+              text-light / border / border-light / danger / success /
+              section-bg / sidebar-header
+   LAYOUT     max-width (1140px), max-w-page (1100px), max-w-prose (720px),
+              gap-card (1rem), card-padding (1.25rem 1.5rem)
+   SURFACE    radius-card (8px), shadow-card, shadow-card-hover,
+              transition-card (0.2s ease)
+   TYPE       font stack: 'PT Sans', system-ui fallbacks (set on body)
+   ========================================================================== */
 @import url('https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap');
 
 :root {
+	/* Color */
 	--color-primary: #25646a;
 	--color-primary-light: #477c81;
 	--color-bg: #f4f7f6;
@@ -15,9 +31,15 @@
 	--color-success: #2f855a;
 	--color-section-bg: rgba(0, 0, 0, 0.1);
 	--color-sidebar-header: #5f9ea0; /* cadetblue from Marturia view */
-	--max-width: 1140px;
+	--color-primary-tint: rgba(37, 100, 106, 0.1); /* icon wells, count badges */
 
-	/* Design system — card tokens (unified across all Case Details sections) */
+	/* Layout */
+	--max-width: 1140px; /* legacy layout wrapper */
+	--max-w-page: 1100px; /* primary content column on dashboard pages */
+	--max-w-prose: 720px; /* readable line length for hero/body copy */
+	--gap-card: 1rem; /* standard gap between cards / grid items */
+
+	/* Surface */
 	--radius-card: 8px;
 	--shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
 	--shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
@@ -178,6 +200,19 @@ h3 { font-size: 1.15rem; }
 	.sidebar-bot {
 		transition: none;
 	}
+}
+
+/* ============================================================================
+   Global focus-visible style for any interactive element that doesn't define
+   its own. Cards that are clickable should still rely on inner <a>/<button>
+   for the focus ring; this rule covers bare <a> and <button> instances.
+   ========================================================================== */
+a:focus-visible,
+button:focus-visible,
+[role='button']:focus-visible {
+	outline: 2px solid var(--color-primary);
+	outline-offset: 3px;
+	border-radius: 3px;
 }
 button {
 	font-family: inherit;
