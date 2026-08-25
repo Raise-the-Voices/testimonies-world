@@ -1,45 +1,74 @@
-# sv
+# Frontend
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+This directory is the SvelteKit frontend for **Testimonies.world**.
 
-## Creating a project
+**The main project README is at [`../README.md`](../README.md)** — start there
+for project context (stack, dev URLs, data model, permissions, deployment).
 
-If you're seeing this, you've probably already done this step. Congrats!
+This README is for **frontend-specific** concerns: development commands,
+the design system, and per-component polish documentation for the Case
+Details page.
 
-```sh
-# create a new project
-npx sv create my-app
-```
+---
 
-To recreate this project with the same configuration:
+## Quick reference (frontend only)
 
-```sh
-# recreate this project
-npx sv@0.12.4 create --template minimal --types ts --no-install frontend
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+### Install + run
 
 ```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+cd frontend
+npm install                                  # first time / after package.json changes
+npm run dev                                  # vite dev server (default :5173)
+PUBLIC_BASE_PATH=/testimonies npm run dev -- --host 0.0.0.0 --port 3040
+npm run check                                # type-check via svelte-check
+npm run test                                 # vitest unit tests
+npm run build                                # production build → ./build/
+npm run preview                              # preview the production build locally
 ```
 
-## Building
+### Project layout (this directory)
 
-To create a production version of your app:
+```
+frontend/
+├── src/
+│   ├── routes/             Pages (SvelteKit file-based routing)
+│   ├── lib/                Components, stores, API client
+│   ├── app.css             Global styles + design system tokens
+│   ├── app.d.ts
+│   └── hooks.server.ts
+├── static/                 Static assets (favicon, etc.)
+├── svelte.config.js
+├── vite.config.ts
+├── tsconfig.json
+└── package.json
+```
+
+### Production build env vars (from `../SYSTEM_RULES.md` §3)
 
 ```sh
-npm run build
+PUBLIC_BASE_PATH="" \
+ORIGIN=https://cases.raisethevoices.org \
+  npm run build
 ```
 
-You can preview the production build with `npm run preview`.
+Missing these causes path-drifting and stale asset hashes after deploy.
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+---
+
+## Case Details — design system & component polish
+
+The Case Details page is the most-trafficked surface of the app. All sections
+have been unified into a single design system. Each section below has a
+**manual verification checklist** for future contributors.
+
+- [Design system (global tokens, animation, hover)](#design-system-global)
+- [Reports section](#reports-section-case-details-view)
+- [Summary section](#summary-section-case-details-view)
+- [Profile sidebar](#profile-sidebar-case-details-view)
+- [Media section](#media-section-case-details-view)
+- [Sidebar metadata cards](#sidebar-metadata-cards-case-details-view)
+
+---
 
 ## Reports section (Case Details view)
 
