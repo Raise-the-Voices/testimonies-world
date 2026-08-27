@@ -1,22 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { getStatistics } from '$lib/api';
+	import { statusLabels } from '$lib/StatusBadge.svelte';
 	import StatCard from '$lib/StatCard.svelte';
 	import StatRow from '$lib/StatRow.svelte';
 
 	let stats: any = $state(null);
 	let loading = $state(true);
-
-	const statusLabels: Record<string, string> = {
-		detained: 'Detained',
-		disappeared: 'Disappeared',
-		restricted_movement: 'Restricted Movement',
-		released: 'Released',
-		deceased: 'Deceased',
-		unknown: 'Unknown',
-		stateless: 'Stateless',
-		rights_restricted: 'Rights Restricted',
-	};
 
 	const medicalLabels: Record<string, string> = {
 		unknown: 'Unknown',
