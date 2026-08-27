@@ -1,3 +1,4 @@
+
 # Raise the Voices — Cases
 # Canonical nginx site config for cases.raisethevoices.org.
 #
@@ -62,7 +63,12 @@ server {
     proxy_set_header Host              $host;
     proxy_set_header X-Real-IP         $remote_addr;
     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
+    # Hardcoded to https — TLS is terminated upstream, so the VM only ever
+    # sees plain HTTP on loopback but the public-facing scheme is always
+    # https. Django uses this header (via SECURE_PROXY_SSL_HEADER) to build
+    # OAuth redirect_uri values; if it sees `http`, allauth sends an http://
+    # redirect_uri and Google rejects it with redirect_uri_mismatch.
+    proxy_set_header X-Forwarded-Proto https;
     proxy_set_header X-Forwarded-Host  $host;
     proxy_redirect off;
 
