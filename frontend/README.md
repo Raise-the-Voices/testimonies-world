@@ -366,6 +366,95 @@ Before merging any change to the sidebar metadata cards:
 11. No changes to `.summary-card`, `.incident-container`, `.media-card`, or
     `.view-title` (all other sections still render exactly as before).
 
+---
+
+## Cases catalog (Cases view)
+
+The `/persons` catalog page (`src/routes/persons/+page.svelte`) was rebuilt
+in 2026-08 to match the rest of the design system. Composes three new
+shared components on top of the existing `Icon` + `StatusBadge`:
+
+- **`FilterToolbar`** (`src/lib/FilterToolbar.svelte`) — the floating
+  elevated card holding search, three filter selects, sort, view toggle,
+  and a clear-filters button. Stateless; every prop is bindable so the
+  page keeps its reactive filter logic.
+- **`PersonCard`** (`src/lib/PersonCard.svelte`) — the redesigned image
+  card with a floating status-badge overlay, icon-led metadata rows, and
+  a CTA footer whose arrow slides right on hover.
+- **`ViewToggle`** (`src/lib/ViewToggle.svelte`) — segmented pill control
+  for the cards / list toggle. Owns the `localStorage` read+write under
+  key `rtv-cases-view` so the page doesn't have to.
+
+### Page chrome
+
+- The catalog area is wrapped in `.page-surface` — a subtle lift off
+  `--color-bg` (`#f8fafb` vs `#f4f7f6`) with `--radius-card-lg` (16px)
+  corners. Defines the catalog as a distinct zone on the page.
+- `.cases-grid` is a responsive 1 / 2 / 3 / 4 column grid at
+  640 / 1024 / 1280 px breakpoints.
+
+### Floating toolbar
+
+- `.toolbar-card` is the elevated white card with `--shadow-toolbar`
+  (a teal-tinted lift) holding search + selects + sort + view toggle.
+- Search uses `<SearchInput>` — leading magnifier icon, `--focus-ring`
+  on focus, height matched to selects.
+- Each filter uses `<FilterSelect>` — appearance-none native `<select>`
+  with a custom `chevron-down` icon overlay.
+- View toggle uses `<ViewToggle>` — segmented pill, `--color-primary`
+  fill on the active button.
+- Clear-filters button appears only when `hasActiveFilters` is true.
+- Toolbar rows collapse to full-width stacked layout under 600 px.
+
+### Person card
+
+- Image area: 4:3 aspect ratio, `bg: var(--color-section-bg)`, image
+  scales to 1.05x on card hover with `transform 0.5s ease`.
+- Floating status badge: `<StatusBadge variant="overlay" />` — pill in
+  the top-right corner with `backdrop-filter: blur(8px)` (and a flat
+  fallback via `@supports not`).
+- Body: name (truncated, single-line ellipsis), then icon-led metadata
+  rows (globe / pin / clock / newspaper).
+- CTA footer: "View details" + arrow icon. Arrow slides 4px right on
+  card hover. Border-top separator from the body.
+- Card hover: `-4px` translateY, `--shadow-card-lg`, border tint to
+  `--color-primary-light`. All transitions gated by
+  `prefers-reduced-motion: reduce`.
+
+### Manual verification checklist
+
+Before merging any change to `/persons`:
+
+1. Initial load shows the floating toolbar + card grid; no JS errors in console.
+2. Browser width < 640 px → 1 card column, toolbar rows stacked full-width.
+3. Browser width 640–1023 px → 2 columns.
+4. Browser width 1024–1279 px → 3 columns.
+5. Browser width ≥ 1280 px → 4 columns.
+6. Type in search → 300 ms debounce; results refresh once after typing stops.
+7. Change status / country / category → results refresh immediately;
+   countries dropdown counts stay in sync with other filters.
+8. Toggle Cards ↔ List → view switches; reload the page → preference persists
+   (localStorage `rtv-cases-view`).
+9. Hover a card → card lifts ~4 px, shadow deepens, image scales to 1.05x,
+   "View details" arrow slides right.
+10. Status badge overlay is readable on top of typical photo backgrounds
+    (backdrop blur); each status renders with its semantic color
+    (deceased = dark slate, detained = red, disappeared = amber, etc.).
+11. Apply a filter, then click "Clear filters" → all filters reset,
+    results refresh, countries dropdown counts recompute.
+12. Block network → "Could not load cases" error banner with Retry button
+    appears in place of the toolbar.
+13. Empty result set → `.empty-state` with icon + clear-filters button.
+14. Pagination — Prev disabled on page 1; Next disabled on last page;
+    "Page N of M — showing X–Y of Z" indicator is correct.
+15. Toggle `prefers-reduced-motion: reduce` in DevTools → hover lift,
+    image zoom, and entrance animation are all suppressed.
+16. Visit `/statistics` and `/watchdog` → no regression; `StatusBadge`
+    still renders identically in its flat-pill usage (the `variant` prop
+    defaults to `'default'`).
+
+---
+
 ## Design system (global)
 
 The Case Details page uses a **single unified design system** for all

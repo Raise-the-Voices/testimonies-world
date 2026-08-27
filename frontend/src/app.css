@@ -5,13 +5,14 @@
    ad-hoc values. If you need a new color / radius / spacing, add a token
    here first; don't reach for the raw value in a component.
    --------------------------------------------------------------------------
-   COLOR      primary / primary-light / bg / bg-white / text / text-muted /
-              text-light / border / border-light / danger / success /
-              section-bg / sidebar-header
+   COLOR      primary / primary-light / bg / bg-white / surface / text /
+              text-muted / text-light / border / border-light / border-subtle /
+              danger / success / section-bg / sidebar-header
    LAYOUT     max-width (1140px), max-w-page (1100px), max-w-prose (720px),
               gap-card (1rem), card-padding (1.25rem 1.5rem)
-   SURFACE    radius-card (8px), shadow-card, shadow-card-hover,
-              transition-card (0.2s ease)
+   SURFACE    radius-card (8px), radius-card-lg (16px), radius-input (10px),
+              shadow-card, shadow-card-hover, shadow-toolbar, shadow-card-lg,
+              focus-ring, transition-card (0.2s ease)
    TYPE       font stack: 'PT Sans', system-ui fallbacks (set on body)
    ========================================================================== */
 @import url('https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap');
@@ -22,11 +23,13 @@
 	--color-primary-light: #477c81;
 	--color-bg: #f4f7f6;
 	--color-bg-white: #fff;
+	--color-surface: #f8fafb; /* subtle lift off --color-bg for catalog pages */
 	--color-text: #1a1a1a;
 	--color-text-muted: #666;
 	--color-text-light: #fafafa;
 	--color-border: darkgray;
 	--color-border-light: #e2e8f0;
+	--color-border-subtle: #eef2f5; /* softer than --color-border-light */
 	--color-danger: #d91616;
 	--color-success: #2f855a;
 	--color-section-bg: rgba(0, 0, 0, 0.1);
@@ -41,8 +44,13 @@
 
 	/* Surface */
 	--radius-card: 8px;
+	--radius-card-lg: 16px; /* the rounded-2xl analog; cards + toolbar */
+	--radius-input: 10px; /* inputs + selects */
 	--shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
 	--shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+	--shadow-toolbar: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -12px rgba(37, 100, 106, 0.18);
+	--shadow-card-lg: 0 4px 12px rgba(0, 0, 0, 0.06), 0 20px 40px -16px rgba(37, 100, 106, 0.18);
+	--focus-ring: 0 0 0 3px var(--color-primary-tint);
 	--transition-card: 0.2s ease;
 	--card-padding: 1.25rem 1.5rem;
 }
@@ -302,6 +310,88 @@ label {
 .badge-source-secondhand { background: #feebc8; color: #c05621; }
 .badge-source-news       { background: #bee3f8; color: #2b6cb0; }
 .badge-source-document   { background: #e2e8f0; color: #4a5568; }
+
+/* Floating overlay variant — used inside image cards. The existing
+   `.badge-{status}` rules set the bg + fg; this just adds the floating
+   chrome (rounded pill, backdrop blur, shadow). */
+.badge--overlay {
+	padding: 0.3rem 0.7rem;
+	border-radius: 999px;
+	font-size: 0.7rem;
+	letter-spacing: 0.04rem;
+	box-shadow: var(--shadow-card);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+}
+@supports not ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))) {
+	.badge--overlay { background-color: var(--color-bg-white) !important; }
+}
+
+/* Catalog page surface — wraps the /persons catalog area to lift it
+   off --color-bg with a subtle tint. */
+.page-surface {
+	background: var(--color-surface);
+	border-radius: var(--radius-card-lg);
+	padding: 2rem;
+	margin-top: 1rem;
+}
+@media (max-width: 700px) {
+	.page-surface { padding: 1rem; border-radius: 12px; }
+}
+
+/* Cases grid — responsive 1 / 2 / 3 / 4 columns. */
+.cases-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 1.5rem;
+}
+@media (min-width: 640px)  { .cases-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .cases-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .cases-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* Inline error banner — used when /persons data load fails. */
+.error-banner-inline {
+	background: #fed7d7;
+	color: #c53030;
+	border: 1px solid #feb2b2;
+	padding: 0.75rem 1rem;
+	border-radius: var(--radius-card);
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-bottom: 1rem;
+}
+
+/* Empty state — for "no results" with optional CTA. */
+.empty-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 0.75rem;
+	padding: 3rem 1rem;
+	color: var(--color-text-muted);
+	text-align: center;
+}
+
+/* Input/select modifiers for the floating filter toolbar. Default form
+   styles above (line ~236) target Marturia legacy forms; these newer
+   modifiers are used by the SearchInput and FilterSelect components. */
+.input--search,
+.select--filter {
+	border-radius: var(--radius-input);
+	border: 1px solid var(--color-border-light);
+	padding: 0.65rem 1rem;
+	background: var(--color-bg-white);
+	color: var(--color-text);
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.input--search:focus,
+.select--filter:focus {
+	outline: none;
+	border-color: var(--color-primary);
+	box-shadow: var(--focus-ring);
+}
 
 /* Report accordion */
 .report-card-header {
