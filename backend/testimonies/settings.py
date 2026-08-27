@@ -16,6 +16,14 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',')
 SCRIPT_NAME = config('SCRIPT_NAME', default='')
 FORCE_SCRIPT_NAME = SCRIPT_NAME or None
 
+# TLS is terminated upstream by Cloudflare/Caddy on the hypervisor; nginx on
+# this VM only sees plain HTTP on loopback. Tell Django to trust the
+# X-Forwarded-Proto header so request.is_secure() reflects the public scheme.
+# Required for allauth to build OAuth redirect_uri values as https:// —
+# otherwise Google rejects the handshake with `redirect_uri_mismatch`
+# (2026-08-27 outage on cases.raisethevoices.org).
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
