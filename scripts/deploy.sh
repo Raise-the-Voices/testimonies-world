@@ -131,13 +131,20 @@ if [ "$frontend_up" != 1 ]; then
     cd "$PROJECT_ROOT"
 fi
 
+# Install the canonical nginx site config from the repo. This is the file
+# that was missing the /accounts/ block on 2026-08-27, locking admins out.
+# Writing directly to sites-enabled so the typical `include sites-enabled/*;`
+# directive picks it up regardless of whether sites-available is also used.
+sudo install -d -m 0755 /etc/nginx/sites-enabled
+sudo install -m 0644 scripts/nginx/rtv-cases /etc/nginx/sites-enabled/rtv-cases
+
 # Sanity check the active nginx config exposes the routes Django actually serves.
 # Catches the "deploy succeeded but /accounts/google/login/ is 404" class of
 # regression before we declare the deploy complete. Without this gate, a
 # missing `location /accounts/` block silently ships and locks admins out.
 if ! sudo nginx -T 2>/dev/null | grep -qE 'location[[:space:]]+/(accounts|admin|api)/[[:space:]]'; then
     echo "DEPLOY FAILED: nginx is missing a location block for /accounts/, /admin/, or /api/." >&2
-    echo "See scripts/nginx/rtv-cases.conf for the canonical site config." >&2
+    echo "See scripts/nginx/rtv-cases for the canonical site config." >&2
     exit 1
 fi
 
