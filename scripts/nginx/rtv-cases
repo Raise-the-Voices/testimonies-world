@@ -1,0 +1,103 @@
+# Raise the Voices — Cases
+# Canonical nginx site config for cases.raisethevoices.org.
+#
+# Deployed automatically by scripts/deploy.sh to
+#   /etc/nginx/sites-available/rtv-cases  (symlinked from sites-enabled/)
+# and reloaded via `sudo nginx -s reload`.
+#
+# Backends:
+#   * gunicorn (Django + allauth)  → 127.0.0.1:8040
+#   * node (SvelteKit SSR)         → 127.0.0.1:3000
+#   * static client bundle         → /var/www/cases/
+#
+# IMPORTANT: every Django route MUST have an explicit `location` block. If a
+# path falls through to the frontend catch-all (`location /`), the SvelteKit
+# server returns its own 404 — and admins get locked out. This is the bug
+# that motivated putting this file in the repo on 2026-08-27.
+#
+# IMPORTANT #2: this config is plain HTTP on :80. TLS is terminated upstream
+# (Cloudflare / Caddy on the hypervisor) for this domain. If you ever
+# expose this VM directly, replace the `listen 80` lines with
+# `listen 443 ssl http2;` and add `ssl_certificate` /
+# `ssl_certificate_key` pointing at the Let's Encrypt material under
+# /etc/letsencrypt/live/cases.raisethevoices.org/.
+
+# ---------- upstreams ----------
+upstream rtv_cases_backend {
+    server 127.0.0.1:8040 fail_timeout=0;
+    keepalive 32;
+}
+
+upstream rtv_cases_frontend {
+    server 127.0.0.1:3000 fail_timeout=0;
+    keepalive 32;
+}
+
+# WebSocket-friendly Connection header for the SvelteKit node upstream.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+# ---------- HTTP entrypoint ----------
+server {
+    listen 80;
+    listen [::]:80;
+    server_name cases.raisethevoices.org;
+
+    client_max_body_size 25m;
+    server_tokens off;
+
+    # Gzip — the SvelteKit client bundle is large enough to benefit.
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript
+               application/x-javascript text/javascript image/svg+xml;
+    gzip_min_length 1024;
+
+    # Common reverse-proxy headers — inherited by every proxy_pass below.
+    # Preserve the public hostname and scheme so Django generates correct
+    # absolute URLs for OAuth redirects (Google's redirect_uri must match
+    # the Authorized redirect URI byte-for-byte).
+    proxy_http_version 1.1;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host  $host;
+    proxy_redirect off;
+
+    # ---- static assets served directly off disk (no upstream hop) ----
+    # `_app/` is where SvelteKit's immutable client bundle lives; rsync'd
+    # here by deploy.sh from /opt/rtv-cases/frontend/build/client/_app/.
+    root /var/www/cases;
+
+    location /_app/ {
+        access_log off;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    location = /favicon.ico { access_log off; try_files $uri =404; }
+    location = /robots.txt  { access_log off; try_files $uri =404; }
+
+    # ---- Django / gunicorn routes ----
+    # Explicit, ordered before the frontend catch-all below. Adding a new
+    # Django route? Add it here so it doesn't get caught by `location /`.
+    location /static/   { proxy_pass http://rtv_cases_backend; }
+    location /media/    { proxy_pass http://rtv_cases_backend; }
+    location /api/      { proxy_pass http://rtv_cases_backend; }
+    location /admin/    { proxy_pass http://rtv_cases_backend; }
+    location /accounts/ { proxy_pass http://rtv_cases_backend; }
+    location /events/   { proxy_pass http://rtv_cases_backend; }
+
+    # ---- SvelteKit frontend catch-all (must come last) ----
+    location / {
+        proxy_pass http://rtv_cases_frontend;
+        # Override the inherited Connection header to support WebSocket
+        # upgrades from the SvelteKit dev tooling / HMR.
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 60s;
+    }
+}

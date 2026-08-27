@@ -131,6 +131,23 @@ if [ "$frontend_up" != 1 ]; then
     cd "$PROJECT_ROOT"
 fi
 
+# Install the canonical nginx site config from the repo. This is the file
+# that was missing the /accounts/ block on 2026-08-27, locking admins out.
+# Writing directly to sites-enabled so the typical `include sites-enabled/*;`
+# directive picks it up regardless of whether sites-available is also used.
+sudo install -d -m 0755 /etc/nginx/sites-enabled
+sudo install -m 0644 scripts/nginx/rtv-cases /etc/nginx/sites-enabled/rtv-cases
+
+# Sanity check the active nginx config exposes the routes Django actually serves.
+# Catches the "deploy succeeded but /accounts/google/login/ is 404" class of
+# regression before we declare the deploy complete. Without this gate, a
+# missing `location /accounts/` block silently ships and locks admins out.
+if ! sudo nginx -T 2>/dev/null | grep -qE 'location[[:space:]]+/(accounts|admin|api)/[[:space:]]'; then
+    echo "DEPLOY FAILED: nginx is missing a location block for /accounts/, /admin/, or /api/." >&2
+    echo "See scripts/nginx/rtv-cases for the canonical site config." >&2
+    exit 1
+fi
+
 # Reload nginx so it picks up the new bundle without dropping connections.
 sudo nginx -t && sudo nginx -s reload
 
@@ -153,12 +170,19 @@ for attempt in 1 2 3 4 5 6 7 8 9 10; do
         asset_url="$SITE/$(printf '%s' "$entry" | sed 's|^[./]*||')"
         code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$asset_url" || true)
         api=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/api/" || true)
-        if [ "$code" = 200 ] && [ "$api" = 200 ]; then
+        # /accounts/google/login/ returns 200 once allauth is wired through nginx;
+        # a 404 here means the nginx site config is missing the /accounts/ block
+        # and admins are about to be locked out. Accept 200 or 302 (redirect).
+        accounts=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/accounts/google/login/" || true)
+        if [ "$code" = 200 ] && [ "$api" = 200 ] \
+           && { [ "$accounts" = 200 ] || [ "$accounts" = 302 ]; }; then
             echo "  entry asset OK: $asset_url"
             echo "  api OK"
+            echo "  /accounts/google/login/ OK ($accounts)"
             ok=1
             break
         fi
+        echo "  attempt $attempt: assets=$code api=$api accounts=$accounts"
     fi
     echo "  attempt $attempt: not ready yet"
     sleep 3
@@ -169,6 +193,7 @@ if [ "$ok" != 1 ]; then
     echo "Check:  systemctl status rtv-cases-frontend" >&2
     echo "        ls -la /opt/rtv-cases/frontend/build/server/chunks/client" >&2
     echo "        ls /var/www/cases/_app/immutable/entry/" >&2
+    echo "        sudo nginx -T | grep -E 'location /(accounts|admin|api)/'  # missing /accounts/ = 404 on login" >&2
     echo "Roll back with:  git checkout \$(git tag -l 'deploy-*' | tail -2 | head -1)" >&2
     exit 1
 fi
