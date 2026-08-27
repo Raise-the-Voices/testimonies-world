@@ -138,18 +138,23 @@ fi
 sudo install -d -m 0755 /etc/nginx/sites-enabled
 sudo install -m 0644 scripts/nginx/rtv-cases /etc/nginx/sites-enabled/rtv-cases
 
-# Sanity check the active nginx config exposes the routes Django actually serves.
-# Catches the "deploy succeeded but /accounts/google/login/ is 404" class of
-# regression before we declare the deploy complete. Without this gate, a
-# missing `location /accounts/` block silently ships and locks admins out.
+# Reload nginx so it picks up the new bundle without dropping connections.
+# `nginx -t` validates the config first — if the file we just installed has
+# a syntax error, this aborts before the reload and the smoke test below
+# will catch the issue.
+sudo nginx -t && sudo nginx -s reload
+
+# Sanity check the LIVE config (post-reload) exposes the routes Django
+# actually serves. Must run AFTER the reload — `nginx -T` dumps whatever
+# nginx currently has loaded, not the file on disk, so checking before
+# the reload inspects the stale config and aborts the deploy with a
+# false negative (this is the bug e6fda05 introduced and 8c54f4c did not
+# catch — the install runs, but the check sees the pre-reload state).
 if ! sudo nginx -T 2>/dev/null | grep -qE 'location[[:space:]]+/(accounts|admin|api)/[[:space:]]'; then
     echo "DEPLOY FAILED: nginx is missing a location block for /accounts/, /admin/, or /api/." >&2
     echo "See scripts/nginx/rtv-cases for the canonical site config." >&2
     exit 1
 fi
-
-# Reload nginx so it picks up the new bundle without dropping connections.
-sudo nginx -t && sudo nginx -s reload
 
 # Smoke test. Fetch the homepage, extract the entry script hash from the HTML
 # the server just rendered, and confirm that exact asset resolves. This is what
