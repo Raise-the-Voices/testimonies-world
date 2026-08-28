@@ -144,14 +144,25 @@ sudo install -m 0644 scripts/nginx/rtv-cases /etc/nginx/sites-enabled/rtv-cases
 # will catch the issue.
 sudo nginx -t && sudo nginx -s reload
 
-# Sanity check the LIVE config (post-reload) exposes the routes Django
-# actually serves. Must run AFTER the reload — `nginx -T` dumps whatever
-# nginx currently has loaded, not the file on disk, so checking before
-# the reload inspects the stale config and aborts the deploy with a
-# false negative (this is the bug e6fda05 introduced and 8c54f4c did not
-# catch — the install runs, but the check sees the pre-reload state).
-if ! sudo nginx -T 2>/dev/null | grep -qE 'location[[:space:]]+/(accounts|admin|api)/[[:space:]]'; then
-    echo "DEPLOY FAILED: nginx is missing a location block for /accounts/, /admin/, or /api/." >&2
+# Sanity check that the installed nginx site config exposes the routes
+# Django actually serves. We check the file we just installed rather than
+# running `sudo nginx -T`, because `nginx -T` on a host where the master
+# is already bound to :80 can race against the master for the port — its
+# internal bind test fails, nothing is written to stdout, and (without
+# 2>/dev/null) you'd see the real error instead of a misleading
+# "missing location block" report. With the previous 2>/dev/null, the
+# failure mode was: deploy aborts with the wrong message even though the
+# config is fine.
+#
+# The file we just installed IS the source of truth on disk: `nginx -t`
+# above already validated that the include chain parses, and
+# `nginx -s reload` already applied it. The smoke test below curl-checks
+# the routes against the live URL — that's what catches real routing
+# problems (e.g. someone editing /etc/nginx/nginx.conf to drop the
+# sites-enabled include). This check is just an early guard against the
+# deploy script itself installing a broken file.
+if ! grep -qE 'location[[:space:]]+/(accounts|admin|api)/[[:space:]]' /etc/nginx/sites-enabled/rtv-cases; then
+    echo "DEPLOY FAILED: /etc/nginx/sites-enabled/rtv-cases is missing a location block for /accounts/, /admin/, or /api/." >&2
     echo "See scripts/nginx/rtv-cases for the canonical site config." >&2
     exit 1
 fi
