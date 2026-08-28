@@ -11,7 +11,7 @@
 	let saving = $state(false);
 	let loading = $state(true);
 	let errorMsg = $state('');
-	let personId = $derived(page.params.id);
+	let personId = $derived(page.params.id!);
 
 	// Person fields
 	let name = $state('');
