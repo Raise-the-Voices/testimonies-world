@@ -25,7 +25,7 @@
 
 	onMount(async () => {
 		try {
-			person = await getPerson(page.params.id);
+			person = await getPerson(page.params.id!);
 		} catch (e: any) {
 			errorMsg = e.message;
 		}
