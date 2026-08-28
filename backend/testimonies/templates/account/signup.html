@@ -1,0 +1,54 @@
+{% extends "account/base_entrance.html" %}
+{% load i18n %}
+{% load allauth account %}
+
+{% block head_title %}{% trans "Sign Up" %}{% endblock head_title %}
+
+{% block content %}
+    <h1>{% trans "Create an account" %}</h1>
+    <p class="auth-subtitle">
+        {% trans "Join Raise the Voices to contribute cases and updates." %}
+    </p>
+
+    {% if not SOCIALACCOUNT_ONLY %}
+        {% url 'account_signup' as action_url %}
+        <form class="auth-form" method="post" action="{{ action_url }}">
+            {% csrf_token %}
+            {{ redirect_field }}
+
+            {% if form.non_field_errors %}
+                <ul class="errorlist">
+                    {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+            {% endif %}
+
+            {% for field in form %}
+                <div class="field">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}
+                        <small class="helptext">{{ field.help_text|safe }}</small>
+                    {% endif %}
+                    {% if field.errors %}
+                        <ul class="errorlist">
+                            {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            {% endfor %}
+
+            <button type="submit" class="auth-submit">{% trans "Sign Up" %}</button>
+
+            <div class="auth-links">
+                {% if login_url %}
+                    {% trans "Already have an account?" %}
+                    <a href="{{ login_url }}">{% trans "Sign in" %}</a>
+                {% endif %}
+            </div>
+        </form>
+    {% endif %}
+
+    {% if SOCIALACCOUNT_ENABLED %}
+        {% include "socialaccount/snippets/login.html" with page_layout="entrance" %}
+    {% endif %}
+{% endblock content %}
