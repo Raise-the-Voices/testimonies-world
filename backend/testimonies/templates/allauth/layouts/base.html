@@ -1,0 +1,41 @@
+{% load i18n static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block head_title %}{% endblock head_title %} — Raise the Voices</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'auth/auth.css' %}">
+    <link rel="icon" href="data:,">
+    {% block extra_head %}{% endblock extra_head %}
+</head>
+<body>
+    <header class="auth-header">
+        <a href="/">Raise the Voices — Cases</a>
+    </header>
+
+    <main class="auth-stage">
+        <section class="auth-card">
+            {% if messages %}
+                <ul class="auth-messages">
+                    {% for message in messages %}
+                        <li class="{{ message.tags }}">{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% block content %}{% endblock content %}
+        </section>
+    </main>
+
+    <footer class="auth-footer">
+        <a href="https://raisethevoices.org">RaisetheVoices.org</a> — Every person matters.
+    </footer>
+
+    {% block extra_body %}{% endblock extra_body %}
+</body>
+</html>

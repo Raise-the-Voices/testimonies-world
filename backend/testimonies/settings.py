@@ -105,6 +105,10 @@ USE_TZ = True
 # Static files
 STATIC_URL = f'{SCRIPT_NAME}/static/' if SCRIPT_NAME else '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+# Project-level static dir (auth.css for the allauth templates lives here).
+# App-level static/ dirs are still picked up automatically because TEMPLATES
+# has APP_DIRS=True — equivalent for staticfiles is the default Finder.
+STATICFILES_DIRS = [BASE_DIR / 'testimonies' / 'static']
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',

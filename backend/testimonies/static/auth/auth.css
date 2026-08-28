@@ -1,0 +1,353 @@
+/* ============================================================================
+   Testimonies.world — Auth pages stylesheet
+   --------------------------------------------------------------------------
+   Mirrors the tokens in frontend/src/app.css so the Django-rendered
+   /accounts/* pages share the same visual identity as the SvelteKit app.
+   Kept as a single static file (not a Tailwind / Bootstrap dependency) so
+   it's served by whitenoise at /static/auth/auth.css and survives without
+   a frontend rebuild.
+   ========================================================================== */
+
+:root {
+    --color-primary: #25646a;
+    --color-primary-light: #477c81;
+    --color-bg: #f4f7f6;
+    --color-bg-white: #fff;
+    --color-text: #1a1a1a;
+    --color-text-muted: #666;
+    --color-text-light: #fafafa;
+    --color-border: darkgray;
+    --color-border-light: #e2e8f0;
+    --color-danger: #d91616;
+    --color-success: #2f855a;
+
+    --radius-card: 8px;
+    --radius-card-lg: 16px;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow-card-lg: 0 4px 12px rgba(0, 0, 0, 0.06), 0 20px 40px -16px rgba(37, 100, 106, 0.18);
+    --card-padding: 1.25rem 1.5rem;
+    --transition-card: 0.2s ease;
+}
+
+* { box-sizing: border-box; }
+
+html {
+    line-height: 1.15;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    margin: 0;
+    font-family: 'PT Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+        'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
+        'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ---- Header banner ---------------------------------------------------- */
+.auth-header {
+    background: var(--color-primary);
+    color: var(--color-text-light);
+    padding: 1.5rem 1rem;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.08rem;
+}
+.auth-header a {
+    color: var(--color-text-light);
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 1.1rem;
+    line-height: 1.4;
+}
+.auth-header a:hover { text-decoration: none; color: var(--color-text-light); }
+
+/* ---- Centered card container ----------------------------------------- */
+.auth-stage {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 2.5rem 1rem 3rem;
+}
+.auth-card {
+    width: 100%;
+    max-width: 440px;
+    background: var(--color-bg-white);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-card-lg);
+    box-shadow: var(--shadow-card-lg);
+    padding: 2rem 2rem 1.75rem;
+}
+.auth-card h1 {
+    margin: 0 0 0.5rem;
+    font-size: 1.6rem;
+    color: var(--color-primary);
+    text-align: center;
+}
+.auth-card h2 {
+    margin: 1.5rem 0 0.75rem;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05rem;
+    font-weight: 600;
+    text-align: center;
+}
+.auth-card p {
+    margin: 0 0 1rem;
+    color: var(--color-text-muted);
+    font-size: 0.92rem;
+    text-align: center;
+}
+.auth-card .auth-subtitle {
+    margin: -0.25rem 0 1.5rem;
+    color: var(--color-text-muted);
+    text-align: center;
+    font-size: 0.92rem;
+}
+
+/* ---- Form fields ------------------------------------------------------ */
+.auth-form { margin-top: 1.25rem; }
+.auth-form .field { margin-bottom: 1.1rem; }
+.auth-form label {
+    display: block;
+    margin-bottom: 0.4rem;
+    font-weight: 700;
+    color: var(--color-text);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03rem;
+}
+.auth-form input[type="text"],
+.auth-form input[type="email"],
+.auth-form input[type="password"],
+.auth-form input[type="url"],
+.auth-form input[type="tel"],
+.auth-form input[type="number"],
+.auth-form select,
+.auth-form textarea {
+    width: 100%;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-card);
+    background: var(--color-bg-white);
+    color: var(--color-text);
+    font: inherit;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    transition: border-color var(--transition-card),
+        box-shadow var(--transition-card);
+}
+.auth-form input:focus,
+.auth-form select:focus,
+.auth-form textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(37, 100, 106, 0.15);
+}
+.auth-form .helptext {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    line-height: 1.45;
+}
+.auth-form .errorlist,
+.auth-form .errors,
+.auth-card .errorlist,
+.auth-card .errors {
+    list-style: none;
+    margin: 0 0 1rem;
+    padding: 0.6rem 0.85rem;
+    background: #fed7d7;
+    color: #c53030;
+    border: 1px solid #feb2b2;
+    border-radius: var(--radius-card);
+    font-size: 0.85rem;
+}
+.auth-form .errorlist li + li { margin-top: 0.2rem; }
+.auth-form .nonfield {
+    color: var(--color-danger);
+    font-size: 0.88rem;
+    margin: 0 0 0.75rem;
+}
+
+/* ---- Buttons ---------------------------------------------------------- */
+.btn-primary,
+.auth-form button[type="submit"],
+.auth-form input[type="submit"],
+button.auth-submit {
+    display: inline-block;
+    width: 100%;
+    background: var(--color-primary);
+    color: var(--color-text-light);
+    border: none;
+    padding: 0.85rem 1.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05rem;
+    cursor: pointer;
+    font-size: 0.92rem;
+    font-weight: 700;
+    border-radius: var(--radius-card);
+    text-decoration: none;
+    transition: background var(--transition-card),
+        transform var(--transition-card);
+}
+.btn-primary:hover,
+.auth-form button[type="submit"]:hover,
+.auth-form input[type="submit"]:hover,
+button.auth-submit:hover {
+    background: var(--color-primary-light);
+    color: var(--color-text-light);
+}
+.btn-primary:active,
+.auth-form button[type="submit"]:active { transform: translateY(1px); }
+
+/* ---- Links inside the card ------------------------------------------- */
+.auth-links {
+    margin-top: 1.25rem;
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+}
+.auth-links a {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: 600;
+}
+.auth-links a:hover { text-decoration: underline; }
+.auth-links .sep {
+    margin: 0 0.5rem;
+    color: var(--color-border);
+}
+
+/* ---- Divider between email/password + 3rd-party ----------------------- */
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 1.5rem 0 1rem;
+    color: var(--color-text-muted);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08rem;
+    font-weight: 600;
+}
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--color-border-light);
+}
+
+/* ---- Third-party providers (Google) ---------------------------------- */
+.provider-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+.provider-list li { margin: 0; }
+.provider-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.7rem;
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-card);
+    background: var(--color-bg-white);
+    color: var(--color-text);
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    cursor: pointer;
+    transition: border-color var(--transition-card),
+        background var(--transition-card),
+        box-shadow var(--transition-card);
+}
+.provider-button:hover {
+    border-color: var(--color-primary-light);
+    background: var(--color-bg);
+    color: var(--color-text);
+    text-decoration: none;
+}
+.provider-button:focus-visible {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(37, 100, 106, 0.15);
+}
+.provider-button .provider-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+/* ---- Messages (success / error banners from Django messages) --------- */
+.auth-messages {
+    list-style: none;
+    margin: 0 0 1rem;
+    padding: 0;
+}
+.auth-messages li {
+    padding: 0.65rem 0.9rem;
+    border-radius: var(--radius-card);
+    margin-bottom: 0.4rem;
+    font-size: 0.88rem;
+    border: 1px solid transparent;
+}
+.auth-messages .success {
+    background: #c6f6d5;
+    color: #276749;
+    border-color: #9ae6b4;
+}
+.auth-messages .info,
+.auth-messages .debug {
+    background: #bee3f8;
+    color: #2b6cb0;
+    border-color: #90cdf4;
+}
+.auth-messages .warning {
+    background: #feebc8;
+    color: #c05621;
+    border-color: #fbd38d;
+}
+.auth-messages .error {
+    background: #fed7d7;
+    color: #c53030;
+    border-color: #feb2b2;
+}
+
+/* ---- Footer ------------------------------------------------------------ */
+.auth-footer {
+    text-align: center;
+    padding: 1.5rem 1rem;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--color-border-light);
+    background: var(--color-bg);
+}
+.auth-footer a { color: var(--color-primary); }
+
+/* ---- Small screens --------------------------------------------------- */
+@media (max-width: 480px) {
+    .auth-stage { padding: 1.5rem 0.75rem 2rem; }
+    .auth-card { padding: 1.5rem 1.25rem; }
+    .auth-card h1 { font-size: 1.4rem; }
+}
