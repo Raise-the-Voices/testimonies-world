@@ -102,7 +102,7 @@
 
 	onMount(async () => {
 		try {
-			person = await getPerson(page.params.id);
+			person = await getPerson(page.params.id!);
 		} catch (e: any) {
 			error = e.message;
 		}
@@ -432,24 +432,27 @@
 {/if}
 
 <style>
+	/* Responsive grid: 1 column on mobile (sidebar first so the profile card is
+	   immediately scannable), 2-column 2:1 split at >=50em. minmax(0, …) tracks
+	   are the canonical fix for grid/flex overflow — without them, a long URL,
+	   country name, or fixed-width child can push the column past the viewport
+	   and produce a horizontal scrollbar. */
 	.view-container {
 		margin-top: 15px;
 		margin-bottom: 15px;
-		display: flex;
-		flex-direction: column-reverse;
-		justify-content: space-around;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 1.5rem;
+		overflow-x: clip;
 	}
-	@media all and (min-width: 50em) {
+	@media (min-width: 50em) {
 		.view-container {
-			flex-direction: row;
+			grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
 		}
 	}
-	.victim-item-container {
-		flex-basis: 60%;
-		margin-right: 1em;
-	}
+	.victim-item-container,
 	.sidebar-container {
-		flex-basis: 30%;
+		min-width: 0; /* allow grid item to shrink below its content size */
 	}
 	.sidebar-top {
 		background: var(--color-bg-white);
@@ -458,6 +461,8 @@
 		box-shadow: var(--shadow-card);
 		position: relative;
 		padding-bottom: 10px;
+		overflow: hidden; /* clip children to rounded corners */
+		min-width: 0;
 	}
 	.sidebar-bot {
 		background: var(--color-bg-white);
@@ -465,6 +470,8 @@
 		border-radius: var(--radius-card);
 		box-shadow: var(--shadow-card);
 		margin-top: 15px;
+		overflow: hidden;
+		min-width: 0;
 	}
 	.sidebar-header-2 {
 		background-color: #25646a;
@@ -492,11 +499,15 @@
 		border-radius: 4px;
 	}
 
-	/* Profile photo */
+	/* Profile photo — responsive: capped at 180px on wide screens,
+	   shrinks fluidly on narrow viewports so the sidebar never overflows.
+	   aspect-ratio keeps the photo square without a fixed pixel height. */
 	.profile-photo {
 		display: block;
-		width: 180px;
-		height: 180px;
+		width: 100%;
+		max-width: 180px;
+		aspect-ratio: 1 / 1;
+		height: auto;
 		object-fit: cover;
 		margin: 0 auto;
 		border-radius: var(--radius-card);
@@ -504,8 +515,10 @@
 		box-shadow: var(--shadow-card);
 	}
 	.profile-photo-placeholder {
-		width: 180px;
-		height: 180px;
+		width: 100%;
+		max-width: 180px;
+		aspect-ratio: 1 / 1;
+		height: auto;
 		background: var(--color-bg);
 		margin: 0 auto;
 		border-radius: var(--radius-card);
@@ -550,7 +563,7 @@
 		letter-spacing: 0.04em;
 		color: var(--color-text-muted);
 		flex: 0 0 auto;
-		min-width: 5.5rem;
+		min-width: 4.5rem;
 	}
 	.sidebar-field dd {
 		margin: 0;
@@ -747,7 +760,7 @@
 		letter-spacing: 0.04em;
 		color: var(--color-text-muted);
 		flex: 0 0 auto;
-		min-width: 5.5rem;
+		min-width: 4.5rem;
 	}
 	.meta-row .meta-value {
 		text-align: right;
