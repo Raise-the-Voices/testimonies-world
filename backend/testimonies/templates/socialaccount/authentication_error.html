@@ -1,0 +1,15 @@
+{% extends "socialaccount/base_entrance.html" %}
+{% load i18n %}
+{% load allauth %}
+
+{% block head_title %}{% trans "Third-Party Login Failure" %}{% endblock head_title %}
+
+{% block content %}
+    <h1>{% trans "Sign-in failed" %}</h1>
+    <p>
+        {% trans "An error occurred while attempting to sign in via your third-party account. Please try again." %}
+    </p>
+    <div class="auth-links">
+        <a href="{% url 'account_login' %}">{% trans "Back to sign in" %}</a>
+    </div>
+{% endblock content %}
