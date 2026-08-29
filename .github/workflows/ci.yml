@@ -10,9 +10,6 @@ jobs:
   frontend:
     name: Frontend check + build
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
 
@@ -24,12 +21,15 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        working-directory: frontend
         run: npm ci
 
       - name: Typecheck (svelte-check)
+        working-directory: frontend
         run: npm run check
 
       - name: Production build
+        working-directory: frontend
         run: npm run build
         env:
           PUBLIC_BASE_PATH: '/testimonies'
@@ -37,9 +37,6 @@ jobs:
   backend:
     name: Backend smoke
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - uses: actions/checkout@v4
 
@@ -49,12 +46,16 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        working-directory: backend
+        # Use --no-cache-dir to avoid stale pip wheels causing version drift
+        # between local dev and CI. requirements.txt pins exact versions.
+        run: pip install --no-cache-dir -r requirements.txt
 
       # `manage.py check` doesn't hit the database, so it works without
       # the production DATABASE_URL. Fails loudly if Django itself won't
       # boot (missing migration, bad import, syntax error, etc.).
       - name: Django check
+        working-directory: backend
         run: python manage.py check
         env:
           DJANGO_SECRET_KEY: ci-placeholder-not-secret
