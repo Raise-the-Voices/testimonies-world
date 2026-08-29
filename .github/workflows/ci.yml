@@ -42,17 +42,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Debug workspace layout
-        run: |
-          echo "PWD: $(pwd)"
-          echo "GITHUB_WORKSPACE: ${GITHUB_WORKSPACE}"
-          echo "Top-level:"
-          ls -la
-          echo "backend/:"
-          ls -la backend/ 2>&1 || echo "no backend dir"
-          echo "Looking for requirements.txt:"
-          find . -name "requirements.txt" -not -path "*/node_modules/*" 2>&1 | head -5
-
       - name: Install dependencies
         run: cd backend && pip install --no-cache-dir -r requirements.txt
 
