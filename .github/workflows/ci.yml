@@ -21,16 +21,13 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        working-directory: frontend
-        run: npm ci
+        run: cd frontend && npm ci
 
       - name: Typecheck (svelte-check)
-        working-directory: frontend
-        run: npm run check
+        run: cd frontend && npm run check
 
       - name: Production build
-        working-directory: frontend
-        run: npm run build
+        run: cd frontend && npm run build
         env:
           PUBLIC_BASE_PATH: '/testimonies'
 
@@ -46,17 +43,17 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        working-directory: backend
-        # Use --no-cache-dir to avoid stale pip wheels causing version drift
-        # between local dev and CI. requirements.txt pins exact versions.
-        run: pip install --no-cache-dir -r requirements.txt
+        # `working-directory` on a step was silently ignored on
+        # actions/setup-python@v5 — pip ran from $GITHUB_WORKSPACE and
+        # couldn't find backend/requirements.txt. Explicit `cd` is
+        # bulletproof.
+        run: cd backend && pip install --no-cache-dir -r requirements.txt
 
       # `manage.py check` doesn't hit the database, so it works without
       # the production DATABASE_URL. Fails loudly if Django itself won't
       # boot (missing migration, bad import, syntax error, etc.).
       - name: Django check
-        working-directory: backend
-        run: python manage.py check
+        run: cd backend && python manage.py check
         env:
           DJANGO_SECRET_KEY: ci-placeholder-not-secret
           DATABASE_URL: sqlite:///db.sqlite3
