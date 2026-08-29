@@ -10,6 +10,7 @@
 
 	let stats: Statistics | null = $state(null);
 	let statsLoading = $state(true);
+	let statsError: string | null = $state(null);
 
 	// Stat counters, defined as data so the markup is one {#each} loop.
 	// `value` is a thunk so we evaluate stats.* lazily (the page must
@@ -69,15 +70,19 @@
 		},
 	];
 
-	onMount(async () => {
+	async function loadStats() {
+		statsLoading = true;
+		statsError = null;
 		try {
 			stats = await getStatistics();
-		} catch {
-			/* empty db is fine */
+		} catch (e) {
+			statsError = e instanceof Error ? e.message : 'Could not load statistics.';
 		} finally {
 			statsLoading = false;
 		}
-	});
+	}
+
+	onMount(loadStats);
 </script>
 
 <svelte:head>
@@ -90,6 +95,13 @@
 			{#each counters as c (c.label)}
 				<SkeletonStatItem />
 			{/each}
+		</section>
+	{:else if statsError}
+		<section class="stats-bar stats-bar-error" role="alert" aria-label="Statistics unavailable">
+			<div class="stats-error-content">
+				<Icon name="help" size={18} />
+				<span>Could not load platform statistics. <button type="button" class="stats-retry" onclick={loadStats}>Retry</button></span>
+			</div>
 		</section>
 	{:else if stats && stats.total > 0}
 		<section class="stats-bar" aria-label="Platform statistics">
@@ -287,5 +299,41 @@
 		.btn-lg:hover {
 			transform: none;
 		}
+	}
+
+	.stats-bar-error {
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-light);
+		border-left: 3px solid var(--color-danger);
+	}
+	.stats-error-content {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		color: var(--color-text-muted);
+		font-size: 0.9rem;
+		padding: 0.5rem 0;
+	}
+	.stats-error-content :global(svg) {
+		color: var(--color-danger);
+	}
+	.stats-retry {
+		background: transparent;
+		border: none;
+		color: var(--color-primary);
+		font-weight: 600;
+		text-decoration: underline;
+		cursor: pointer;
+		padding: 0;
+		font: inherit;
+	}
+	.stats-retry:hover {
+		color: var(--color-primary-light);
+	}
+	.stats-retry:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+		border-radius: 3px;
 	}
 </style>

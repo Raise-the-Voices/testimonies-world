@@ -85,9 +85,12 @@
 			totalCount = data.count;
 			currentPage = page;
 			if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
-		} catch (e) {
+		} catch (e: unknown) {
 			console.error(e);
-			error = 'Could not load cases. Please try again.';
+			error =
+				e instanceof Error
+					? `Could not load cases: ${e.message}`
+					: 'Could not load cases. Please try again.';
 		} finally {
 			loading = false;
 		}
