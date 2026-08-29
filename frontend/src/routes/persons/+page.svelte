@@ -15,9 +15,12 @@
 	import FilterToolbar from '$lib/FilterToolbar.svelte';
 	import PersonCard from '$lib/PersonCard.svelte';
 	import Icon from '$lib/Icon.svelte';
+	import Skeleton from '$lib/Skeleton.svelte';
+	import type { Paginated, Person, PersonCategory } from '$lib/types';
 
 	const SEARCH_DEBOUNCE_MS = 300;
 	const PAGE_SIZE = 10;
+	const SKELETON_CARD_COUNT = 8;
 
 	const sorts = [
 		{ value: '-created_at', label: 'Newest submitted' },
@@ -28,9 +31,9 @@
 		{ value: 'current_status', label: 'Status' },
 	];
 
-	let persons: any[] = $state([]);
-	let countries: any[] = $state([]);
-	let categories: any[] = $state([]);
+	let persons: Person[] = $state([]);
+	let countries: { country: string; count: number }[] = $state([]);
+	let categories: PersonCategory[] = $state([]);
 	let loading = $state(true);
 	let error: string | null = $state(null);
 	let totalCount = $state(0);
@@ -54,7 +57,7 @@
 	let canPrev = $derived(currentPage > 1);
 	let canNext = $derived(currentPage < totalPages);
 	let hasActiveFilters = $derived(
-		Boolean(search || filterCountry || filterStatus || filterCategory || sort !== '-created_at')
+		Boolean(search || filterCountry || filterStatus || filterCategory || sort !== '-created_at'),
 	);
 
 	// Memoized signature for the countries-dropdown query — refetches only
@@ -71,13 +74,13 @@
 
 	async function loadPersons(
 		params: Record<string, string> = {},
-		page: number = currentPage
+		page: number = currentPage,
 	) {
 		loading = true;
 		error = null;
 		try {
 			const pageParams = { ...params, page: String(page) };
-			const data = await getPersons(pageParams);
+			const data: Paginated<Person> = await getPersons(pageParams);
 			persons = data.results;
 			totalCount = data.count;
 			currentPage = page;
@@ -111,7 +114,7 @@
 	async function applyFilters() {
 		await loadPersons(currentFilterParams(), 1);
 		const newKey = JSON.stringify(
-			Object.entries(currentCountryParams()).sort(([a], [b]) => a.localeCompare(b))
+			Object.entries(currentCountryParams()).sort(([a], [b]) => a.localeCompare(b)),
 		);
 		if (newKey !== lastCountryParamKey) {
 			lastCountryParamKey = newKey;
@@ -143,11 +146,13 @@
 			loadPersons(initial, 1),
 			loadCountries(currentCountryParams()),
 			getCategories()
-				.then((d: any) => (categories = d.results ?? d))
+				.then((d) => {
+					categories = Array.isArray(d) ? d : d.results ?? [];
+				})
 				.catch((e: unknown) => console.error(e)),
 		]);
 		lastCountryParamKey = JSON.stringify(
-			Object.entries(currentCountryParams()).sort(([a], [b]) => a.localeCompare(b))
+			Object.entries(currentCountryParams()).sort(([a], [b]) => a.localeCompare(b)),
 		);
 	});
 </script>
@@ -159,7 +164,13 @@
 <div class="page-surface">
 	<header class="catalog-header">
 		<h1>Cases</h1>
-		<p class="muted">{totalCount} case{totalCount !== 1 ? 's' : ''} recorded</p>
+		<p class="muted">
+			{#if loading && persons.length === 0}
+				<Skeleton variant="text" width="8rem" />
+			{:else}
+				{totalCount} case{totalCount !== 1 ? 's' : ''} recorded
+			{/if}
+		</p>
 	</header>
 
 	{#if error}
@@ -187,7 +198,21 @@
 	/>
 
 	{#if loading && persons.length === 0}
-		<p class="muted text-center">Loading…</p>
+		{#if viewMode === 'list'}
+			<div class="cases-table-wrap" aria-busy="true" aria-label="Loading cases">
+				<div class="cases-table-skeleton">
+					{#each Array.from({ length: PAGE_SIZE }, (_, i) => i) as i (i)}
+						<Skeleton variant="table-row" cols={7} />
+					{/each}
+				</div>
+			</div>
+		{:else}
+			<div class="cases-grid" aria-busy="true" aria-label="Loading cases">
+				{#each Array.from({ length: SKELETON_CARD_COUNT }, (_, i) => i) as i (i)}
+					<Skeleton variant="card" />
+				{/each}
+			</div>
+		{/if}
 	{:else if persons.length === 0}
 		<div class="empty-state">
 			<Icon name="cases" size={48} />
@@ -289,6 +314,10 @@
 		overflow: hidden;
 		box-shadow: var(--shadow-card);
 	}
+	.cases-table-skeleton {
+		display: flex;
+		flex-direction: column;
+	}
 	.cases-table {
 		width: 100%;
 		border-collapse: collapse;
@@ -348,6 +377,8 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.page-btn { transition: none; }
+		.page-btn {
+			transition: none;
+		}
 	}
 </style>

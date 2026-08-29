@@ -37,7 +37,7 @@
 
 	onMount(async () => {
 		const data = await getCategories();
-		categories = data.results || data;
+		categories = Array.isArray(data) ? data : data.results ?? [];
 	});
 
 	function toggleCategory(id: number) {

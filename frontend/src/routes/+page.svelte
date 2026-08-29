@@ -5,8 +5,11 @@
 	import Icon from '$lib/Icon.svelte';
 	import StatCounter from '$lib/StatCounter.svelte';
 	import HelpCard from '$lib/HelpCard.svelte';
+	import SkeletonStatItem from '$lib/SkeletonStatItem.svelte';
+	import type { Statistics } from '$lib/types';
 
-	let stats: any = $state(null);
+	let stats: Statistics | null = $state(null);
+	let statsLoading = $state(true);
 
 	// Stat counters, defined as data so the markup is one {#each} loop.
 	// `value` is a thunk so we evaluate stats.* lazily (the page must
@@ -57,7 +60,7 @@
 			icon: 'megaphone',
 			title: 'Advocate',
 			description:
-	'Contact us to join as a casework volunteer and amplify documented cases.',
+				'Contact us to join as a casework volunteer and amplify documented cases.',
 		},
 		{
 			icon: 'newspaper',
@@ -71,6 +74,8 @@
 			stats = await getStatistics();
 		} catch {
 			/* empty db is fine */
+		} finally {
+			statsLoading = false;
 		}
 	});
 </script>
@@ -80,7 +85,13 @@
 </svelte:head>
 
 <div class="home">
-	{#if stats && stats.total > 0}
+	{#if statsLoading}
+		<section class="stats-bar" aria-busy="true" aria-label="Loading platform statistics">
+			{#each counters as c (c.label)}
+				<SkeletonStatItem />
+			{/each}
+		</section>
+	{:else if stats && stats.total > 0}
 		<section class="stats-bar" aria-label="Platform statistics">
 			{#each counters as c (c.label)}
 				<StatCounter icon={c.icon} value={c.value()} label={c.label} />

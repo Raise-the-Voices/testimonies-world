@@ -24,11 +24,12 @@
 			const params: Record<string, string> = {};
 			if (filterStatus) params.status = filterStatus;
 			const data = await getCasework(params);
-			records = data.results || data;
+			records = Array.isArray(data) ? data : data.results ?? [];
 		} catch (e) {
 			console.error(e);
+		} finally {
+			loading = false;
 		}
-		loading = false;
 	}
 
 	onMount(() => loadRecords());
