@@ -30,7 +30,7 @@
 	onMount(async () => {
 		try {
 			const data = await getPersons({ page_size: '1000' });
-			persons = data.results || [];
+			persons = data.results;
 		} catch (e) {
 			console.error(e);
 		}
