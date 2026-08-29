@@ -5,6 +5,8 @@
 	import { getPerson } from '$lib/api';
 	import { user, isVolunteer } from '$lib/session';
 	import StatusBadge from '$lib/StatusBadge.svelte';
+	import Skeleton from '$lib/Skeleton.svelte';
+	import type { Person } from '$lib/types';
 
 	// Source-type display labels (mirror backend Report.SourceType.choices)
 	const sourceTypeLabels: Record<string, string> = {
@@ -68,8 +70,8 @@
 			'|\\d{1,2}\\s+' + MONTH_RE + '\\s+\\d{4}' +
 			// ISO: "2025-07-25"
 			'|\\d{4}-\\d{2}-\\d{2}' +
-		')\\b',
-		'gi'
+			')\\b',
+		'gi',
 	);
 	function scanNarrativeDates(text: string): Array<{ kind: 'text' | 'date'; value: string }> {
 		if (!text) return [];
@@ -86,9 +88,9 @@
 		return out;
 	}
 
-	let person: any = $state(null);
+	let person: Person | null = $state(null);
 	let loading = $state(true);
-	let error = $state('');
+	let error: string = $state('');
 	let expandedId: number | null = $state(null);
 	let currentUser = $derived($user);
 
@@ -103,10 +105,11 @@
 	onMount(async () => {
 		try {
 			person = await getPerson(page.params.id!);
-		} catch (e: any) {
-			error = e.message;
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : 'Failed to load';
+		} finally {
+			loading = false;
 		}
-		loading = false;
 	});
 </script>
 
@@ -115,7 +118,55 @@
 </svelte:head>
 
 {#if loading}
-	<p class="muted">Loading...</p>
+	<div class="view-container" aria-busy="true" aria-label="Loading case">
+		<!-- Main content skeleton (reports column) -->
+		<div class="victim-item-container">
+			<div class="view-title"><span class="view-item-title">Summary</span></div>
+			<div class="summary-card">
+				<div class="summary-card-body">
+					<Skeleton variant="text-block" lines={4} />
+				</div>
+			</div>
+
+			<div class="view-title">
+				<span class="view-item-title">Reports</span>
+			</div>
+			<Skeleton variant="rect" height="3.5rem" />
+			<Skeleton variant="rect" height="3.5rem" />
+
+			<div class="view-title"><span class="view-item-title">Media</span></div>
+			<div class="media-list">
+				<Skeleton variant="rect" height="6rem" />
+			</div>
+		</div>
+
+		<!-- Sidebar skeleton -->
+		<div class="sidebar-container">
+			<div class="sidebar-top">
+				<div class="sidebar-header-2">
+					<p>
+						<Skeleton variant="text" width="60%" height="1rem" />
+					</p>
+				</div>
+				<div class="sidebar-pic">
+					<Skeleton variant="circle" width="180px" height="180px" />
+				</div>
+				<div class="sidebar-content">
+					<Skeleton variant="text" width="40%" />
+					<div class="sidebar-status">
+						<Skeleton variant="badge" width="6rem" height="1.5rem" />
+					</div>
+					<Skeleton variant="text-block" lines={6} />
+				</div>
+			</div>
+			<div class="meta-card">
+				<div class="meta-card-header"><p>Details</p></div>
+				<div class="meta-card-body">
+					<Skeleton variant="text-block" lines={3} />
+				</div>
+			</div>
+		</div>
+	</div>
 {:else if error}
 	<p class="muted">Error: {error}</p>
 {:else if person}
@@ -166,10 +217,14 @@
 			<div class="view-title">
 				<span class="view-item-title">Reports ({person.reports?.length || 0})</span>
 				{#if isVolunteer(currentUser)}
-					<a href="{base}/persons/{person.id}/report" class="btn" style="padding:5px 10px;font-size:0.8rem;">Add Report</a>
+					<a
+						href="{base}/persons/{person.id}/report"
+						class="btn"
+						style="padding:5px 10px;font-size:0.8rem;">Add Report</a
+					>
 				{/if}
 			</div>
-			{#if person.reports?.length > 0}
+			{#if person.reports && person.reports.length > 0}
 				{#each person.reports as report (report.id)}
 					{@const open = expandedId === report.id}
 					{@const title = report.source_attribution || sourceTypeLabels[report.source_type] || 'Report'}
@@ -223,9 +278,9 @@
 								{#if report.official_reason}
 									<p class="mt-1"><strong>Official reason:</strong> {report.official_reason}</p>
 								{/if}
-								{#if report.media_files?.length > 0}
+								{#if report.media_files && report.media_files.length > 0}
 									<div class="report-card-media">
-										{#each report.media_files as media}
+										{#each report.media_files as media (media.id)}
 											{#if media.url}
 												<a
 													href={media.url}
@@ -249,15 +304,19 @@
 				<p class="muted mt-1">No reports yet.</p>
 			{/if}
 
-			{#if person.media_files?.length > 0}
+			{#if person.media_files && person.media_files.length > 0}
 				<div class="view-title">
 					<span class="view-item-title">Media</span>
 				</div>
 				<div class="media-list fade-in-stagger">
-					{#each person.media_files as media}
+					{#each person.media_files as media (media.id)}
 						<div class="media-item-card">
 							{#if media.media_type === 'photo' && media.file}
-								<img src={media.file} alt={media.description || 'Photo'} class="media-item-thumb" />
+								<img
+									src={media.file}
+									alt={media.description || 'Photo'}
+									class="media-item-thumb"
+								/>
 							{/if}
 							<div class="media-item-body">
 								<div class="media-item-meta">
@@ -291,7 +350,11 @@
 		<div class="sidebar-container">
 			{#if isVolunteer(currentUser)}
 				<div class="mb-1">
-					<a href="{base}/persons/{person.id}/edit" class="btn btn-primary" style="width:100%;text-align:center;display:block;">Edit Case</a>
+					<a
+						href="{base}/persons/{person.id}/edit"
+						class="btn btn-primary"
+						style="width:100%;text-align:center;display:block;">Edit Case</a
+					>
 				</div>
 			{/if}
 			<div class="sidebar-top">
@@ -300,7 +363,11 @@
 				</div>
 				<div class="sidebar-pic">
 					{#if person.profile_image_url}
-						<img src={person.profile_image_url} alt={person.name} class="profile-photo" />
+						<img
+							src={person.profile_image_url}
+							alt={person.name}
+							class="profile-photo"
+						/>
 					{:else}
 						<div class="profile-photo-placeholder"></div>
 					{/if}
@@ -361,7 +428,12 @@
 						<div class="sidebar-source">
 							<span class="sidebar-source-label">Source</span>
 							{#if person.authoritative_url}
-								<a href={person.authoritative_url} target="_blank" rel="noopener noreferrer" class="sidebar-source-link">
+								<a
+									href={person.authoritative_url}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="sidebar-source-link"
+								>
 									<span>{person.authoritative_source}</span>
 									<span class="sidebar-source-icon" aria-hidden="true">↗</span>
 								</a>
@@ -373,14 +445,14 @@
 				</div>
 			</div>
 
-			{#if person.categories?.length > 0}
+			{#if person.categories && person.categories.length > 0}
 				<div class="meta-card">
 					<div class="meta-card-header">
 						<p>Categories</p>
 					</div>
 					<div class="meta-card-body">
 						<ul class="meta-list">
-							{#each person.categories as cat}
+							{#each person.categories as cat (cat.id)}
 								<li>{cat.name}</li>
 							{/each}
 						</ul>
@@ -399,13 +471,13 @@
 				</div>
 			{/if}
 
-			{#if person.family?.length > 0}
+			{#if person.family && person.family.length > 0}
 				<div class="sidebar-bot">
 					<div class="sidebar-header-2">
 						<p><strong>Family</strong></p>
 					</div>
 					<div class="sidebar-content">
-						{#each person.family as rel}
+						{#each person.family as rel (rel.person_id)}
 							<p class="small">
 								<a href="{base}/persons/{rel.person_id}">{rel.person_name}</a>
 								<span class="muted">({rel.relationship})</span>
@@ -683,7 +755,9 @@
 		font-weight: 600;
 		text-decoration: none;
 		align-self: flex-start;
-		transition: background 0.15s ease, border-color 0.15s ease;
+		transition:
+			background 0.15s ease,
+			border-color 0.15s ease;
 	}
 	.media-item-action:hover {
 		background: var(--color-primary-light);

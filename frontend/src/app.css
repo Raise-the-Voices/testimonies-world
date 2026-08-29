@@ -36,6 +36,13 @@
 	--color-sidebar-header: #5f9ea0; /* cadetblue from Marturia view */
 	--color-primary-tint: rgba(37, 100, 106, 0.1); /* icon wells, count badges */
 
+	/* Skeleton — base color + shimmer highlight + reduced-motion static.
+	   Keep the static tone darker than the base so it still reads as
+	   "placeholder" when the shimmer animation is disabled. */
+	--skeleton-bg: #e6ebee;
+	--skeleton-shine: rgba(255, 255, 255, 0.6);
+	--skeleton-bg-static: #d8dee2;
+
 	/* Layout */
 	--max-width: 1140px; /* legacy layout wrapper */
 	--max-w-page: 1100px; /* primary content column on dashboard pages */
