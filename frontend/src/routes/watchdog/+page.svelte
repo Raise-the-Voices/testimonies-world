@@ -8,16 +8,22 @@
 
 	let persons: Person[] = $state([]);
 	let loading = $state(true);
+	let error: string | null = $state(null);
 
-	onMount(async () => {
+	async function loadWatchdog() {
+		loading = true;
+		error = null;
 		try {
 			persons = await getWatchdog();
-		} catch (e) {
+		} catch (e: unknown) {
 			console.error(e);
+			error = e instanceof Error ? e.message : 'Failed to load watchdog.';
 		} finally {
 			loading = false;
 		}
-	});
+	}
+
+	onMount(loadWatchdog);
 
 	function daysSince(dateStr: string | null | undefined): string {
 		if (!dateStr) return 'never';
@@ -46,6 +52,11 @@
 		</div>
 	{:else if persons.length === 0}
 		<p class="muted">No active cases in the watchdog.</p>
+	{:else if error}
+		<div class="watchdog-error" role="alert">
+			<p>Could not load watchdog: {error}</p>
+			<button type="button" class="btn btn-secondary" onclick={loadWatchdog}>Retry</button>
+		</div>
 	{:else}
 		<div class="watchdog-table-wrap">
 			<table class="watchdog-table">
@@ -107,5 +118,22 @@
 		font-weight: 600;
 		background: var(--color-primary);
 		color: var(--color-text-light);
+	}
+
+	.watchdog-error {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1rem;
+		padding: 2rem 1rem;
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-light);
+		border-left: 3px solid var(--color-danger);
+		border-radius: var(--radius-card);
+		text-align: center;
+		color: var(--color-text-muted);
+	}
+	.watchdog-error p {
+		margin: 0;
 	}
 </style>

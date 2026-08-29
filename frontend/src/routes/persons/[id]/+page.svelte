@@ -102,15 +102,19 @@
 		deceased: 'Deceased',
 	};
 
-	onMount(async () => {
+	async function loadPerson() {
+		loading = true;
+		error = '';
 		try {
 			person = await getPerson(page.params.id!);
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to load';
+			error = e instanceof Error ? e.message : 'Failed to load case.';
 		} finally {
 			loading = false;
 		}
-	});
+	}
+
+	onMount(loadPerson);
 </script>
 
 <svelte:head>
@@ -168,7 +172,10 @@
 		</div>
 	</div>
 {:else if error}
-	<p class="muted">Error: {error}</p>
+	<div class="error-state" role="alert">
+		<p class="error-state-message">Could not load this case: {error}</p>
+		<button type="button" class="btn btn-secondary" onclick={loadPerson}>Retry</button>
+	</div>
 {:else if person}
 	<div class="view-container">
 		<!-- Main content (reports, media) -->
@@ -841,5 +848,24 @@
 		color: var(--color-text);
 		flex: 1 1 auto;
 		word-break: break-word;
+	}
+
+	.error-state {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1rem;
+		padding: 3rem 1rem;
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-light);
+		border-left: 3px solid var(--color-danger);
+		border-radius: var(--radius-card);
+		text-align: center;
+		max-width: var(--max-w-prose);
+		margin: 2rem auto;
+	}
+	.error-state-message {
+		margin: 0;
+		color: var(--color-text-muted);
 	}
 </style>

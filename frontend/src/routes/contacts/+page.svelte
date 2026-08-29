@@ -9,6 +9,7 @@
 	let currentUser = $derived($user);
 	let contacts: Contact[] = $state([]);
 	let loading = $state(true);
+	let error: string | null = $state(null);
 	let filterRole = $state('');
 
 	const roleLabels: Record<string, string> = {
@@ -23,13 +24,15 @@
 
 	async function loadContacts() {
 		loading = true;
+		error = null;
 		try {
 			const params: Record<string, string> = {};
 			if (filterRole) params.role = filterRole;
 			const data = await getContacts(params);
 			contacts = Array.isArray(data) ? data : data.results ?? [];
-		} catch (e) {
+		} catch (e: unknown) {
 			console.error(e);
+			error = e instanceof Error ? e.message : 'Failed to load contacts.';
 		} finally {
 			loading = false;
 		}
@@ -70,6 +73,11 @@
 			</div>
 		{:else if contacts.length === 0}
 			<p class="muted">No contacts found. Add contacts via the Django admin.</p>
+		{:else if error}
+			<div class="contacts-error" role="alert">
+				<p>Could not load contacts: {error}</p>
+				<button type="button" class="btn btn-secondary" onclick={loadContacts}>Retry</button>
+			</div>
 		{:else}
 			<div class="contacts-table-wrap">
 				<table class="contacts-table">
@@ -140,5 +148,22 @@
 		font-weight: 600;
 		background: var(--color-primary);
 		color: var(--color-text-light);
+	}
+
+	.contacts-error {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1rem;
+		padding: 2rem 1rem;
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-light);
+		border-left: 3px solid var(--color-danger);
+		border-radius: var(--radius-card);
+		text-align: center;
+		color: var(--color-text-muted);
+	}
+	.contacts-error p {
+		margin: 0;
 	}
 </style>
