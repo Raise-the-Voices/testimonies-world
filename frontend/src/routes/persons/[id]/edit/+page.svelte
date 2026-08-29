@@ -34,7 +34,7 @@
 				getCategories(),
 			]);
 
-			categories = catData.results || catData;
+			categories = Array.isArray(catData) ? catData : catData.results ?? [];
 
 			// Populate form fields from existing person data
 			name = person.name || '';

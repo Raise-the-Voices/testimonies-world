@@ -4,8 +4,10 @@
 	import { statusLabels } from '$lib/StatusBadge.svelte';
 	import StatCard from '$lib/StatCard.svelte';
 	import StatRow from '$lib/StatRow.svelte';
+	import Skeleton from '$lib/Skeleton.svelte';
+	import type { MedicalStatus, Statistics as StatisticsT } from '$lib/types';
 
-	let stats: any = $state(null);
+	let stats = $state<StatisticsT | null>(null);
 	let loading = $state(true);
 
 	const medicalLabels: Record<string, string> = {
@@ -28,41 +30,40 @@
 	 * produced [[0, ['Pakistan', 60]], ...] and rendered "0 / Pakistan,60".
 	 * Normalize both into a single [label, count] tuple shape.
 	 */
-	function normalizeCountries(byCountry: any): [string, number][] {
+	function normalizeCountries(byCountry: StatisticsT['by_country']): [string, number][] {
 		if (!byCountry) return [];
 		if (!Array.isArray(byCountry)) {
 			return Object.entries(byCountry) as [string, number][];
 		}
 		const first = byCountry[0];
 		if (first && typeof first === 'object' && !Array.isArray(first)) {
-			return byCountry.map((row: any) => [
-				row.country ?? row.name ?? '',
-				Number(row.count),
-			]);
+			return (byCountry as Array<{ country?: string; name?: string; count: number }>).map(
+				(row) => [row.country ?? row.name ?? '', Number(row.count)],
+			);
 		}
-		return byCountry.map((row: [string, number]) => [row[0], Number(row[1])]);
+		return (byCountry as Array<[string, number]>).map((row) => [row[0], Number(row[1])]);
 	}
 
 	const countries = $derived(
-		normalizeCountries(stats?.by_country).sort((a, b) => b[1] - a[1])
+		normalizeCountries(stats?.by_country ?? []).sort((a, b) => b[1] - a[1]),
 	);
 
 	const sortedByStatus = $derived(
 		Object.entries(stats?.by_status ?? {}).sort(
-			(a, b) => (b[1] as number) - (a[1] as number)
-		)
+			(a, b) => (b[1] as number) - (a[1] as number),
+		),
 	);
 
 	const sortedByMedical = $derived(
 		Object.entries(stats?.by_medical ?? {}).sort(
-			(a, b) => (b[1] as number) - (a[1] as number)
-		)
+			(a, b) => (b[1] as number) - (a[1] as number),
+		),
 	);
 
 	const sortedCategories = $derived(
-		((stats?.by_category ?? []) as any[])
+		((stats?.by_category ?? []) as Array<{ name: string; count: number }>)
 			.filter((c) => c.count > 0)
-			.sort((a, b) => b.count - a.count)
+			.sort((a, b) => b.count - a.count),
 	);
 
 	onMount(async () => {
@@ -70,8 +71,9 @@
 			stats = await getStatistics();
 		} catch (e) {
 			console.error(e);
+		} finally {
+			loading = false;
 		}
-		loading = false;
 	});
 </script>
 
@@ -88,7 +90,14 @@
 				medical condition.
 			</p>
 		</div>
-		{#if !loading && stats}
+		{#if loading}
+			<div class="total-badge" aria-busy="true" aria-label="Loading total">
+				<span class="total-number">
+					<Skeleton variant="text" width="3rem" />
+				</span>
+				<span class="total-label">Total cases</span>
+			</div>
+		{:else if stats}
 			<div class="total-badge" aria-label="{stats.total} total cases">
 				<span class="total-number">{stats.total}</span>
 				<span class="total-label">Total cases</span>
@@ -97,7 +106,12 @@
 	</header>
 
 	{#if loading}
-		<p class="muted">Loading…</p>
+		<div class="stats-grid" aria-busy="true" aria-label="Loading statistics">
+			<Skeleton variant="stat-card" lines={4} />
+			<Skeleton variant="stat-card" lines={5} />
+			<Skeleton variant="stat-card" lines={3} />
+			<Skeleton variant="stat-card" lines={3} />
+		</div>
 	{:else if stats}
 		<div class="stats-grid">
 			<StatCard title="By Status" meta="{sortedByStatus.length} categories" delayMs={0}>
@@ -148,7 +162,11 @@
 				{#if sortedByMedical.length > 0}
 					<ul class="stat-list">
 						{#each sortedByMedical as [key, count] (key)}
-							<StatRow label={medicalLabels[key] || key} count={count as number} {total} />
+							<StatRow
+								label={medicalLabels[key] || key}
+								count={count as number}
+								{total}
+							/>
 						{/each}
 					</ul>
 				{:else}
