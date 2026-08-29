@@ -9,6 +9,7 @@
 
 	let stats = $state<StatisticsT | null>(null);
 	let loading = $state(true);
+	let error: string | null = $state(null);
 
 	const medicalLabels: Record<string, string> = {
 		unknown: 'Unknown',
@@ -66,15 +67,20 @@
 			.sort((a, b) => b.count - a.count),
 	);
 
-	onMount(async () => {
+	async function loadStats() {
+		loading = true;
+		error = null;
 		try {
 			stats = await getStatistics();
-		} catch (e) {
+		} catch (e: unknown) {
 			console.error(e);
+			error = e instanceof Error ? e.message : 'Failed to load statistics.';
 		} finally {
 			loading = false;
 		}
-	});
+	}
+
+	onMount(loadStats);
 </script>
 
 <svelte:head>
@@ -111,6 +117,11 @@
 			<Skeleton variant="stat-card" lines={5} />
 			<Skeleton variant="stat-card" lines={3} />
 			<Skeleton variant="stat-card" lines={3} />
+		</div>
+	{:else if error}
+		<div class="error-state" role="alert">
+			<p class="error-state-message">Could not load statistics: {error}</p>
+			<button type="button" class="btn btn-secondary" onclick={loadStats}>Retry</button>
 		</div>
 	{:else if stats}
 		<div class="stats-grid">
@@ -253,6 +264,24 @@
 		color: var(--color-text-muted);
 		font-size: 0.85rem;
 		text-align: center;
+	}
+
+	.error-state {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1rem;
+		padding: 3rem 1rem;
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-light);
+		border-left: 3px solid var(--color-danger);
+		border-radius: var(--radius-card);
+		text-align: center;
+	}
+	.error-state-message {
+		margin: 0;
+		color: var(--color-text-muted);
+		max-width: var(--max-w-prose);
 	}
 
 	@media (max-width: 700px) {
