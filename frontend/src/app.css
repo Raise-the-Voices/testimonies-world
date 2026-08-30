@@ -346,20 +346,21 @@ label {
 	.page-surface { padding: 1rem; border-radius: 12px; }
 }
 
-/* Cases grid — magazine asymmetric layout.
-   First item (i===0) spans both columns; rest are 2-up.
-   Stays 1 column on phones. */
+/* Cases grid — 12 cards per page in 3 columns × 4 rows on desktop.
+   Responsive: 1 column on phones, 2 on tablets, 3 on desktop. */
 .cases-grid {
 	display: grid;
 	grid-template-columns: 1fr;
-	gap: 1.5rem;
+	gap: 1.25rem;
 }
 @media (min-width: 720px) {
 	.cases-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
-	.cases-grid-item.featured {
-		grid-column: 1 / -1;
+}
+@media (min-width: 1100px) {
+	.cases-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
 }
 
