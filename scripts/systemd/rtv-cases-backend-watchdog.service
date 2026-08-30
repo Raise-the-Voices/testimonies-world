@@ -1,0 +1,43 @@
+[Unit]
+Description=rtv-cases backend healthcheck — restarts gunicorn if :8040 is dead
+Documentation=https://github.com/Raise-the-Voices/testimonies-world
+# Run AFTER the main backend unit has had a chance to start on boot.
+After=rtv-cases-backend.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+# 1. If something is already serving /api/persons/ on :8040, do nothing.
+# 2. Otherwise, start gunicorn as the `deploy` user with --daemon, so it
+#    survives this watchdog unit exiting. Mirrors the fallback in
+#    scripts/deploy.sh — kept in sync by manual review.
+#
+# `curl --max-time 2` means a hung backend (e.g. DB unreachable but TCP
+# accepting) is treated as "down" after 2s, which is what we want — the
+# alternative is waiting forever for nginx to 504 first.
+ExecStart=/bin/sh -c '\
+  if curl -sf --max-time 2 http://127.0.0.1:8040/api/persons/ >/dev/null; then \
+    exit 0; \
+  fi; \
+  echo "$(date -Is) watchdog: :8040 not responding, starting gunicorn" \
+    >> /tmp/cases-backend-watchdog.log; \
+  sudo -u deploy /opt/rtv-cases/backend/.venv/bin/gunicorn \
+    testimonies.wsgi:application \
+    --bind 127.0.0.1:8040 \
+    --workers 2 \
+    --daemon \
+    --pid /tmp/cases-backend.pid \
+    --access-logfile /tmp/cases-backend.access.log \
+    --error-logfile /tmp/cases-backend.err.log'
+
+# Don't let a failed start loop forever — if the start command itself
+# fails (missing binary, bad path, etc.), systemd will retry per
+# Restart= below. Cap retries with StartLimitIntervalSec.
+Restart=on-failure
+RestartSec=10s
+StartLimitIntervalSec=60s
+StartLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target
