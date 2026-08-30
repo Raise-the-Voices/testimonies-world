@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import { user, isAdvocate } from '$lib/session';
 	import { getCasework } from '$lib/api';
+	import Skeleton from '$lib/Skeleton.svelte';
 
 	let currentUser = $derived($user);
 	let records: any[] = $state([]);
@@ -58,7 +59,11 @@
 		</div>
 
 		{#if loading}
-			<p class="muted">Loading...</p>
+			<div class="casework-skeleton" aria-busy="true" aria-label="Loading casework records">
+				<Skeleton variant="rect" height="5rem" />
+				<Skeleton variant="rect" height="5rem" />
+				<Skeleton variant="rect" height="5rem" />
+			</div>
 		{:else if records.length === 0}
 			<p class="muted">No casework records found.</p>
 		{:else}
@@ -85,3 +90,11 @@
 		{/if}
 	{/if}
 </div>
+
+<style>
+	.casework-skeleton {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+</style>
