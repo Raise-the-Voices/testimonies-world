@@ -3,8 +3,6 @@
 	import { onMount } from 'svelte';
 	import { getStatistics } from '$lib/api';
 	import Icon from '$lib/Icon.svelte';
-	import StatCounter from '$lib/StatCounter.svelte';
-	import HelpCard from '$lib/HelpCard.svelte';
 	import SkeletonStatItem from '$lib/SkeletonStatItem.svelte';
 	import type { Statistics } from '$lib/types';
 
@@ -16,55 +14,47 @@
 	// `value` is a thunk so we evaluate stats.* lazily (the page must
 	// still render when stats is null).
 	type Counter = {
-		icon: 'cases' | 'globe' | 'lock' | 'help';
 		label: string;
 		value: () => number;
 	};
 	const counters: Counter[] = [
-		{ icon: 'cases', label: 'Cases', value: () => stats?.total ?? 0 },
+		{ label: 'Cases', value: () => stats?.total ?? 0 },
 		{
-			icon: 'globe',
 			label: 'Countries',
 			value: () => Object.keys(stats?.by_country ?? {}).length,
 		},
 		{
-			icon: 'lock',
 			label: 'Detained',
 			value: () => stats?.by_status?.detained ?? 0,
 		},
 		{
-			icon: 'help',
 			label: 'Disappeared',
 			value: () => stats?.by_status?.disappeared ?? 0,
 		},
 	];
 
-	// Help cards, same pattern.
+	// Help items — same data as before, just rendered as prose
+	// paragraphs (no icon cards) for a less AI-grid look.
 	type Help = {
-		icon: 'pencil' | 'refresh' | 'megaphone' | 'newspaper';
 		title: string;
 		description: string;
 	};
 	const helpItems: Help[] = [
 		{
-			icon: 'pencil',
 			title: 'Submit a case',
 			description:
 				'If you know of someone facing oppression, log in and submit their story.',
 		},
 		{
-			icon: 'refresh',
 			title: 'Update existing cases',
 			description: 'Add new reports with updated information as situations evolve.',
 		},
 		{
-			icon: 'megaphone',
 			title: 'Advocate',
 			description:
 				'Contact us to join as a casework volunteer and amplify documented cases.',
 		},
 		{
-			icon: 'newspaper',
 			title: 'Journalists and NGOs',
 			description: 'Data exports available upon request for reporting and analysis.',
 		},
@@ -105,8 +95,12 @@
 		</section>
 	{:else if stats && stats.total > 0}
 		<section class="stats-bar" aria-label="Platform statistics">
-			{#each counters as c (c.label)}
-				<StatCounter icon={c.icon} value={c.value()} label={c.label} />
+			{#each counters as c, i (c.label)}
+				{#if i > 0}<span class="stat-divider" aria-hidden="true"></span>{/if}
+				<div class="stat-item">
+					<span class="stat-number">{c.value()}</span>
+					<span class="stat-label">{c.label}</span>
+				</div>
 			{/each}
 		</section>
 	{/if}
@@ -130,12 +124,10 @@
 		</div>
 		<div class="actions">
 			<a href="{base}/persons" class="btn btn-primary btn-lg">
-				<Icon name="cases" size={18} />
 				Browse Cases
 				<Icon name="arrow-right" size={18} />
 			</a>
 			<a href="{base}/statistics" class="btn btn-secondary btn-lg">
-				<Icon name="chart-bar" size={18} />
 				View Statistics
 			</a>
 		</div>
@@ -148,14 +140,13 @@
 				Four ways to contribute to the record of human rights documentation.
 			</p>
 		</header>
-		<div class="help-grid">
+		<div class="help-list">
 			{#each helpItems as item, i (item.title)}
-				<HelpCard
-					icon={item.icon}
-					title={item.title}
-					description={item.description}
-					delayMs={100 + i * 50}
-				/>
+				{#if i > 0}<hr class="help-rule" aria-hidden="true" />{/if}
+				<div class="help-item">
+					<h3>{item.title}</h3>
+					<p>{item.description}</p>
+				</div>
 			{/each}
 		</div>
 	</section>
@@ -171,17 +162,45 @@
 		gap: 2rem;
 	}
 
-	/* === 1. Stats counters — unified floating bar === */
+	/* === 1. Stats bar — inline typographic row (no icons, no card grid) === */
 	.stats-bar {
 		background: var(--color-bg-white);
 		border: 1px solid var(--color-border-light);
 		border-radius: var(--radius-card);
 		box-shadow: var(--shadow-card);
-		display: grid;
-		grid-template-columns: repeat(4, 1fr);
-		gap: var(--gap-card);
-		padding: 1.25rem 1.5rem;
+		padding: 1.1rem 1.5rem;
+		display: flex;
+		align-items: baseline;
+		justify-content: space-around;
+		gap: 1rem;
+		flex-wrap: wrap;
 		animation: fadeSlideUp 0.4s ease both;
+	}
+	.stat-item {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		min-width: 0;
+		padding: 0.25rem 0.5rem;
+	}
+	.stat-number {
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: var(--color-primary);
+		line-height: 1.1;
+		font-variant-numeric: tabular-nums;
+	}
+	.stat-label {
+		font-size: 0.78rem;
+		color: var(--color-text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.06rem;
+		margin-top: 0.15rem;
+	}
+	.stat-divider {
+		width: 1px;
+		align-self: stretch;
+		background: var(--color-border-light);
 	}
 
 	/* === 2. Hero card === */
@@ -248,10 +267,10 @@
 		transform: translateX(3px);
 	}
 
-	/* === 3. How to help grid === */
+	/* === 3. How to help — prose paragraphs separated by hairline rules === */
 	.section-header {
 		text-align: center;
-		margin-bottom: 1.25rem;
+		margin-bottom: 1.5rem;
 	}
 	.section-title {
 		font-size: 1.4rem;
@@ -264,36 +283,64 @@
 		margin: 0;
 		font-size: 0.95rem;
 	}
-	.help-grid {
-		display: grid;
-		grid-template-columns: repeat(4, 1fr);
-		gap: var(--gap-card);
+	.help-list {
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-light);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
+		padding: 1.25rem 1.75rem;
+		max-width: var(--max-w-prose);
+		margin: 0 auto;
+	}
+	.help-rule {
+		border: 0;
+		border-top: 1px solid var(--color-border-light);
+		margin: 1.1rem 0;
+	}
+	.help-item {
+		animation: fadeSlideUp 0.4s ease both;
+	}
+	.help-item h3 {
+		font-size: 1.05rem;
+		font-weight: 700;
+		margin: 0 0 0.4rem 0;
+		color: var(--color-text);
+	}
+	.help-item p {
+		font-size: 0.95rem;
+		line-height: 1.6;
+		color: var(--color-text-muted);
+		margin: 0;
 	}
 
 	/* Responsive */
-	@media (max-width: 900px) {
+	@media (max-width: 700px) {
 		.stats-bar {
-			grid-template-columns: repeat(2, 1fr);
+			flex-direction: column;
+			align-items: stretch;
+			gap: 0.75rem;
 		}
-		.help-grid {
-			grid-template-columns: repeat(2, 1fr);
+		.stat-divider {
+			width: auto;
+			height: 1px;
 		}
-	}
-	@media (max-width: 560px) {
-		.stats-bar {
-			grid-template-columns: 1fr;
-		}
-		.help-grid {
-			grid-template-columns: 1fr;
+		.stat-item {
+			flex-direction: row;
+			justify-content: space-between;
+			padding: 0.15rem 0.25rem;
 		}
 		.hero-card {
 			padding: 1.5rem 1.25rem;
+		}
+		.help-list {
+			padding: 1rem 1.25rem;
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
 		.stats-bar,
-		.hero-card {
+		.hero-card,
+		.help-item {
 			animation: none;
 		}
 		.btn-lg:hover {
