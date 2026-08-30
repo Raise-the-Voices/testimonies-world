@@ -346,15 +346,22 @@ label {
 	.page-surface { padding: 1rem; border-radius: 12px; }
 }
 
-/* Cases grid — responsive 1 / 2 / 3 / 4 columns. */
+/* Cases grid — magazine asymmetric layout.
+   First item (i===0) spans both columns; rest are 2-up.
+   Stays 1 column on phones. */
 .cases-grid {
 	display: grid;
 	grid-template-columns: 1fr;
 	gap: 1.5rem;
 }
-@media (min-width: 640px)  { .cases-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (min-width: 1024px) { .cases-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (min-width: 1280px) { .cases-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 720px) {
+	.cases-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.cases-grid-item.featured {
+		grid-column: 1 / -1;
+	}
+}
 
 /* Inline error banner — used when /persons data load fails. */
 .error-banner-inline {
