@@ -395,6 +395,7 @@
 			<!-- ============== Section 1: Person Information ============== -->
 			<section class="form-section" aria-labelledby="sec-person">
 				<h2 id="sec-person" class="form-section-title">
+					<span class="title-bar" aria-hidden="true"></span>
 					Person Information
 				</h2>
 				<p class="form-section-desc">Basic identifying details about the person.</p>
@@ -550,8 +551,8 @@
 					<div class="field">
 						<label for="rough_location">
 							Location
-							
-							<span class="field-tag">public</span>
+							<span class="privacy-dot privacy-dot-public" aria-label="Public"></span>
+							<span class="visually-hidden">(public)</span>
 						</label>
 						<input
 							id="rough_location"
@@ -564,8 +565,8 @@
 					<div class="field">
 						<label for="precise_location">
 							Precise Location
-							
-							<span class="field-tag">private</span>
+							<span class="privacy-dot privacy-dot-private" aria-label="Private"></span>
+							<span class="visually-hidden">(private)</span>
 						</label>
 						<input
 							id="precise_location"
@@ -765,6 +766,7 @@
 			<!-- ============== Section 2: Summary & Categories ============== -->
 			<section class="form-section" aria-labelledby="sec-summary">
 				<h2 id="sec-summary" class="form-section-title">
+					<span class="title-bar" aria-hidden="true"></span>
 					Summary &amp; Categories
 				</h2>
 				<p class="form-section-desc">A short overview and the categories that apply to this case.</p>
@@ -790,6 +792,13 @@
 							<div class="categories-grid" role="group" aria-label="Categories">
 								{#each categories as cat (cat.id)}
 									<label class="category-pill" class:is-selected={selectedCategories.includes(cat.id)}>
+										<span class="category-check" aria-hidden="true">
+											{#if selectedCategories.includes(cat.id)}
+												<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+													<polyline points="20 6 9 17 4 12" />
+												</svg>
+											{/if}
+										</span>
 										<input
 											type="checkbox"
 											checked={selectedCategories.includes(cat.id)}
@@ -807,6 +816,7 @@
 			<!-- ============== Section 3: Initial Report ============== -->
 			<section class="form-section" aria-labelledby="sec-report">
 				<h2 id="sec-report" class="form-section-title">
+					<span class="title-bar" aria-hidden="true"></span>
 					Initial Report
 				</h2>
 				<p class="form-section-desc">The first testimony or report about this person — what happened, and what's known.</p>
@@ -826,8 +836,8 @@
 					<div class="field">
 						<label for="source_attr">
 							Source Attribution
-							
-							<span class="field-tag">public</span>
+							<span class="privacy-dot privacy-dot-public" aria-label="Public"></span>
+							<span class="visually-hidden">(public)</span>
 						</label>
 						<input
 							id="source_attr"
@@ -840,8 +850,8 @@
 					<div class="field">
 						<label for="reporter_name">
 							Reporter Name
-							
-							<span class="field-tag">private</span>
+							<span class="privacy-dot privacy-dot-private" aria-label="Private"></span>
+							<span class="visually-hidden">(private)</span>
 						</label>
 						<input
 							id="reporter_name"
@@ -855,8 +865,8 @@
 					<div class="field">
 						<label for="reporter_contact">
 							Reporter Contact
-							
-							<span class="field-tag">private</span>
+							<span class="privacy-dot privacy-dot-private" aria-label="Private"></span>
+							<span class="visually-hidden">(private)</span>
 						</label>
 						<input
 							id="reporter_contact"
@@ -1128,12 +1138,22 @@
 		margin-bottom: 1.5rem;
 	}
 	.form-section-title {
+		display: flex;
+		align-items: center;
+		gap: 0.65rem;
 		margin: 0 0 0.4rem 0;
 		color: var(--color-primary);
 		font-size: 1.2rem;
 		font-weight: 700;
 		letter-spacing: -0.005em;
 		line-height: 1.3;
+	}
+	.title-bar {
+		display: inline-block;
+		width: 22px;
+		height: 2px;
+		background: var(--color-primary);
+		border-radius: 2px;
 	}
 	.form-section-desc {
 		margin: 0 0 1.25rem 0;
@@ -1210,6 +1230,25 @@
 	.field-tag-private svg {
 		display: inline-block;
 		vertical-align: -1px;
+	}
+
+	/* Privacy dot — small colored circle after the label. Green = public,
+	   red = private. Sits inline with the label text via the
+	   `display: inline-flex` on the parent label. */
+	.privacy-dot {
+		display: inline-block;
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		flex: 0 0 8px;
+	}
+	.privacy-dot-public {
+		background: var(--color-success);
+		box-shadow: 0 0 0 3px rgba(47, 133, 90, 0.18);
+	}
+	.privacy-dot-private {
+		background: var(--color-danger);
+		box-shadow: 0 0 0 3px rgba(217, 22, 22, 0.18);
 	}
 
 	.field-help {
@@ -1326,7 +1365,30 @@
 		white-space: nowrap;
 		border: 0;
 	}
-	.category-pill:focus-within {
+	.category-pill.is-selected .category-check {
+		background: var(--color-primary);
+		border-color: var(--color-primary);
+		color: white;
+	}
+	.category-pill:hover .category-check {
+		border-color: var(--color-primary-light);
+	}
+
+	/* Native checkbox is visually replaced by .category-check, but
+	   stays in the DOM for keyboard / screen-reader access. */
+	.category-pill input[type='checkbox'] {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+	.category-pill input[type='checkbox']:focus-visible + .category-check,
+	.category-pill:focus-within .category-check {
 		outline: none;
 		box-shadow: 0 0 0 3px var(--color-primary-tint);
 	}
@@ -1415,6 +1477,7 @@
 		.field select,
 		.field textarea,
 		.category-pill,
+		.category-check,
 		.spinner {
 			transition: none;
 			animation: none;
