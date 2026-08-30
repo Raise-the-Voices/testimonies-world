@@ -91,11 +91,30 @@ server {
     # Explicit, ordered before the frontend catch-all below. Adding a new
     # Django route? Add it here so it doesn't get caught by `location /`.
     location /static/   { proxy_pass http://rtv_cases_backend; }
-    location /media/    { proxy_pass http://rtv_cases_backend; }
     location /api/      { proxy_pass http://rtv_cases_backend; }
     location /admin/    { proxy_pass http://rtv_cases_backend; }
     location /accounts/ { proxy_pass http://rtv_cases_backend; }
     location /events/   { proxy_pass http://rtv_cases_backend; }
+
+    # Serve uploaded media directly from disk. Django doesn't serve these
+    # in prod because settings.DEBUG=False skips the dev-only
+    # `urlpatterns += static(MEDIA_URL, ...)` in testimonies/urls.py —
+    # proxying to Django here would 404 with an HTML body. Reading from
+    # disk is also faster (no gunicorn hop) and doesn't require MEDIA_ROOT
+    # to be readable by the gunicorn user (only by www-data).
+    #
+    # The alias path matches `MEDIA_ROOT = BASE_DIR / 'media'` when the
+    # backend is run from /opt/rtv-cases/backend. The `sensitive_media/`
+    # directory is NOT under /media/ — it's a separate MEDIA_ROOT-equivalent
+    # that Django controls; add a Django-routed location for it if/when a
+    # public route for sensitive media is needed.
+    location /media/ {
+        alias /opt/rtv-cases/backend/media/;
+        expires 30d;
+        add_header Cache-Control "public";
+        access_log off;
+        try_files $uri =404;
+    }
 
     # ---- SvelteKit frontend catch-all (must come last) ----
     location / {
