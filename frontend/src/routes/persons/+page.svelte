@@ -19,8 +19,8 @@
 	import type { Paginated, Person, PersonCategory } from '$lib/types';
 
 	const SEARCH_DEBOUNCE_MS = 300;
-	const PAGE_SIZE = 10;
-	const SKELETON_CARD_COUNT = 8;
+	const PAGE_SIZE = 12;
+	const SKELETON_CARD_COUNT = 12;
 
 	const sorts = [
 		{ value: '-created_at', label: 'Newest submitted' },
@@ -264,9 +264,7 @@
 	{:else}
 		<div class="cases-grid">
 			{#each persons as person, i (person.id)}
-				<div class="cases-grid-item" class:featured={i === 0}>
-					<PersonCard {person} delayMs={(i % 8) * 40} />
-				</div>
+				<PersonCard {person} delayMs={(i % 8) * 40} />
 			{/each}
 		</div>
 	{/if}
