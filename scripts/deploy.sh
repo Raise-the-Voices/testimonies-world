@@ -60,6 +60,47 @@ sudo rsync -a --delete build/client/ /var/www/cases/
 sudo chown -R www-data:www-data /var/www/cases
 sudo chmod -R u+rwX,g+rX,o+rX /var/www/cases
 
+# Sync the canonical nginx site config from the repo to the host. Without
+# this, the deployed config drifts from `scripts/nginx/rtv-cases` and every
+# Django route that isn't explicitly listed in the on-disk file falls
+# through to the SvelteKit catch-all — which is how /media/ 404s for local
+# profile images and /admin/ sometimes lands on the wrong upstream.
+#
+# Back up any existing file before overwriting, only install + reload if
+# the config actually changed, and validate with `nginx -t` before
+# applying so a syntax error doesn't take the whole site down.
+SITE_CONF_SRC="$PROJECT_ROOT/scripts/nginx/rtv-cases"
+SITE_CONF_DST="/etc/nginx/sites-available/rtv-cases"
+SITE_LINK="/etc/nginx/sites-enabled/rtv-cases"
+SITE_BAK="/etc/nginx/sites-available/rtv-cases.bak-$(date +%Y%m%d-%H%M%S)"
+
+if [ ! -f "$SITE_CONF_SRC" ]; then
+    echo "  WARN: $SITE_CONF_SRC not found in repo — skipping nginx sync"
+else
+    # Back up the existing file if it differs from what we'd install.
+    if [ -f "$SITE_CONF_DST" ] && ! sudo cmp -s "$SITE_CONF_SRC" "$SITE_CONF_DST"; then
+        sudo cp -a "$SITE_CONF_DST" "$SITE_BAK"
+        echo "  backed up existing config to $SITE_BAK"
+    fi
+
+    if [ ! -f "$SITE_CONF_DST" ] || ! sudo cmp -s "$SITE_CONF_SRC" "$SITE_CONF_DST"; then
+        sudo install -m 644 "$SITE_CONF_SRC" "$SITE_CONF_DST"
+        sudo ln -sfn "$SITE_CONF_DST" "$SITE_LINK"
+
+        if sudo nginx -t; then
+            sudo nginx -s reload
+            echo "  nginx config synced and reloaded"
+        else
+            echo "  nginx -t FAILED — restoring backup $SITE_BAK"
+            if [ -f "$SITE_BAK" ]; then
+                sudo cp -a "$SITE_BAK" "$SITE_CONF_DST"
+                sudo nginx -t && sudo nginx -s reload
+            fi
+            exit 1
+        fi
+    fi
+fi
+
 # Restart the app services. This is not optional: both processes hold their
 # build in memory, so without a restart the node service keeps emitting HTML
 # that references the *previous* build's asset hashes, and every one of those
