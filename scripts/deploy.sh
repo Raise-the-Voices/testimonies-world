@@ -279,4 +279,39 @@ if [ "$ok" != 1 ]; then
     exit 1
 fi
 
+# --- Install + enable the backend watchdog (safety net) ---
+# rtv-cases-backend-watchdog.{service,timer} runs a one-shot healthcheck
+# every 60s: if /api/persons/ is down on :8040, it starts gunicorn as
+# the deploy user with --daemon. This catches the case where systemd
+# rtv-cases-backend silently fails (which has happened) AND the case
+# where an admin kills gunicorn manually — the site auto-heals within
+# 60s without operator intervention.
+#
+# Idempotent: install copies only if the on-disk file is stale
+# (cmp -s), reloads the daemon, enables+starts the timer.
+WD_SRC_DIR="$PROJECT_ROOT/scripts/systemd"
+WD_DST_DIR="/etc/systemd/system"
+
+if [ -d "$WD_SRC_DIR" ]; then
+    for unit in rtv-cases-backend-watchdog.service rtv-cases-backend-watchdog.timer; do
+        src="$WD_SRC_DIR/$unit"
+        dst="$WD_DST_DIR/$unit"
+        if [ ! -f "$src" ]; then
+            echo "  WARN: $src missing — skipping $unit" >&2
+            continue
+        fi
+        if [ ! -f "$dst" ] || ! sudo cmp -s "$src" "$dst"; then
+            sudo install -m 0644 "$src" "$dst"
+            echo "  installed $unit"
+        fi
+    done
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable rtv-cases-backend-watchdog.timer >/dev/null 2>&1 || true
+    sudo systemctl restart rtv-cases-backend-watchdog.timer >/dev/null 2>&1 || true
+    echo "  watchdog timer enabled: $(sudo systemctl is-active rtv-cases-backend-watchdog.timer)"
+else
+    echo "  WARN: $WD_SRC_DIR not found — skipping watchdog install"
+fi
+
 echo 'Deploy complete'
