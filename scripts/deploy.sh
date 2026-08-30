@@ -223,7 +223,7 @@ fi
 # Writing directly to sites-enabled so the typical `include sites-enabled/*;`
 # directive picks it up regardless of whether sites-available is also used.
 sudo install -d -m 0755 /etc/nginx/sites-enabled
-sudo install -m 0644 scripts/nginx/rtv-cases /etc/nginx/sites-enabled/rtv-cases
+sudo install -m 0644 "$PROJECT_ROOT/scripts/nginx/rtv-cases" /etc/nginx/sites-enabled/rtv-cases
 
 # Reload nginx so it picks up the new bundle without dropping connections.
 # `nginx -t` validates the config first — if the file we just installed has
