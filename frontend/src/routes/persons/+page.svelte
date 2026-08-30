@@ -264,7 +264,9 @@
 	{:else}
 		<div class="cases-grid">
 			{#each persons as person, i (person.id)}
-				<PersonCard {person} delayMs={(i % 8) * 40} />
+				<div class="cases-grid-item" class:featured={i === 0}>
+					<PersonCard {person} delayMs={(i % 8) * 40} />
+				</div>
 			{/each}
 		</div>
 	{/if}

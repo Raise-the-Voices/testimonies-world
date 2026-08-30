@@ -454,10 +454,8 @@
 
 			{#if person.categories && person.categories.length > 0}
 				<div class="meta-card">
-					<div class="meta-card-header">
-						<p>Categories</p>
-					</div>
 					<div class="meta-card-body">
+						<h3 class="meta-section-title">Categories</h3>
 						<ul class="meta-list">
 							{#each person.categories as cat (cat.id)}
 								<li>{cat.name}</li>
@@ -469,23 +467,19 @@
 
 			{#if person.quality_tier}
 				<div class="meta-card">
-					<div class="meta-card-header">
-						<p>Evidence Tier</p>
-					</div>
 					<div class="meta-card-body">
+						<h3 class="meta-section-title">Evidence Tier</h3>
 						<p class="meta-tier">{person.quality_tier}</p>
 					</div>
 				</div>
 			{/if}
 
 			{#if person.family && person.family.length > 0}
-				<div class="sidebar-bot">
-					<div class="sidebar-header-2">
-						<p><strong>Family</strong></p>
-					</div>
-					<div class="sidebar-content">
+				<div class="meta-card">
+					<div class="meta-card-body">
+						<h3 class="meta-section-title">Family</h3>
 						{#each person.family as rel (rel.person_id)}
-							<p class="small">
+							<p class="meta-family-row">
 								<a href="{base}/persons/{rel.person_id}">{rel.person_name}</a>
 								<span class="muted">({rel.relationship})</span>
 							</p>
@@ -553,12 +547,12 @@
 		min-width: 0;
 	}
 	.sidebar-header-2 {
-		background-color: #25646a;
+		background-color: var(--color-primary);
 		text-align: center;
 		padding: 5px;
 	}
 	.sidebar-header-2 p {
-		color: #fafafa;
+		color: var(--color-text-light);
 		margin: 0;
 	}
 	.sidebar-pic {
@@ -805,6 +799,14 @@
 	.meta-card-body p {
 		margin: 0;
 	}
+	.meta-section-title {
+		font-size: 0.72rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.05rem;
+		color: var(--color-text-muted);
+		margin: 0 0 0.6rem 0;
+	}
 	.meta-list {
 		list-style: none;
 		margin: 0;
@@ -821,6 +823,13 @@
 		font-size: 1rem;
 		font-weight: 600;
 		color: var(--color-primary);
+	}
+	.meta-family-row {
+		margin: 0 0 0.3rem 0;
+		font-size: 0.88rem;
+	}
+	.meta-family-row:last-child {
+		margin-bottom: 0;
 	}
 	.meta-row {
 		display: flex;

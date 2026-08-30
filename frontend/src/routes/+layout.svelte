@@ -55,7 +55,7 @@
 
 <style>
 	.header-container {
-		background: #25646a;
+		background: var(--color-primary);
 	}
 	.main-header {
 		height: 100px;
@@ -70,7 +70,7 @@
 	.logo {
 		flex: 1 0 200px;
 		max-width: 200px;
-		color: #fafafa;
+		color: var(--color-text-light);
 		font-size: 1.2em;
 		line-height: 1.4;
 		background: rgba(0, 0, 0, 0.55);
@@ -85,7 +85,7 @@
 	}
 	.logo:hover {
 		text-decoration: none;
-		color: #fafafa;
+		color: var(--color-text-light);
 	}
 	.logo p {
 		margin: 0;
@@ -108,19 +108,19 @@
 		font-weight: bold;
 		text-decoration: none;
 		text-transform: uppercase;
-		color: #fafafa;
+		color: var(--color-text-light);
 		border-radius: 4px;
 	}
 	.main-navigation a:hover {
 		background: rgba(0, 0, 0, 0.16);
-		color: #fafafa;
+		color: var(--color-text-light);
 	}
 
     .main-navigation a:hover,
     .main-navigation a.active {
-        background: rgba(0, 0, 0, 0.25); 
-        color: #ffffff;
-        border-bottom: 3px solid #fff; 
+        background: rgba(0, 0, 0, 0.25);
+        color: var(--color-bg-white);
+        border-bottom: 3px solid var(--color-bg-white);
     }
 
     .main-navigation a.active {
@@ -140,7 +140,7 @@
 		height: 36px;
 		border-radius: 50%;
 		background: rgba(0, 0, 0, 0.35);
-		color: #fafafa;
+		color: var(--color-text-light);
 		font-weight: bold;
 		font-size: 1rem;
 		margin: 0 20px;

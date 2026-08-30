@@ -10,8 +10,6 @@
 	 * The component owns the localStorage key ('rtv-cases-view') so the
 	 * /persons page doesn't have to think about it.
 	 */
-	import Icon from './Icon.svelte';
-
 	const STORAGE_KEY = 'rtv-cases-view';
 
 	type Mode = 'cards' | 'list';
@@ -58,7 +56,6 @@
 		class:active={value === 'cards'}
 		onclick={() => set('cards')}
 	>
-		<Icon name="layout-grid" size={16} />
 		<span>Cards</span>
 	</button>
 	<button
@@ -69,7 +66,6 @@
 		class:active={value === 'list'}
 		onclick={() => set('list')}
 	>
-		<Icon name="list" size={16} />
 		<span>List</span>
 	</button>
 </div>
