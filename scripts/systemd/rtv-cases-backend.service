@@ -1,0 +1,38 @@
+# /etc/systemd/system/rtv-cases-backend.service
+#
+# Canonical content for the rtv-cases-backend systemd unit. Deployed
+# automatically by scripts/deploy.sh to /etc/systemd/system/ and
+# reloaded via `sudo systemctl daemon-reload && sudo systemctl restart
+# rtv-cases-backend`.
+#
+# IMPORTANT: --bind MUST be 127.0.0.1:8040 — nginx proxies /api/* to
+# that exact socket (see scripts/nginx/rtv-cases `upstream
+# rtv_cases_backend`). On 2026-08-30 the on-host unit had
+# 127.0.0.1:8000 due to a paste/install mistake, which made every
+# nginx → backend request return 502. This file pins the right value.
+
+[Unit]
+Description=RTV Cases Django backend
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory=/opt/rtv-cases/backend
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/opt/rtv-cases/backend/.env
+ExecStart=/opt/rtv-cases/backend/.venv/bin/gunicorn \
+    testimonies.wsgi:application \
+    --bind 127.0.0.1:8040 \
+    --workers 2 \
+    --worker-class gthread \
+    --access-logfile - \
+    --error-logfile -
+Restart=always
+RestartSec=5
+MemoryMax=512M
+CPUQuota=100%
+
+[Install]
+WantedBy=multi-user.target

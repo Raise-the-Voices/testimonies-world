@@ -1,0 +1,39 @@
+# /etc/systemd/system/rtv-cases-frontend.service
+#
+# Canonical content for the rtv-cases-frontend systemd unit (SvelteKit
+# Node adapter). Deployed automatically by scripts/deploy.sh.
+#
+# IMPORTANT: --bind is not used here because SvelteKit's Node adapter
+# binds via env vars PORT and HOST. PORT must be 3000 and HOST must
+# be 127.0.0.1 — nginx proxies everything that isn't /api/, /admin/,
+# /accounts/, /events/, /media/, /static/, or /_app/ to that socket
+# (see scripts/nginx/rtv-cases `upstream rtv_cases_frontend`).
+#
+# NOTE: The ExecStart below is a best-guess reconstruction based on the
+# deploy.sh fallback and deploy.yml env section, since the on-host
+# unit wasn't shared. Verify against the actual unit on prod before
+# merging the PR — if the real ExecStart differs, update this file
+# and re-deploy.
+
+[Unit]
+Description=RTV Cases SvelteKit frontend (Node adapter)
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory=/opt/rtv-cases/frontend
+Environment=PORT=3000
+Environment=HOST=127.0.0.1
+Environment=PUBLIC_BASE_PATH=/testimonies
+Environment=ORIGIN=https://cases.raisethevoices.org
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node build/index.js
+Restart=always
+RestartSec=5
+MemoryMax=512M
+CPUQuota=100%
+
+[Install]
+WantedBy=multi-user.target
