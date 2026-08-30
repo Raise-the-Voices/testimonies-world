@@ -101,6 +101,28 @@ else
     fi
 fi
 
+# --- Sync canonical systemd unit files from the repo ---
+# The backend + frontend unit files live in scripts/systemd/ so they
+# can't drift. Without this, a typo (e.g. 127.0.0.1:8000 instead of
+# :8040 on 2026-08-30) survives across deploys and the site 502s.
+# Idempotent: copies only when the on-disk file is stale (cmp -s).
+UNIT_SRC_DIR="$PROJECT_ROOT/scripts/systemd"
+UNIT_DST_DIR="/etc/systemd/system"
+
+for unit in rtv-cases-backend.service rtv-cases-frontend.service; do
+    src="$UNIT_SRC_DIR/$unit"
+    dst="$UNIT_DST_DIR/$unit"
+    if [ ! -f "$src" ]; then
+        echo "  WARN: $src missing — skipping $unit" >&2
+        continue
+    fi
+    if [ ! -f "$dst" ] || ! sudo cmp -s "$src" "$dst"; then
+        sudo install -m 0644 "$src" "$dst"
+        echo "  installed $unit"
+    fi
+done
+sudo systemctl daemon-reload
+
 # Restart the app services. This is not optional: both processes hold their
 # build in memory, so without a restart the node service keeps emitting HTML
 # that references the *previous* build's asset hashes, and every one of those
