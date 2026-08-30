@@ -124,10 +124,16 @@ sudo systemctl restart rtv-cases-backend 2>/dev/null || true
 sudo systemctl restart rtv-cases-frontend 2>/dev/null || true
 sleep 3
 
-# --- Backend fallback: nohup gunicorn if systemd didn't bring it up -----
+# --- Backend fallback: detached gunicorn if systemd didn't bring it up -----
 # We only fire this if neither systemd says the service is active nor :8040
 # is listening. Without this, a broken systemd unit on prod keeps the
 # site 502'd indefinitely.
+#
+# Run as the `deploy` user (matching the systemd unit's User=) so file
+# ownership matches the rest of the install. --daemon tells gunicorn to
+# fully background itself and write its pidfile — no shell-trick needed
+# to survive the appleboy/ssh-action session teardown that would
+# otherwise kill a plain nohup child.
 backend_up=0
 if curl -s -o /dev/null --max-time 2 http://127.0.0.1:8040/api/persons/; then
     backend_up=1
@@ -136,24 +142,34 @@ elif sudo systemctl is-active --quiet rtv-cases-backend 2>/dev/null \
     backend_up=1
 fi
 if [ "$backend_up" != 1 ]; then
-    echo "  systemd restart did not bring up the backend; falling back to nohup gunicorn"
+    echo "  systemd restart did not bring up the backend; falling back to detached gunicorn"
     cd /opt/rtv-cases/backend
-    if [ -f .venv/bin/activate ]; then
-        # shellcheck disable=SC1091
-        source .venv/bin/activate
-    fi
-    nohup .venv/bin/gunicorn testimonies.wsgi:application \
+    # Activate the venv in a subshell so PATH leaks don't propagate, and
+    # exec gunicorn under sudo -u deploy (the systemd unit's User=).
+    sudo -u deploy /opt/rtv-cases/backend/.venv/bin/gunicorn \
+        testimonies.wsgi:application \
         --bind 127.0.0.1:8040 \
         --workers 2 \
-        --access-logfile - \
-        --error-logfile - \
-        > /tmp/cases-backend.log 2>&1 &
-    disown
-    echo $! > /tmp/cases-backend.pid
+        --daemon \
+        --pid /tmp/cases-backend.pid \
+        --access-logfile /tmp/cases-backend.access.log \
+        --error-logfile /tmp/cases-backend.err.log
     cd "$PROJECT_ROOT"
+
+    # Verify it actually came up before declaring victory.
+    sleep 3
+    if curl -s -o /dev/null --max-time 3 http://127.0.0.1:8040/api/persons/; then
+        echo "  fallback gunicorn up on :8040"
+    else
+        echo "  ERROR: fallback gunicorn did not bind :8040" >&2
+        echo "  See /tmp/cases-backend.err.log" >&2
+        tail -20 /tmp/cases-backend.err.log >&2 2>/dev/null || true
+    fi
 fi
 
-# --- Frontend fallback: nohup node if systemd didn't bring it up ------
+# --- Frontend fallback: detached node if systemd didn't bring it up ----
+# Same pattern as the backend: --daemon-equivalent (nohup here is fine
+# because node doesn't fork like gunicorn), with stderr/stdout captured.
 frontend_up=0
 if curl -s -o /dev/null --max-time 2 http://127.0.0.1:3000/; then
     frontend_up=1
@@ -162,14 +178,22 @@ elif sudo systemctl is-active --quiet rtv-cases-frontend 2>/dev/null \
     frontend_up=1
 fi
 if [ "$frontend_up" != 1 ]; then
-    echo "  systemd restart did not bring up the frontend; falling back to nohup node"
+    echo "  systemd restart did not bring up the frontend; falling back to detached node"
     cd /opt/rtv-cases/frontend
-    nohup env PORT="${PORT:-3000}" HOST=127.0.0.1 \
-        node build/index.js \
-        > /tmp/cases-frontend.log 2>&1 &
+    sudo -u deploy env PORT="${PORT:-3000}" HOST=127.0.0.1 \
+        setsid node build/index.js \
+            < /dev/null > /tmp/cases-frontend.log 2>&1 &
     disown
-    echo $! > /tmp/cases-frontend.pid
     cd "$PROJECT_ROOT"
+
+    sleep 3
+    if curl -s -o /dev/null --max-time 3 http://127.0.0.1:3000/; then
+        echo "  fallback node up on :3000"
+    else
+        echo "  ERROR: fallback node did not bind :3000" >&2
+        echo "  See /tmp/cases-frontend.log" >&2
+        tail -20 /tmp/cases-frontend.log >&2 2>/dev/null || true
+    fi
 fi
 
 # Install the canonical nginx site config from the repo. This is the file
