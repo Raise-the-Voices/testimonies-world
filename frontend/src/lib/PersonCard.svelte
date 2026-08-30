@@ -1,21 +1,22 @@
 <script lang="ts">
 	/**
-	 * PersonCard — the redesigned card used on /persons (cards view).
+	 * PersonCard — used on /persons (cards view).
 	 *
 	 * Layout:
 	 *   ┌────────────────────────────┐
 	 *   │ image      [status badge]  │   <- card-media + overlay badge
 	 *   ├────────────────────────────┤
 	 *   │ Name (truncated)           │
-	 *   │ · country · location       │   <- card-body, metadata rows
-	 *   │ · last seen · N reports    │
+	 *   │ Country · Last seen · N rpts│   <- single inline metadata line
 	 *   ├────────────────────────────┤
 	 *   │ View details →             │   <- card-cta (footer)
 	 *   └────────────────────────────┘
 	 *
-	 * Hover lifts the card (-4px), deepens the shadow, scales the image
-	 * to 1.05x, and slides the CTA arrow right. All transitions are
-	 * disabled under prefers-reduced-motion: reduce.
+	 * Humanized variant: no icon-prefixed metadata lines (each line used to
+	 * start with a small globe/pin/clock/newspaper icon, which read as
+	 * "AI-template"). No hover-lift, no image scale-on-hover. The card
+	 * itself still has its border + shadow, but the interaction is just
+	 * a color change on the title.
 	 */
 	import { base } from '$app/paths';
 	import Icon from './Icon.svelte';
@@ -46,6 +47,19 @@
 	let href = $derived(`${base}/persons/${person.id}`);
 	let formattedLastSeen = $derived(formatDate(person.last_known_date));
 	let hasReportCount = $derived(Number(person.report_count) > 0);
+
+	// Build a single inline metadata string: "Country · Last seen DATE · N reports"
+	let metaLine = $derived.by(() => {
+		const parts: string[] = [];
+		if (person.country) parts.push(person.country);
+		if (formattedLastSeen) parts.push(`Last seen ${formattedLastSeen}`);
+		if (hasReportCount) {
+			parts.push(
+				`${person.report_count} report${person.report_count === 1 ? '' : 's'}`,
+			);
+		}
+		return parts.join(' · ');
+	});
 </script>
 
 <article class="person-card" style="animation-delay: {delayMs}ms">
@@ -67,23 +81,9 @@
 	<div class="card-body">
 		<h3 class="card-name"><a {href}>{person.name}</a></h3>
 
-		<ul class="card-meta">
-			{#if person.country}
-				<li><Icon name="globe" size={14} /> {person.country}</li>
-			{/if}
-			{#if person.rough_location}
-				<li><Icon name="pin" size={14} /> {person.rough_location}</li>
-			{/if}
-			{#if formattedLastSeen}
-				<li><Icon name="clock" size={14} /> Last seen {formattedLastSeen}</li>
-			{/if}
-			{#if hasReportCount}
-				<li>
-					<Icon name="newspaper" size={14} />
-					{person.report_count} report{person.report_count === 1 ? '' : 's'}
-				</li>
-			{/if}
-		</ul>
+		{#if metaLine}
+			<p class="card-meta">{metaLine}</p>
+		{/if}
 
 		<a class="card-cta" {href}>
 			<span>View details</span>
@@ -102,12 +102,6 @@
 		display: flex;
 		flex-direction: column;
 		animation: fadeSlideUp 0.4s ease both;
-		transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
-	}
-	.person-card:hover {
-		box-shadow: var(--shadow-card-lg);
-		transform: translateY(-4px);
-		border-color: var(--color-primary-light);
 	}
 
 	.card-media {
@@ -121,11 +115,7 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-		transition: transform 0.5s ease;
 		display: block;
-	}
-	.person-card:hover .card-media :global(img) {
-		transform: scale(1.05);
 	}
 
 	.card-media-placeholder {
@@ -171,23 +161,10 @@
 	}
 
 	.card-meta {
-		list-style: none;
 		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-	}
-	.card-meta li {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-		font-size: 0.78rem;
+		font-size: 0.82rem;
 		color: var(--color-text-muted);
 		line-height: 1.4;
-	}
-	.card-meta li :global(svg) {
-		flex: 0 0 auto;
 	}
 
 	.card-cta {
@@ -207,31 +184,10 @@
 	.card-cta:hover {
 		color: var(--color-text);
 	}
-	.card-cta-arrow {
-		display: inline-flex;
-		transition: transform 0.2s ease;
-	}
-	.person-card:hover .card-cta-arrow {
-		transform: translateX(4px);
-	}
 
 	@media (prefers-reduced-motion: reduce) {
 		.person-card {
 			animation: none;
-			transition: none;
-		}
-		.card-media :global(img),
-		.card-cta-arrow {
-			transition: none;
-		}
-		.person-card:hover {
-			transform: none;
-		}
-		.person-card:hover .card-media :global(img) {
-			transform: none;
-		}
-		.person-card:hover .card-cta-arrow {
-			transform: none;
 		}
 	}
 </style>
