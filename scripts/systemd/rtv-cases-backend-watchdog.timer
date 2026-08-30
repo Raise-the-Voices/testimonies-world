@@ -1,0 +1,15 @@
+[Unit]
+Description=Run rtv-cases backend watchdog every minute
+Documentation=https://github.com/Raise-the-Voices/testimonies-world
+
+[Timer]
+# Boot + every 60s after. The watchdog service is oneshot so a second
+# invocation while the first is still running is a no-op — systemd
+# handles that natively.
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
