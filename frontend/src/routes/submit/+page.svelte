@@ -114,9 +114,8 @@
 		<header class="form-header">
 			<h1>Submit a Case</h1>
 			<p class="form-intro">
-				Document someone facing oppression. Only <strong>name</strong>,
-				<strong>country</strong>, and an <strong>initial narrative</strong> are required — every other field can
-				be filled in later as more is known.
+				Document someone facing oppression. Only <em>name</em>, <em>country</em>, and an
+				<em>initial narrative</em> are required — every other field can be filled in later as more is known.
 			</p>
 		</header>
 
@@ -125,36 +124,34 @@
 		{/if}
 
 		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} novalidate>
-			<!-- Section 1: Person Information -->
-			<section class="form-section">
-				<header class="form-section-header">
-					<span class="section-number" aria-hidden="true">1</span>
-					<div class="form-section-titles">
-						<h2>Person Information</h2>
-						<p class="form-section-desc">Basic identifying details about the person.</p>
-					</div>
-				</header>
+			<!-- ============== Section 1: Person Information ============== -->
+			<section class="form-section" aria-labelledby="sec-person">
+				<h2 id="sec-person" class="form-section-title">
+					<span class="title-bar" aria-hidden="true"></span>
+					Person Information
+				</h2>
+				<p class="form-section-desc">Basic identifying details about the person.</p>
 
 				<div class="form-grid">
 					<div class="field">
 						<label for="name">Name <span class="required-mark" aria-hidden="true">*</span></label>
-						<input id="name" bind:value={name} required aria-required="true" autocomplete="off" />
+						<input id="name" bind:value={name} required aria-required="true" placeholder="Person's full name" autocomplete="off" />
 					</div>
 
 					<div class="field">
 						<label for="country">Country <span class="required-mark" aria-hidden="true">*</span></label>
-						<input id="country" bind:value={country} required aria-required="true" autocomplete="country-name" />
+						<input id="country" bind:value={country} required aria-required="true" placeholder="Country where the case is" autocomplete="country-name" />
 					</div>
 
 					<div class="field">
 						<label for="status">Current Status</label>
 						<select id="status" bind:value={currentStatus}>
+							<option value="unknown" disabled hidden>Select current status…</option>
 							<option value="detained">Detained</option>
 							<option value="disappeared">Disappeared</option>
 							<option value="restricted_movement">Restricted Movement</option>
 							<option value="released">Released</option>
 							<option value="deceased">Deceased</option>
-							<option value="unknown">Unknown</option>
 							<option value="stateless">Stateless</option>
 							<option value="rights_restricted">Rights Restricted</option>
 						</select>
@@ -163,7 +160,7 @@
 					<div class="field">
 						<label for="medical">Medical Status</label>
 						<select id="medical" bind:value={medicalStatus}>
-							<option value="unknown">Unknown</option>
+							<option value="unknown" disabled hidden>Select medical status…</option>
 							<option value="healthy">Healthy</option>
 							<option value="health_concerns">Health Concerns</option>
 							<option value="critical">Critical</option>
@@ -172,13 +169,25 @@
 					</div>
 
 					<div class="field">
-						<label for="rough_location">Location <span class="field-tag">public</span></label>
-						<input id="rough_location" bind:value={roughLocation} placeholder="Region or city" />
+						<label for="rough_location">
+							Location
+							<span class="privacy-dot privacy-dot-public" aria-label="Public"></span>
+							<span class="visually-hidden">(public)</span>
+						</label>
+						<input
+							id="rough_location"
+							bind:value={roughLocation}
+							placeholder="Region or city"
+						/>
 						<p class="field-help">Region- or city-level — shown publicly.</p>
 					</div>
 
 					<div class="field">
-						<label for="precise_location">Precise Location <span class="field-tag field-tag-private">private</span></label>
+						<label for="precise_location">
+							Precise Location
+							<span class="privacy-dot privacy-dot-private" aria-label="Private"></span>
+							<span class="visually-hidden">(private)</span>
+						</label>
 						<input
 							id="precise_location"
 							bind:value={preciseLocation}
@@ -194,13 +203,13 @@
 
 					<div class="field">
 						<label for="ethnicity">Ethnicity</label>
-						<input id="ethnicity" bind:value={ethnicity} />
+						<input id="ethnicity" bind:value={ethnicity} placeholder="Ethnicity or heritage" />
 					</div>
 
 					<div class="field">
 						<label for="gender">Gender</label>
 						<select id="gender" bind:value={gender}>
-							<option value="">—</option>
+							<option value="" disabled hidden>Select gender…</option>
 							<option value="M">Male</option>
 							<option value="F">Female</option>
 							<option value="O">Other</option>
@@ -215,17 +224,13 @@
 				</div>
 			</section>
 
-			<!-- Section 2: Summary & Categories -->
-			<section class="form-section">
-				<header class="form-section-header">
-					<span class="section-number" aria-hidden="true">2</span>
-					<div class="form-section-titles">
-						<h2>Summary &amp; Categories</h2>
-						<p class="form-section-desc">
-							A short overview and the categories that apply to this case.
-						</p>
-					</div>
-				</header>
+			<!-- ============== Section 2: Summary & Categories ============== -->
+			<section class="form-section" aria-labelledby="sec-summary">
+				<h2 id="sec-summary" class="form-section-title">
+					<span class="title-bar" aria-hidden="true"></span>
+					Summary &amp; Categories
+				</h2>
+				<p class="form-section-desc">A short overview and the categories that apply to this case.</p>
 
 				<div class="field-stack">
 					<div class="field">
@@ -248,12 +253,19 @@
 							<div class="categories-grid" role="group" aria-label="Categories">
 								{#each categories as cat (cat.id)}
 									<label class="category-pill" class:is-selected={selectedCategories.includes(cat.id)}>
+										<span class="category-check" aria-hidden="true">
+											{#if selectedCategories.includes(cat.id)}
+												<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+													<polyline points="20 6 9 17 4 12" />
+												</svg>
+											{/if}
+										</span>
 										<input
 											type="checkbox"
 											checked={selectedCategories.includes(cat.id)}
 											onchange={() => toggleCategory(cat.id)}
 										/>
-										<span>{cat.name}</span>
+										<span class="category-name">{cat.name}</span>
 									</label>
 								{/each}
 							</div>
@@ -262,22 +274,19 @@
 				</div>
 			</section>
 
-			<!-- Section 3: Initial Report -->
-			<section class="form-section">
-				<header class="form-section-header">
-					<span class="section-number" aria-hidden="true">3</span>
-					<div class="form-section-titles">
-						<h2>Initial Report</h2>
-						<p class="form-section-desc">
-							The first testimony or report about this person — what happened, and what's known.
-						</p>
-					</div>
-				</header>
+			<!-- ============== Section 3: Initial Report ============== -->
+			<section class="form-section" aria-labelledby="sec-report">
+				<h2 id="sec-report" class="form-section-title">
+					<span class="title-bar" aria-hidden="true"></span>
+					Initial Report
+				</h2>
+				<p class="form-section-desc">The first testimony or report about this person — what happened, and what's known.</p>
 
 				<div class="form-grid">
 					<div class="field">
 						<label for="source_type">Source Type</label>
 						<select id="source_type" bind:value={sourceType}>
+							<option value="firsthand" disabled hidden>Select source type…</option>
 							<option value="firsthand">Firsthand</option>
 							<option value="secondhand">Secondhand</option>
 							<option value="news">News report</option>
@@ -286,7 +295,11 @@
 					</div>
 
 					<div class="field">
-						<label for="source_attr">Source Attribution <span class="field-tag">public</span></label>
+						<label for="source_attr">
+							Source Attribution
+							<span class="privacy-dot privacy-dot-public" aria-label="Public"></span>
+							<span class="visually-hidden">(public)</span>
+						</label>
 						<input
 							id="source_attr"
 							bind:value={sourceAttribution}
@@ -296,22 +309,30 @@
 					</div>
 
 					<div class="field">
-						<label for="reporter_name">Reporter Name <span class="field-tag field-tag-private">private</span></label>
+						<label for="reporter_name">
+							Reporter Name
+							<span class="privacy-dot privacy-dot-private" aria-label="Private"></span>
+							<span class="visually-hidden">(private)</span>
+						</label>
 						<input
 							id="reporter_name"
 							bind:value={reporterName}
-							placeholder="Not shown publicly"
+							placeholder="Reporter's name"
 							autocomplete="off"
 						/>
 						<p class="field-help">Stored privately — never displayed on the public case page.</p>
 					</div>
 
 					<div class="field">
-						<label for="reporter_contact">Reporter Contact <span class="field-tag field-tag-private">private</span></label>
+						<label for="reporter_contact">
+							Reporter Contact
+							<span class="privacy-dot privacy-dot-private" aria-label="Private"></span>
+							<span class="visually-hidden">(private)</span>
+						</label>
 						<input
 							id="reporter_contact"
 							bind:value={reporterContact}
-							placeholder="Email, phone, Signal — anything to follow up"
+							placeholder="Email, phone, or Signal handle"
 							autocomplete="off"
 						/>
 						<p class="field-help">Stored privately. Used only by casework volunteers to verify or follow up.</p>
@@ -324,7 +345,7 @@
 
 					<div class="field">
 						<label for="report_location">Event Location</label>
-						<input id="report_location" bind:value={reportRoughLocation} />
+						<input id="report_location" bind:value={reportRoughLocation} placeholder="Where the event took place" />
 					</div>
 				</div>
 
@@ -370,9 +391,7 @@
 
 			<!-- Submit -->
 			<div class="form-actions">
-				<p class="form-actions-note">
-					You'll be taken to the case page after submission.
-				</p>
+				<p class="form-actions-note">You'll be taken to the case page after submission.</p>
 				<button type="submit" class="btn btn-primary submit-btn" disabled={saving}>
 					{#if saving}
 						<span class="spinner" aria-hidden="true"></span>
@@ -387,71 +406,78 @@
 </div>
 
 <style>
+	/* === Accessibility helper === */
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
 	/* === Page header === */
 	.form-header {
 		margin-bottom: 1.75rem;
 	}
 	.form-header h1 {
 		margin: 0 0 0.5rem 0;
-		color: var(--color-text);
+		color: var(--color-primary);
+		font-size: 1.85rem;
+		font-weight: 700;
+		letter-spacing: -0.01em;
 	}
 	.form-intro {
 		margin: 0;
 		max-width: var(--max-w-prose);
-		color: var(--color-text-muted);
+		color: var(--color-text);
 		font-size: 1rem;
 		line-height: 1.6;
 	}
-	.form-intro strong {
-		color: var(--color-text);
+	.form-intro em {
+		color: var(--color-primary);
 		font-weight: 600;
+		font-style: normal;
+		text-decoration: underline;
+		text-decoration-color: var(--color-primary-tint);
+		text-underline-offset: 3px;
 	}
 
-	/* === Section card === */
+	/* === Section card — colored left bar + colored title === */
 	.form-section {
 		background: var(--color-bg-white);
-		border: 1px solid var(--color-border-light);
+		border: 1px solid var(--color-border-subtle);
+		border-left: 3px solid var(--color-primary);
 		border-radius: var(--radius-card-lg);
 		box-shadow: var(--shadow-card);
-		padding: 1.75rem 2rem;
+		padding: 1.5rem 1.75rem 1.75rem;
 		margin-bottom: 1.5rem;
 	}
-	.form-section-header {
+	.form-section-title {
 		display: flex;
-		align-items: flex-start;
-		gap: 1rem;
-		padding-bottom: 1.25rem;
-		margin-bottom: 1.5rem;
-		border-bottom: 1px solid var(--color-border-subtle);
-	}
-	.section-number {
-		display: inline-flex;
 		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		border-radius: 50%;
-		background: var(--color-primary-tint);
+		gap: 0.65rem;
+		margin: 0 0 0.4rem 0;
 		color: var(--color-primary);
-		font-weight: 700;
-		font-size: 0.95rem;
-		flex: 0 0 32px;
-		font-variant-numeric: tabular-nums;
-	}
-	.form-section-titles {
-		min-width: 0;
-	}
-	.form-section h2 {
-		margin: 0;
 		font-size: 1.2rem;
 		font-weight: 700;
-		color: var(--color-text);
+		letter-spacing: -0.005em;
 		line-height: 1.3;
 	}
+	.title-bar {
+		display: inline-block;
+		width: 22px;
+		height: 2px;
+		background: var(--color-primary);
+		border-radius: 2px;
+	}
 	.form-section-desc {
-		margin: 0.3rem 0 0 0;
+		margin: 0 0 1.25rem 0;
 		color: var(--color-text-muted);
-		font-size: 0.9rem;
+		font-size: 0.92rem;
 		line-height: 1.5;
 	}
 
@@ -478,30 +504,34 @@
 	.field-label {
 		font-size: 0.85rem;
 		font-weight: 600;
-		color: var(--color-text);
+		color: var(--color-primary);
 		line-height: 1.3;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
 	}
 	.required-mark {
 		color: var(--color-danger);
 		font-weight: 700;
-		margin-left: 0.15rem;
+		margin-left: 0.1rem;
 	}
-	.field-tag {
+
+	/* Privacy dot — small colored circle after the label.
+	   Green dot = public, red dot = private. */
+	.privacy-dot {
 		display: inline-block;
-		font-size: 0.65rem;
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.04rem;
-		padding: 0.1rem 0.4rem;
-		border-radius: 999px;
-		background: var(--color-surface);
-		color: var(--color-text-muted);
-		margin-left: 0.4rem;
-		vertical-align: middle;
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		flex: 0 0 8px;
 	}
-	.field-tag-private {
-		background: rgba(217, 22, 22, 0.08);
-		color: var(--color-danger);
+	.privacy-dot-public {
+		background: var(--color-success);
+		box-shadow: 0 0 0 3px rgba(47, 133, 90, 0.18);
+	}
+	.privacy-dot-private {
+		background: var(--color-danger);
+		box-shadow: 0 0 0 3px rgba(217, 22, 22, 0.18);
 	}
 
 	.field-help {
@@ -511,8 +541,7 @@
 		line-height: 1.45;
 	}
 
-	/* Inputs share one consistent look — single source of truth for border,
-	   radius, padding, focus ring, and placeholder contrast. */
+	/* Inputs share one consistent look */
 	.field input,
 	.field select,
 	.field textarea {
@@ -539,7 +568,7 @@
 	}
 	.field select {
 		padding-right: 2.25rem;
-		background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+		background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2325646a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
 		background-repeat: no-repeat;
 		background-position: right 0.85rem center;
 		background-size: 12px 12px;
@@ -547,12 +576,12 @@
 	.field input::placeholder,
 	.field textarea::placeholder {
 		color: var(--color-text-muted);
-		opacity: 0.65;
+		opacity: 0.6;
 	}
 	.field input:hover:not(:focus):not(:disabled),
 	.field select:hover:not(:focus):not(:disabled),
 	.field textarea:hover:not(:focus):not(:disabled) {
-		border-color: var(--color-border);
+		border-color: var(--color-primary-light);
 	}
 	.field input:focus,
 	.field select:focus,
@@ -569,7 +598,7 @@
 		cursor: not-allowed;
 	}
 
-	/* === Categories as interactive pills === */
+	/* === Categories as interactive pills with visible check mark === */
 	.categories-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -578,8 +607,8 @@
 	.category-pill {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.55rem 0.9rem;
+		gap: 0.6rem;
+		padding: 0.55rem 0.9rem 0.55rem 0.7rem;
 		border: 1px solid var(--color-border-light);
 		border-radius: var(--radius-input);
 		background: var(--color-bg-white);
@@ -604,13 +633,48 @@
 		color: var(--color-primary);
 		font-weight: 600;
 	}
-	.category-pill input[type='checkbox'] {
-		width: auto;
-		margin: 0;
-		accent-color: var(--color-primary);
-		cursor: pointer;
+
+	/* Visible check indicator — an empty box that fills with
+	   primary color and a white check when selected. */
+	.category-check {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 18px;
+		height: 18px;
+		border: 1.5px solid var(--color-border-light);
+		border-radius: 4px;
+		background: var(--color-bg-white);
+		color: transparent;
+		flex: 0 0 18px;
+		transition:
+			background 0.15s ease,
+			border-color 0.15s ease,
+			color 0.15s ease;
 	}
-	.category-pill:focus-within {
+	.category-pill.is-selected .category-check {
+		background: var(--color-primary);
+		border-color: var(--color-primary);
+		color: white;
+	}
+	.category-pill:hover .category-check {
+		border-color: var(--color-primary-light);
+	}
+
+	/* Native checkbox hidden but accessible */
+	.category-pill input[type='checkbox'] {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+	.category-pill input[type='checkbox']:focus-visible + .category-check,
+	.category-pill:focus-within .category-check {
 		outline: none;
 		box-shadow: 0 0 0 3px var(--color-primary-tint);
 	}
@@ -624,7 +688,7 @@
 		margin-top: 0.5rem;
 		padding: 1.5rem 2rem;
 		background: var(--color-bg-white);
-		border: 1px solid var(--color-border-light);
+		border: 1px solid var(--color-border-subtle);
 		border-radius: var(--radius-card-lg);
 		box-shadow: var(--shadow-card);
 		flex-wrap: wrap;
@@ -662,9 +726,6 @@
 		.form-section {
 			padding: 1.25rem 1.25rem;
 		}
-		.form-section-header {
-			gap: 0.75rem;
-		}
 		.form-grid {
 			grid-template-columns: 1fr;
 			gap: 1rem;
@@ -695,6 +756,7 @@
 		.field select,
 		.field textarea,
 		.category-pill,
+		.category-check,
 		.spinner {
 			transition: none;
 			animation: none;
