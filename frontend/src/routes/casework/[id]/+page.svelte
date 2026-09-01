@@ -1,17 +1,29 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { user, isAdvocate, loadSession } from '$lib/session';
-	import { createCasework, getPersons, ApiError } from '$lib/api';
-	import { toastSuccess } from '$lib/toast';
+	import {
+		getCaseworkRecord,
+		updateCasework,
+		getPersons,
+		ApiError,
+		type CaseworkRecord,
+	} from '$lib/api';
+	import Toast from '$lib/Toast.svelte';
+	import Skeleton from '$lib/Skeleton.svelte';
+	import { toastSuccess, toastError } from '$lib/toast';
 
 	let currentUser = $derived($user);
 	let saving = $state(false);
 	let refreshing = $state(false);
+	let loading = $state(true);
+	let loadError = $state('');
 	let formError = $state('');
 	let formErrorKind = $state<'auth' | 'server' | 'other'>('other');
 	let errors = $state<Record<string, string>>({});
+	let recordId = $state<number | null>(null);
 	let persons: any[] = $state([]);
 	let selectedPersons: number[] = $state([]);
 
@@ -37,13 +49,54 @@
 	const validStatuses = new Set(['open', 'in_progress', 'done']);
 
 	onMount(async () => {
+		const idStr = $page.params.id;
+		const id = Number(idStr);
+		if (!Number.isFinite(id) || id <= 0) {
+			loadError = 'Invalid record id.';
+			loading = false;
+			return;
+		}
+		recordId = id;
+		await Promise.all([loadRecord(id), loadPersons()]);
+	});
+
+	async function loadRecord(id: number) {
+		loading = true;
+		loadError = '';
+		try {
+			const r = await getCaseworkRecord(id);
+			applyRecord(r);
+		} catch (e: any) {
+			if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+				loadError = "You don't have permission to view this record.";
+			} else if (e instanceof ApiError && e.status === 404) {
+				loadError = 'This record no longer exists.';
+			} else {
+				loadError = e?.message || "Couldn't load this record.";
+			}
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function loadPersons() {
 		try {
 			const data = await getPersons({ page_size: '1000' });
 			persons = data.results;
 		} catch (e) {
 			console.error(e);
 		}
-	});
+	}
+
+	function applyRecord(r: CaseworkRecord) {
+		actionType = r.action_type;
+		description = r.description;
+		date = r.date;
+		status = r.status;
+		nextSteps = r.next_steps ?? '';
+		notes = r.notes ?? '';
+		selectedPersons = Array.isArray(r.persons) ? r.persons.slice() : [];
+	}
 
 	function togglePerson(id: number) {
 		if (selectedPersons.includes(id)) {
@@ -53,28 +106,15 @@
 		}
 	}
 
-	/** Remove a field's error — fires on every input so users see instant feedback when they fix it. */
 	function clearError(field: string) {
 		if (errors[field]) {
 			const next = { ...errors };
 			delete next[field];
 			errors = next;
 		}
-		// Also clear the top-level banner once the user is editing again.
 		if (formError) formError = '';
 	}
 
-	/** Map server error field names → our form's field ids (DRF uses snake_case). */
-	function mapServerField(name: string): string {
-		if (name === 'action_type' || name === 'date' || name === 'status' ||
-			name === 'description' || name === 'next_steps' || name === 'notes' ||
-			name === 'persons') {
-			return name;
-		}
-		return name; // unknown fields stay as-is — they surface at top
-	}
-
-	/** Run client-side validation. Returns a map of field → message; empty if all good. */
 	function validate(): Record<string, string> {
 		const e: Record<string, string> = {};
 		if (!actionType) e.action_type = 'Pick the type of action.';
@@ -137,9 +177,10 @@
 			return;
 		}
 
+		if (recordId == null) return;
 		saving = true;
 		try {
-			await createCasework({
+			await updateCasework(recordId, {
 				action_type: actionType,
 				description: description.trim(),
 				date,
@@ -148,21 +189,21 @@
 				notes: notes.trim(),
 				persons: selectedPersons,
 			});
-			toastSuccess('Record created', 'Your casework record is now in the list.');
+			toastSuccess('Record saved', 'Your changes are live in the casework list.');
 			goto(`${base}/casework`);
 		} catch (e: any) {
 			if (e instanceof ApiError) {
 				if (e.isValidation && Object.keys(e.fieldErrors).length > 0) {
 					const mapped: Record<string, string> = {};
 					for (const [k, msgs] of Object.entries(e.fieldErrors)) {
-						mapped[mapServerField(k)] = msgs[0];
+						mapped[k] = msgs[0];
 					}
 					errors = mapped;
 					focusFirstError(mapped);
 				} else if (e.isUnauthorized) {
 					formErrorKind = 'auth';
 					formError =
-						'Your session has expired, or you don’t have permission to add records. ' +
+						'Your session has expired, or you don’t have permission to edit records. ' +
 						'Try refreshing your session — if that doesn’t work, log in again.';
 				} else if (e.isServer || e.status === 0) {
 					formErrorKind = 'server';
@@ -187,26 +228,42 @@
 </script>
 
 <svelte:head>
-	<title>New Casework Record — Testimonies.world</title>
+	<title>Edit Casework Record — Testimonies.world</title>
 </svelte:head>
+
+<Toast />
 
 <div class="container">
 	{#if !isAdvocate(currentUser)}
 		<p class="muted">
-			You must be logged in as an advocate to create casework records.
-			<a href="{base}/api/auth/login/?next={base}/casework/new">Login</a>
+			You must be logged in as an advocate to edit casework records.
+			<a href="{base}/api/auth/login/?next={base}/casework">Login</a>
 		</p>
+	{:else if loading}
+		<div class="loading-card" aria-busy="true" aria-label="Loading record">
+			<Skeleton variant="rect" height="1.5rem" width="40%" />
+			<Skeleton variant="rect" height="0.9rem" width="65%" />
+			<div class="skeleton-spacer"></div>
+			<Skeleton variant="rect" height="8rem" />
+		</div>
+	{:else if loadError}
+		<div class="state-card state-error" role="alert">
+			<div class="state-icon state-icon-error" aria-hidden="true">!</div>
+			<h2 class="state-title">Couldn't load this record</h2>
+			<p class="state-body">{loadError}</p>
+			<div class="state-actions">
+				<a href="{base}/casework" class="btn btn-primary">Back to casework</a>
+			</div>
+		</div>
 	{:else}
 		<header class="form-header">
-			<h1>New Casework Record</h1>
+			<a href="{base}/casework" class="back-link">← Back to casework</a>
+			<h1>Edit Casework Record</h1>
 			<p class="form-intro">
-				Log an advocacy action — outreach, a legal filing, media engagement, or anything
-				else you’ve done for a case. Only the <em>description</em> is required; link the
-				person(s) it concerns at the bottom.
+				Update the details below. Changes are saved when you click <em>Save changes</em>.
 			</p>
 		</header>
 
-		<!-- ============== Top-level error banner (only auth / server / unknown) ============== -->
 		{#if formError}
 			<div
 				class="form-error-banner form-error-{formErrorKind}"
@@ -222,15 +279,11 @@
 								class="btn btn-secondary btn-sm"
 								onclick={refreshSession}
 								disabled={refreshing}
-							>
-								{refreshing ? 'Refreshing…' : 'Refresh session'}
-							</button>
+							>{refreshing ? 'Refreshing…' : 'Refresh session'}</button>
 							<a
-								href="{base}/api/auth/login/?next={base}/casework/new"
+								href="{base}/api/auth/login/?next={base}/casework"
 								class="btn btn-primary btn-sm"
-							>
-								Log in again
-							</a>
+							>Log in again</a>
 						</div>
 					{/if}
 				</div>
@@ -244,7 +297,6 @@
 		{/if}
 
 		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} novalidate>
-			<!-- ============== Section 1: Action Details ============== -->
 			<section class="form-section" aria-labelledby="sec-action">
 				<h2 id="sec-action" class="form-section-title">
 					<span class="title-bar" aria-hidden="true"></span>
@@ -286,7 +338,7 @@
 						{#if errors.date}
 							<p class="field-error" id="date-error" role="alert">{errors.date}</p>
 						{:else}
-							<p class="field-help" id="date-help">When the action took place — defaults to today.</p>
+							<p class="field-help" id="date-help">When the action took place.</p>
 						{/if}
 					</div>
 
@@ -312,15 +364,12 @@
 				</div>
 			</section>
 
-			<!-- ============== Section 2: What Happened? ============== -->
 			<section class="form-section" aria-labelledby="sec-description">
 				<h2 id="sec-description" class="form-section-title">
 					<span class="title-bar" aria-hidden="true"></span>
 					What Happened?
 				</h2>
-				<p class="form-section-desc">
-					A clear description of the action taken — what was done, with whom, and the outcome.
-				</p>
+				<p class="form-section-desc">A clear description of the action taken — what was done, with whom, and the outcome.</p>
 
 				<div class="field" class:has-error={errors.description}>
 					<label for="description">
@@ -350,18 +399,13 @@
 								Concrete details help the next advocate pick up where you left off.
 							</p>
 						{/if}
-						<p
-							id="description-counter"
-							class="char-counter"
-							class:over={descCount > MAX_FIELD}
-						>
+						<p id="description-counter" class="char-counter" class:over={descCount > MAX_FIELD}>
 							{descCount.toLocaleString()} / {MAX_FIELD.toLocaleString()}
 						</p>
 					</div>
 				</div>
 			</section>
 
-			<!-- ============== Section 3: Follow-up ============== -->
 			<section class="form-section" aria-labelledby="sec-followup">
 				<h2 id="sec-followup" class="form-section-title">
 					<span class="title-bar" aria-hidden="true"></span>
@@ -389,10 +433,7 @@
 									Open tasks or follow-ups — visible to fellow advocates.
 								</p>
 							{/if}
-							<p
-								class="char-counter"
-								class:over={nextCount > MAX_FIELD}
-							>
+							<p class="char-counter" class:over={nextCount > MAX_FIELD}>
 								{nextCount.toLocaleString()} / {MAX_FIELD.toLocaleString()}
 							</p>
 						</div>
@@ -417,10 +458,7 @@
 									Private to the casework team — never shown publicly.
 								</p>
 							{/if}
-							<p
-								class="char-counter"
-								class:over={notesCount > MAX_FIELD}
-							>
+							<p class="char-counter" class:over={notesCount > MAX_FIELD}>
 								{notesCount.toLocaleString()} / {MAX_FIELD.toLocaleString()}
 							</p>
 						</div>
@@ -428,7 +466,6 @@
 				</div>
 			</section>
 
-			<!-- ============== Section 4: Linked Persons ============== -->
 			{#if persons.length > 0}
 				<section class="form-section" aria-labelledby="sec-persons">
 					<h2 id="sec-persons" class="form-section-title">
@@ -436,7 +473,7 @@
 						Linked Persons
 					</h2>
 					<p class="form-section-desc">
-						Select the case file(s) this action relates to. Skip if not yet linked to a person.
+						Select the case file(s) this action relates to.
 					</p>
 
 					{#if selectedPersons.length > 0}
@@ -477,15 +514,14 @@
 				</section>
 			{/if}
 
-			<!-- Submit -->
 			<div class="form-actions">
-				<p class="form-actions-note">You’ll be returned to the casework list after saving.</p>
+				<a href="{base}/casework" class="btn btn-secondary">Cancel</a>
 				<button type="submit" class="btn btn-primary submit-btn" disabled={saving}>
 					{#if saving}
 						<span class="spinner" aria-hidden="true"></span>
 						Saving…
 					{:else}
-						Create Record
+						Save changes
 					{/if}
 				</button>
 			</div>
@@ -494,7 +530,6 @@
 </div>
 
 <style>
-	/* === Accessibility helper === */
 	.visually-hidden {
 		position: absolute;
 		width: 1px;
@@ -507,9 +542,22 @@
 		border: 0;
 	}
 
-	/* === Page header === */
+	.back-link {
+		display: inline-block;
+		margin-bottom: 0.6rem;
+		color: var(--color-primary-light);
+		font-size: 0.88rem;
+		font-weight: 500;
+		text-decoration: none;
+	}
+	.back-link:hover {
+		color: var(--color-primary);
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+
 	.form-header {
-		margin-bottom: 1.75rem;
+		margin-bottom: 1.5rem;
 	}
 	.form-header h1 {
 		margin: 0 0 0.5rem 0;
@@ -522,8 +570,8 @@
 		margin: 0;
 		max-width: var(--max-w-prose);
 		color: var(--color-text);
-		font-size: 1rem;
-		line-height: 1.6;
+		font-size: 0.98rem;
+		line-height: 1.55;
 	}
 	.form-intro em {
 		color: var(--color-primary);
@@ -534,7 +582,65 @@
 		text-underline-offset: 3px;
 	}
 
-	/* === Top-level error banner (auth / server / unknown) === */
+	/* Loading + error states */
+	.loading-card {
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-subtle);
+		border-radius: var(--radius-card-lg);
+		box-shadow: var(--shadow-card);
+		padding: 1.5rem 1.75rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+	}
+	.skeleton-spacer {
+		height: 0.6rem;
+	}
+	.state-card {
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-subtle);
+		border-radius: var(--radius-card-lg);
+		padding: 2.5rem 2rem;
+		text-align: center;
+		box-shadow: var(--shadow-card);
+		max-width: 540px;
+		margin: 1.5rem auto;
+	}
+	.state-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 48px;
+		height: 48px;
+		border-radius: 50%;
+		font-family: 'Georgia', serif;
+		font-style: italic;
+		font-weight: 700;
+		font-size: 1.4rem;
+		color: white;
+		margin-bottom: 1rem;
+	}
+	.state-icon-error { background: var(--color-danger); }
+	.state-title {
+		margin: 0 0 0.5rem 0;
+		color: var(--color-text);
+		font-size: 1.15rem;
+		font-weight: 700;
+	}
+	.state-body {
+		margin: 0 0 1.25rem 0;
+		color: var(--color-text-muted);
+		font-size: 0.95rem;
+		line-height: 1.55;
+	}
+	.state-actions {
+		display: flex;
+		justify-content: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	/* Top-level error banner */
 	.form-error-banner {
 		display: flex;
 		align-items: flex-start;
@@ -549,25 +655,14 @@
 	}
 	.form-error-auth {
 		border-color: var(--color-danger);
-		background: linear-gradient(
-			180deg,
-			rgba(217, 22, 22, 0.04),
-			var(--color-bg-white) 60%
-		);
+		background: linear-gradient(180deg, rgba(217, 22, 22, 0.04), var(--color-bg-white) 60%);
 	}
 	.form-error-server {
 		border-color: #c97a0d;
-		background: linear-gradient(
-			180deg,
-			rgba(201, 122, 13, 0.05),
-			var(--color-bg-white) 60%
-		);
+		background: linear-gradient(180deg, rgba(201, 122, 13, 0.05), var(--color-bg-white) 60%);
 		border-left-color: #c97a0d;
 	}
-	.form-error-body {
-		flex: 1 1 auto;
-		min-width: 0;
-	}
+	.form-error-body { flex: 1 1 auto; min-width: 0; }
 	.form-error-message {
 		margin: 0 0 0.6rem 0;
 		color: var(--color-text);
@@ -595,11 +690,9 @@
 		padding: 0 0.25rem;
 		margin-left: auto;
 	}
-	.form-error-dismiss:hover {
-		color: var(--color-text);
-	}
+	.form-error-dismiss:hover { color: var(--color-text); }
 
-	/* === Section card — colored left bar + colored title === */
+	/* Sections */
 	.form-section {
 		background: var(--color-bg-white);
 		border: 1px solid var(--color-border-subtle);
@@ -633,15 +726,13 @@
 		font-size: 0.92rem;
 		line-height: 1.5;
 	}
-
-	/* === Form grid === */
 	.form-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 		gap: 1.25rem 1.5rem;
 	}
 
-	/* === Field === */
+	/* Field */
 	.field {
 		display: flex;
 		flex-direction: column;
@@ -684,8 +775,6 @@
 		font-size: 0.9rem;
 		line-height: 1.2;
 	}
-
-	/* Meta row — counter on the right, help/error on the left */
 	.field-meta {
 		display: flex;
 		align-items: flex-start;
@@ -706,12 +795,8 @@
 		font-variant-numeric: tabular-nums;
 		line-height: 1.45;
 	}
-	.char-counter.over {
-		color: var(--color-danger);
-		font-weight: 600;
-	}
+	.char-counter.over { color: var(--color-danger); font-weight: 600; }
 
-	/* Inputs share one consistent look */
 	.field input,
 	.field select,
 	.field textarea {
@@ -726,16 +811,9 @@
 		font-family: inherit;
 		font-size: 0.95rem;
 		line-height: 1.45;
-		transition:
-			border-color 0.15s ease,
-			box-shadow 0.15s ease,
-			background 0.15s ease;
+		transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 	}
-	.field textarea {
-		min-height: 5rem;
-		resize: vertical;
-		font-family: inherit;
-	}
+	.field textarea { min-height: 5rem; resize: vertical; font-family: inherit; }
 	.field select {
 		padding-right: 2.25rem;
 		background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2325646a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
@@ -767,8 +845,6 @@
 		color: var(--color-text-muted);
 		cursor: not-allowed;
 	}
-
-	/* Error state on a field — red border + light red wash */
 	.field.has-error input,
 	.field.has-error select,
 	.field.has-error textarea {
@@ -781,11 +857,9 @@
 		border-color: var(--color-danger);
 		box-shadow: 0 0 0 3px rgba(217, 22, 22, 0.15);
 	}
-	.field.has-error label {
-		color: var(--color-danger);
-	}
+	.field.has-error label { color: var(--color-danger); }
 
-	/* === Linked persons as interactive pills with visible check mark === */
+	/* Persons picker */
 	.persons-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -804,11 +878,7 @@
 		font-weight: 500;
 		cursor: pointer;
 		user-select: none;
-		transition:
-			background 0.15s ease,
-			border-color 0.15s ease,
-			color 0.15s ease,
-			box-shadow 0.15s ease;
+		transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 	}
 	.person-pill:hover {
 		border-color: var(--color-primary-light);
@@ -825,12 +895,7 @@
 		font-weight: 400;
 		font-size: 0.82rem;
 	}
-	.person-pill.is-selected .person-country {
-		color: var(--color-primary-light);
-	}
-
-	/* Visible check indicator — empty box that fills with primary
-	   color and a white check when selected. */
+	.person-pill.is-selected .person-country { color: var(--color-primary-light); }
 	.person-check {
 		display: inline-flex;
 		align-items: center;
@@ -842,21 +907,14 @@
 		background: var(--color-bg-white);
 		color: transparent;
 		flex: 0 0 18px;
-		transition:
-			background 0.15s ease,
-			border-color 0.15s ease,
-			color 0.15s ease;
+		transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 	}
 	.person-pill.is-selected .person-check {
 		background: var(--color-primary);
 		border-color: var(--color-primary);
 		color: white;
 	}
-	.person-pill:hover .person-check {
-		border-color: var(--color-primary-light);
-	}
-
-	/* Native checkbox hidden but accessible */
+	.person-pill:hover .person-check { border-color: var(--color-primary-light); }
 	.person-pill input[type='checkbox'] {
 		position: absolute;
 		width: 1px;
@@ -873,8 +931,6 @@
 		outline: none;
 		box-shadow: 0 0 0 3px var(--color-primary-tint);
 	}
-
-	/* === Linked persons summary + clear link === */
 	.linked-summary {
 		margin: 0 0 0.75rem;
 		font-size: 0.85rem;
@@ -895,16 +951,14 @@
 		cursor: pointer;
 		padding: 0;
 	}
-	.link-button:hover {
-		color: var(--color-primary);
-	}
+	.link-button:hover { color: var(--color-primary); }
 
-	/* === Submit actions === */
+	/* Submit actions */
 	.form-actions {
 		display: flex;
 		align-items: center;
 		justify-content: flex-end;
-		gap: 1rem;
+		gap: 0.75rem;
 		margin-top: 0.5rem;
 		padding: 1.5rem 2rem;
 		background: var(--color-bg-white);
@@ -912,12 +966,6 @@
 		border-radius: var(--radius-card-lg);
 		box-shadow: var(--shadow-card);
 		flex-wrap: wrap;
-	}
-	.form-actions-note {
-		margin: 0;
-		font-size: 0.85rem;
-		color: var(--color-text-muted);
-		flex: 1 1 auto;
 	}
 	.submit-btn {
 		min-width: 160px;
@@ -935,42 +983,23 @@
 		border-radius: 50%;
 		animation: spin 0.7s linear infinite;
 	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
+	@keyframes spin { to { transform: rotate(360deg); } }
 
-	/* === Responsive === */
 	@media (max-width: 720px) {
-		.form-section {
-			padding: 1.25rem 1.25rem;
-		}
-		.form-grid {
-			grid-template-columns: 1fr;
-			gap: 1rem;
-		}
-		.persons-grid {
-			grid-template-columns: 1fr;
-		}
+		.form-section { padding: 1.25rem 1.25rem; }
+		.form-grid { grid-template-columns: 1fr; gap: 1rem; }
+		.persons-grid { grid-template-columns: 1fr; }
 		.form-actions {
 			padding: 1.25rem;
-			flex-direction: column;
+			flex-direction: column-reverse;
 			align-items: stretch;
 		}
-		.form-actions-note {
-			text-align: center;
-		}
-		.submit-btn {
-			width: 100%;
-		}
+		.form-actions .btn { width: 100%; }
 		.form-error-actions {
 			flex-direction: column;
 			align-items: stretch;
 		}
-		.form-error-actions .btn-sm {
-			width: 100%;
-		}
+		.form-error-actions .btn-sm { width: 100%; }
 	}
 
 	@media (prefers-reduced-motion: reduce) {

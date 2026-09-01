@@ -10,6 +10,8 @@ import type {
 	User,
 } from './types';
 
+export type { CaseworkRecord, Contact, Person, PersonCategory, Report, User, Paginated } from './types';
+
 const API_BASE = `${base}/api`;
 
 /**
@@ -231,6 +233,26 @@ export async function createCasework(data: Record<string, unknown>): Promise<Cas
 	return request<CaseworkRecord>('/casework/', {
 		method: 'POST',
 		body: JSON.stringify(data),
+	});
+}
+
+export async function getCaseworkRecord(id: number | string): Promise<CaseworkRecord> {
+	return request<CaseworkRecord>(`/casework/${id}/`);
+}
+
+export async function updateCasework(
+	id: number | string,
+	data: Record<string, unknown>,
+): Promise<CaseworkRecord> {
+	return request<CaseworkRecord>(`/casework/${id}/`, {
+		method: 'PATCH',
+		body: JSON.stringify(data),
+	});
+}
+
+export async function deleteCasework(id: number | string): Promise<void> {
+	await request<null>(`/casework/${id}/`, {
+		method: 'DELETE',
 	});
 }
 
