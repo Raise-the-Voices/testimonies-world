@@ -273,33 +273,26 @@
 				aria-labelledby="delete-toast-title"
 				aria-describedby="delete-toast-text"
 			>
-				<div class="delete-toast-icon" aria-hidden="true">
-					{#if deleteToast.stage === 'success'}
-						✓
-					{:else}
-						!
-					{/if}
-				</div>
 				<div class="delete-toast-body">
 					<h2 id="delete-toast-title" class="delete-toast-title">
 						{#if deleteToast.stage === 'confirming'}
 							Delete this record?
 						{:else if deleteToast.stage === 'deleting'}
-							Deleting…
+							Deleting record…
 						{:else if deleteToast.stage === 'success'}
-							Deleted.
+							Record deleted
 						{:else}
-							Couldn't delete.
+							Couldn’t delete this record
 						{/if}
 					</h2>
 					<p id="delete-toast-text" class="delete-toast-text">
 						{#if deleteToast.stage === 'confirming'}
 							This <strong>{actionLabels[deleteToast.actionType] || deleteToast.actionType}</strong>
-							from {formatDate(deleteToast.date)} will be gone. There's no undo.
+							from {formatDate(deleteToast.date)} will be permanently removed. This action cannot be undone.
 						{:else if deleteToast.stage === 'deleting'}
-							Hang on a moment.
+							Please wait while the record is removed.
 						{:else if deleteToast.stage === 'success'}
-							It's gone — feel free to move on.
+							The record has been removed from your list.
 						{:else}
 							{deleteToast.errorMessage}
 						{/if}
@@ -312,21 +305,18 @@
 							class="btn btn-secondary btn-sm"
 							onclick={cancelDelete}
 							use:autofocus
-						>Keep it</button>
+						>Cancel</button>
 						<button
 							type="button"
 							class="btn btn-danger btn-sm"
 							onclick={performDelete}
-						>Delete it</button>
+						>Delete</button>
 					{:else if deleteToast.stage === 'deleting'}
 						<button
 							type="button"
 							class="btn btn-secondary btn-sm"
 							disabled
-						>
-							<span class="spinner-inline" aria-hidden="true"></span>
-							Deleting…
-						</button>
+						>Deleting…</button>
 					{:else}
 						<button
 							type="button"
@@ -796,7 +786,7 @@
 		width: min(560px, calc(100vw - 2rem));
 		background: var(--color-bg-white);
 		border: 1px solid var(--color-border-subtle);
-		border-top: 4px solid var(--color-danger);
+		border-left: 4px solid var(--color-danger);
 		border-radius: var(--radius-card-lg);
 		box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
 		padding: 1.1rem 1.25rem;
@@ -805,25 +795,10 @@
 		align-items: flex-start;
 		animation: deleteToastSlideDown 0.22s ease both;
 	}
-	.delete-toast-success { border-top-color: var(--color-success); }
-	.delete-toast-error { border-top-color: var(--color-danger); }
-	.delete-toast-icon {
-		flex: 0 0 auto;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		border-radius: 50%;
-		background: var(--color-danger);
-		color: white;
-		font-family: 'Georgia', serif;
-		font-style: italic;
-		font-weight: 700;
-		font-size: 1.1rem;
-		line-height: 1;
-	}
-	.delete-toast-success .delete-toast-icon { background: var(--color-success); }
+	.delete-toast-success { border-left-color: var(--color-success); }
+	.delete-toast-error { border-left-color: var(--color-danger); }
+	/* Stage indicator — a small left accent bar instead of the old circular
+	   icon well. Reads as part of the card, not as a cartoon badge. */
 	.delete-toast-body { flex: 1 1 auto; min-width: 0; }
 	.delete-toast-title {
 		margin: 0 0 0.2rem 0;
