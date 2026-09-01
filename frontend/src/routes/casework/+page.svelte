@@ -215,13 +215,20 @@
 		</p>
 	{:else}
 		<header class="page-header">
+			<div class="page-header-text">
+				<h1 class="page-title">
+					Casework
+					{#if !loading && records.length > 0 && !loadError}
+						<span class="page-title-count" aria-label="{records.length} records">· {records.length}</span>
+					{/if}
+				</h1>
+				<p class="page-intro">
+					Every advocacy action logged against a case — outreach, filings,
+					meetings, and follow-ups. Use <strong>Edit</strong> to update a
+					record, or <strong>Delete</strong> to remove it.
+				</p>
+			</div>
 			<a href="{base}/casework/new" class="btn btn-primary header-cta">+ New record</a>
-			<h1 class="page-title">
-				Casework
-				{#if !loading && records.length > 0 && !loadError}
-					<span class="page-title-count" aria-label="{records.length} records">· {records.length}</span>
-				{/if}
-			</h1>
 		</header>
 
 		{#if bannerMsg}
@@ -454,14 +461,18 @@
 <style>
 	.page-header {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		justify-content: space-between;
 		gap: 1rem;
 		margin-bottom: 1.75rem;
 		flex-wrap: wrap;
 	}
+	.page-header-text {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
 	.page-title {
-		margin: 0;
+		margin: 0 0 0.3rem 0;
 		color: var(--color-primary);
 		font-size: 1.85rem;
 		font-weight: 700;
@@ -475,9 +486,22 @@
 		margin-left: 0.4rem;
 		font-variant-numeric: tabular-nums;
 	}
+	.page-intro {
+		margin: 0;
+		max-width: var(--max-w-prose);
+		color: var(--color-text);
+		font-size: 0.98rem;
+		line-height: 1.55;
+		overflow-wrap: anywhere;
+	}
+	.page-intro strong {
+		color: var(--color-primary);
+		font-weight: 600;
+	}
 	.header-cta {
 		flex: 0 0 auto;
 		white-space: nowrap;
+		align-self: flex-start;
 	}
 
 	.banner {
