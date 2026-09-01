@@ -2,13 +2,22 @@
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { user, isVolunteer } from '$lib/session';
-	import { createPerson, createReport, getCategories } from '$lib/api';
+	import { user, isVolunteer, loadSession } from '$lib/session';
+	import { createPerson, createReport, getCategories, ApiError } from '$lib/api';
 
 	let currentUser = $derived($user);
 	let categories: any[] = $state([]);
 	let saving = $state(false);
-	let errorMsg = $state('');
+	let refreshing = $state(false);
+	// Top-level banner — ONLY for API / auth / server failures.
+	let formError = $state('');
+	let formErrorKind = $state<'auth' | 'server' | 'other'>('other');
+	// Per-field errors — shown inline below each field.
+	let errors = $state<Record<string, string>>({});
+
+	// Character-counter ceilings
+	const MAX_NARRATIVE = 5000;
+	const MAX_SHORT = 1000;
 
 	// Person fields
 	let name = $state('');
@@ -36,8 +45,12 @@
 	let officialReason = $state('');
 
 	onMount(async () => {
-		const data = await getCategories();
-		categories = Array.isArray(data) ? data : data.results ?? [];
+		try {
+			const data = await getCategories();
+			categories = Array.isArray(data) ? data : data.results ?? [];
+		} catch (e) {
+			console.error(e);
+		}
 	});
 
 	function toggleCategory(id: number) {
@@ -48,29 +61,102 @@
 		}
 	}
 
-	async function handleSubmit() {
-		if (!name || !country) {
-			errorMsg = 'Name and country are required.';
-			return;
+	function clearError(field: string) {
+		if (errors[field]) {
+			const next = { ...errors };
+			delete next[field];
+			errors = next;
 		}
-		if (!narrative) {
-			errorMsg = 'Please provide a narrative for the initial report.';
+		if (formError) formError = '';
+	}
+
+	function validate(): Record<string, string> {
+		const e: Record<string, string> = {};
+		if (!name.trim()) e.name = 'Add the person’s name — even a partial name helps.';
+		else if (name.length > MAX_SHORT) e.name = `Keep the name under ${MAX_SHORT.toLocaleString()} characters.`;
+
+		if (!country.trim()) e.country = 'Which country is this case in?';
+		else if (country.length > MAX_SHORT) e.country = `Keep this under ${MAX_SHORT.toLocaleString()} characters.`;
+
+		if (!narrative.trim())
+			e.narrative = 'Tell us what happened — even one sentence about the first report is required.';
+		else if (narrative.length > MAX_NARRATIVE)
+			e.narrative = `Trim this down — please keep it under ${MAX_NARRATIVE.toLocaleString()} characters.`;
+
+		if (summaryNarrative.length > MAX_NARRATIVE)
+			e.summary = `Trim this down — please keep it under ${MAX_NARRATIVE.toLocaleString()} characters.`;
+		if (sourceAttribution.length > MAX_SHORT)
+			e.source_attr = `Keep this under ${MAX_SHORT.toLocaleString()} characters.`;
+		if (reportRoughLocation.length > MAX_SHORT)
+			e.report_location = `Keep this under ${MAX_SHORT.toLocaleString()} characters.`;
+		if (suspectedReason.length > MAX_NARRATIVE)
+			e.suspected_reason = `Keep this under ${MAX_NARRATIVE.toLocaleString()} characters.`;
+		if (officialReason.length > MAX_NARRATIVE)
+			e.official_reason = `Keep this under ${MAX_NARRATIVE.toLocaleString()} characters.`;
+
+		if (lastKnownDate) {
+			if (Number.isNaN(new Date(lastKnownDate).getTime())) e.last_known_date = 'That doesn’t look like a valid date.';
+		}
+		if (dateOfBirth) {
+			if (Number.isNaN(new Date(dateOfBirth).getTime())) e.dob = 'That doesn’t look like a valid date.';
+		}
+		if (reportDateStart) {
+			if (Number.isNaN(new Date(reportDateStart).getTime())) e.report_date = 'That doesn’t look like a valid date.';
+		}
+
+		return e;
+	}
+
+	function focusFirstError(errs: Record<string, string>) {
+		const order = [
+			'name', 'country', 'status', 'medical', 'rough_location', 'precise_location',
+			'last_known_date', 'ethnicity', 'gender', 'dob',
+			'summary', 'source_type', 'source_attr', 'reporter_name', 'reporter_contact',
+			'report_date', 'report_location', 'narrative', 'suspected_reason', 'official_reason',
+		];
+		for (const f of order) {
+			if (errs[f]) {
+				const el = document.getElementById(f) as HTMLElement | null;
+				if (el) {
+					el.focus();
+					el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+					return;
+				}
+			}
+		}
+	}
+
+	async function doRefreshSession() {
+		refreshing = true;
+		try {
+			await loadSession();
+		} finally {
+			refreshing = false;
+		}
+	}
+
+	async function handleSubmit() {
+		errors = {};
+		formError = '';
+
+		const v = validate();
+		if (Object.keys(v).length > 0) {
+			errors = v;
+			focusFirstError(v);
 			return;
 		}
 
 		saving = true;
-		errorMsg = '';
-
 		try {
 			const personData: any = {
-				name,
-				country,
+				name: name.trim(),
+				country: country.trim(),
 				current_status: currentStatus,
 				medical_status: medicalStatus,
-				rough_location: roughLocation,
-				precise_location: preciseLocation,
-				summary_narrative: summaryNarrative,
-				ethnicity,
+				rough_location: roughLocation.trim(),
+				precise_location: preciseLocation.trim(),
+				summary_narrative: summaryNarrative.trim(),
+				ethnicity: ethnicity.trim(),
 				gender: gender || undefined,
 				category_ids: selectedCategories,
 			};
@@ -82,22 +168,52 @@
 			await createReport({
 				person: person.id,
 				source_type: sourceType,
-				source_attribution: sourceAttribution,
-				reporter_name: reporterName,
-				reporter_contact: reporterContact,
+				source_attribution: sourceAttribution.trim(),
+				reporter_name: reporterName.trim(),
+				reporter_contact: reporterContact.trim(),
 				date_start: reportDateStart || null,
-				rough_location: reportRoughLocation,
-				narrative,
-				suspected_reason: suspectedReason,
-				official_reason: officialReason,
+				rough_location: reportRoughLocation.trim(),
+				narrative: narrative.trim(),
+				suspected_reason: suspectedReason.trim(),
+				official_reason: officialReason.trim(),
 			});
 
 			goto(`${base}/persons/${person.id}`);
 		} catch (e: any) {
-			errorMsg = e.message || 'Failed to save.';
+			if (e instanceof ApiError) {
+				if (e.isValidation && Object.keys(e.fieldErrors).length > 0) {
+					const mapped: Record<string, string> = {};
+					for (const [k, msgs] of Object.entries(e.fieldErrors)) {
+						mapped[k] = msgs[0];
+					}
+					errors = mapped;
+					focusFirstError(mapped);
+				} else if (e.isUnauthorized) {
+					formErrorKind = 'auth';
+					formError =
+						'Your session has expired, or you don’t have permission to submit cases. ' +
+						'Try refreshing your session — if that doesn’t work, log in again.';
+				} else if (e.isServer || e.status === 0) {
+					formErrorKind = 'server';
+					formError = e.message || 'The server hit a snag. Please try again in a moment.';
+				} else {
+					formErrorKind = 'other';
+					formError = e.message || 'Something went wrong. Please try again.';
+				}
+			} else {
+				formErrorKind = 'other';
+				formError = 'Something went wrong. Please try again.';
+			}
+		} finally {
+			saving = false;
 		}
-		saving = false;
 	}
+
+	// Live counts for character counters
+	const narrativeCount = $derived(narrative.length);
+	const summaryCount = $derived(summaryNarrative.length);
+	const suspectedCount = $derived(suspectedReason.length);
+	const officialCount = $derived(officialReason.length);
 </script>
 
 <svelte:head>
@@ -119,8 +235,40 @@
 			</p>
 		</header>
 
-		{#if errorMsg}
-			<div class="error-banner" role="alert">{errorMsg}</div>
+		{#if formError}
+			<div
+				class="form-error-banner form-error-{formErrorKind}"
+				role="alert"
+				aria-live="assertive"
+			>
+				<div class="form-error-body">
+					<p class="form-error-message">{formError}</p>
+					{#if formErrorKind === 'auth'}
+						<div class="form-error-actions">
+							<button
+								type="button"
+								class="btn btn-secondary btn-sm"
+								onclick={doRefreshSession}
+								disabled={refreshing}
+							>
+								{refreshing ? 'Refreshing…' : 'Refresh session'}
+							</button>
+							<a
+								href="{base}/api/auth/login/?next={base}/submit"
+								class="btn btn-primary btn-sm"
+							>
+								Log in again
+							</a>
+						</div>
+					{/if}
+				</div>
+				<button
+					type="button"
+					class="form-error-dismiss"
+					aria-label="Dismiss error"
+					onclick={() => (formError = '')}
+				>×</button>
+			</div>
 		{/if}
 
 		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} novalidate>
@@ -133,14 +281,44 @@
 				<p class="form-section-desc">Basic identifying details about the person.</p>
 
 				<div class="form-grid">
-					<div class="field">
+					<div class="field" class:has-error={errors.name}>
 						<label for="name">Name <span class="required-mark" aria-hidden="true">*</span></label>
-						<input id="name" bind:value={name} required aria-required="true" placeholder="Person's full name" autocomplete="off" />
+						<input
+							id="name"
+							bind:value={name}
+							oninput={() => clearError('name')}
+							required
+							aria-required="true"
+							placeholder="Person's full name"
+							autocomplete="off"
+							aria-invalid={errors.name ? 'true' : 'false'}
+							aria-describedby={errors.name ? 'name-error' : 'name-help'}
+						/>
+						{#if errors.name}
+							<p class="field-error" id="name-error" role="alert">{errors.name}</p>
+						{:else}
+							<p class="field-help" id="name-help">Full name, partial name, or alias — anything that identifies them.</p>
+						{/if}
 					</div>
 
-					<div class="field">
+					<div class="field" class:has-error={errors.country}>
 						<label for="country">Country <span class="required-mark" aria-hidden="true">*</span></label>
-						<input id="country" bind:value={country} required aria-required="true" placeholder="Country where the case is" autocomplete="country-name" />
+						<input
+							id="country"
+							bind:value={country}
+							oninput={() => clearError('country')}
+							required
+							aria-required="true"
+							placeholder="Country where the case is"
+							autocomplete="country-name"
+							aria-invalid={errors.country ? 'true' : 'false'}
+							aria-describedby={errors.country ? 'country-error' : 'country-help'}
+						/>
+						{#if errors.country}
+							<p class="field-error" id="country-error" role="alert">{errors.country}</p>
+						{:else}
+							<p class="field-help" id="country-help">Where the case is happening — country-level is enough.</p>
+						{/if}
 					</div>
 
 					<div class="field">
@@ -350,19 +528,42 @@
 				</div>
 
 				<div class="field-stack" style="margin-top: 1.25rem;">
-					<div class="field">
+					<div class="field" class:has-error={errors.narrative}>
 						<label for="narrative">
 							What happened? <span class="required-mark" aria-hidden="true">*</span>
 						</label>
 						<textarea
 							id="narrative"
 							bind:value={narrative}
+							oninput={() => clearError('narrative')}
 							required
 							aria-required="true"
 							rows="5"
 							placeholder="Describe what happened, when, and what's known so far."
+							aria-invalid={errors.narrative ? 'true' : 'false'}
+							aria-describedby={[
+								errors.narrative ? 'narrative-error' : 'narrative-help',
+								'narrative-counter',
+							]
+								.filter(Boolean)
+								.join(' ')}
 						></textarea>
-						<p class="field-help">Plain prose. Dates, names, places — the more concrete the better.</p>
+						<div class="field-meta">
+							{#if errors.narrative}
+								<p class="field-error" id="narrative-error" role="alert">{errors.narrative}</p>
+							{:else}
+								<p class="field-help" id="narrative-help">
+									Plain prose. Dates, names, places — the more concrete the better.
+								</p>
+							{/if}
+							<p
+								id="narrative-counter"
+								class="char-counter"
+								class:over={narrativeCount > MAX_NARRATIVE}
+							>
+								{narrativeCount.toLocaleString()} / {MAX_NARRATIVE.toLocaleString()}
+							</p>
+						</div>
 					</div>
 
 					<div class="form-grid">
@@ -417,6 +618,132 @@
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
+	}
+
+	/* === Top-level error banner (auth / server / unknown) === */
+	.form-error-banner {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		padding: 0.9rem 1rem;
+		margin-bottom: 1.5rem;
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-danger);
+		border-left: 4px solid var(--color-danger);
+		border-radius: var(--radius-input);
+		box-shadow: var(--shadow-card);
+	}
+	.form-error-auth {
+		border-color: var(--color-danger);
+		background: linear-gradient(
+			180deg,
+			rgba(217, 22, 22, 0.04),
+			var(--color-bg-white) 60%
+		);
+	}
+	.form-error-server {
+		border-color: #c97a0d;
+		background: linear-gradient(
+			180deg,
+			rgba(201, 122, 13, 0.05),
+			var(--color-bg-white) 60%
+		);
+		border-left-color: #c97a0d;
+	}
+	.form-error-body {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.form-error-message {
+		margin: 0 0 0.6rem 0;
+		color: var(--color-text);
+		font-size: 0.95rem;
+		line-height: 1.5;
+	}
+	.form-error-actions {
+		display: flex;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+	.btn-sm {
+		padding: 0.4rem 0.85rem;
+		font-size: 0.85rem;
+		min-width: 0;
+	}
+	.form-error-dismiss {
+		flex: 0 0 auto;
+		background: transparent;
+		border: 0;
+		color: var(--color-text-muted);
+		font-size: 1.4rem;
+		line-height: 1;
+		cursor: pointer;
+		padding: 0 0.25rem;
+		margin-left: auto;
+	}
+	.form-error-dismiss:hover {
+		color: var(--color-text);
+	}
+
+	/* === Per-field error message === */
+	.field-error {
+		margin: 0;
+		font-size: 0.82rem;
+		color: var(--color-danger);
+		font-weight: 500;
+		line-height: 1.4;
+		display: flex;
+		align-items: flex-start;
+		gap: 0.35rem;
+	}
+	.field-error::before {
+		content: '⚠';
+		flex: 0 0 auto;
+		font-size: 0.9rem;
+		line-height: 1.2;
+	}
+
+	/* Meta row — counter on the right, help/error on the left */
+	.field-meta {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+	}
+	.field-meta .field-help,
+	.field-meta .field-error {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.char-counter {
+		flex: 0 0 auto;
+		margin: 0;
+		font-size: 0.74rem;
+		color: var(--color-text-muted);
+		font-variant-numeric: tabular-nums;
+		line-height: 1.45;
+	}
+	.char-counter.over {
+		color: var(--color-danger);
+		font-weight: 600;
+	}
+
+	/* Error state on a field — red border + light red wash */
+	.field.has-error input,
+	.field.has-error select,
+	.field.has-error textarea {
+		border-color: var(--color-danger);
+		background: rgba(217, 22, 22, 0.03);
+	}
+	.field.has-error input:focus,
+	.field.has-error select:focus,
+	.field.has-error textarea:focus {
+		border-color: var(--color-danger);
+		box-shadow: 0 0 0 3px rgba(217, 22, 22, 0.15);
+	}
+	.field.has-error label {
+		color: var(--color-danger);
 	}
 
 	/* === Page header === */
@@ -742,6 +1069,13 @@
 			text-align: center;
 		}
 		.submit-btn {
+			width: 100%;
+		}
+		.form-error-actions {
+			flex-direction: column;
+			align-items: stretch;
+		}
+		.form-error-actions .btn-sm {
 			width: 100%;
 		}
 	}
