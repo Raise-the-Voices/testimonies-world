@@ -146,7 +146,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 	}
 
 	if (res.ok) {
-		return res.json() as Promise<T>;
+		// DELETE responses are usually 204 No Content (empty body). Calling
+		// res.json() on an empty string throws "Unexpected end of JSON input"
+		// and the caller sees a fake ApiError even though the server processed
+		// the request. Read as text first; only parse if there's a body.
+		const text = await res.text();
+		return (text ? JSON.parse(text) : undefined) as T;
 	}
 
 	let body: unknown = null;

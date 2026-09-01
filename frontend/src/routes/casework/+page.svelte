@@ -215,6 +215,7 @@
 		</p>
 	{:else}
 		<header class="page-header">
+			<a href="{base}/casework/new" class="btn btn-primary header-cta">+ New Record</a>
 			<div class="page-header-text">
 				<div class="page-header-title-row">
 					<h1>Casework</h1>
@@ -231,7 +232,6 @@
 					record, or <strong>Delete</strong> to remove it.
 				</p>
 			</div>
-			<a href="{base}/casework/new" class="btn btn-primary header-cta">+ New Record</a>
 		</header>
 
 		{#if bannerMsg}
