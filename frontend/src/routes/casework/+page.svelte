@@ -13,9 +13,29 @@
 	let filterStatus = $state('');
 	let filterAction = $state('');
 
-	// Inline delete-confirmation state — record id currently in "are you sure?" mode
-	let confirmingDelete: number | null = $state(null);
-	let deleting = $state(false);
+	// Top-of-page delete toast state.
+	// Stages: 'confirming' (Cancel + Confirm), 'deleting' (request in flight,
+	// button shows spinner), 'success' (auto-dismiss after 2s), 'error' (sticky
+	// until user closes). Carries enough of the record to render the toast text.
+	type DeleteStage = 'confirming' | 'deleting' | 'success' | 'error';
+	interface DeleteToast {
+		id: number;
+		actionType: string;
+		date: string;
+		stage: DeleteStage;
+		errorMessage?: string;
+	}
+	let deleteToast = $state<DeleteToast | null>(null);
+	let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// Esc closes the toast (confirming + error stages). Modal-like behavior
+	// only when the toast is open — Cancel already handles clicks.
+	function onToastKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape' && deleteToast) {
+			e.preventDefault();
+			cancelDelete();
+		}
+	}
 
 	// Banner state — sourced from URL on mount, can be set directly too
 	let bannerMsg = $state('');
@@ -111,29 +131,66 @@
 		}
 	}
 
-	function startDelete(id: number) {
-		confirmingDelete = id;
+	function clearToastTimer() {
+		if (toastTimer) {
+			clearTimeout(toastTimer);
+			toastTimer = null;
+		}
+	}
+
+	// Svelte action: focus an element when it's mounted. Used on the toast's
+	// Cancel button so a stray Enter is a no-op rather than a destructive
+	// confirm. Svelte's `autofocus` attribute warns under a11y rules; doing
+	// it imperatively via an action keeps the focus management explicit and
+	// reviewable, and avoids the warning.
+	function autofocus(node: HTMLElement) {
+		node.focus();
+	}
+
+	// Global Esc handler while the toast is open. Mounted/unmounted with the
+	// toast so we don't leak listeners when the page goes away mid-flow.
+	$effect(() => {
+		if (!deleteToast) return;
+		const handler = (e: KeyboardEvent) => {
+			if (e.key === 'Escape' && deleteToast) {
+				e.preventDefault();
+				cancelDelete();
+			}
+		};
+		document.addEventListener('keydown', handler);
+		return () => document.removeEventListener('keydown', handler);
+	});
+
+	function startDelete(id: number, actionType: string, date: string) {
+		clearToastTimer();
+		deleteToast = { id, actionType, date, stage: 'confirming' };
 		bannerMsg = '';
 	}
 
 	function cancelDelete() {
-		confirmingDelete = null;
+		clearToastTimer();
+		deleteToast = null;
 	}
 
-	async function performDelete(id: number) {
-		deleting = true;
+	async function performDelete() {
+		if (!deleteToast || deleteToast.stage !== 'confirming') return;
+		const target = deleteToast;
+		deleteToast = { ...target, stage: 'deleting' };
 		try {
-			await deleteCasework(id);
-			records = records.filter((r) => r.id !== id);
-			confirmingDelete = null;
-			bannerKind = 'success';
-			bannerMsg = 'Record deleted.';
+			await deleteCasework(target.id);
+			records = records.filter((r) => r.id !== target.id);
+			deleteToast = { ...target, stage: 'success' };
+			// Auto-dismiss the success toast after 2s.
+			clearToastTimer();
+			toastTimer = setTimeout(() => {
+				if (deleteToast?.id === target.id) deleteToast = null;
+			}, 2000);
 		} catch (e: any) {
-			bannerKind = 'error';
-			bannerMsg = e?.message || "Couldn't delete that record. Please try again.";
-			confirmingDelete = null;
-		} finally {
-			deleting = false;
+			deleteToast = {
+				...target,
+				stage: 'error',
+				errorMessage: e?.message || "Couldn't delete that record. Please try again.",
+			};
 		}
 	}
 
@@ -158,11 +215,20 @@
 		</p>
 	{:else}
 		<header class="page-header">
-			<div>
-				<h1>Casework</h1>
+			<div class="page-header-text">
+				<div class="page-header-title-row">
+					<h1>Casework</h1>
+					{#if !loading && records.length > 0 && !loadError}
+						<span class="page-header-count" aria-label="{records.length} records">
+							{records.length}
+							<span class="page-header-count-label">record{records.length === 1 ? '' : 's'}</span>
+						</span>
+					{/if}
+				</div>
 				<p class="page-intro">
-					Every advocacy action logged against a case. Click <strong>Edit</strong> on a
-					record to update it, or <strong>Delete</strong> to remove it.
+					Every advocacy action logged against a case — outreach, filings,
+					meetings, and follow-ups. Use <strong>Edit</strong> to update a
+					record, or <strong>Delete</strong> to remove it.
 				</p>
 			</div>
 			<a href="{base}/casework/new" class="btn btn-primary header-cta">+ New Record</a>
@@ -180,6 +246,94 @@
 					aria-label="Dismiss"
 					onclick={() => (bannerMsg = '')}
 				>×</button>
+			</div>
+		{/if}
+
+		{#if deleteToast}
+			<!--
+				Backdrop: dimmed, blurred. Clicks dismiss the toast (safe default —
+				destructive confirmations require a deliberate Confirm click).
+				`role="presentation"` because the dialog itself is the focusable surface.
+			-->
+			<div
+				class="delete-toast-overlay"
+				onclick={cancelDelete}
+				role="presentation"
+			></div>
+
+			<!--
+				Fixed top-of-page toast. Lives here in DOM order (just under the
+				banner) for logical reading order; CSS positions it at the viewport
+				top with backdrop blur over the rest of the page. Cancel button is
+				auto-focused so a stray Enter is a no-op rather than a delete.
+			-->
+			<div
+				class="delete-toast"
+				class:delete-toast-success={deleteToast.stage === 'success'}
+				class:delete-toast-error={deleteToast.stage === 'error'}
+				role="alertdialog"
+				aria-modal="true"
+				aria-labelledby="delete-toast-title"
+				aria-describedby="delete-toast-text"
+			>
+				<div class="delete-toast-icon" aria-hidden="true">
+					{#if deleteToast.stage === 'success'}
+						✓
+					{:else}
+						!
+					{/if}
+				</div>
+				<div class="delete-toast-body">
+					<h2 id="delete-toast-title" class="delete-toast-title">
+						{#if deleteToast.stage === 'confirming' || deleteToast.stage === 'deleting'}
+							Delete this record?
+						{:else if deleteToast.stage === 'success'}
+							Record deleted
+						{:else}
+							Couldn't delete record
+						{/if}
+					</h2>
+					<p id="delete-toast-text" class="delete-toast-text">
+						{#if deleteToast.stage === 'confirming' || deleteToast.stage === 'deleting'}
+							The <strong>{actionLabels[deleteToast.actionType] || deleteToast.actionType}</strong>
+							record from {formatDate(deleteToast.date)} will be permanently removed. This can't be undone.
+						{:else if deleteToast.stage === 'success'}
+							The record has been removed.
+						{:else}
+							{deleteToast.errorMessage}
+						{/if}
+					</p>
+				</div>
+				<div class="delete-toast-actions">
+					{#if deleteToast.stage === 'confirming'}
+						<button
+							type="button"
+							class="btn btn-secondary btn-sm"
+							onclick={cancelDelete}
+							use:autofocus
+						>Cancel</button>
+						<button
+							type="button"
+							class="btn btn-danger btn-sm"
+							onclick={performDelete}
+						>Confirm delete</button>
+					{:else if deleteToast.stage === 'deleting'}
+						<button
+							type="button"
+							class="btn btn-secondary btn-sm"
+							disabled
+						>
+							<span class="spinner-inline" aria-hidden="true"></span>
+							Deleting…
+						</button>
+					{:else}
+						<button
+							type="button"
+							class="btn btn-secondary btn-sm"
+							onclick={cancelDelete}
+						>Close</button>
+					{/if}
+				</div>
 			</div>
 		{/if}
 
@@ -247,8 +401,7 @@
 			<section class="records-list" aria-label="Casework records">
 				{#each records as record (record.id)}
 					{@const rc = recencyClass(record.date)}
-					{@const isConfirming = confirmingDelete === record.id}
-					<article class="record-card record-{rc}" class:is-confirming={isConfirming}>
+					<article class="record-card record-{rc}">
 						<div class="record-main">
 							<div class="record-head">
 								<div class="record-badges">
@@ -267,34 +420,12 @@
 									<a href="{base}/casework/new?id={record.id}" class="btn btn-secondary btn-sm">
 										Edit
 									</a>
-									{#if isConfirming}
-										<button
-											type="button"
-											class="btn btn-secondary btn-sm"
-											onclick={cancelDelete}
-											disabled={deleting}
-										>Cancel</button>
-										<button
-											type="button"
-											class="btn btn-danger btn-sm"
-											onclick={() => performDelete(record.id)}
-											disabled={deleting}
-											aria-label="Confirm delete this record"
-										>
-											{#if deleting}
-												<span class="spinner-inline" aria-hidden="true"></span>
-												Deleting…
-											{:else}
-												Confirm delete
-											{/if}
-										</button>
-									{:else}
-										<button
-											type="button"
-											class="btn btn-danger-soft btn-sm"
-											onclick={() => startDelete(record.id)}
-										>Delete</button>
-									{/if}
+									<button
+										type="button"
+										class="btn btn-danger-soft btn-sm"
+										onclick={() => startDelete(record.id, record.action_type, record.date)}
+										aria-label="Delete this record"
+									>Delete</button>
 								</div>
 							</div>
 
@@ -319,20 +450,6 @@
 								</footer>
 							{/if}
 						</div>
-
-						{#if isConfirming}
-							<div class="confirm-panel" role="alertdialog" aria-label="Confirm deletion">
-								<div class="confirm-icon" aria-hidden="true">!</div>
-								<div class="confirm-body">
-									<p class="confirm-title">Delete this record?</p>
-									<p class="confirm-text">
-										This will permanently remove the
-										<strong>{actionLabels[record.action_type] || record.action_type}</strong>
-										record from {formatDate(record.date)}. This can't be undone.
-									</p>
-								</div>
-							</div>
-						{/if}
 					</article>
 				{/each}
 			</section>
@@ -349,12 +466,41 @@
 		margin-bottom: 1.5rem;
 		flex-wrap: wrap;
 	}
+	.page-header-text {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.page-header-title-row {
+		display: flex;
+		align-items: baseline;
+		gap: 0.7rem;
+		flex-wrap: wrap;
+		margin-bottom: 0.35rem;
+	}
 	.page-header h1 {
-		margin: 0 0 0.35rem 0;
+		margin: 0;
 		color: var(--color-primary);
 		font-size: 1.85rem;
 		font-weight: 700;
 		letter-spacing: -0.01em;
+		line-height: 1.2;
+	}
+	.page-header-count {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.3rem;
+		padding: 0.2rem 0.55rem;
+		background: var(--color-primary-tint);
+		color: var(--color-primary);
+		border-radius: 999px;
+		font-size: 0.85rem;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+	}
+	.page-header-count-label {
+		font-size: 0.78rem;
+		font-weight: 500;
+		opacity: 0.85;
 	}
 	.page-intro {
 		margin: 0;
@@ -486,17 +632,16 @@
 	.record-card {
 		background: var(--color-bg-white);
 		border: 1px solid var(--color-border-subtle);
-		border-left: 3px solid var(--color-primary);
 		border-radius: var(--radius-card-lg);
 		box-shadow: var(--shadow-card);
 		padding: 1rem 1.25rem 1.1rem;
 		transition: box-shadow 0.15s ease, border-color 0.15s ease;
 	}
+	/* Recency is now signalled by the .recency-dot only — no card-level
+	   left border, per UX feedback. Variants left in place so future
+	   tuning (e.g. subtle bg tint) can target them without re-introducing
+	   the colored bar. */
 	.record-card:hover { box-shadow: var(--shadow-card-hover); }
-	.record-card.is-confirming { border-left-color: var(--color-danger); }
-	.record-fresh { border-left-color: var(--color-success); }
-	.record-stale { border-left-color: #c97a0d; }
-	.record-urgent { border-left-color: var(--color-danger); }
 
 	.record-head {
 		display: flex;
@@ -641,45 +786,89 @@
 		color: var(--color-text-muted);
 	}
 
-	/* Inline confirm panel */
-	.confirm-panel {
-		display: flex;
-		gap: 0.75rem;
-		align-items: flex-start;
-		margin-top: 0.85rem;
-		padding: 0.75rem 0.9rem;
-		background: rgba(217, 22, 22, 0.04);
-		border: 1px solid var(--color-danger);
-		border-radius: var(--radius-input);
+	/* ============================================================
+	   Delete toast (fixed top-of-page)
+	   - Backdrop dims + blurs the page so the user's eye lands here
+	   - Card sits at the viewport top, not nested inside any card
+	   - Top border color encodes stage: danger / success / danger
+	   ============================================================ */
+	.delete-toast-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.28);
+		backdrop-filter: blur(4px);
+		-webkit-backdrop-filter: blur(4px);
+		z-index: 90;
+		animation: deleteToastFadeIn 0.18s ease both;
 	}
-	.confirm-icon {
+	.delete-toast {
+		position: fixed;
+		top: 1.25rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 100;
+		width: min(560px, calc(100vw - 2rem));
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-subtle);
+		border-top: 4px solid var(--color-danger);
+		border-radius: var(--radius-card-lg);
+		box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
+		padding: 1.1rem 1.25rem;
+		display: flex;
+		gap: 0.9rem;
+		align-items: flex-start;
+		animation: deleteToastSlideDown 0.22s ease both;
+	}
+	.delete-toast-success { border-top-color: var(--color-success); }
+	.delete-toast-error { border-top-color: var(--color-danger); }
+	.delete-toast-icon {
 		flex: 0 0 auto;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 26px;
-		height: 26px;
+		width: 32px;
+		height: 32px;
 		border-radius: 50%;
 		background: var(--color-danger);
 		color: white;
 		font-family: 'Georgia', serif;
 		font-style: italic;
 		font-weight: 700;
-		font-size: 0.95rem;
+		font-size: 1.1rem;
 		line-height: 1;
 	}
-	.confirm-body { flex: 1 1 auto; min-width: 0; }
-	.confirm-title {
-		margin: 0 0 0.15rem 0;
+	.delete-toast-success .delete-toast-icon { background: var(--color-success); }
+	.delete-toast-body { flex: 1 1 auto; min-width: 0; }
+	.delete-toast-title {
+		margin: 0 0 0.2rem 0;
 		color: var(--color-text);
-		font-size: 0.92rem;
+		font-size: 1rem;
 		font-weight: 700;
+		line-height: 1.3;
 	}
-	.confirm-text {
+	.delete-toast-text {
 		margin: 0;
 		color: var(--color-text-muted);
-		font-size: 0.85rem;
-		line-height: 1.45;
+		font-size: 0.9rem;
+		line-height: 1.5;
+	}
+	.delete-toast-text strong {
+		color: var(--color-text);
+		font-weight: 600;
+	}
+	.delete-toast-actions {
+		flex: 0 0 auto;
+		display: flex;
+		gap: 0.4rem;
+		align-items: center;
+	}
+	@keyframes deleteToastFadeIn {
+		from { opacity: 0; }
+		to   { opacity: 1; }
+	}
+	@keyframes deleteToastSlideDown {
+		from { opacity: 0; transform: translate(-50%, -10px); }
+		to   { opacity: 1; transform: translate(-50%, 0); }
 	}
 
 	.casework-skeleton {
@@ -744,12 +933,21 @@
 			align-items: stretch;
 		}
 		.record-actions { justify-content: flex-end; flex-wrap: wrap; }
+		.delete-toast {
+			top: 0.75rem;
+			padding: 0.95rem 1rem;
+			gap: 0.7rem;
+		}
+		.delete-toast-actions { width: 100%; }
+		.delete-toast-actions :global(.btn) { flex: 1 1 0; }
 	}
 
 	@media (prefers-reduced-motion: reduce) {
 		.record-card,
 		.recency-dot,
-		.spinner-inline {
+		.spinner-inline,
+		.delete-toast,
+		.delete-toast-overlay {
 			transition: none;
 			animation: none;
 		}
