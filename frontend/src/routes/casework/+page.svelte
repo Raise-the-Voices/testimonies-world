@@ -110,15 +110,6 @@
 		}
 	}
 
-	function recencyClass(dateStr: string): 'fresh' | 'stale' | 'urgent' {
-		const d = new Date(dateStr);
-		if (Number.isNaN(d.getTime())) return 'stale';
-		const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
-		if (days < 30) return 'fresh';
-		if (days < 90) return 'stale';
-		return 'urgent';
-	}
-
 	function formatDate(d: string): string {
 		try {
 			return new Date(d).toLocaleDateString(undefined, {
@@ -215,19 +206,12 @@
 		</p>
 	{:else}
 		<header class="page-header">
-			<div class="page-header-text">
-				<h1 class="page-title">
-					Casework
-					{#if !loading && records.length > 0 && !loadError}
-						<span class="page-title-count" aria-label="{records.length} records">· {records.length}</span>
-					{/if}
-				</h1>
-				<p class="page-intro">
-					Every advocacy action logged against a case — outreach, filings,
-					meetings, and follow-ups. Use <strong>Edit</strong> to update a
-					record, or <strong>Delete</strong> to remove it.
-				</p>
-			</div>
+			<h1 class="page-title">
+				Casework
+				{#if !loading && records.length > 0 && !loadError}
+					<span class="page-title-count" aria-label="{records.length} records">· {records.length}</span>
+				{/if}
+			</h1>
 			<a href="{base}/casework/new" class="btn btn-primary header-cta">+ New record</a>
 		</header>
 
@@ -391,8 +375,7 @@
 		{:else}
 			<section class="records-list" aria-label="Casework records">
 				{#each records as record (record.id)}
-					{@const rc = recencyClass(record.date)}
-					<article class="record-card record-{rc}">
+					<article class="record-card">
 						<div class="record-main">
 							<div class="record-head">
 								<div class="record-badges">
@@ -402,10 +385,7 @@
 									<span class="badge badge-status badge-{statusKind[record.status] || 'unknown'}">
 										{statusLabels[record.status] || record.status}
 									</span>
-									<span class="recency recency-{rc}">
-										<span class="recency-dot" aria-hidden="true"></span>
-										{formatDate(record.date)}
-									</span>
+									<span class="record-date">— {formatDate(record.date)}</span>
 								</div>
 								<div class="record-actions">
 									<a href="{base}/casework/new?id={record.id}" class="btn btn-secondary btn-sm">
@@ -437,7 +417,7 @@
 
 							{#if record.performed_by_name}
 								<footer class="record-footer">
-									<span class="record-author">By {record.performed_by_name}</span>
+									<span class="record-author"><span class="record-author-mark" aria-hidden="true">·</span> By {record.performed_by_name}</span>
 								</footer>
 							{/if}
 						</div>
@@ -457,12 +437,8 @@
 		margin-bottom: 1.75rem;
 		flex-wrap: wrap;
 	}
-	.page-header-text {
-		flex: 1 1 auto;
-		min-width: 0;
-	}
 	.page-title {
-		margin: 0 0 0.3rem 0;
+		margin: 0;
 		color: var(--color-primary);
 		font-size: 1.85rem;
 		font-weight: 700;
@@ -476,22 +452,10 @@
 		margin-left: 0.4rem;
 		font-variant-numeric: tabular-nums;
 	}
-	.page-intro {
-		margin: 0;
-		max-width: var(--max-w-prose);
-		color: var(--color-text);
-		font-size: 0.98rem;
-		line-height: 1.55;
-		overflow-wrap: anywhere;
-	}
-	.page-intro strong {
-		color: var(--color-primary);
-		font-weight: 600;
-	}
 	.header-cta {
 		flex: 0 0 auto;
 		white-space: nowrap;
-		align-self: flex-start;
+		align-self: center;
 	}
 
 	.banner {
@@ -611,13 +575,17 @@
 		border-radius: var(--radius-card-lg);
 		box-shadow: var(--shadow-card);
 		padding: 1rem 1.25rem 1.1rem;
-		transition: box-shadow 0.15s ease, border-color 0.15s ease;
+		/* Smooth hover lift — shadow + border tint together so the card
+		   feels responsive without being noisy. */
+		transition:
+			box-shadow 0.18s ease,
+			border-color 0.18s ease,
+			transform 0.18s ease;
 	}
-	/* Recency is now signalled by the .recency-dot only — no card-level
-	   left border, per UX feedback. Variants left in place so future
-	   tuning (e.g. subtle bg tint) can target them without re-introducing
-	   the colored bar. */
-	.record-card:hover { box-shadow: var(--shadow-card-hover); }
+	.record-card:hover {
+		box-shadow: var(--shadow-card-hover);
+		border-color: var(--color-primary-light, var(--color-border-subtle));
+	}
 
 	.record-head {
 		display: flex;
@@ -651,28 +619,13 @@
 	.badge-released { background: var(--color-success); }
 	.badge-unknown { background: #c97a0d; }
 
-	.recency {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
+	/* Date inside the badge row — plain, muted, prefixed with an em-dash so
+	   it reads as metadata, not as a separate status pill. */
+	.record-date {
 		font-size: 0.82rem;
 		color: var(--color-text-muted);
 		font-weight: 500;
-	}
-	.recency-dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		flex: 0 0 8px;
-	}
-	.recency-fresh .recency-dot {
-		background: var(--color-success);
-		box-shadow: 0 0 0 3px rgba(47, 133, 90, 0.18);
-	}
-	.recency-stale .recency-dot { background: #c97a0d; }
-	.recency-urgent .recency-dot {
-		background: var(--color-danger);
-		box-shadow: 0 0 0 3px rgba(217, 22, 22, 0.18);
+		letter-spacing: 0.01em;
 	}
 
 	.record-actions {
@@ -752,14 +705,24 @@
 		line-height: 1.5;
 		white-space: pre-wrap;
 	}
+	/* Byline at the bottom of the card — far right, plenty of breathing room
+	   above so it sits clearly as metadata, not part of the description. */
 	.record-footer {
 		display: flex;
 		justify-content: flex-end;
-		margin-top: 0.6rem;
+		margin-top: 1rem;
+		padding-top: 0.6rem;
+		border-top: 1px solid var(--color-border-subtle);
 	}
 	.record-author {
 		font-size: 0.78rem;
 		color: var(--color-text-muted);
+		font-weight: 500;
+		letter-spacing: 0.01em;
+	}
+	.record-author-mark {
+		margin-right: 0.35rem;
+		opacity: 0.6;
 	}
 
 	/* ============================================================
@@ -905,7 +868,6 @@
 
 	@media (prefers-reduced-motion: reduce) {
 		.record-card,
-		.recency-dot,
 		.spinner-inline,
 		.delete-toast,
 		.delete-toast-overlay {
