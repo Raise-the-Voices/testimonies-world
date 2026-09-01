@@ -1,27 +1,25 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import { user, isAdvocate } from '$lib/session';
-	import {
-		getCasework,
-		deleteCasework,
-		type CaseworkRecord as ApiCaseworkRecord,
-	} from '$lib/api';
-	import Toast from '$lib/Toast.svelte';
-	import ConfirmDialog from '$lib/ConfirmDialog.svelte';
+	import { getCasework, deleteCasework } from '$lib/api';
 	import Skeleton from '$lib/Skeleton.svelte';
-	import { toastSuccess, toastError } from '$lib/toast';
 
 	let currentUser = $derived($user);
-	let records: ApiCaseworkRecord[] = $state([]);
+	let records: any[] = $state([]);
 	let loading = $state(true);
 	let loadError = $state('');
 	let filterStatus = $state('');
 	let filterAction = $state('');
 
-	// Delete confirmation state
-	let deleteTarget: ApiCaseworkRecord | null = $state(null);
+	// Inline delete-confirmation state — record id currently in "are you sure?" mode
+	let confirmingDelete: number | null = $state(null);
 	let deleting = $state(false);
+
+	// Banner state — sourced from URL on mount, can be set directly too
+	let bannerMsg = $state('');
+	let bannerKind = $state<'success' | 'error'>('success');
 
 	const actionLabels: Record<string, string> = {
 		outreach: 'Outreach',
@@ -44,7 +42,34 @@
 		done: 'released',
 	};
 
-	onMount(() => loadRecords());
+	function consumeUrlBanner() {
+		const url = $page.url;
+		const saved = url.searchParams.get('saved');
+		const deleted = url.searchParams.get('deleted');
+		const err = url.searchParams.get('error');
+		if (saved === '1') {
+			bannerKind = 'success';
+			bannerMsg = 'Record saved.';
+		} else if (deleted === '1') {
+			bannerKind = 'success';
+			bannerMsg = 'Record deleted.';
+		} else if (err) {
+			bannerKind = 'error';
+			bannerMsg = err;
+		}
+		if (saved || deleted || err) {
+			const clean = new URL(url);
+			clean.searchParams.delete('saved');
+			clean.searchParams.delete('deleted');
+			clean.searchParams.delete('error');
+			history.replaceState(history.state, '', clean.toString());
+		}
+	}
+
+	onMount(() => {
+		consumeUrlBanner();
+		loadRecords();
+	});
 
 	async function loadRecords() {
 		loading = true;
@@ -86,30 +111,29 @@
 		}
 	}
 
-	function startDelete(record: ApiCaseworkRecord) {
-		deleteTarget = record;
+	function startDelete(id: number) {
+		confirmingDelete = id;
+		bannerMsg = '';
 	}
 
 	function cancelDelete() {
-		deleteTarget = null;
+		confirmingDelete = null;
 	}
 
-	async function confirmDelete() {
-		if (!deleteTarget) return;
+	async function performDelete(id: number) {
 		deleting = true;
-		const target = deleteTarget;
 		try {
-			await deleteCasework(target.id);
-			records = records.filter((r) => r.id !== target.id);
-			toastSuccess('Record deleted', `The ${actionLabels[target.action_type] ?? target.action_type} record was removed.`);
+			await deleteCasework(id);
+			records = records.filter((r) => r.id !== id);
+			confirmingDelete = null;
+			bannerKind = 'success';
+			bannerMsg = 'Record deleted.';
 		} catch (e: any) {
-			toastError(
-				"Couldn't delete that record",
-				e?.message || 'Please try again in a moment.',
-			);
+			bannerKind = 'error';
+			bannerMsg = e?.message || "Couldn't delete that record. Please try again.";
+			confirmingDelete = null;
 		} finally {
 			deleting = false;
-			deleteTarget = null;
 		}
 	}
 
@@ -120,17 +144,11 @@
 	}
 
 	const hasActiveFilters = $derived(!!filterStatus || !!filterAction);
-	const activeCount = $derived(records.length);
-	const openCount = $derived(records.filter((r) => r.status === 'open').length);
-	const inProgressCount = $derived(records.filter((r) => r.status === 'in_progress').length);
-	const doneCount = $derived(records.filter((r) => r.status === 'done').length);
 </script>
 
 <svelte:head>
 	<title>Casework — Testimonies.world</title>
 </svelte:head>
-
-<Toast />
 
 <div class="container">
 	{#if !isAdvocate(currentUser)}
@@ -143,73 +161,60 @@
 			<div>
 				<h1>Casework</h1>
 				<p class="page-intro">
-					Every advocacy action logged against a case — outreach, legal filings,
-					media, follow-ups. Filter, edit, or remove any record below.
+					Every advocacy action logged against a case. Click <strong>Edit</strong> on a
+					record to update it, or <strong>Delete</strong> to remove it.
 				</p>
 			</div>
 			<a href="{base}/casework/new" class="btn btn-primary header-cta">+ New Record</a>
 		</header>
 
-		<!-- ============== Stats strip ============== -->
-		{#if !loading && !loadError && activeCount > 0}
-			<div class="stats-strip" aria-label="Casework counts">
-				<div class="stat-cell">
-					<span class="stat-num">{activeCount}</span>
-					<span class="stat-lbl">Total</span>
-				</div>
-				<div class="stat-cell stat-open">
-					<span class="stat-num">{openCount}</span>
-					<span class="stat-lbl">Open</span>
-				</div>
-				<div class="stat-cell stat-progress">
-					<span class="stat-num">{inProgressCount}</span>
-					<span class="stat-lbl">In progress</span>
-				</div>
-				<div class="stat-cell stat-done">
-					<span class="stat-num">{doneCount}</span>
-					<span class="stat-lbl">Done</span>
-				</div>
+		{#if bannerMsg}
+			<div class="banner banner-{bannerKind}" role="status">
+				<span class="banner-icon" aria-hidden="true">
+					{bannerKind === 'success' ? '✓' : '!'}
+				</span>
+				<span class="banner-text">{bannerMsg}</span>
+				<button
+					type="button"
+					class="banner-dismiss"
+					aria-label="Dismiss"
+					onclick={() => (bannerMsg = '')}
+				>×</button>
 			</div>
 		{/if}
 
-		<!-- ============== Filters ============== -->
-		<section class="filters-card" aria-label="Filter records">
-			<div class="filters-row">
-				<div class="filter-group">
-					<label for="filter-status">Status</label>
-					<select id="filter-status" bind:value={filterStatus} onchange={loadRecords}>
-						<option value="">All</option>
-						<option value="open">Open</option>
-						<option value="in_progress">In progress</option>
-						<option value="done">Done</option>
-					</select>
-				</div>
-				<div class="filter-group">
-					<label for="filter-action">Action type</label>
-					<select id="filter-action" bind:value={filterAction} onchange={loadRecords}>
-						<option value="">All</option>
-						{#each Object.entries(actionLabels) as [value, label]}
-							<option {value}>{label}</option>
-						{/each}
-					</select>
-				</div>
-				{#if hasActiveFilters}
-					<button type="button" class="filter-clear" onclick={clearFilters}>
-						Clear filters
-					</button>
-				{/if}
+		<div class="filters">
+			<div class="filter-group">
+				<label for="filter-status">Status</label>
+				<select id="filter-status" bind:value={filterStatus} onchange={loadRecords}>
+					<option value="">All</option>
+					<option value="open">Open</option>
+					<option value="in_progress">In progress</option>
+					<option value="done">Done</option>
+				</select>
 			</div>
-		</section>
+			<div class="filter-group">
+				<label for="filter-action">Action type</label>
+				<select id="filter-action" bind:value={filterAction} onchange={loadRecords}>
+					<option value="">All</option>
+					{#each Object.entries(actionLabels) as [value, label]}
+						<option {value}>{label}</option>
+					{/each}
+				</select>
+			</div>
+			{#if hasActiveFilters}
+				<button type="button" class="filter-clear" onclick={clearFilters}>
+					Clear filters
+				</button>
+			{/if}
+		</div>
 
-		<!-- ============== Loading state ============== -->
 		{#if loading}
 			<div class="casework-skeleton" aria-busy="true" aria-label="Loading casework records">
 				<Skeleton variant="rect" height="6rem" />
 				<Skeleton variant="rect" height="6rem" />
 				<Skeleton variant="rect" height="6rem" />
 			</div>
-
-		<!-- ============== Error state ============== -->
 		{:else if loadError}
 			<div class="state-card state-error" role="alert">
 				<div class="state-icon state-icon-error" aria-hidden="true">!</div>
@@ -217,9 +222,7 @@
 				<p class="state-body">{loadError}</p>
 				<button type="button" class="btn btn-primary" onclick={loadRecords}>Try again</button>
 			</div>
-
-		<!-- ============== Empty state ============== -->
-		{:else if activeCount === 0}
+		{:else if records.length === 0}
 			<div class="state-card state-empty">
 				<div class="state-icon state-icon-empty" aria-hidden="true">✓</div>
 				{#if hasActiveFilters}
@@ -240,13 +243,12 @@
 					</div>
 				{/if}
 			</div>
-
-		<!-- ============== Records ============== -->
 		{:else}
 			<section class="records-list" aria-label="Casework records">
 				{#each records as record (record.id)}
 					{@const rc = recencyClass(record.date)}
-					<article class="record-card record-{rc}">
+					{@const isConfirming = confirmingDelete === record.id}
+					<article class="record-card record-{rc}" class:is-confirming={isConfirming}>
 						<div class="record-main">
 							<div class="record-head">
 								<div class="record-badges">
@@ -256,22 +258,43 @@
 									<span class="badge badge-status badge-{statusKind[record.status] || 'unknown'}">
 										{statusLabels[record.status] || record.status}
 									</span>
-									<span class="recency recency-{rc}" title="Date of action">
+									<span class="recency recency-{rc}">
 										<span class="recency-dot" aria-hidden="true"></span>
 										{formatDate(record.date)}
 									</span>
 								</div>
 								<div class="record-actions">
-									<a href="{base}/casework/{record.id}" class="btn btn-secondary btn-sm">
+									<a href="{base}/casework/new?id={record.id}" class="btn btn-secondary btn-sm">
 										Edit
 									</a>
-									<button
-										type="button"
-										class="btn btn-danger-soft btn-sm"
-										onclick={() => startDelete(record)}
-									>
-										Delete
-									</button>
+									{#if isConfirming}
+										<button
+											type="button"
+											class="btn btn-secondary btn-sm"
+											onclick={cancelDelete}
+											disabled={deleting}
+										>Cancel</button>
+										<button
+											type="button"
+											class="btn btn-danger btn-sm"
+											onclick={() => performDelete(record.id)}
+											disabled={deleting}
+											aria-label="Confirm delete this record"
+										>
+											{#if deleting}
+												<span class="spinner-inline" aria-hidden="true"></span>
+												Deleting…
+											{:else}
+												Confirm delete
+											{/if}
+										</button>
+									{:else}
+										<button
+											type="button"
+											class="btn btn-danger-soft btn-sm"
+											onclick={() => startDelete(record.id)}
+										>Delete</button>
+									{/if}
 								</div>
 							</div>
 
@@ -290,12 +313,26 @@
 								</details>
 							{/if}
 
-							<footer class="record-footer">
-								{#if record.performed_by_name}
+							{#if record.performed_by_name}
+								<footer class="record-footer">
 									<span class="record-author">By {record.performed_by_name}</span>
-								{/if}
-							</footer>
+								</footer>
+							{/if}
 						</div>
+
+						{#if isConfirming}
+							<div class="confirm-panel" role="alertdialog" aria-label="Confirm deletion">
+								<div class="confirm-icon" aria-hidden="true">!</div>
+								<div class="confirm-body">
+									<p class="confirm-title">Delete this record?</p>
+									<p class="confirm-text">
+										This will permanently remove the
+										<strong>{actionLabels[record.action_type] || record.action_type}</strong>
+										record from {formatDate(record.date)}. This can't be undone.
+									</p>
+								</div>
+							</div>
+						{/if}
 					</article>
 				{/each}
 			</section>
@@ -303,22 +340,7 @@
 	{/if}
 </div>
 
-<ConfirmDialog
-	open={deleteTarget !== null}
-	title="Delete this record?"
-	body={deleteTarget
-		? `This will permanently remove the ${actionLabels[deleteTarget.action_type] ?? deleteTarget.action_type} record from ${formatDate(deleteTarget.date)}. This can't be undone.`
-		: ''}
-	confirmLabel="Delete record"
-	cancelLabel="Keep it"
-	kind="danger"
-	confirming={deleting}
-	onConfirm={confirmDelete}
-	onCancel={cancelDelete}
-/>
-
 <style>
-	/* === Page header === */
 	.page-header {
 		display: flex;
 		align-items: flex-start;
@@ -341,60 +363,71 @@
 		font-size: 0.98rem;
 		line-height: 1.55;
 	}
+	.page-intro strong {
+		color: var(--color-primary);
+		font-weight: 600;
+	}
 	.header-cta {
 		flex: 0 0 auto;
 		white-space: nowrap;
 	}
 
-	/* === Stats strip === */
-	.stats-strip {
-		display: grid;
-		grid-template-columns: repeat(4, 1fr);
-		gap: 0.75rem;
-		margin-bottom: 1.5rem;
-	}
-	.stat-cell {
-		background: var(--color-bg-white);
-		border: 1px solid var(--color-border-subtle);
-		border-radius: var(--radius-input);
-		padding: 0.75rem 0.9rem;
+	.banner {
 		display: flex;
-		flex-direction: column;
-		gap: 0.15rem;
-		box-shadow: var(--shadow-card);
-	}
-	.stat-num {
-		font-size: 1.6rem;
-		font-weight: 700;
-		color: var(--color-primary);
-		font-variant-numeric: tabular-nums;
-		line-height: 1.1;
-	}
-	.stat-lbl {
-		font-size: 0.78rem;
-		color: var(--color-text-muted);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		font-weight: 600;
-	}
-	.stat-open .stat-num { color: var(--color-danger); }
-	.stat-progress .stat-num { color: #c97a0d; }
-	.stat-done .stat-num { color: var(--color-success); }
-
-	/* === Filters === */
-	.filters-card {
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.7rem 0.9rem;
+		margin-bottom: 1.25rem;
 		background: var(--color-bg-white);
 		border: 1px solid var(--color-border-subtle);
-		border-radius: var(--radius-card-lg);
-		padding: 1rem 1.25rem;
-		margin-bottom: 1.25rem;
+		border-left: 4px solid var(--color-primary);
+		border-radius: var(--radius-input);
 		box-shadow: var(--shadow-card);
 	}
-	.filters-row {
+	.banner-success { border-left-color: var(--color-success); }
+	.banner-error { border-left-color: var(--color-danger); }
+	.banner-icon {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+		border-radius: 50%;
+		font-size: 0.85rem;
+		font-weight: 700;
+		font-family: 'Georgia', serif;
+		color: white;
+	}
+	.banner-success .banner-icon { background: var(--color-success); }
+	.banner-error .banner-icon { background: var(--color-danger); }
+	.banner-text {
+		flex: 1 1 auto;
+		color: var(--color-text);
+		font-size: 0.92rem;
+	}
+	.banner-dismiss {
+		flex: 0 0 auto;
+		background: transparent;
+		border: 0;
+		color: var(--color-text-muted);
+		font-size: 1.3rem;
+		cursor: pointer;
+		padding: 0 0.2rem;
+	}
+	.banner-dismiss:hover { color: var(--color-text); }
+
+	.filters {
 		display: flex;
 		gap: 1rem;
 		align-items: flex-end;
 		flex-wrap: wrap;
+		margin-bottom: 1.25rem;
+		padding: 0.9rem 1.1rem;
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-subtle);
+		border-radius: var(--radius-card-lg);
+		box-shadow: var(--shadow-card);
 	}
 	.filter-group {
 		display: flex;
@@ -443,11 +476,8 @@
 		text-underline-offset: 2px;
 		margin-bottom: 2px;
 	}
-	.filter-clear:hover {
-		color: var(--color-primary);
-	}
+	.filter-clear:hover { color: var(--color-primary); }
 
-	/* === Records === */
 	.records-list {
 		display: flex;
 		flex-direction: column;
@@ -460,21 +490,13 @@
 		border-radius: var(--radius-card-lg);
 		box-shadow: var(--shadow-card);
 		padding: 1rem 1.25rem 1.1rem;
-		transition: box-shadow 0.15s ease, transform 0.15s ease;
+		transition: box-shadow 0.15s ease, border-color 0.15s ease;
 	}
-	.record-card:hover {
-		box-shadow: var(--shadow-card-hover);
-		transform: translateY(-1px);
-	}
-	.record-fresh {
-		border-left-color: var(--color-success);
-	}
-	.record-stale {
-		border-left-color: #c97a0d;
-	}
-	.record-urgent {
-		border-left-color: var(--color-danger);
-	}
+	.record-card:hover { box-shadow: var(--shadow-card-hover); }
+	.record-card.is-confirming { border-left-color: var(--color-danger); }
+	.record-fresh { border-left-color: var(--color-success); }
+	.record-stale { border-left-color: #c97a0d; }
+	.record-urgent { border-left-color: var(--color-danger); }
 
 	.record-head {
 		display: flex;
@@ -503,9 +525,7 @@
 		background: var(--color-primary-tint);
 		color: var(--color-primary);
 	}
-	.badge-status {
-		color: white;
-	}
+	.badge-status { color: white; }
 	.badge-detained { background: var(--color-danger); }
 	.badge-released { background: var(--color-success); }
 	.badge-unknown { background: #c97a0d; }
@@ -528,17 +548,10 @@
 		background: var(--color-success);
 		box-shadow: 0 0 0 3px rgba(47, 133, 90, 0.18);
 	}
-	.recency-stale .recency-dot {
-		background: #c97a0d;
-	}
+	.recency-stale .recency-dot { background: #c97a0d; }
 	.recency-urgent .recency-dot {
 		background: var(--color-danger);
 		box-shadow: 0 0 0 3px rgba(217, 22, 22, 0.18);
-		animation: pulse 2.5s ease-in-out infinite;
-	}
-	@keyframes pulse {
-		0%, 100% { box-shadow: 0 0 0 3px rgba(217, 22, 22, 0.18); }
-		50% { box-shadow: 0 0 0 6px rgba(217, 22, 22, 0.06); }
 	}
 
 	.record-actions {
@@ -560,6 +573,31 @@
 		background: rgba(217, 22, 22, 0.08);
 		border-color: var(--color-danger);
 	}
+	:global(.btn.btn-danger) {
+		background: var(--color-danger);
+		color: var(--color-text-light);
+		border: 1px solid var(--color-danger);
+	}
+	:global(.btn.btn-danger:hover:not(:disabled)) {
+		background: #b51313;
+		border-color: #b51313;
+	}
+	:global(.btn.btn-danger:disabled) {
+		opacity: 0.7;
+		cursor: not-allowed;
+	}
+	.spinner-inline {
+		display: inline-block;
+		width: 11px;
+		height: 11px;
+		border: 2px solid currentColor;
+		border-right-color: transparent;
+		border-radius: 50%;
+		animation: spin 0.7s linear infinite;
+		vertical-align: middle;
+		margin-right: 0.2rem;
+	}
+	@keyframes spin { to { transform: rotate(360deg); } }
 
 	.record-description {
 		margin: 0 0 0.45rem 0;
@@ -583,9 +621,7 @@
 		font-weight: 500;
 		padding: 0.25rem 0;
 	}
-	.record-notes summary:hover {
-		color: var(--color-primary);
-	}
+	.record-notes summary:hover { color: var(--color-primary); }
 	.record-notes p {
 		margin: 0.4rem 0 0;
 		padding: 0.6rem 0.8rem;
@@ -595,7 +631,6 @@
 		line-height: 1.5;
 		white-space: pre-wrap;
 	}
-
 	.record-footer {
 		display: flex;
 		justify-content: flex-end;
@@ -606,7 +641,47 @@
 		color: var(--color-text-muted);
 	}
 
-	/* === States (loading / error / empty) === */
+	/* Inline confirm panel */
+	.confirm-panel {
+		display: flex;
+		gap: 0.75rem;
+		align-items: flex-start;
+		margin-top: 0.85rem;
+		padding: 0.75rem 0.9rem;
+		background: rgba(217, 22, 22, 0.04);
+		border: 1px solid var(--color-danger);
+		border-radius: var(--radius-input);
+	}
+	.confirm-icon {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 26px;
+		height: 26px;
+		border-radius: 50%;
+		background: var(--color-danger);
+		color: white;
+		font-family: 'Georgia', serif;
+		font-style: italic;
+		font-weight: 700;
+		font-size: 0.95rem;
+		line-height: 1;
+	}
+	.confirm-body { flex: 1 1 auto; min-width: 0; }
+	.confirm-title {
+		margin: 0 0 0.15rem 0;
+		color: var(--color-text);
+		font-size: 0.92rem;
+		font-weight: 700;
+	}
+	.confirm-text {
+		margin: 0;
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+		line-height: 1.45;
+	}
+
 	.casework-skeleton {
 		display: flex;
 		flex-direction: column;
@@ -636,12 +711,8 @@
 		color: white;
 		margin-bottom: 1rem;
 	}
-	.state-icon-empty {
-		background: var(--color-success);
-	}
-	.state-icon-error {
-		background: var(--color-danger);
-	}
+	.state-icon-empty { background: var(--color-success); }
+	.state-icon-error { background: var(--color-danger); }
 	.state-title {
 		margin: 0 0 0.5rem 0;
 		color: var(--color-text);
@@ -661,33 +732,24 @@
 		flex-wrap: wrap;
 	}
 
-	/* === Responsive === */
 	@media (max-width: 720px) {
-		.stats-strip {
-			grid-template-columns: repeat(2, 1fr);
-		}
 		.page-header {
 			flex-direction: column;
 			align-items: stretch;
 		}
-		.header-cta {
-			width: 100%;
-		}
-		.filter-group {
-			min-width: 100%;
-		}
+		.header-cta { width: 100%; }
+		.filter-group { min-width: 100%; }
 		.record-head {
 			flex-direction: column;
 			align-items: stretch;
 		}
-		.record-actions {
-			justify-content: flex-end;
-		}
+		.record-actions { justify-content: flex-end; flex-wrap: wrap; }
 	}
 
 	@media (prefers-reduced-motion: reduce) {
 		.record-card,
-		.recency-dot {
+		.recency-dot,
+		.spinner-inline {
 			transition: none;
 			animation: none;
 		}

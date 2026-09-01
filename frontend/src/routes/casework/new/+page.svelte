@@ -2,18 +2,30 @@
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import { user, isAdvocate, loadSession } from '$lib/session';
-	import { createCasework, getPersons, ApiError } from '$lib/api';
-	import { toastSuccess } from '$lib/toast';
+	import {
+		createCasework,
+		getCaseworkRecord,
+		updateCasework,
+		getPersons,
+		ApiError,
+	} from '$lib/api';
 
 	let currentUser = $derived($user);
 	let saving = $state(false);
 	let refreshing = $state(false);
+	let loading = $state(true);
+	let loadError = $state('');
 	let formError = $state('');
 	let formErrorKind = $state<'auth' | 'server' | 'other'>('other');
 	let errors = $state<Record<string, string>>({});
 	let persons: any[] = $state([]);
 	let selectedPersons: number[] = $state([]);
+
+	// Edit mode: when ?id=X is present, we load and PATCH instead of POST.
+	let recordId = $state<number | null>(null);
+	const isEdit = $derived(recordId !== null);
 
 	let actionType = $state('outreach');
 	let description = $state('');
@@ -37,6 +49,33 @@
 	const validStatuses = new Set(['open', 'in_progress', 'done']);
 
 	onMount(async () => {
+		const idStr = $page.url.searchParams.get('id');
+		if (idStr) {
+			const id = Number(idStr);
+			if (Number.isFinite(id) && id > 0) {
+				recordId = id;
+				try {
+					const r = await getCaseworkRecord(id);
+					actionType = r.action_type;
+					description = r.description;
+					date = r.date;
+					status = r.status;
+					nextSteps = r.next_steps ?? '';
+					notes = r.notes ?? '';
+					selectedPersons = Array.isArray(r.persons) ? r.persons.slice() : [];
+				} catch (e: any) {
+					if (e instanceof ApiError && e.status === 404) {
+						loadError = 'That record no longer exists.';
+					} else if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+						loadError = "You don't have permission to edit this record.";
+					} else {
+						loadError = e?.message || "Couldn't load this record.";
+					}
+				}
+			}
+		}
+		loading = false;
+
 		try {
 			const data = await getPersons({ page_size: '1000' });
 			persons = data.results;
@@ -139,7 +178,7 @@
 
 		saving = true;
 		try {
-			await createCasework({
+			const payload = {
 				action_type: actionType,
 				description: description.trim(),
 				date,
@@ -147,9 +186,14 @@
 				next_steps: nextSteps.trim(),
 				notes: notes.trim(),
 				persons: selectedPersons,
-			});
-			toastSuccess('Record created', 'Your casework record is now in the list.');
-			goto(`${base}/casework`);
+			};
+			if (recordId !== null) {
+				await updateCasework(recordId, payload);
+				goto(`${base}/casework?saved=1`);
+			} else {
+				await createCasework(payload);
+				goto(`${base}/casework?saved=1`);
+			}
 		} catch (e: any) {
 			if (e instanceof ApiError) {
 				if (e.isValidation && Object.keys(e.fieldErrors).length > 0) {
@@ -187,22 +231,40 @@
 </script>
 
 <svelte:head>
-	<title>New Casework Record — Testimonies.world</title>
+	<title>{isEdit ? 'Edit' : 'New'} Casework Record — Testimonies.world</title>
 </svelte:head>
 
 <div class="container">
 	{#if !isAdvocate(currentUser)}
 		<p class="muted">
-			You must be logged in as an advocate to create casework records.
-			<a href="{base}/api/auth/login/?next={base}/casework/new">Login</a>
+			You must be logged in as an advocate to {isEdit ? 'edit' : 'create'} casework records.
+			<a href="{base}/api/auth/login/?next={base}/casework">Login</a>
 		</p>
+	{:else if loading}
+		<header class="form-header">
+			<h1>{isEdit ? 'Edit' : 'New'} Casework Record</h1>
+			<p class="form-intro">Loading…</p>
+		</header>
+	{:else if loadError}
+		<div class="state-card state-error" role="alert">
+			<div class="state-icon state-icon-error" aria-hidden="true">!</div>
+			<h2 class="state-title">Couldn't load this record</h2>
+			<p class="state-body">{loadError}</p>
+			<div class="state-actions">
+				<a href="{base}/casework" class="btn btn-primary">Back to casework</a>
+			</div>
+		</div>
 	{:else}
 		<header class="form-header">
-			<h1>New Casework Record</h1>
+			<h1>{isEdit ? 'Edit' : 'New'} Casework Record</h1>
 			<p class="form-intro">
-				Log an advocacy action — outreach, a legal filing, media engagement, or anything
-				else you’ve done for a case. Only the <em>description</em> is required; link the
-				person(s) it concerns at the bottom.
+				{#if isEdit}
+					Update the details below. Changes are saved when you click <em>Save changes</em>.
+				{:else}
+					Log an advocacy action — outreach, a legal filing, media engagement, or anything
+					else you’ve done for a case. Only the <em>description</em> is required; link the
+					person(s) it concerns at the bottom.
+				{/if}
 			</p>
 		</header>
 
@@ -479,13 +541,13 @@
 
 			<!-- Submit -->
 			<div class="form-actions">
-				<p class="form-actions-note">You’ll be returned to the casework list after saving.</p>
+				<a href="{base}/casework" class="btn btn-secondary">Cancel</a>
 				<button type="submit" class="btn btn-primary submit-btn" disabled={saving}>
 					{#if saving}
 						<span class="spinner" aria-hidden="true"></span>
 						Saving…
 					{:else}
-						Create Record
+						{isEdit ? 'Save changes' : 'Create Record'}
 					{/if}
 				</button>
 			</div>
@@ -495,6 +557,51 @@
 
 <style>
 	/* === Accessibility helper === */
+	/* === Loading + error states === */
+	.state-card {
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-subtle);
+		border-radius: var(--radius-card-lg);
+		padding: 2.5rem 2rem;
+		text-align: center;
+		box-shadow: var(--shadow-card);
+		max-width: 540px;
+		margin: 1.5rem auto;
+	}
+	.state-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 48px;
+		height: 48px;
+		border-radius: 50%;
+		font-family: 'Georgia', serif;
+		font-style: italic;
+		font-weight: 700;
+		font-size: 1.4rem;
+		color: white;
+		margin-bottom: 1rem;
+	}
+	.state-icon-error { background: var(--color-danger); }
+	.state-title {
+		margin: 0 0 0.5rem 0;
+		color: var(--color-text);
+		font-size: 1.15rem;
+		font-weight: 700;
+	}
+	.state-body {
+		margin: 0 0 1.25rem 0;
+		color: var(--color-text-muted);
+		font-size: 0.95rem;
+		line-height: 1.55;
+	}
+	.state-actions {
+		display: flex;
+		justify-content: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
 	.visually-hidden {
 		position: absolute;
 		width: 1px;
