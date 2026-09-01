@@ -215,23 +215,13 @@
 		</p>
 	{:else}
 		<header class="page-header">
-			<a href="{base}/casework/new" class="btn btn-primary header-cta">+ New Record</a>
-			<div class="page-header-text">
-				<div class="page-header-title-row">
-					<h1>Casework</h1>
-					{#if !loading && records.length > 0 && !loadError}
-						<span class="page-header-count" aria-label="{records.length} records">
-							{records.length}
-							<span class="page-header-count-label">record{records.length === 1 ? '' : 's'}</span>
-						</span>
-					{/if}
-				</div>
-				<p class="page-intro">
-					Every advocacy action logged against a case — outreach, filings,
-					meetings, and follow-ups. Use <strong>Edit</strong> to update a
-					record, or <strong>Delete</strong> to remove it.
-				</p>
-			</div>
+			<a href="{base}/casework/new" class="btn btn-primary header-cta">+ New record</a>
+			<h1 class="page-title">
+				Casework
+				{#if !loading && records.length > 0 && !loadError}
+					<span class="page-title-count" aria-label="{records.length} records">· {records.length}</span>
+				{/if}
+			</h1>
 		</header>
 
 		{#if bannerMsg}
@@ -285,20 +275,24 @@
 				</div>
 				<div class="delete-toast-body">
 					<h2 id="delete-toast-title" class="delete-toast-title">
-						{#if deleteToast.stage === 'confirming' || deleteToast.stage === 'deleting'}
+						{#if deleteToast.stage === 'confirming'}
 							Delete this record?
+						{:else if deleteToast.stage === 'deleting'}
+							Deleting…
 						{:else if deleteToast.stage === 'success'}
-							Record deleted
+							Deleted.
 						{:else}
-							Couldn't delete record
+							Couldn't delete.
 						{/if}
 					</h2>
 					<p id="delete-toast-text" class="delete-toast-text">
-						{#if deleteToast.stage === 'confirming' || deleteToast.stage === 'deleting'}
-							The <strong>{actionLabels[deleteToast.actionType] || deleteToast.actionType}</strong>
-							record from {formatDate(deleteToast.date)} will be permanently removed. This can't be undone.
+						{#if deleteToast.stage === 'confirming'}
+							This <strong>{actionLabels[deleteToast.actionType] || deleteToast.actionType}</strong>
+							from {formatDate(deleteToast.date)} will be gone. There's no undo.
+						{:else if deleteToast.stage === 'deleting'}
+							Hang on a moment.
 						{:else if deleteToast.stage === 'success'}
-							The record has been removed.
+							It's gone — feel free to move on.
 						{:else}
 							{deleteToast.errorMessage}
 						{/if}
@@ -311,12 +305,12 @@
 							class="btn btn-secondary btn-sm"
 							onclick={cancelDelete}
 							use:autofocus
-						>Cancel</button>
+						>Keep it</button>
 						<button
 							type="button"
 							class="btn btn-danger btn-sm"
 							onclick={performDelete}
-						>Confirm delete</button>
+						>Delete it</button>
 					{:else if deleteToast.stage === 'deleting'}
 						<button
 							type="button"
@@ -460,24 +454,13 @@
 <style>
 	.page-header {
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
-		margin-bottom: 1.5rem;
+		margin-bottom: 1.75rem;
 		flex-wrap: wrap;
 	}
-	.page-header-text {
-		flex: 1 1 auto;
-		min-width: 0;
-	}
-	.page-header-title-row {
-		display: flex;
-		align-items: baseline;
-		gap: 0.7rem;
-		flex-wrap: wrap;
-		margin-bottom: 0.35rem;
-	}
-	.page-header h1 {
+	.page-title {
 		margin: 0;
 		color: var(--color-primary);
 		font-size: 1.85rem;
@@ -485,33 +468,12 @@
 		letter-spacing: -0.01em;
 		line-height: 1.2;
 	}
-	.page-header-count {
-		display: inline-flex;
-		align-items: baseline;
-		gap: 0.3rem;
-		padding: 0.2rem 0.55rem;
-		background: var(--color-primary-tint);
-		color: var(--color-primary);
-		border-radius: 999px;
-		font-size: 0.85rem;
-		font-weight: 600;
-		font-variant-numeric: tabular-nums;
-	}
-	.page-header-count-label {
-		font-size: 0.78rem;
+	.page-title-count {
+		color: var(--color-text-muted);
 		font-weight: 500;
-		opacity: 0.85;
-	}
-	.page-intro {
-		margin: 0;
-		max-width: var(--max-w-prose);
-		color: var(--color-text);
-		font-size: 0.98rem;
-		line-height: 1.55;
-	}
-	.page-intro strong {
-		color: var(--color-primary);
-		font-weight: 600;
+		font-size: 1.05rem;
+		margin-left: 0.4rem;
+		font-variant-numeric: tabular-nums;
 	}
 	.header-cta {
 		flex: 0 0 auto;
