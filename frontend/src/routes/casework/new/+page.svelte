@@ -2,12 +2,15 @@
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { user, isAdvocate } from '$lib/session';
-	import { createCasework, getPersons } from '$lib/api';
+	import { user, isAdvocate, loadSession } from '$lib/session';
+	import { createCasework, getPersons, ApiError } from '$lib/api';
 
 	let currentUser = $derived($user);
 	let saving = $state(false);
-	let errorMsg = $state('');
+	let refreshing = $state(false);
+	let formError = $state('');
+	let formErrorKind = $state<'auth' | 'server' | 'other'>('other');
+	let errors = $state<Record<string, string>>({});
 	let persons: any[] = $state([]);
 	let selectedPersons: number[] = $state([]);
 
@@ -18,6 +21,8 @@
 	let nextSteps = $state('');
 	let notes = $state('');
 
+	const MAX_FIELD = 5000;
+
 	const actionLabels: Record<string, string> = {
 		outreach: 'Outreach',
 		legal_filing: 'Legal Filing',
@@ -26,6 +31,9 @@
 		investigation: 'Investigation',
 		other: 'Other',
 	};
+
+	const validActions = new Set(Object.keys(actionLabels));
+	const validStatuses = new Set(['open', 'in_progress', 'done']);
 
 	onMount(async () => {
 		try {
@@ -44,29 +52,136 @@
 		}
 	}
 
+	/** Remove a field's error — fires on every input so users see instant feedback when they fix it. */
+	function clearError(field: string) {
+		if (errors[field]) {
+			const next = { ...errors };
+			delete next[field];
+			errors = next;
+		}
+		// Also clear the top-level banner once the user is editing again.
+		if (formError) formError = '';
+	}
+
+	/** Map server error field names → our form's field ids (DRF uses snake_case). */
+	function mapServerField(name: string): string {
+		if (name === 'action_type' || name === 'date' || name === 'status' ||
+			name === 'description' || name === 'next_steps' || name === 'notes' ||
+			name === 'persons') {
+			return name;
+		}
+		return name; // unknown fields stay as-is — they surface at top
+	}
+
+	/** Run client-side validation. Returns a map of field → message; empty if all good. */
+	function validate(): Record<string, string> {
+		const e: Record<string, string> = {};
+		if (!actionType) e.action_type = 'Pick the type of action.';
+		else if (!validActions.has(actionType))
+			e.action_type = 'That action type isn’t recognized.';
+
+		if (!date) e.date = 'Pick a date for this action.';
+		else {
+			const d = new Date(date);
+			if (Number.isNaN(d.getTime())) e.date = 'That doesn’t look like a valid date.';
+		}
+
+		if (!status) e.status = 'Pick a status.';
+		else if (!validStatuses.has(status)) e.status = 'That status isn’t recognized.';
+
+		const descTrim = description.trim();
+		if (!descTrim) e.description = 'Tell us what happened — even one sentence helps.';
+		else if (descTrim.length > MAX_FIELD)
+			e.description = `Trim this down — please keep it under ${MAX_FIELD.toLocaleString()} characters.`;
+
+		if (nextSteps.length > MAX_FIELD)
+			e.next_steps = `Trim this down — please keep it under ${MAX_FIELD.toLocaleString()} characters.`;
+		if (notes.length > MAX_FIELD)
+			e.notes = `Trim this down — please keep it under ${MAX_FIELD.toLocaleString()} characters.`;
+
+		return e;
+	}
+
+	function focusFirstError(errs: Record<string, string>) {
+		const order = ['action_type', 'date', 'status', 'description', 'next_steps', 'notes'];
+		for (const f of order) {
+			if (errs[f]) {
+				const el = document.getElementById(f) as HTMLElement | null;
+				if (el) {
+					el.focus();
+					el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+					return;
+				}
+			}
+		}
+	}
+
+	async function refreshSession() {
+		refreshing = true;
+		try {
+			await loadSession();
+		} finally {
+			refreshing = false;
+		}
+	}
+
 	async function handleSubmit() {
-		if (!description) {
-			errorMsg = 'Description is required.';
+		errors = {};
+		formError = '';
+
+		const v = validate();
+		if (Object.keys(v).length > 0) {
+			errors = v;
+			focusFirstError(v);
 			return;
 		}
+
 		saving = true;
-		errorMsg = '';
 		try {
 			await createCasework({
 				action_type: actionType,
-				description,
+				description: description.trim(),
 				date,
 				status,
-				next_steps: nextSteps,
-				notes,
+				next_steps: nextSteps.trim(),
+				notes: notes.trim(),
 				persons: selectedPersons,
 			});
 			goto(`${base}/casework`);
 		} catch (e: any) {
-			errorMsg = e.message || 'Failed to save.';
+			if (e instanceof ApiError) {
+				if (e.isValidation && Object.keys(e.fieldErrors).length > 0) {
+					const mapped: Record<string, string> = {};
+					for (const [k, msgs] of Object.entries(e.fieldErrors)) {
+						mapped[mapServerField(k)] = msgs[0];
+					}
+					errors = mapped;
+					focusFirstError(mapped);
+				} else if (e.isUnauthorized) {
+					formErrorKind = 'auth';
+					formError =
+						'Your session has expired, or you don’t have permission to add records. ' +
+						'Try refreshing your session — if that doesn’t work, log in again.';
+				} else if (e.isServer || e.status === 0) {
+					formErrorKind = 'server';
+					formError = e.message || 'The server hit a snag. Please try again in a moment.';
+				} else {
+					formErrorKind = 'other';
+					formError = e.message || 'Something went wrong. Please try again.';
+				}
+			} else {
+				formErrorKind = 'other';
+				formError = 'Something went wrong. Please try again.';
+			}
+		} finally {
+			saving = false;
 		}
-		saving = false;
 	}
+
+	// Live counts for character counters
+	const descCount = $derived(description.length);
+	const nextCount = $derived(nextSteps.length);
+	const notesCount = $derived(notes.length);
 </script>
 
 <svelte:head>
@@ -84,13 +199,46 @@
 			<h1>New Casework Record</h1>
 			<p class="form-intro">
 				Log an advocacy action — outreach, a legal filing, media engagement, or anything
-				else you've done for a case. Only the <em>description</em> is required; link the
+				else you’ve done for a case. Only the <em>description</em> is required; link the
 				person(s) it concerns at the bottom.
 			</p>
 		</header>
 
-		{#if errorMsg}
-			<div class="error-banner" role="alert">{errorMsg}</div>
+		<!-- ============== Top-level error banner (only auth / server / unknown) ============== -->
+		{#if formError}
+			<div
+				class="form-error-banner form-error-{formErrorKind}"
+				role="alert"
+				aria-live="assertive"
+			>
+				<div class="form-error-body">
+					<p class="form-error-message">{formError}</p>
+					{#if formErrorKind === 'auth'}
+						<div class="form-error-actions">
+							<button
+								type="button"
+								class="btn btn-secondary btn-sm"
+								onclick={refreshSession}
+								disabled={refreshing}
+							>
+								{refreshing ? 'Refreshing…' : 'Refresh session'}
+							</button>
+							<a
+								href="{base}/api/auth/login/?next={base}/casework/new"
+								class="btn btn-primary btn-sm"
+							>
+								Log in again
+							</a>
+						</div>
+					{/if}
+				</div>
+				<button
+					type="button"
+					class="form-error-dismiss"
+					aria-label="Dismiss error"
+					onclick={() => (formError = '')}
+				>×</button>
+			</div>
 		{/if}
 
 		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} novalidate>
@@ -103,32 +251,61 @@
 				<p class="form-section-desc">What kind of action, when, and where it stands.</p>
 
 				<div class="form-grid">
-					<div class="field">
+					<div class="field" class:has-error={errors.action_type}>
 						<label for="action_type">Action Type</label>
-						<select id="action_type" bind:value={actionType}>
-							<option value="outreach" disabled hidden>Select action type…</option>
+						<select
+							id="action_type"
+							bind:value={actionType}
+							onchange={() => clearError('action_type')}
+							aria-invalid={errors.action_type ? 'true' : 'false'}
+							aria-describedby={errors.action_type ? 'action_type-error' : 'action_type-help'}
+						>
 							{#each Object.entries(actionLabels) as [value, label]}
 								<option {value}>{label}</option>
 							{/each}
 						</select>
-						<p class="field-help">What category of advocacy was this?</p>
+						{#if errors.action_type}
+							<p class="field-error" id="action_type-error" role="alert">{errors.action_type}</p>
+						{:else}
+							<p class="field-help" id="action_type-help">What category of advocacy was this?</p>
+						{/if}
 					</div>
 
-					<div class="field">
+					<div class="field" class:has-error={errors.date}>
 						<label for="date">Date</label>
-						<input id="date" type="date" bind:value={date} />
-						<p class="field-help">When the action took place — defaults to today.</p>
+						<input
+							id="date"
+							type="date"
+							bind:value={date}
+							oninput={() => clearError('date')}
+							aria-invalid={errors.date ? 'true' : 'false'}
+							aria-describedby={errors.date ? 'date-error' : 'date-help'}
+						/>
+						{#if errors.date}
+							<p class="field-error" id="date-error" role="alert">{errors.date}</p>
+						{:else}
+							<p class="field-help" id="date-help">When the action took place — defaults to today.</p>
+						{/if}
 					</div>
 
-					<div class="field">
+					<div class="field" class:has-error={errors.status}>
 						<label for="status">Status</label>
-						<select id="status" bind:value={status}>
-							<option value="open" disabled hidden>Select status…</option>
+						<select
+							id="status"
+							bind:value={status}
+							onchange={() => clearError('status')}
+							aria-invalid={errors.status ? 'true' : 'false'}
+							aria-describedby={errors.status ? 'status-error' : 'status-help'}
+						>
 							<option value="open">Open</option>
 							<option value="in_progress">In Progress</option>
 							<option value="done">Done</option>
 						</select>
-						<p class="field-help">Open while it's still pending; done when complete.</p>
+						{#if errors.status}
+							<p class="field-error" id="status-error" role="alert">{errors.status}</p>
+						{:else}
+							<p class="field-help" id="status-help">Open while it’s still pending; done when complete.</p>
+						{/if}
 					</div>
 				</div>
 			</section>
@@ -143,21 +320,42 @@
 					A clear description of the action taken — what was done, with whom, and the outcome.
 				</p>
 
-				<div class="field">
+				<div class="field" class:has-error={errors.description}>
 					<label for="description">
 						Description <span class="required-mark" aria-hidden="true">*</span>
 					</label>
 					<textarea
 						id="description"
 						bind:value={description}
+						oninput={() => clearError('description')}
 						required
 						aria-required="true"
+						aria-invalid={errors.description ? 'true' : 'false'}
+						aria-describedby={[
+							errors.description ? 'description-error' : 'description-help',
+							'description-counter',
+						]
+							.filter(Boolean)
+							.join(' ')}
 						rows="5"
 						placeholder="What action was taken or needs to be taken?"
 					></textarea>
-					<p class="field-help">
-						Concrete details help the next advocate pick up where you left off.
-					</p>
+					<div class="field-meta">
+						{#if errors.description}
+							<p class="field-error" id="description-error" role="alert">{errors.description}</p>
+						{:else}
+							<p class="field-help" id="description-help">
+								Concrete details help the next advocate pick up where you left off.
+							</p>
+						{/if}
+						<p
+							id="description-counter"
+							class="char-counter"
+							class:over={descCount > MAX_FIELD}
+						>
+							{descCount.toLocaleString()} / {MAX_FIELD.toLocaleString()}
+						</p>
+					</div>
 				</div>
 			</section>
 
@@ -167,29 +365,63 @@
 					<span class="title-bar" aria-hidden="true"></span>
 					Follow-up
 				</h2>
-				<p class="form-section-desc">What's next, plus any private notes for fellow advocates.</p>
+				<p class="form-section-desc">What’s next, plus any private notes for fellow advocates.</p>
 
 				<div class="form-grid">
-					<div class="field">
+					<div class="field" class:has-error={errors.next_steps}>
 						<label for="next_steps">Next Steps</label>
 						<textarea
 							id="next_steps"
 							bind:value={nextSteps}
+							oninput={() => clearError('next_steps')}
 							rows="4"
 							placeholder="What should happen next?"
+							aria-invalid={errors.next_steps ? 'true' : 'false'}
+							aria-describedby={errors.next_steps ? 'next_steps-error' : 'next_steps-help'}
 						></textarea>
-						<p class="field-help">Open tasks or follow-ups — visible to fellow advocates.</p>
+						<div class="field-meta">
+							{#if errors.next_steps}
+								<p class="field-error" id="next_steps-error" role="alert">{errors.next_steps}</p>
+							{:else}
+								<p class="field-help" id="next_steps-help">
+									Open tasks or follow-ups — visible to fellow advocates.
+								</p>
+							{/if}
+							<p
+								class="char-counter"
+								class:over={nextCount > MAX_FIELD}
+							>
+								{nextCount.toLocaleString()} / {MAX_FIELD.toLocaleString()}
+							</p>
+						</div>
 					</div>
 
-					<div class="field">
+					<div class="field" class:has-error={errors.notes}>
 						<label for="notes">Internal Notes</label>
 						<textarea
 							id="notes"
 							bind:value={notes}
+							oninput={() => clearError('notes')}
 							rows="4"
 							placeholder="Anything sensitive only advocates should see"
+							aria-invalid={errors.notes ? 'true' : 'false'}
+							aria-describedby={errors.notes ? 'notes-error' : 'notes-help'}
 						></textarea>
-						<p class="field-help">Private to the casework team — never shown publicly.</p>
+						<div class="field-meta">
+							{#if errors.notes}
+								<p class="field-error" id="notes-error" role="alert">{errors.notes}</p>
+							{:else}
+								<p class="field-help" id="notes-help">
+									Private to the casework team — never shown publicly.
+								</p>
+							{/if}
+							<p
+								class="char-counter"
+								class:over={notesCount > MAX_FIELD}
+							>
+								{notesCount.toLocaleString()} / {MAX_FIELD.toLocaleString()}
+							</p>
+						</div>
 					</div>
 				</div>
 			</section>
@@ -204,6 +436,19 @@
 					<p class="form-section-desc">
 						Select the case file(s) this action relates to. Skip if not yet linked to a person.
 					</p>
+
+					{#if selectedPersons.length > 0}
+						<p class="linked-summary" aria-live="polite">
+							{selectedPersons.length}
+							{selectedPersons.length === 1 ? 'person' : 'people'} linked
+							<button
+								type="button"
+								class="link-button"
+								onclick={() => (selectedPersons = [])}
+								aria-label="Clear all linked persons"
+							>Clear</button>
+						</p>
+					{/if}
 
 					<div class="persons-grid" role="group" aria-label="Linked persons">
 						{#each persons as person (person.id)}
@@ -232,7 +477,7 @@
 
 			<!-- Submit -->
 			<div class="form-actions">
-				<p class="form-actions-note">You'll be returned to the casework list after saving.</p>
+				<p class="form-actions-note">You’ll be returned to the casework list after saving.</p>
 				<button type="submit" class="btn btn-primary submit-btn" disabled={saving}>
 					{#if saving}
 						<span class="spinner" aria-hidden="true"></span>
@@ -285,6 +530,71 @@
 		text-decoration: underline;
 		text-decoration-color: var(--color-primary-tint);
 		text-underline-offset: 3px;
+	}
+
+	/* === Top-level error banner (auth / server / unknown) === */
+	.form-error-banner {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		padding: 0.9rem 1rem;
+		margin-bottom: 1.5rem;
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-danger);
+		border-left: 4px solid var(--color-danger);
+		border-radius: var(--radius-input);
+		box-shadow: var(--shadow-card);
+	}
+	.form-error-auth {
+		border-color: var(--color-danger);
+		background: linear-gradient(
+			180deg,
+			rgba(217, 22, 22, 0.04),
+			var(--color-bg-white) 60%
+		);
+	}
+	.form-error-server {
+		border-color: #c97a0d;
+		background: linear-gradient(
+			180deg,
+			rgba(201, 122, 13, 0.05),
+			var(--color-bg-white) 60%
+		);
+		border-left-color: #c97a0d;
+	}
+	.form-error-body {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.form-error-message {
+		margin: 0 0 0.6rem 0;
+		color: var(--color-text);
+		font-size: 0.95rem;
+		line-height: 1.5;
+	}
+	.form-error-actions {
+		display: flex;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+	.btn-sm {
+		padding: 0.4rem 0.85rem;
+		font-size: 0.85rem;
+		min-width: 0;
+	}
+	.form-error-dismiss {
+		flex: 0 0 auto;
+		background: transparent;
+		border: 0;
+		color: var(--color-text-muted);
+		font-size: 1.4rem;
+		line-height: 1;
+		cursor: pointer;
+		padding: 0 0.25rem;
+		margin-left: auto;
+	}
+	.form-error-dismiss:hover {
+		color: var(--color-text);
 	}
 
 	/* === Section card — colored left bar + colored title === */
@@ -356,6 +666,48 @@
 		color: var(--color-text-muted);
 		line-height: 1.45;
 	}
+	.field-error {
+		margin: 0;
+		font-size: 0.82rem;
+		color: var(--color-danger);
+		font-weight: 500;
+		line-height: 1.4;
+		display: flex;
+		align-items: flex-start;
+		gap: 0.35rem;
+	}
+	.field-error::before {
+		content: '⚠';
+		flex: 0 0 auto;
+		font-size: 0.9rem;
+		line-height: 1.2;
+	}
+
+	/* Meta row — counter on the right, help/error on the left */
+	.field-meta {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+	}
+	.field-meta .field-help,
+	.field-meta .field-error {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.char-counter {
+		flex: 0 0 auto;
+		margin: 0;
+		font-size: 0.74rem;
+		color: var(--color-text-muted);
+		font-variant-numeric: tabular-nums;
+		line-height: 1.45;
+	}
+	.char-counter.over {
+		color: var(--color-danger);
+		font-weight: 600;
+	}
 
 	/* Inputs share one consistent look */
 	.field input,
@@ -412,6 +764,23 @@
 		background: var(--color-surface);
 		color: var(--color-text-muted);
 		cursor: not-allowed;
+	}
+
+	/* Error state on a field — red border + light red wash */
+	.field.has-error input,
+	.field.has-error select,
+	.field.has-error textarea {
+		border-color: var(--color-danger);
+		background: rgba(217, 22, 22, 0.03);
+	}
+	.field.has-error input:focus,
+	.field.has-error select:focus,
+	.field.has-error textarea:focus {
+		border-color: var(--color-danger);
+		box-shadow: 0 0 0 3px rgba(217, 22, 22, 0.15);
+	}
+	.field.has-error label {
+		color: var(--color-danger);
 	}
 
 	/* === Linked persons as interactive pills with visible check mark === */
@@ -503,6 +872,31 @@
 		box-shadow: 0 0 0 3px var(--color-primary-tint);
 	}
 
+	/* === Linked persons summary + clear link === */
+	.linked-summary {
+		margin: 0 0 0.75rem;
+		font-size: 0.85rem;
+		color: var(--color-primary);
+		font-weight: 600;
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+	}
+	.link-button {
+		background: transparent;
+		border: 0;
+		color: var(--color-primary-light);
+		font-size: 0.85rem;
+		font-weight: 500;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		cursor: pointer;
+		padding: 0;
+	}
+	.link-button:hover {
+		color: var(--color-primary);
+	}
+
 	/* === Submit actions === */
 	.form-actions {
 		display: flex;
@@ -566,6 +960,13 @@
 			text-align: center;
 		}
 		.submit-btn {
+			width: 100%;
+		}
+		.form-error-actions {
+			flex-direction: column;
+			align-items: stretch;
+		}
+		.form-error-actions .btn-sm {
 			width: 100%;
 		}
 	}
