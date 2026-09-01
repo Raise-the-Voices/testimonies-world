@@ -96,16 +96,40 @@ function flattenDrfError(body: unknown, status: number, statusText: string): {
 	};
 }
 
+/**
+ * Read Django's `csrftoken` cookie. Django sets it on the first safe
+ * request (e.g. /api/session/) and expects it back as `X-CSRFToken`
+ * on POST / PUT / PATCH / DELETE when using SessionAuthentication.
+ *
+ * Without this, every state-changing request fails Django's CSRF
+ * check and returns 403 — even for fully-authenticated users.
+ */
+function getCsrfToken(): string {
+	if (typeof document === 'undefined') return '';
+	const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+	return match ? decodeURIComponent(match[1]) : '';
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 	const url = `${API_BASE}${path}`;
+
+	const method = (options.method ?? 'GET').toUpperCase();
+	const stateChanging = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+
+	const headers: Record<string, string> = {
+		'Content-Type': 'application/json',
+		...(options.headers as Record<string, string> | undefined),
+	};
+	if (stateChanging) {
+		const csrf = getCsrfToken();
+		if (csrf) headers['X-CSRFToken'] = csrf;
+	}
+
 	let res: Response;
 	try {
 		res = await fetch(url, {
 			credentials: 'include',
-			headers: {
-				'Content-Type': 'application/json',
-				...options.headers,
-			},
+			headers,
 			...options,
 		});
 	} catch (e) {
