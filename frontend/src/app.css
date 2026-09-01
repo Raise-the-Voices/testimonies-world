@@ -136,8 +136,13 @@ h3 { font-size: 1.15rem; }
 	color: var(--color-text);
 	border: 1px solid var(--color-border);
 }
-.btn-secondary:hover {
+/* Reset color explicitly. Without this, .btn:hover's `color: var(--color-text-light)`
+   leaks through (specificity tie + later rule wins for bg only), making the
+   button disappear on hover because light text sits on a near-white background. */
+.btn-secondary:hover,
+.btn-secondary:focus-visible {
 	background: var(--color-bg);
+	color: var(--color-text);
 }
 
 /* === Design system: card animations + transitions === */
