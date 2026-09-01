@@ -275,7 +275,6 @@
 			<!-- ============== Section 1: Person Information ============== -->
 			<section class="form-section" aria-labelledby="sec-person">
 				<h2 id="sec-person" class="form-section-title">
-					<span class="title-bar" aria-hidden="true"></span>
 					Person Information
 				</h2>
 				<p class="form-section-desc">Basic identifying details about the person.</p>
@@ -349,8 +348,8 @@
 					<div class="field">
 						<label for="rough_location">
 							Location
-							<span class="privacy-dot privacy-dot-public" aria-label="Public"></span>
-							<span class="visually-hidden">(public)</span>
+							
+							<span class="field-tag">public</span>
 						</label>
 						<input
 							id="rough_location"
@@ -363,8 +362,8 @@
 					<div class="field">
 						<label for="precise_location">
 							Precise Location
-							<span class="privacy-dot privacy-dot-private" aria-label="Private"></span>
-							<span class="visually-hidden">(private)</span>
+							
+							<span class="field-tag">private</span>
 						</label>
 						<input
 							id="precise_location"
@@ -405,7 +404,6 @@
 			<!-- ============== Section 2: Summary & Categories ============== -->
 			<section class="form-section" aria-labelledby="sec-summary">
 				<h2 id="sec-summary" class="form-section-title">
-					<span class="title-bar" aria-hidden="true"></span>
 					Summary &amp; Categories
 				</h2>
 				<p class="form-section-desc">A short overview and the categories that apply to this case.</p>
@@ -431,13 +429,6 @@
 							<div class="categories-grid" role="group" aria-label="Categories">
 								{#each categories as cat (cat.id)}
 									<label class="category-pill" class:is-selected={selectedCategories.includes(cat.id)}>
-										<span class="category-check" aria-hidden="true">
-											{#if selectedCategories.includes(cat.id)}
-												<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-													<polyline points="20 6 9 17 4 12" />
-												</svg>
-											{/if}
-										</span>
 										<input
 											type="checkbox"
 											checked={selectedCategories.includes(cat.id)}
@@ -455,7 +446,6 @@
 			<!-- ============== Section 3: Initial Report ============== -->
 			<section class="form-section" aria-labelledby="sec-report">
 				<h2 id="sec-report" class="form-section-title">
-					<span class="title-bar" aria-hidden="true"></span>
 					Initial Report
 				</h2>
 				<p class="form-section-desc">The first testimony or report about this person — what happened, and what's known.</p>
@@ -475,8 +465,8 @@
 					<div class="field">
 						<label for="source_attr">
 							Source Attribution
-							<span class="privacy-dot privacy-dot-public" aria-label="Public"></span>
-							<span class="visually-hidden">(public)</span>
+							
+							<span class="field-tag">public</span>
 						</label>
 						<input
 							id="source_attr"
@@ -489,8 +479,8 @@
 					<div class="field">
 						<label for="reporter_name">
 							Reporter Name
-							<span class="privacy-dot privacy-dot-private" aria-label="Private"></span>
-							<span class="visually-hidden">(private)</span>
+							
+							<span class="field-tag">private</span>
 						</label>
 						<input
 							id="reporter_name"
@@ -504,8 +494,8 @@
 					<div class="field">
 						<label for="reporter_contact">
 							Reporter Contact
-							<span class="privacy-dot privacy-dot-private" aria-label="Private"></span>
-							<span class="visually-hidden">(private)</span>
+							
+							<span class="field-tag">private</span>
 						</label>
 						<input
 							id="reporter_contact"
@@ -692,15 +682,8 @@
 		color: var(--color-danger);
 		font-weight: 500;
 		line-height: 1.4;
-		display: flex;
-		align-items: flex-start;
-		gap: 0.35rem;
-	}
-	.field-error::before {
-		content: '⚠';
-		flex: 0 0 auto;
-		font-size: 0.9rem;
-		line-height: 1.2;
+		/* Just red text — no warning glyph. The danger color + field-has-error
+		   wash is enough signal; adding ⚠ made the page feel alert-heavy. */
 	}
 
 	/* Meta row — counter on the right, help/error on the left */
@@ -784,22 +767,12 @@
 		margin-bottom: 1.5rem;
 	}
 	.form-section-title {
-		display: flex;
-		align-items: center;
-		gap: 0.65rem;
 		margin: 0 0 0.4rem 0;
 		color: var(--color-primary);
 		font-size: 1.2rem;
 		font-weight: 700;
 		letter-spacing: -0.005em;
 		line-height: 1.3;
-	}
-	.title-bar {
-		display: inline-block;
-		width: 22px;
-		height: 2px;
-		background: var(--color-primary);
-		border-radius: 2px;
 	}
 	.form-section-desc {
 		margin: 0 0 1.25rem 0;
@@ -843,22 +816,17 @@
 		margin-left: 0.1rem;
 	}
 
-	/* Privacy dot — small colored circle after the label.
-	   Green dot = public, red dot = private. */
-	.privacy-dot {
+	/* Small inline tag that sits next to a field label — "public" or "private".
+	   Replaces the colored dot that used to live here. Plain, readable,
+	   no decoration. */
+	.field-tag {
 		display: inline-block;
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		flex: 0 0 8px;
-	}
-	.privacy-dot-public {
-		background: var(--color-success);
-		box-shadow: 0 0 0 3px rgba(47, 133, 90, 0.18);
-	}
-	.privacy-dot-private {
-		background: var(--color-danger);
-		box-shadow: 0 0 0 3px rgba(217, 22, 22, 0.18);
+		margin-left: 0.35rem;
+		font-size: 0.72rem;
+		font-weight: 500;
+		color: var(--color-text-muted);
+		text-transform: lowercase;
+		letter-spacing: 0.02em;
 	}
 
 	.field-help {
@@ -961,34 +929,9 @@
 		font-weight: 600;
 	}
 
-	/* Visible check indicator — an empty box that fills with
-	   primary color and a white check when selected. */
-	.category-check {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 18px;
-		height: 18px;
-		border: 1.5px solid var(--color-border-light);
-		border-radius: 4px;
-		background: var(--color-bg-white);
-		color: transparent;
-		flex: 0 0 18px;
-		transition:
-			background 0.15s ease,
-			border-color 0.15s ease,
-			color 0.15s ease;
-	}
-	.category-pill.is-selected .category-check {
-		background: var(--color-primary);
-		border-color: var(--color-primary);
-		color: white;
-	}
-	.category-pill:hover .category-check {
-		border-color: var(--color-primary-light);
-	}
-
-	/* Native checkbox hidden but accessible */
+	/* Native checkbox hidden but accessible. Selection is signalled by
+	   the .is-selected background + border + weight on the pill itself —
+	   no separate check-mark icon. */
 	.category-pill input[type='checkbox'] {
 		position: absolute;
 		width: 1px;
@@ -1000,8 +943,7 @@
 		white-space: nowrap;
 		border: 0;
 	}
-	.category-pill input[type='checkbox']:focus-visible + .category-check,
-	.category-pill:focus-within .category-check {
+	.category-pill:focus-within {
 		outline: none;
 		box-shadow: 0 0 0 3px var(--color-primary-tint);
 	}
@@ -1090,7 +1032,6 @@
 		.field select,
 		.field textarea,
 		.category-pill,
-		.category-check,
 		.spinner {
 			transition: none;
 			animation: none;
