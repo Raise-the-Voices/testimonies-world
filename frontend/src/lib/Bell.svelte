@@ -3,6 +3,7 @@
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { user, isAdvocate } from '$lib/session';
+	import Icon from '$lib/Icon.svelte';
 	import {
 		getUnreadCount,
 		getNotifications,
@@ -135,7 +136,9 @@
 			aria-expanded={open}
 			onclick={toggle}
 		>
-			<span class="bell-icon" aria-hidden="true">◔</span>
+			<span class="bell-icon" aria-hidden="true">
+				<Icon name="envelope" size={20} />
+			</span>
 			{#if unread > 0}
 				<span class="bell-badge" aria-label="{unread} unread">{unread}</span>
 			{/if}
@@ -206,9 +209,9 @@
 		background: rgba(0, 0, 0, 0.32);
 	}
 	.bell-icon {
-		font-family: 'Georgia', serif;
-		font-size: 1.1rem;
-		line-height: 1;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 	}
 	.bell-badge {
 		position: absolute;
