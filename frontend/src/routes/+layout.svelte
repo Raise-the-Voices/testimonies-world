@@ -2,6 +2,7 @@
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { user, loadSession, isVolunteer, isAdvocate } from '$lib/session';
+	import Bell from '$lib/Bell.svelte';
 	import '../app.css';
 	import { page } from '$app/stores';
 
@@ -32,6 +33,7 @@
 					<li><a href="{base}/contacts" class:active={$page.url.pathname.startsWith(`${base}/contacts`)}>Contacts</a></li>
 				{/if}
 				{#if currentUser.authenticated}
+					<li class="nav-bell"><Bell /></li>
 					<li><span class="nav-avatar" title={currentUser.username}>{currentUser.username?.charAt(0).toUpperCase()}</span></li>
 				{:else}
 					<li><a href="{base}/accounts/google/login/?next={base}/">Login</a></li>
@@ -131,6 +133,10 @@
 		padding: 20px;
 		color: rgba(250, 250, 250, 0.7);
 		font-size: 0.85em;
+	}
+	.nav-bell {
+		display: inline-flex;
+		align-items: center;
 	}
 	.nav-avatar {
 		display: inline-flex;
