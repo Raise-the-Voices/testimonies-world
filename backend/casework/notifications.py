@@ -10,6 +10,7 @@ readable in one place. If this grows, split into:
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Iterable, Optional
@@ -17,7 +18,7 @@ from typing import Iterable, Optional
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -289,11 +290,38 @@ def emit_event(event: NotificationEvent) -> list[Notification]:
 
     if email_targets.exists():
         recipients_for_email = list(email_targets)
-        transaction.on_commit(lambda: _dispatch_email(event, recipients_for_email))
+        # Run the SMTP send off the request thread. Django's
+        # transaction.on_commit fires callbacks synchronously inside the
+        # thread that committed, so the HTTP response would block on the
+        # SMTP handshake (often 1–5s against a remote provider). Wrapping
+        # in a daemon thread puts that latency on a worker so the POST
+        # returns as soon as the row is saved.
+        #
+        # In tests we wrap each test in an atomic block, so a sibling
+        # thread trying to write to the same DB collides with SQLite's
+        # single-writer model. Stay synchronous while inside any atomic
+        # block; only spawn the worker thread in the normal request path.
+        transaction.on_commit(
+            lambda: _schedule_dispatch(event, recipients_for_email)
+        )
 
     return Notification.objects.filter(
         casework=event.record, kind=event.kind, created_at__gte=timezone.now() - timedelta(seconds=2)
     )
+
+
+def _schedule_dispatch(event: NotificationEvent, recipients: list) -> None:
+    """Run the email send on a worker thread when we're not already
+    inside an atomic block; otherwise run inline so tests (and other
+    callers using transaction.atomic()) keep deterministic behavior."""
+    if connection.in_atomic_block:
+        _dispatch_email(event, recipients)
+        return
+    threading.Thread(
+        target=_dispatch_email,
+        args=(event, recipients),
+        daemon=True,
+    ).start()
 
 
 def _dispatch_email(event: NotificationEvent, recipients: Iterable) -> None:
