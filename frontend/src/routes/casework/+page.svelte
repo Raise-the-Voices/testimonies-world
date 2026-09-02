@@ -700,6 +700,29 @@
 		color: var(--color-text);
 		font-size: 0.95rem;
 		line-height: 1.55;
+		/* Long pasted descriptions (or runs of dashes / paths with no
+		   spaces) would otherwise blow out the card and hide the
+		   Edit/Delete buttons. Wrap aggressively and cap the height
+		   with a scroll affordance for very long records. */
+		overflow-wrap: anywhere;
+		word-break: break-word;
+		max-height: 150px;
+		overflow-y: auto;
+		padding-right: 0.4rem;
+		/* Tabular scrollbar in Firefox; thin, neutral color in WebKit so
+		   it doesn't fight with the card border. */
+		scrollbar-width: thin;
+		scrollbar-color: var(--color-border-light) transparent;
+	}
+	.record-description::-webkit-scrollbar {
+		width: 6px;
+	}
+	.record-description::-webkit-scrollbar-thumb {
+		background: var(--color-border-light);
+		border-radius: 3px;
+	}
+	.record-description::-webkit-scrollbar-track {
+		background: transparent;
 	}
 	.record-meta {
 		margin: 0.3rem 0 0;
