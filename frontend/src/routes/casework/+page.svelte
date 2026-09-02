@@ -418,6 +418,11 @@
 							{#if record.performed_by_name}
 								<footer class="record-footer">
 									<span class="record-author"><span class="record-author-mark" aria-hidden="true">·</span> By {record.performed_by_name}</span>
+									{#if record.seen_by && record.seen_by.length > 0}
+										<span class="record-seen" aria-label="Seen by {record.seen_by.length} advocate{record.seen_by.length === 1 ? '' : 's'}">
+											· Seen by {record.seen_by.slice(0, 3).map((s: { name: string }) => s.name).join(', ')}{record.seen_by.length > 3 ? ` +${record.seen_by.length - 3}` : ''}
+										</span>
+									{/if}
 								</footer>
 							{/if}
 						</div>
@@ -710,6 +715,8 @@
 	.record-footer {
 		display: flex;
 		justify-content: flex-end;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.6rem;
 		margin-top: 1rem;
 		padding-top: 0.6rem;
 		border-top: 1px solid var(--color-border-subtle);
@@ -723,6 +730,12 @@
 	.record-author-mark {
 		margin-right: 0.35rem;
 		opacity: 0.6;
+	}
+	.record-seen {
+		font-size: 0.78rem;
+		color: var(--color-text-muted);
+		font-weight: 500;
+		letter-spacing: 0.01em;
 	}
 
 	/* ============================================================
