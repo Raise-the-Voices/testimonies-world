@@ -12,7 +12,11 @@ from cases.views import (
     PersonViewSet,
     ReportViewSet,
 )
-from casework.views import CaseworkRecordViewSet
+from casework.views import (
+    CaseworkRecordViewSet,
+    NotificationViewSet,
+    UserPreferenceViewSet,
+)
 from contacts.views import ContactViewSet
 
 router = DefaultRouter()
@@ -22,6 +26,8 @@ router.register(r'media', MediaViewSet, basename='media')
 router.register(r'categories', CaseCategoryViewSet, basename='category')
 router.register(r'relationships', FamilyRelationshipViewSet, basename='relationship')
 router.register(r'casework', CaseworkRecordViewSet, basename='casework')
+router.register(r'notifications', NotificationViewSet, basename='notification')
+router.register(r'preferences', UserPreferenceViewSet, basename='preference')
 router.register(r'contacts', ContactViewSet, basename='contact')
 
 

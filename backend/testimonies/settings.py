@@ -90,6 +90,21 @@ DATABASES = {
     }
 }
 
+# The shared dev Postgres user lacks CREATEDB, and the schema is portable
+# (no PG-specific features), so the test runner swaps to SQLite. Detect
+# `manage.py test` via sys.argv; opt out with USE_POSTGRES_FOR_TESTS=1
+# (e.g. in CI with a superuser). NAME is a string here so Django's PG
+# connection code never tries to parse it as a SQL identifier.
+import sys as _sys
+if (
+    'test' in _sys.argv
+    and not config('USE_POSTGRES_FOR_TESTS', default=False, cast=bool)
+):
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': str(BASE_DIR / 'test_db.sqlite3'),
+    }
+
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -129,6 +144,28 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Sites framework (required by allauth)
 SITE_ID = 1
+
+# Email — used by casework notifications. Console backend in dev prints to
+# stdout (look for "Subject:" lines). In prod set EMAIL_BACKEND=django.core
+# mail.backends.smtp.EmailBackend plus host/port/user/password via .env.
+# Never commit SMTP credentials.
+EMAIL_BACKEND = config(
+    'EMAIL_BACKEND',
+    default='django.core.mail.backends.console.EmailBackend',
+)
+EMAIL_HOST = config('EMAIL_HOST', default='')
+EMAIL_PORT = config('EMAIL_PORT', default='587', cast=int)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+DEFAULT_FROM_EMAIL = config(
+    'DEFAULT_FROM_EMAIL',
+    default='Testimonies.world <noreply@linkedtrust.us>',
+)
+
+# Public base URL used in notification email bodies. Honored by the
+# casework notifications module — keep this in sync with the deploy target.
+SITE_URL = config('SITE_URL', default='https://demos.linkedtrust.us/testimonies')
 
 # DRF
 REST_FRAMEWORK = {

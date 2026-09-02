@@ -163,6 +163,7 @@ export interface CaseworkRecord {
 	notes?: string;
 	performed_by_name?: string;
 	persons?: number[];
+	seen_by?: Array<{ name: string; at: string | null }>;
 }
 
 /* ============================================================================
