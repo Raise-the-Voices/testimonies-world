@@ -2,6 +2,7 @@
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { fly } from 'svelte/transition';
 	import { user, isAdvocate } from '$lib/session';
 	import { getCasework, deleteCasework } from '$lib/api';
 	import Skeleton from '$lib/Skeleton.svelte';
@@ -37,9 +38,21 @@
 		}
 	}
 
-	// Banner state — sourced from URL on mount, can be set directly too
+	// Banner state — sourced from URL on mount, can be set directly too.
+	// Auto-dismisses after BANNER_TTL_MS unless the X button clears it
+	// sooner. Re-showing the banner (e.g. after a second save) resets the
+	// timer via the $effect cleanup.
 	let bannerMsg = $state('');
 	let bannerKind = $state<'success' | 'error'>('success');
+	const BANNER_TTL_MS = 3500;
+
+	$effect(() => {
+		if (!bannerMsg) return;
+		const id = setTimeout(() => {
+			bannerMsg = '';
+		}, BANNER_TTL_MS);
+		return () => clearTimeout(id);
+	});
 
 	const actionLabels: Record<string, string> = {
 		outreach: 'Outreach',
@@ -216,7 +229,11 @@
 		</header>
 
 		{#if bannerMsg}
-			<div class="banner banner-{bannerKind}" role="status">
+			<div
+				class="banner banner-{bannerKind}"
+				role="status"
+				transition:fly={{ y: -8, duration: 220, opacity: 0 }}
+			>
 				<span class="banner-icon" aria-hidden="true">
 					{bannerKind === 'success' ? '✓' : '!'}
 				</span>
