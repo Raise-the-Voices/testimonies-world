@@ -24,6 +24,12 @@ class Contact(models.Model):
     whatsapp = models.CharField(max_length=50, blank=True, default='')
     notes = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
+    # Soft-delete tombstone. Contacts appear in historical casework
+    # narratives, so hard-deleting breaks provenance — we mark the row
+    # as removed and the viewset's get_queryset filters it out of the
+    # default response. Future PR can wire a separate "show deleted"
+    # admin view if needed.
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:
         ordering = ['name']
