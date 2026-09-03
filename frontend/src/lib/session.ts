@@ -28,3 +28,7 @@ export function isVolunteer(u: User): boolean {
 export function isAdvocate(u: User): boolean {
 	return u.authenticated && (hasGroup(u, 'Advocate') || u.is_staff === true);
 }
+
+export function isAdmin(u: User): boolean {
+	return u.authenticated && u.is_staff === true;
+}
