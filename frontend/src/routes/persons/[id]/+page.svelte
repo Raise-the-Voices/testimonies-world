@@ -404,13 +404,31 @@
 			{/if}
 
 			<div class="view-title media-section-header">
-				<span class="view-item-title">Media</span>
+				<div class="media-section-header-text">
+					<svg class="media-section-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+						<path
+							fill="currentColor"
+							d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6zm2 0v.4l1.6-.9 2.4 1.6 4.8-3 3.2 2V6H6zm12 2.7-3.2-2-4.8 3-2.4-1.6L6 9.4V18h12V8.7zM10 13a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"
+						/>
+					</svg>
+					<span class="view-item-title">Media</span>
+					{#if mediaList.length > 0}
+						<span class="media-section-count" aria-label="{mediaList.length} items">
+							{mediaList.length}
+						</span>
+					{/if}
+				</div>
 				{#if isVolunteer(currentUser) && person}
 					<button
 						type="button"
-						class="btn btn-secondary btn-sm"
+						class="btn btn-secondary btn-sm media-add-btn"
 						onclick={openUpload}
-					>+ Add media</button>
+					>
+						<svg class="media-add-btn-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+							<path fill="currentColor" d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z" />
+						</svg>
+						Add media
+					</button>
 				{/if}
 			</div>
 
@@ -1076,7 +1094,62 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		gap: 0.85rem;
+		/* Override .view-title's `border-bottom: 1px solid black` (legacy bug)
+		   so the header bar reads as one continuous primary surface. */
+		border-bottom: 1px solid var(--color-primary-light);
+		padding: 0.55rem 0.85rem;
+	}
+	.media-section-header-text {
+		display: inline-flex;
+		align-items: center;
 		gap: 0.5rem;
+	}
+	.media-section-icon {
+		color: var(--color-text-light);
+		opacity: 0.92;
+		flex-shrink: 0;
+	}
+	.media-section-count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 22px;
+		height: 22px;
+		padding: 0 0.5rem;
+		border-radius: 999px;
+		background: var(--color-text-light);
+		color: var(--color-primary);
+		font-size: 0.74rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		line-height: 1;
+	}
+
+	/* Add media button — secondary on the dark header surface. Subtle hover
+	   lift + icon scale for tactile feedback. */
+	.media-add-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		transition:
+			transform 0.15s ease,
+			box-shadow 0.15s ease,
+			background 0.15s ease,
+			border-color 0.15s ease;
+	}
+	.media-add-btn:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+	}
+	.media-add-btn:active {
+		transform: translateY(0);
+	}
+	.media-add-btn-icon {
+		transition: transform 0.15s ease;
+	}
+	.media-add-btn:hover .media-add-btn-icon {
+		transform: scale(1.15);
 	}
 
 	.media-skeleton {
@@ -1106,16 +1179,28 @@
 
 	/* Type + visibility pills inside the existing media-item-card layout */
 	.media-item-type {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.15rem 0.55rem;
+		border-radius: 999px;
+		background: var(--color-surface);
+		color: var(--color-primary);
+		border: 1px solid var(--color-border-light);
+		font-weight: 700;
 		text-transform: capitalize;
+		letter-spacing: 0.06rem;
+		line-height: 1.2;
+		box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
 	}
 	.media-item-visibility {
-		padding: 0.15rem 0.55rem;
+		padding: 0.2rem 0.6rem;
 		border-radius: 999px;
 		font-size: 0.72rem;
 		font-weight: 600;
 		text-transform: uppercase;
-		letter-spacing: 0.04rem;
+		letter-spacing: 0.06rem;
 		line-height: 1.2;
+		box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
 	}
 	.media-item-visibility.visibility-public {
 		background: #c6f6d5;
@@ -1130,11 +1215,75 @@
 		color: #742a2a;
 	}
 
+	/* Card hover — subtle lift to invite interaction */
+	.media-item-card {
+		transition:
+			box-shadow 0.15s ease,
+			border-color 0.15s ease;
+	}
+	.media-item-card:hover {
+		box-shadow: var(--shadow-card-hover);
+		border-color: var(--color-primary-light);
+	}
+
+	/* Action group — soft top divider gives the buttons visual weight */
 	.media-item-actions {
 		display: flex;
-		gap: 0.35rem;
-		margin-top: 0.55rem;
+		gap: 0.5rem;
+		margin-top: 0.6rem;
+		padding-top: 0.6rem;
+		border-top: 1px solid var(--color-border-subtle);
 		justify-content: flex-end;
+	}
+
+	/* Row actions (Edit / Delete) — `.row-action` is scoped to /contacts/+page.svelte
+	   so we re-define it here for this page. Always-visible subtle surface;
+	   primary tint on hover; distinct danger variant for delete. */
+	.row-action {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: var(--radius-card);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border-light);
+		color: var(--color-primary);
+		cursor: pointer;
+		padding: 0;
+		transition:
+			background 0.15s ease,
+			color 0.15s ease,
+			border-color 0.15s ease,
+			box-shadow 0.15s ease;
+	}
+	.row-action:hover {
+		background: var(--color-primary-tint);
+		color: var(--color-primary);
+		border-color: var(--color-primary-light);
+		box-shadow: var(--focus-ring);
+	}
+	.row-action:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+	}
+	.row-action-danger {
+		color: var(--color-danger);
+	}
+	.row-action-danger:hover {
+		background: rgba(217, 22, 22, 0.12);
+		color: var(--color-danger);
+		border-color: var(--color-danger);
+		box-shadow: 0 0 0 3px rgba(217, 22, 22, 0.18);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.media-item-card,
+		.media-add-btn,
+		.row-action,
+		.media-add-btn-icon {
+			transition: none;
+		}
 	}
 
 	/* Modal — shared styles used by both MediaUploadModal (mounted) and
