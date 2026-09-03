@@ -2,6 +2,7 @@ import { base } from '$app/paths';
 import type {
 	CaseworkRecord,
 	Contact,
+	Media,
 	Paginated,
 	Person,
 	PersonCategory,
@@ -118,10 +119,18 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 	const method = (options.method ?? 'GET').toUpperCase();
 	const stateChanging = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
 
-	const headers: Record<string, string> = {
-		'Content-Type': 'application/json',
-		...(options.headers as Record<string, string> | undefined),
-	};
+	// For FormData uploads we MUST NOT set Content-Type ourselves — the
+	// browser needs to add the multipart boundary header itself, and a
+	// caller-supplied Content-Type without a boundary would silently
+	// drop the file on the floor. Detect FormData and skip the default.
+	const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+
+	const headers: Record<string, string> = isFormData
+		? { ...(options.headers as Record<string, string> | undefined) }
+		: {
+				'Content-Type': 'application/json',
+				...(options.headers as Record<string, string> | undefined),
+			};
 	if (stateChanging) {
 		const csrf = getCsrfToken();
 		if (csrf) headers['X-CSRFToken'] = csrf;
@@ -291,6 +300,44 @@ export async function updateContact(
 
 export async function deleteContact(id: number | string): Promise<void> {
 	await request<null>(`/contacts/${id}/`, {
+		method: 'DELETE',
+	});
+}
+
+/* --- Media -----------------------------------------------------------------
+   File uploads use multipart/form-data so the browser sets the boundary
+   correctly — we deliberately do NOT set Content-Type ourselves on these.
+   The generic request() helper detects FormData and strips its
+   Content-Type so the browser can supply the right multipart boundary.
+*/
+
+export async function getMedia(
+	params: Record<string, string> = {},
+): Promise<Paginated<Media> | Media[]> {
+	const qs = new URLSearchParams(params).toString();
+	return request<Paginated<Media> | Media[]>(`/media/${qs ? '?' + qs : ''}`);
+}
+
+export async function getMediaItem(id: number | string): Promise<Media> {
+	return request<Media>(`/media/${id}/`);
+}
+
+export async function uploadMedia(formData: FormData): Promise<Media> {
+	return request<Media>('/media/', {
+		method: 'POST',
+		body: formData,
+	});
+}
+
+export async function updateMedia(id: number | string, formData: FormData): Promise<Media> {
+	return request<Media>(`/media/${id}/`, {
+		method: 'PATCH',
+		body: formData,
+	});
+}
+
+export async function deleteMedia(id: number | string): Promise<void> {
+	await request<null>(`/media/${id}/`, {
 		method: 'DELETE',
 	});
 }

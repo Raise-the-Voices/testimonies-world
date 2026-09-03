@@ -2,11 +2,27 @@
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
-	import { getPerson } from '$lib/api';
-	import { user, isVolunteer } from '$lib/session';
+	import { getPerson, getMedia, deleteMedia } from '$lib/api';
+	import { user, isVolunteer, isAdvocate } from '$lib/session';
 	import StatusBadge from '$lib/StatusBadge.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
-	import type { Person } from '$lib/types';
+	import MediaUploadModal from '$lib/MediaUploadModal.svelte';
+	import type { Media, Person } from '$lib/types';
+
+	let currentUser = $derived($user);
+	let mediaList = $state<Media[]>([]);
+	let loadingMedia = $state(true);
+	let mediaError = $state('');
+	let uploadOpen = $state(false);
+	let editTarget = $state<Media | null>(null);
+	let deleteTarget = $state<Media | null>(null);
+	let deleting = $state(false);
+	let deleteError = $state('');
+
+	// Permission helper: only advocates+admin can put media in the
+	// 'sensitive' tier. Mirrors backend `_can_mark_sensitive` in
+	// cases/views.py.
+	const canMarkSensitive = $derived(isAdvocate(currentUser));
 
 	// Source-type display labels (mirror backend Report.SourceType.choices)
 	const sourceTypeLabels: Record<string, string> = {
@@ -14,6 +30,20 @@
 		secondhand: 'Secondhand',
 		news: 'News',
 		document: 'Document',
+	};
+
+	// Media type / visibility display labels — mirror backend
+	// Media.MediaType + Media.Visibility.
+	const mediaTypeLabels: Record<string, string> = {
+		photo: 'Photo',
+		video: 'Video',
+		document: 'Document',
+		link: 'External link',
+	};
+	const visibilityLabels: Record<string, string> = {
+		public: 'Public',
+		restricted: 'Restricted',
+		sensitive: 'Sensitive',
 	};
 
 	// URL extraction — finds http(s):// and bare www. links in narrative text,
@@ -92,7 +122,6 @@
 	let loading = $state(true);
 	let error: string = $state('');
 	let expandedId: number | null = $state(null);
-	let currentUser = $derived($user);
 
 	const medicalLabels: Record<string, string> = {
 		unknown: 'Unknown',
@@ -107,10 +136,73 @@
 		error = '';
 		try {
 			person = await getPerson(page.params.id!);
+			// Reload media with the freshly-loaded person in scope.
+			await loadMedia();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : 'Failed to load case.';
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadMedia() {
+		if (!person) return;
+		loadingMedia = true;
+		mediaError = '';
+		try {
+			const data = await getMedia({ person: String(person.id) });
+			mediaList = Array.isArray(data) ? data : data.results ?? [];
+		} catch (e: unknown) {
+			mediaError =
+				e instanceof Error ? e.message : 'Failed to load media for this case.';
+			mediaList = [];
+		} finally {
+			loadingMedia = false;
+		}
+	}
+
+	function openUpload() {
+		editTarget = null;
+		uploadOpen = true;
+	}
+
+	function openEdit(m: Media) {
+		editTarget = m;
+		uploadOpen = true;
+	}
+
+	function onMediaSaved(saved: Media) {
+		// Upsert: if we already have this row (edit case), replace; else add.
+		const idx = mediaList.findIndex((m) => m.id === saved.id);
+		if (idx >= 0) {
+			mediaList[idx] = saved;
+		} else {
+			mediaList = [saved, ...mediaList];
+		}
+	}
+
+	function startDelete(m: Media) {
+		deleteTarget = m;
+		deleteError = '';
+	}
+
+	function cancelDelete() {
+		deleteTarget = null;
+		deleteError = '';
+	}
+
+	async function confirmDelete() {
+		if (!deleteTarget) return;
+		deleting = true;
+		try {
+			await deleteMedia(deleteTarget.id);
+			mediaList = mediaList.filter((m) => m.id !== deleteTarget!.id);
+			deleteTarget = null;
+		} catch (e: unknown) {
+			deleteError =
+				e instanceof Error ? e.message : "Couldn't delete that media item.";
+		} finally {
+			deleting = false;
 		}
 	}
 
@@ -311,12 +403,38 @@
 				<p class="muted mt-1">No reports yet.</p>
 			{/if}
 
-			{#if person.media_files && person.media_files.length > 0}
-				<div class="view-title">
-					<span class="view-item-title">Media</span>
+			<div class="view-title media-section-header">
+				<span class="view-item-title">Media</span>
+				{#if isVolunteer(currentUser) && person}
+					<button
+						type="button"
+						class="btn btn-secondary btn-sm"
+						onclick={openUpload}
+					>+ Add media</button>
+				{/if}
+			</div>
+
+			{#if loadingMedia}
+				<div class="media-skeleton">
+					<Skeleton variant="card" />
+					<Skeleton variant="card" />
 				</div>
+			{:else if mediaError}
+				<div class="media-error" role="alert">
+					<p>{mediaError}</p>
+					<button type="button" class="btn btn-secondary btn-sm" onclick={loadMedia}>Retry</button>
+				</div>
+			{:else if mediaList.length === 0}
+				<div class="media-empty">
+					<p class="muted">
+						{isVolunteer(currentUser)
+							? 'No media attached yet. Click "+ Add media" to upload a file or link an external source.'
+							: 'No media attached yet.'}
+					</p>
+				</div>
+			{:else}
 				<div class="media-list fade-in-stagger">
-					{#each person.media_files as media (media.id)}
+					{#each mediaList as media (media.id)}
 						<div class="media-item-card">
 							{#if media.media_type === 'photo' && media.file}
 								<img
@@ -327,10 +445,12 @@
 							{/if}
 							<div class="media-item-body">
 								<div class="media-item-meta">
-									<span class="media-item-type">{media.media_type}</span>
-									{#if media.visibility && media.visibility !== 'public'}
-										<span class="media-item-visibility">{media.visibility}</span>
-									{/if}
+									<span class="media-item-type media-type-{media.media_type}">
+										{mediaTypeLabels[media.media_type] || media.media_type}
+									</span>
+									<span class="media-item-visibility visibility-{media.visibility}">
+										{visibilityLabels[media.visibility] || media.visibility}
+									</span>
 								</div>
 								{#if media.description}
 									<p class="media-item-description">{media.description}</p>
@@ -342,9 +462,41 @@
 										rel="noopener noreferrer"
 										class="media-item-action"
 									>
-										<span>View Source</span>
+										<span>View source</span>
 										<span class="media-item-action-icon" aria-hidden="true">↗</span>
 									</a>
+								{/if}
+								{#if isVolunteer(currentUser)}
+									<div class="media-item-actions">
+										<button
+											type="button"
+											class="row-action"
+											aria-label="Edit {media.description || mediaTypeLabels[media.media_type]}"
+											title="Edit"
+											onclick={() => openEdit(media)}
+										>
+											<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+												<path
+													fill="currentColor"
+													d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+												/>
+											</svg>
+										</button>
+										<button
+											type="button"
+											class="row-action row-action-danger"
+											aria-label="Delete {media.description || mediaTypeLabels[media.media_type]}"
+											title="Delete"
+											onclick={() => startDelete(media)}
+										>
+											<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+												<path
+													fill="currentColor"
+													d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+												/>
+											</svg>
+										</button>
+									</div>
 								{/if}
 							</div>
 						</div>
@@ -499,6 +651,47 @@
 						<span class="meta-value">{new Date(person.updated_at).toLocaleDateString()}</span>
 					</div>
 				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Media upload / edit modal -->
+<MediaUploadModal
+	open={uploadOpen}
+	media={editTarget}
+	personId={person?.id}
+	hidePerson={true}
+	canMarkSensitive={canMarkSensitive}
+	onSaved={onMediaSaved}
+	onClose={() => (uploadOpen = false)}
+/>
+
+<!-- Delete media confirm dialog -->
+{#if deleteTarget}
+	<div class="modal-overlay" onclick={cancelDelete} role="presentation"></div>
+	<div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-media-title">
+		<header class="modal-header">
+			<h2 id="delete-media-title">Delete media?</h2>
+			<button type="button" class="modal-close" aria-label="Close" onclick={cancelDelete} disabled={deleting}>×</button>
+		</header>
+		<div class="modal-body">
+			{#if deleteError}
+				<div class="form-error" role="alert">
+					<span class="form-error-icon" aria-hidden="true">!</span>
+					<span>{deleteError}</span>
+				</div>
+			{/if}
+			<p>
+				This will permanently delete
+				<strong>{deleteTarget.description || mediaTypeLabels[deleteTarget.media_type] || 'this media item'}</strong>.
+				It cannot be recovered.
+			</p>
+			<div class="modal-actions">
+				<button type="button" class="btn btn-secondary" onclick={cancelDelete} disabled={deleting}>Cancel</button>
+				<button type="button" class="btn btn-danger" onclick={confirmDelete} disabled={deleting}>
+					{deleting ? 'Deleting…' : 'Delete'}
+				</button>
 			</div>
 		</div>
 	</div>
@@ -877,4 +1070,175 @@
 		margin: 0;
 		color: var(--color-text-muted);
 	}
+
+	/* === Media section: interactive gallery with edit / delete === */
+	.media-section-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+
+	.media-skeleton {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.media-empty {
+		padding: 0.5rem 0;
+	}
+	.media-empty .muted {
+		font-size: 0.9rem;
+		margin: 0;
+	}
+	.media-error {
+		padding: 0.6rem 0.85rem;
+		background: #fed7d7;
+		color: #c53030;
+		border: 1px solid #feb2b2;
+		border-radius: var(--radius-card);
+		font-size: 0.88rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.media-error p { margin: 0; flex: 1 1 auto; }
+
+	/* Type + visibility pills inside the existing media-item-card layout */
+	.media-item-type {
+		text-transform: capitalize;
+	}
+	.media-item-visibility {
+		padding: 0.15rem 0.55rem;
+		border-radius: 999px;
+		font-size: 0.72rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04rem;
+		line-height: 1.2;
+	}
+	.media-item-visibility.visibility-public {
+		background: #c6f6d5;
+		color: #22543d;
+	}
+	.media-item-visibility.visibility-restricted {
+		background: #fefcbf;
+		color: #744210;
+	}
+	.media-item-visibility.visibility-sensitive {
+		background: #fed7d7;
+		color: #742a2a;
+	}
+
+	.media-item-actions {
+		display: flex;
+		gap: 0.35rem;
+		margin-top: 0.55rem;
+		justify-content: flex-end;
+	}
+
+	/* Modal — shared styles used by both MediaUploadModal (mounted) and
+	   the inline delete-confirm dialog. Lives in this page's scope because
+	   the modal is only used here today; if a second page starts using
+	   modals, lift these to app.css. */
+	.modal-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.45);
+		backdrop-filter: blur(2px);
+		-webkit-backdrop-filter: blur(2px);
+		z-index: 80;
+	}
+	.modal {
+		position: fixed;
+		top: 1.25rem;
+		left: 50%;
+		transform: translateX(-50%);
+		width: calc(100% - 2rem);
+		max-width: 540px;
+		max-height: calc(100vh - 2.5rem);
+		overflow-y: auto;
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-light);
+		border-left: 3px solid var(--color-danger);
+		border-radius: var(--radius-card-lg);
+		box-shadow: var(--shadow-card-lg);
+		z-index: 90;
+		display: flex;
+		flex-direction: column;
+	}
+	.modal-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 1rem 1.25rem;
+		border-bottom: 1px solid var(--color-border-subtle);
+	}
+	.modal-header h2 {
+		margin: 0;
+		font-size: 1.1rem;
+		font-weight: 700;
+		color: var(--color-text);
+	}
+	.modal-close {
+		background: transparent;
+		border: none;
+		color: var(--color-text-muted);
+		font-size: 1.4rem;
+		line-height: 1;
+		padding: 0 0.25rem;
+		cursor: pointer;
+	}
+	.modal-close:hover { color: var(--color-text); }
+	.modal-close:disabled { opacity: 0.5; cursor: not-allowed; }
+
+	.modal-body {
+		padding: 1.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.85rem;
+	}
+
+	.modal-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.75rem;
+		padding-top: 0.5rem;
+		border-top: 1px solid var(--color-border-subtle);
+	}
+	.modal-actions .btn { min-width: 120px; }
+	.modal-actions .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+	.form-error {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.6rem 0.85rem;
+		background: #fed7d7;
+		color: #c53030;
+		border: 1px solid #feb2b2;
+		border-radius: var(--radius-card);
+		font-size: 0.88rem;
+	}
+	.form-error-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+		background: rgba(197, 48, 48, 0.2);
+		font-weight: 700;
+		font-size: 0.85rem;
+	}
+
+	.btn-sm {
+		padding: 0.4rem 0.85rem;
+		font-size: 0.82rem;
+	}
+	.btn-danger {
+		background: var(--color-danger);
+		color: var(--color-text-light);
+	}
+	.btn-danger:hover { background: #b71212; color: var(--color-text-light); }
 </style>
