@@ -114,6 +114,7 @@ export interface Person {
 	country: string;
 	rough_location?: string;
 	precise_location?: string;
+	medical_notes?: string;
 	current_status: StatusValue;
 	medical_status: MedicalStatus;
 	ethnicity?: string;
@@ -123,7 +124,8 @@ export interface Person {
 	summary_narrative?: string;
 	authoritative_source?: string;
 	authoritative_url?: string;
-	quality_tier?: string;
+	quality_tier?: 1 | 2 | 3 | null;
+	is_published?: boolean;
 	profile_image_url?: string | null;
 	report_count?: number;
 	categories?: PersonCategory[];
