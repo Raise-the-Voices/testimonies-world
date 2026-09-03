@@ -2,12 +2,12 @@
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
-	import { getPerson, getMedia, deleteMedia } from '$lib/api';
+	import { getPerson, getMedia, deleteMedia, deleteReport } from '$lib/api';
 	import { user, isVolunteer, isAdvocate } from '$lib/session';
 	import StatusBadge from '$lib/StatusBadge.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import MediaUploadModal from '$lib/MediaUploadModal.svelte';
-	import type { Media, Person } from '$lib/types';
+	import type { Media, Person, Report } from '$lib/types';
 
 	let currentUser = $derived($user);
 	let mediaList = $state<Media[]>([]);
@@ -18,6 +18,12 @@
 	let deleteTarget = $state<Media | null>(null);
 	let deleting = $state(false);
 	let deleteError = $state('');
+
+	/* Report delete state — mirrors the Media pattern but uses `report*`
+	   prefixes to avoid name collisions with the Media delete state above. */
+	let reportDeleteTarget = $state<Report | null>(null);
+	let reportDeleting = $state(false);
+	let reportDeleteError = $state('');
 
 	// Permission helper: only advocates+admin can put media in the
 	// 'sensitive' tier. Mirrors backend `_can_mark_sensitive` in
@@ -206,6 +212,39 @@
 		}
 	}
 
+	/* Report delete — optimistic remove from `person.reports`. The backend
+	   may return 403 if the current user isn't the author (and isn't staff /
+	   advocate); we surface that via `reportDeleteError` rather than silently
+	   hiding the buttons, so the user understands why the action failed. */
+	function startReportDelete(r: Report) {
+		reportDeleteTarget = r;
+		reportDeleteError = '';
+	}
+
+	function cancelReportDelete() {
+		reportDeleteTarget = null;
+		reportDeleteError = '';
+	}
+
+	async function confirmReportDelete() {
+		if (!reportDeleteTarget || !person) return;
+		reportDeleting = true;
+		try {
+			await deleteReport(reportDeleteTarget.id);
+			person.reports = (person.reports ?? []).filter(
+				(r) => r.id !== reportDeleteTarget!.id,
+			);
+			// If the user had this report's body open, collapse it.
+			if (expandedId === reportDeleteTarget.id) expandedId = null;
+			reportDeleteTarget = null;
+		} catch (e: unknown) {
+			reportDeleteError =
+				e instanceof Error ? e.message : "Couldn't delete that report.";
+		} finally {
+			reportDeleting = false;
+		}
+	}
+
 	onMount(loadPerson);
 </script>
 
@@ -328,26 +367,59 @@
 					{@const open = expandedId === report.id}
 					{@const title = report.source_attribution || sourceTypeLabels[report.source_type] || 'Report'}
 					<div class="incident-container">
-						<button
-							type="button"
-							class="report-card-header"
-							aria-expanded={open}
-							aria-controls="report-body-{report.id}"
-							onclick={() => (expandedId = open ? null : report.id)}
-						>
-							<span class="badge badge-source-{report.source_type}">
-								{sourceTypeLabels[report.source_type] || report.source_type}
-							</span>
-							<span class="report-card-title">{title}</span>
-							<span class="report-card-date small muted">
-								{#if report.date_start}
-									{report.date_start}{#if report.date_end} — {report.date_end}{/if}
-								{:else}
-									{new Date(report.created_at).toLocaleDateString()}
-								{/if}
-							</span>
-							<span class="report-card-chevron" class:open aria-hidden="true">▸</span>
-						</button>
+						<div class="report-card-header">
+							<button
+								type="button"
+								class="report-card-toggle"
+								aria-expanded={open}
+								aria-controls="report-body-{report.id}"
+								onclick={() => (expandedId = open ? null : report.id)}
+							>
+								<span class="badge badge-source-{report.source_type}">
+									{sourceTypeLabels[report.source_type] || report.source_type}
+								</span>
+								<span class="report-card-title">{title}</span>
+								<span class="report-card-date small muted">
+									{#if report.date_start}
+										{report.date_start}{#if report.date_end} — {report.date_end}{/if}
+									{:else}
+										{new Date(report.created_at).toLocaleDateString()}
+									{/if}
+								</span>
+								<span class="report-card-chevron" class:open aria-hidden="true">▸</span>
+							</button>
+							{#if isVolunteer(currentUser)}
+								<div class="report-card-actions" role="group" aria-label="Report actions">
+									<a
+										href="{base}/persons/{person.id}/report?id={report.id}"
+										class="row-action"
+										aria-label="Edit report: {title}"
+										title="Edit"
+									>
+										<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+											<path
+												fill="currentColor"
+												d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+											/>
+										</svg>
+									</a>
+									<button
+										type="button"
+										class="row-action row-action-danger"
+										aria-label="Delete report: {title}"
+										title="Delete"
+										onclick={() => startReportDelete(report)}
+									>
+										<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+											<path
+												fill="currentColor"
+												d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+											/>
+										</svg>
+									</button>
+								</div>
+							{/if}
+						</div>
 						{#if open}
 							<div id="report-body-{report.id}" class="report-card-body">
 								{#if report.rough_location}
@@ -709,6 +781,37 @@
 				<button type="button" class="btn btn-secondary" onclick={cancelDelete} disabled={deleting}>Cancel</button>
 				<button type="button" class="btn btn-danger" onclick={confirmDelete} disabled={deleting}>
 					{deleting ? 'Deleting…' : 'Delete'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Delete report confirm dialog — mirrors the media dialog but warns
+     about the Media FK cascade (cases/models.py: Media.report CASCADE). -->
+{#if reportDeleteTarget}
+	<div class="modal-overlay" onclick={cancelReportDelete} role="presentation"></div>
+	<div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-report-title">
+		<header class="modal-header">
+			<h2 id="delete-report-title">Delete report?</h2>
+			<button type="button" class="modal-close" aria-label="Close" onclick={cancelReportDelete} disabled={reportDeleting}>×</button>
+		</header>
+		<div class="modal-body">
+			{#if reportDeleteError}
+				<div class="form-error" role="alert">
+					<span class="form-error-icon" aria-hidden="true">!</span>
+					<span>{reportDeleteError}</span>
+				</div>
+			{/if}
+			<p>
+				This will permanently delete
+				<strong>{reportDeleteTarget.source_attribution || sourceTypeLabels[reportDeleteTarget.source_type] || 'this report'}</strong>
+				<strong>and any media attached to it</strong>. It cannot be recovered.
+			</p>
+			<div class="modal-actions">
+				<button type="button" class="btn btn-secondary" onclick={cancelReportDelete} disabled={reportDeleting}>Cancel</button>
+				<button type="button" class="btn btn-danger" onclick={confirmReportDelete} disabled={reportDeleting}>
+					{reportDeleting ? 'Deleting…' : 'Delete'}
 				</button>
 			</div>
 		</div>
@@ -1087,6 +1190,53 @@
 	.error-state-message {
 		margin: 0;
 		color: var(--color-text-muted);
+	}
+
+	/* === Reports: collapsible card with edit / delete row actions ===
+	   The header is a flex container holding a full-width toggle button
+	   (left) and a small action group (right). Restructured from a
+	   single <button> to a div+button so we can nest anchor/button
+	   siblings without violating the "no nested interactive elements"
+	   rule. The .incident-container provides the card chrome. */
+	.report-card-header {
+		display: flex;
+		align-items: stretch;
+		gap: 0.25rem;
+	}
+	.report-card-toggle {
+		flex: 1 1 auto;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0;
+		background: transparent;
+		border: none;
+		text-align: left;
+		cursor: pointer;
+		color: inherit;
+		font: inherit;
+	}
+	.report-card-toggle:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+		border-radius: var(--radius-card);
+	}
+	.report-card-actions {
+		display: flex;
+		gap: 0.4rem;
+		align-items: center;
+		flex: 0 0 auto;
+		padding-left: 0.5rem;
+	}
+	.report-card-chevron {
+		display: inline-block;
+		font-size: 0.85rem;
+		color: var(--color-text-muted);
+		transition: transform 0.15s ease;
+	}
+	.report-card-chevron.open {
+		transform: rotate(90deg);
 	}
 
 	/* === Media section: interactive gallery with edit / delete === */
