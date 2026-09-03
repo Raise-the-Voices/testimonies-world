@@ -79,9 +79,12 @@ export interface Report {
 	date_start?: string | null;
 	date_end?: string | null;
 	rough_location?: string;
+	precise_location?: string | null;
 	narrative: string;
 	suspected_reason?: string;
 	official_reason?: string;
+	is_private?: boolean;
+	created_by?: number | null;
 	created_at: string;
 	updated_at: string;
 	media_files?: Media[];

@@ -5,7 +5,8 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
-from .models import CaseCategory, FamilyRelationship, Media, Person, Report
+from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report
+from .permissions import IsVolunteer
 from .serializers import (
     CaseCategorySerializer,
     FamilyRelationshipSerializer,
@@ -168,7 +169,26 @@ class PersonViewSet(viewsets.ModelViewSet):
 
 
 class ReportViewSet(viewsets.ModelViewSet):
+    """Report CRUD.
+
+    Read access: anyone (anonymous included) can list + retrieve reports
+    on **published** persons where `is_private=False`. The default
+    `IsAuthenticatedOrReadOnly` already enforces write authentication.
+
+    Write access (create / update / destroy):
+        - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+        - Must be a Volunteer, Advocate, or staff (`IsVolunteer`).
+        - For update / destroy on an existing row, must additionally be
+          the report's author OR staff OR in the Advocate group.
+
+    Audit log: every update and destroy writes an `AuditLog` row with the
+    actor, the changed field list, and the request IP. Matches the
+    privacy model in CLAUDE.md (reports are the canonical narrative and
+    we want a paper trail of every correction).
+    """
+
     serializer_class = ReportSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
     filterset_fields = ['person', 'source_type', 'is_private']
     search_fields = ['narrative', 'source_attribution']
     ordering_fields = ['date_start', 'created_at']
@@ -179,8 +199,76 @@ class ReportViewSet(viewsets.ModelViewSet):
             qs = qs.filter(is_private=False, person__is_published=True)
         return qs
 
+    # --- Authorship gate -------------------------------------------------
+
+    def _user_can_modify(self, user, instance: Report) -> bool:
+        """Staff and Advocates can modify any report. Volunteers can only
+        modify their own. Returns False for everyone else."""
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_staff:
+            return True
+        if user.groups.filter(name='Advocate').exists():
+            return True
+        return instance.created_by_id == user.id
+
+    # --- Audit log helpers (mirror contacts/views.py) --------------------
+
+    def _client_ip(self) -> str | None:
+        xff = self.request.META.get('HTTP_X_FORWARDED_FOR')
+        if xff:
+            return xff.split(',')[0].strip()
+        return self.request.META.get('REMOTE_ADDR')
+
+    def _audit(self, action: str, instance: Report, details: str = '') -> None:
+        AuditLog.objects.create(
+            user=self.request.user if self.request.user.is_authenticated else None,
+            action=action,
+            target_type='report',
+            target_id=instance.pk,
+            details=details,
+            ip_address=self._client_ip(),
+        )
+
+    # --- Write hooks -----------------------------------------------------
+
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        instance = serializer.save(created_by=self.request.user)
+        self._audit(AuditLog.Action.EDITED, instance, 'created')
+
+    def perform_update(self, serializer):
+        # Authorship gate (must run BEFORE save() so the failure doesn't
+        # partially apply).
+        if not self._user_can_modify(self.request.user, serializer.instance):
+            raise PermissionDenied(
+                'Only the report author, an advocate, or staff can edit this report.'
+            )
+        # Capture the field-level delta so the audit row tells us what
+        # actually changed, not just that something did.
+        before = {f: getattr(serializer.instance, f) for f in serializer.fields}
+        instance = serializer.save()
+        after = {f: getattr(instance, f) for f in serializer.fields}
+        changed = [
+            f for f in before
+            if str(before[f]) != str(after[f])
+        ]
+        details = f'updated fields: {", ".join(changed) or "(none)"}'
+        self._audit(AuditLog.Action.EDITED, instance, details)
+
+    def perform_destroy(self, instance):
+        # Authorship gate (DRF invokes perform_destroy with the already-
+        # fetched instance, so we have access to it before the delete).
+        if not self._user_can_modify(self.request.user, instance):
+            raise PermissionDenied(
+                'Only the report author, an advocate, or staff can delete this report.'
+            )
+        # Capture provenance BEFORE the row vanishes. CASCADE on the
+        # Media FK (cases/models.py) will delete any attached media rows
+        # + their underlying files; this audit row is the only surviving
+        # trace of the report that was.
+        person_id = instance.person_id
+        self._audit(AuditLog.Action.DELETED, instance, f'person_id={person_id}')
+        instance.delete()
 
 
 class MediaViewSet(viewsets.ModelViewSet):

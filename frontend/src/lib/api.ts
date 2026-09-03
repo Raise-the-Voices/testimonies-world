@@ -234,6 +234,33 @@ export async function createReport(data: Record<string, unknown>): Promise<Repor
 	});
 }
 
+export async function getReports(
+	params: Record<string, string> = {},
+): Promise<Paginated<Report> | Report[]> {
+	const qs = new URLSearchParams(params).toString();
+	return request<Paginated<Report> | Report[]>(`/reports/${qs ? '?' + qs : ''}`);
+}
+
+export async function getReport(id: number | string): Promise<Report> {
+	return request<Report>(`/reports/${id}/`);
+}
+
+export async function updateReport(
+	id: number | string,
+	data: Record<string, unknown>,
+): Promise<Report> {
+	return request<Report>(`/reports/${id}/`, {
+		method: 'PATCH',
+		body: JSON.stringify(data),
+	});
+}
+
+export async function deleteReport(id: number | string): Promise<void> {
+	await request<null>(`/reports/${id}/`, {
+		method: 'DELETE',
+	});
+}
+
 export async function getCasework(
 	params: Record<string, string> = {},
 ): Promise<Paginated<CaseworkRecord> | CaseworkRecord[]> {

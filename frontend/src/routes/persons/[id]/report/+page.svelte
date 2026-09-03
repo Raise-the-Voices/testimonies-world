@@ -5,7 +5,8 @@
 	import { onMount } from 'svelte';
 	import { fly, fade } from 'svelte/transition';
 	import { user, isVolunteer } from '$lib/session';
-	import { getPerson, createReport } from '$lib/api';
+	import { getPerson, createReport, getReport, updateReport, ApiError } from '$lib/api';
+	import type { Report } from '$lib/types';
 
 	let currentUser = $derived($user);
 	let person: any = $state(null);
@@ -13,6 +14,17 @@
 	let saving = $state(false);
 	let errorMsg = $state('');
 	let fieldErrors = $state<Record<string, string>>({});
+
+	// `?id=` in the URL → edit mode. Without it → create mode.
+	// We resolve the id once at component init from $page.url so navigating
+	// between create and edit via the same route just works.
+	let reportId: number | null = $derived.by(() => {
+		const raw = page.url.searchParams.get('id');
+		if (!raw) return null;
+		const n = Number(raw);
+		return Number.isFinite(n) ? n : null;
+	});
+	let isEdit = $derived(reportId !== null);
 
 	let sourceType = $state('firsthand');
 	let sourceAttribution = $state('');
@@ -24,6 +36,7 @@
 	let narrative = $state('');
 	let suspectedReason = $state('');
 	let officialReason = $state('');
+	let isPrivate = $state(false);
 
 	const MAX_NARRATIVE = 5000;
 	const MAX_SHORT = 500;
@@ -44,6 +57,21 @@
 	onMount(async () => {
 		try {
 			person = await getPerson(page.params.id!);
+			// Edit mode → hydrate the form from the existing report.
+			if (reportId !== null) {
+				const r = await getReport(reportId);
+				sourceType = r.source_type;
+				sourceAttribution = r.source_attribution ?? '';
+				reporterName = r.reporter_name ?? '';
+				reporterContact = r.reporter_contact ?? '';
+				dateStart = r.date_start ?? '';
+				dateEnd = r.date_end ?? '';
+				roughLocation = r.rough_location ?? '';
+				narrative = r.narrative ?? '';
+				suspectedReason = r.suspected_reason ?? '';
+				officialReason = r.official_reason ?? '';
+				isPrivate = !!r.is_private;
+			}
 		} catch (e: unknown) {
 			errorMsg = e instanceof Error ? e.message : "Couldn't load this case.";
 		}
@@ -68,24 +96,39 @@
 		if (!validate()) return;
 		saving = true;
 		errorMsg = '';
+		fieldErrors = {};
+		const payload = {
+			person: person.id,
+			source_type: sourceType,
+			source_attribution: sourceAttribution,
+			reporter_name: reporterName,
+			reporter_contact: reporterContact,
+			date_start: dateStart || null,
+			date_end: dateEnd || null,
+			rough_location: roughLocation,
+			narrative,
+			suspected_reason: suspectedReason,
+			official_reason: officialReason,
+			is_private: isPrivate,
+		};
 		try {
-			await createReport({
-				person: person.id,
-				source_type: sourceType,
-				source_attribution: sourceAttribution,
-				reporter_name: reporterName,
-				reporter_contact: reporterContact,
-				date_start: dateStart || null,
-				date_end: dateEnd || null,
-				rough_location: roughLocation,
-				narrative,
-				suspected_reason: suspectedReason,
-				official_reason: officialReason,
-			});
+			if (isEdit && reportId !== null) {
+				await updateReport(reportId, payload);
+			} else {
+				await createReport(payload);
+			}
 			await goto(`${base}/persons/${person.id}`);
 		} catch (err: unknown) {
-			errorMsg =
-				err instanceof Error ? err.message : 'Failed to save the report.';
+			// DRF returns per-field errors on 400 — surface them inline.
+			if (err instanceof ApiError && err.isValidation) {
+				fieldErrors = Object.fromEntries(
+					Object.entries(err.fieldErrors).map(([k, v]) => [k, v[0] ?? '']),
+				);
+				errorMsg = err.message;
+			} else {
+				errorMsg =
+					err instanceof Error ? err.message : 'Failed to save the report.';
+			}
 			saving = false;
 		}
 	}
@@ -111,13 +154,16 @@
 		<p class="breadcrumb">
 			<a href="{base}/persons/{person.id}">{person.name}</a>
 			<span class="breadcrumb-sep" aria-hidden="true">›</span>
-			<span>Add report</span>
+			<span>{isEdit ? 'Edit report' : 'Add report'}</span>
 		</p>
-		<h1>Add a report</h1>
+		<h1>{isEdit ? 'Edit report' : 'Add a report'}</h1>
 		<p class="muted">
-			Reports are chronological updates — what happened, when, and where.
-			The more detail, the stronger the case. Required fields are marked with
-			<span class="required-mark" aria-hidden="true">*</span>.
+			{isEdit
+				? 'Update the report below. Only the author, an advocate, or staff can edit a report.'
+				: 'Reports are chronological updates — what happened, when, and where. The more detail, the stronger the case. Required fields are marked with'}
+			{#if !isEdit}
+				<span class="required-mark" aria-hidden="true">*</span>.
+			{/if}
 		</p>
 	</header>
 
@@ -348,6 +394,33 @@
 		</fieldset>
 
 		<!-- ============================================================
+		     Privacy — controls whether the report is publicly visible
+		     ============================================================ -->
+		<fieldset class="form-section">
+			<legend class="section-legend">
+				<span class="section-icon" aria-hidden="true">
+					<svg viewBox="0 0 16 16" width="14" height="14">
+						<path
+							fill="currentColor"
+							d="M4 7V5a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h1zm2 0h4V5a2 2 0 1 0-4 0v2z"
+						/>
+					</svg>
+				</span>
+				Privacy
+			</legend>
+			<p class="section-hint">
+				Private reports are hidden from the public case page. Volunteers and
+				advocates can still see them when logged in.
+			</p>
+			<div class="field">
+				<label class="field-checkbox">
+					<input type="checkbox" bind:checked={isPrivate} />
+					<span>Mark this report as private</span>
+				</label>
+			</div>
+		</fieldset>
+
+		<!-- ============================================================
 		     Action footer — sticky on long forms
 		     ============================================================ -->
 		<footer class="form-footer">
@@ -370,7 +443,7 @@
 						<span class="spinner" aria-hidden="true"></span>
 						Saving…
 					{:else}
-						Submit report
+						{isEdit ? 'Save changes' : 'Submit report'}
 					{/if}
 				</button>
 			</div>
@@ -550,6 +623,23 @@
 		margin: 0;
 		font-size: 0.82rem;
 		color: var(--color-danger);
+	}
+
+	/* Checkbox row — used for the Privacy toggle */
+	.field-checkbox {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.55rem;
+		font-size: 0.95rem;
+		color: var(--color-text);
+		cursor: pointer;
+		user-select: none;
+	}
+	.field-checkbox input[type='checkbox'] {
+		width: 18px;
+		height: 18px;
+		accent-color: var(--color-primary);
+		cursor: pointer;
 	}
 
 	/* The .input--search class is defined globally in app.css for the
