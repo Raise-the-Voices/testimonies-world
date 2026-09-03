@@ -57,6 +57,10 @@ export interface Media {
 	url?: string | null;
 	file?: string | null;
 	description?: string;
+	person?: number | null;
+	report?: number | null;
+	uploaded_by?: number | null;
+	created_at?: string;
 }
 
 /* ============================================================================
