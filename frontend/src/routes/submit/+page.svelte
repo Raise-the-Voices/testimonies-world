@@ -2,10 +2,11 @@
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { user, isVolunteer, loadSession } from '$lib/session';
+	import { user, isVolunteer, isAdmin, loadSession } from '$lib/session';
 	import { createPerson, createReport, getCategories, ApiError } from '$lib/api';
 
 	let currentUser = $derived($user);
+	let isAdminUser = $derived(isAdmin(currentUser));
 	let categories: any[] = $state([]);
 	let saving = $state(false);
 	let refreshing = $state(false);
@@ -18,20 +19,39 @@
 	// Character-counter ceilings
 	const MAX_NARRATIVE = 5000;
 	const MAX_SHORT = 1000;
+	const MAX_ALIASES = 500;       // matches models.Person.aliases
+	const MAX_LEGAL_NAME = 255;
+	const MAX_PROFILE_IMAGE = 5 * 1024 * 1024; // 5 MB
 
-	// Person fields
+	// Person fields — identity
 	let name = $state('');
+	let legalName = $state('');
+	let aliasesRaw = $state('');         // comma-separated; presented as tags
 	let country = $state('');
+
+	// Person fields — demographics & location
 	let currentStatus = $state('unknown');
 	let medicalStatus = $state('unknown');
 	let roughLocation = $state('');
 	let preciseLocation = $state('');
 	let lastKnownDate = $state('');
-	let summaryNarrative = $state('');
 	let ethnicity = $state('');
 	let gender = $state('');
 	let dateOfBirth = $state('');
+
+	// Person fields — media, evidence quality, privacy, verification
+	let qualityTier = $state<number | ''>('');
+	let profileImageFile = $state<File | null>(null);
+	let profileImagePreview = $state<string | null>(null);
+	let profileImageCleared = $state(false);  // explicit "remove image" signal
+	let medicalNotes = $state('');
+	let authoritativeSource = $state('');
+	let authoritativeUrl = $state('');
+	let isPublished = $state(true);
 	let selectedCategories: number[] = $state([]);
+
+	// Re-added — was lost in the script-block rewrite above.
+	let summaryNarrative = $state('');
 
 	// Initial report fields
 	let sourceType = $state('firsthand');
@@ -59,6 +79,58 @@
 		} else {
 			selectedCategories = [...selectedCategories, id];
 		}
+	}
+
+	/* --- Aliases — comma-joined tag-style input ----------------------- */
+	function getAliases(): string[] {
+		return aliasesRaw
+			.split(',')
+			.map((s) => s.trim())
+			.filter(Boolean);
+	}
+	function setAliases(list: string[]) {
+		aliasesRaw = list.join(', ');
+	}
+	function addAliasFromInput(raw: string) {
+		// Split on commas so users can paste "A, B, C" in one go.
+		const parts = raw
+			.split(',')
+			.map((s) => s.trim())
+			.filter(Boolean);
+		if (parts.length === 0) return;
+		const merged = Array.from(new Set([...getAliases(), ...parts]));
+		setAliases(merged);
+	}
+	function removeAlias(target: string) {
+		setAliases(getAliases().filter((a) => a !== target));
+	}
+
+	/* --- Profile image preview --------------------------------------- */
+	$effect(() => {
+		if (profileImageFile && profileImageFile.type.startsWith('image/')) {
+			const url = URL.createObjectURL(profileImageFile);
+			profileImagePreview = url;
+			return () => URL.revokeObjectURL(url);
+		} else {
+			profileImagePreview = null;
+		}
+	});
+	function onProfileImageChange(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const f = input.files?.[0] ?? null;
+		if (f && f.size > MAX_PROFILE_IMAGE) {
+			errors.profile_image = `Image is too large (${(f.size / 1024 / 1024).toFixed(1)} MB). Max 5 MB.`;
+			input.value = '';
+			profileImageFile = null;
+			return;
+		}
+		if (errors.profile_image) clearError('profile_image');
+		profileImageFile = f;
+		profileImageCleared = false;
+	}
+	function clearProfileImage() {
+		profileImageFile = null;
+		profileImageCleared = true;
 	}
 
 	function clearError(field: string) {
@@ -103,14 +175,25 @@
 		if (reportDateStart) {
 			if (Number.isNaN(new Date(reportDateStart).getTime())) e.report_date = 'That doesn’t look like a valid date.';
 		}
+		if (legalName && legalName.length > MAX_LEGAL_NAME) {
+			e.legal_name = `Keep this under ${MAX_LEGAL_NAME.toLocaleString()} characters.`;
+		}
+		if (aliasesRaw && aliasesRaw.length > MAX_ALIASES) {
+			e.aliases = `Total aliases are too long (max ${MAX_ALIASES.toLocaleString()} characters).`;
+		}
+		if (authoritativeUrl && !/^https?:\/\//i.test(authoritativeUrl.trim())) {
+			e.authoritative_url = 'URL must start with http:// or https://';
+		}
 
 		return e;
 	}
 
 	function focusFirstError(errs: Record<string, string>) {
 		const order = [
-			'name', 'country', 'status', 'medical', 'rough_location', 'precise_location',
-			'last_known_date', 'ethnicity', 'gender', 'dob',
+			'name', 'legal_name', 'aliases', 'country', 'status', 'medical',
+			'rough_location', 'precise_location', 'last_known_date', 'ethnicity',
+			'gender', 'dob', 'quality_tier', 'profile_image', 'medical_notes',
+			'authoritative_source', 'authoritative_url', 'is_published',
 			'summary', 'source_type', 'source_attr', 'reporter_name', 'reporter_contact',
 			'report_date', 'report_location', 'narrative', 'suspected_reason', 'official_reason',
 		];
@@ -148,22 +231,59 @@
 
 		saving = true;
 		try {
-			const personData: any = {
-				name: name.trim(),
-				country: country.trim(),
-				current_status: currentStatus,
-				medical_status: medicalStatus,
-				rough_location: roughLocation.trim(),
-				precise_location: preciseLocation.trim(),
-				summary_narrative: summaryNarrative.trim(),
-				ethnicity: ethnicity.trim(),
-				gender: gender || undefined,
-				category_ids: selectedCategories,
-			};
-			if (lastKnownDate) personData.last_known_date = lastKnownDate;
-			if (dateOfBirth) personData.date_of_birth = dateOfBirth;
+			const aliases = getAliases();
+			const hasProfileImage = !!profileImageFile;
 
-			const person = await createPerson(personData);
+			let payload: Record<string, unknown> | FormData;
+			if (hasProfileImage) {
+				// multipart path — the file forces multipart/form-data.
+				const fd = new FormData();
+				fd.append('name', name.trim());
+				fd.append('country', country.trim());
+				fd.append('current_status', currentStatus);
+				fd.append('medical_status', medicalStatus);
+				fd.append('rough_location', roughLocation.trim());
+				fd.append('precise_location', preciseLocation.trim());
+				fd.append('summary_narrative', summaryNarrative.trim());
+				fd.append('ethnicity', ethnicity.trim());
+				if (gender) fd.append('gender', gender);
+				if (lastKnownDate) fd.append('last_known_date', lastKnownDate);
+				if (dateOfBirth) fd.append('date_of_birth', dateOfBirth);
+				if (legalName.trim()) fd.append('legal_name', legalName.trim());
+				if (aliases.length) fd.append('aliases', aliases.join(', '));
+				if (qualityTier !== '') fd.append('quality_tier', String(qualityTier));
+				if (medicalNotes.trim()) fd.append('medical_notes', medicalNotes.trim());
+				if (authoritativeSource.trim()) fd.append('authoritative_source', authoritativeSource.trim());
+				if (authoritativeUrl.trim()) fd.append('authoritative_url', authoritativeUrl.trim());
+				fd.append('is_published', String(isPublished));
+				for (const catId of selectedCategories) fd.append('category_ids', String(catId));
+				fd.append('profile_image', profileImageFile!);
+				payload = fd;
+			} else {
+				payload = {
+					name: name.trim(),
+					country: country.trim(),
+					current_status: currentStatus,
+					medical_status: medicalStatus,
+					rough_location: roughLocation.trim(),
+					precise_location: preciseLocation.trim(),
+					summary_narrative: summaryNarrative.trim(),
+					ethnicity: ethnicity.trim(),
+					gender: gender || undefined,
+					category_ids: selectedCategories,
+				};
+				if (lastKnownDate) payload.last_known_date = lastKnownDate;
+				if (dateOfBirth) payload.date_of_birth = dateOfBirth;
+				if (legalName.trim()) payload.legal_name = legalName.trim();
+				if (aliases.length) payload.aliases = aliases.join(', ');
+				if (qualityTier !== '') payload.quality_tier = qualityTier;
+				if (medicalNotes.trim()) payload.medical_notes = medicalNotes.trim();
+				if (authoritativeSource.trim()) payload.authoritative_source = authoritativeSource.trim();
+				if (authoritativeUrl.trim()) payload.authoritative_url = authoritativeUrl.trim();
+				payload.is_published = isPublished;
+			}
+
+			const person = await createPerson(payload);
 
 			await createReport({
 				person: person.id,
@@ -320,6 +440,88 @@
 						{/if}
 					</div>
 
+					<!-- Legal name -->
+					<div class="field">
+						<label for="legal_name">
+							Legal name <span class="optional-mark">(optional)</span>
+						</label>
+						<input
+							id="legal_name"
+							type="text"
+							bind:value={legalName}
+							oninput={() => clearError('legal_name')}
+							placeholder="Full legal name, if it differs"
+							maxlength={MAX_LEGAL_NAME}
+							autocomplete="off"
+							aria-invalid={errors.legal_name ? 'true' : 'false'}
+							aria-describedby={errors.legal_name ? 'legal-name-error' : 'legal-name-help'}
+						/>
+						{#if errors.legal_name}
+							<p class="field-error" id="legal-name-error" role="alert">{errors.legal_name}</p>
+						{:else}
+							<p class="field-help" id="legal-name-help">For verification only.</p>
+						{/if}
+					</div>
+
+					<!-- Aliases — tag input, comma-joined on submit -->
+					<div class="field field-full" class:has-error={errors.aliases}>
+						<label for="aliases-input">
+							Aliases <span class="optional-mark">(optional)</span>
+						</label>
+						<!-- Hidden input lets users submit tags via Enter or comma.
+						     We don't bind this to state — we read from aliasesRaw on save. -->
+						<input
+							id="aliases-input"
+							type="text"
+							placeholder="Type an alias, press Enter or comma to add"
+							onkeydown={(e) => {
+								if (e.key === 'Enter' || e.key === ',') {
+									e.preventDefault();
+									const v = (e.currentTarget as HTMLInputElement).value.trim();
+									if (v) {
+										addAliasFromInput(v);
+										(e.currentTarget as HTMLInputElement).value = '';
+									}
+								} else if (e.key === 'Backspace' && (e.currentTarget as HTMLInputElement).value === '' && getAliases().length > 0) {
+									e.preventDefault();
+									const all = getAliases();
+									all.pop();
+									setAliases(all);
+								}
+							}}
+							onblur={(e) => {
+								const v = (e.currentTarget as HTMLInputElement).value.trim();
+								if (v) {
+									addAliasFromInput(v);
+									(e.currentTarget as HTMLInputElement).value = '';
+								}
+							}}
+							aria-describedby="aliases-help"
+						/>
+						{#if getAliases().length > 0}
+							<div class="alias-pills" role="list" aria-label="Aliases">
+								{#each getAliases() as alias (alias)}
+									<span class="alias-pill" role="listitem">
+										{alias}
+										<button
+											type="button"
+											class="alias-pill-remove"
+											aria-label={`Remove alias "${alias}"`}
+											onclick={() => removeAlias(alias)}
+										>×</button>
+									</span>
+								{/each}
+							</div>
+						{/if}
+						{#if errors.aliases}
+							<p class="field-error" role="alert">{errors.aliases}</p>
+						{:else}
+							<p class="field-help" id="aliases-help">
+								Other names this person goes by — birth name, nom de guerre, common misspelling.
+							</p>
+						{/if}
+					</div>
+
 					<div class="field">
 						<label for="status">Current Status</label>
 						<select id="status" bind:value={currentStatus}>
@@ -398,6 +600,165 @@
 						<label for="dob">Date of Birth</label>
 						<input id="dob" type="date" bind:value={dateOfBirth} />
 					</div>
+
+					<!-- Quality tier — evidence reliability rating -->
+					<div class="field">
+						<label for="quality_tier">
+							Evidence tier <span class="optional-mark">(optional)</span>
+						</label>
+						<select id="quality_tier" bind:value={qualityTier}>
+							<option value={''}>Not yet rated</option>
+							<option value={1}>Tier 1 — strong evidence</option>
+							<option value={2}>Tier 2 — average evidence</option>
+							<option value={3}>Tier 3 — weak evidence</option>
+						</select>
+						<p class="field-help">How confident are we in the facts of this case?</p>
+					</div>
+
+					<!-- Profile image upload -->
+					<div class="field field-full" class:has-error={errors.profile_image}>
+						<label for="profile_image">
+							Profile image <span class="optional-mark">(optional)</span>
+						</label>
+						<div class="profile-image-row">
+							{#if profileImagePreview}
+								<img src={profileImagePreview} alt="" class="profile-image-preview" />
+							{/if}
+							<div class="profile-image-controls">
+								<input
+									id="profile_image"
+									type="file"
+									accept="image/*"
+									onchange={onProfileImageChange}
+									aria-describedby="profile-image-help"
+								/>
+								{#if profileImageFile}
+									<button
+										type="button"
+										class="btn btn-secondary btn-sm"
+										onclick={clearProfileImage}
+									>Clear</button>
+								{/if}
+							</div>
+						</div>
+						{#if errors.profile_image}
+							<p class="field-error" role="alert">{errors.profile_image}</p>
+						{:else}
+							<p class="field-help" id="profile-image-help">
+								PNG or JPG, up to 5 MB. Shown on the public case page if it exists.
+							</p>
+						{/if}
+					</div>
+				</div>
+			</section>
+
+			<!-- ============== Section 1b: Privacy ============== -->
+			<section class="form-section" aria-labelledby="sec-privacy">
+				<h2 id="sec-privacy" class="form-section-title">Privacy</h2>
+				<p class="form-section-desc">Sensitive details about this person's health and situation.</p>
+
+				<div class="field-stack">
+					<div class="field" class:has-error={errors.medical_notes}>
+						<label for="medical_notes">
+							Medical notes
+							<span class="field-tag-private">
+								<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+									<path fill="currentColor" d="M4 7V5a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h1zm2 0h4V5a2 2 0 1 0-4 0v2z" />
+								</svg>
+								private
+							</span>
+						</label>
+						<textarea
+							id="medical_notes"
+							bind:value={medicalNotes}
+							oninput={() => clearError('medical_notes')}
+							rows="4"
+							maxlength={MAX_NARRATIVE}
+							placeholder="Health conditions, medications, ongoing treatment — anything that helps the team support this person safely."
+							aria-invalid={errors.medical_notes ? 'true' : 'false'}
+							aria-describedby={errors.medical_notes ? 'medical-notes-error' : 'medical-notes-help'}
+						></textarea>
+						{#if errors.medical_notes}
+							<p class="field-error" id="medical-notes-error" role="alert">{errors.medical_notes}</p>
+						{:else}
+							<p class="field-help" id="medical-notes-help">
+								Hidden from the public case page — visible only to volunteers and admins.
+							</p>
+						{/if}
+					</div>
+				</div>
+			</section>
+
+			<!-- ============== Section 1c: Verification & publication ============== -->
+			<section class="form-section" aria-labelledby="sec-verify">
+				<h2 id="sec-verify" class="form-section-title">Verification &amp; publication</h2>
+				<p class="form-section-desc">
+					Where did this case come from, and who should see it?
+				</p>
+
+				<div class="form-grid">
+					<div class="field" class:has-error={errors.authoritative_source}>
+						<label for="authoritative_source">
+							Authoritative source <span class="optional-mark">(optional)</span>
+						</label>
+						<input
+							id="authoritative_source"
+							type="text"
+							bind:value={authoritativeSource}
+							oninput={() => clearError('authoritative_source')}
+							maxlength={MAX_SHORT}
+							autocomplete="off"
+							placeholder='e.g. "AAPP", "HRW", "shahit.biz"'
+							aria-invalid={errors.authoritative_source ? 'true' : 'false'}
+							aria-describedby={errors.authoritative_source ? 'auth-source-error' : 'auth-source-help'}
+						/>
+						{#if errors.authoritative_source}
+							<p class="field-error" id="auth-source-error" role="alert">{errors.authoritative_source}</p>
+						{:else}
+							<p class="field-help" id="auth-source-help">Name of the source database or organization.</p>
+						{/if}
+					</div>
+
+					<div class="field" class:has-error={errors.authoritative_url}>
+						<label for="authoritative_url">
+							Source URL <span class="optional-mark">(optional)</span>
+						</label>
+						<input
+							id="authoritative_url"
+							type="url"
+							bind:value={authoritativeUrl}
+							oninput={() => clearError('authoritative_url')}
+							maxlength={1000}
+							autocomplete="off"
+							placeholder="https://example.org/case/12345"
+							aria-invalid={errors.authoritative_url ? 'true' : 'false'}
+							aria-describedby={errors.authoritative_url ? 'auth-url-error' : 'auth-url-help'}
+						/>
+						{#if errors.authoritative_url}
+							<p class="field-error" id="auth-url-error" role="alert">{errors.authoritative_url}</p>
+						{:else}
+							<p class="field-help" id="auth-url-help">Link to this case in the original source.</p>
+						{/if}
+					</div>
+
+					<!-- is_published — admin-only toggle -->
+					{#if isAdminUser}
+						<div class="field field-full">
+							<label class="toggle-row">
+								<input
+									id="is_published"
+									type="checkbox"
+									bind:checked={isPublished}
+								/>
+								<span class="toggle-row-text">
+									<strong>Published on the public site</strong>
+									<span class="field-help">
+										When off, the case is hidden from public listings and search. Admins only.
+									</span>
+								</span>
+							</label>
+						</div>
+					{/if}
 				</div>
 			</section>
 
@@ -829,6 +1190,28 @@
 		letter-spacing: 0.02em;
 	}
 
+	/* Private-tag variant — yellow tint with a small lock icon.
+	   Visually signals "this is sensitive and hidden from public view". */
+	.field-tag-private {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin-left: 0.35rem;
+		padding: 0.1rem 0.5rem 0.1rem 0.4rem;
+		border-radius: 999px;
+		background: #fefcbf;
+		color: #744210;
+		font-size: 0.68rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04rem;
+		line-height: 1.2;
+	}
+	.field-tag-private svg {
+		display: inline-block;
+		vertical-align: -1px;
+	}
+
 	.field-help {
 		margin: 0;
 		font-size: 0.78rem;
@@ -1036,5 +1419,103 @@
 			transition: none;
 			animation: none;
 		}
+	}
+
+	/* === Aliases: pill list under the input ============================ */
+	.alias-pills {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin: 0.1rem 0 0.25rem 0;
+	}
+	.alias-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.3rem 0.4rem 0.3rem 0.7rem;
+		background: var(--color-primary-tint);
+		color: var(--color-primary);
+		border-radius: 999px;
+		font-size: 0.82rem;
+		font-weight: 600;
+		line-height: 1.2;
+	}
+	.alias-pill-remove {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		border: 0;
+		background: transparent;
+		color: var(--color-primary);
+		font-size: 1rem;
+		line-height: 1;
+		padding: 0;
+		cursor: pointer;
+	}
+	.alias-pill-remove:hover {
+		background: rgba(37, 100, 106, 0.2);
+	}
+
+	/* === Profile image upload row ===================================== */
+	.profile-image-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+	.profile-image-preview {
+		width: 96px;
+		height: 96px;
+		object-fit: cover;
+		border-radius: var(--radius-card);
+		border: 1px solid var(--color-border-light);
+		background: var(--color-surface);
+		flex: 0 0 96px;
+	}
+	.profile-image-controls {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		min-width: 0;
+		flex: 1 1 220px;
+	}
+	.profile-image-controls input[type='file'] {
+		padding: 0.45rem 0.6rem;
+		font-size: 0.88rem;
+	}
+
+	/* === Toggle row (used for is_published) ============================ */
+	.toggle-row {
+		display: inline-flex;
+		align-items: flex-start;
+		gap: 0.65rem;
+		cursor: pointer;
+		padding: 0.85rem 1rem;
+		border: 1px solid var(--color-border-light);
+		border-radius: var(--radius-card);
+		background: var(--color-surface);
+		width: 100%;
+	}
+	.toggle-row:hover { border-color: var(--color-primary-light); }
+	.toggle-row input[type='checkbox'] {
+		width: 18px;
+		height: 18px;
+		margin-top: 0.15rem;
+		flex: 0 0 18px;
+		accent-color: var(--color-primary);
+	}
+	.toggle-row-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		min-width: 0;
+	}
+	.toggle-row-text strong {
+		font-size: 0.92rem;
+		font-weight: 600;
+		color: var(--color-text);
 	}
 </style>
