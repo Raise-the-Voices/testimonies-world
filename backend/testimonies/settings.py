@@ -146,9 +146,30 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 SITE_ID = 1
 
 # Email — used by casework notifications. Console backend in dev prints to
-# stdout (look for "Subject:" lines). In prod set EMAIL_BACKEND=django.core
-# mail.backends.smtp.EmailBackend plus host/port/user/password via .env.
-# Never commit SMTP credentials.
+# stdout (look for "Subject:" lines). In prod we route through Migadu, an
+# external transactional mailer — chosen over a self-hosted Postfix to
+# avoid deliverability / spam-classification risk on our IP range.
+#
+# Migadu SMTP (see https://migadu.com/guides/ for canonical recipe):
+#   host:   smtp.migadu.com
+#   port:   465 with implicit SSL  (recommended)
+#         | 587 with STARTTLS        (fallback if 465 is blocked)
+#   auth:   full mailbox email address + password
+#   from:   must live on the same domain as the mailbox or messages will
+#           be sent "on behalf of" and look spammy to recipients
+#
+# To enable in prod, set in .env:
+#   EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+#   EMAIL_HOST=smtp.migadu.com
+#   EMAIL_PORT=465
+#   EMAIL_USE_SSL=True
+#   EMAIL_USE_TLS=False
+#   EMAIL_HOST_USER=noreply@<migadu-domain>
+#   EMAIL_HOST_PASSWORD=<mailbox password>     # never commit
+#   DEFAULT_FROM_EMAIL=Testimonies.world <noreply@<migadu-domain>>
+#
+# Never commit SMTP credentials. .env is gitignored; .env.example lists
+# the keys without values.
 EMAIL_BACKEND = config(
     'EMAIL_BACKEND',
     default='django.core.mail.backends.console.EmailBackend',
@@ -157,7 +178,15 @@ EMAIL_HOST = config('EMAIL_HOST', default='')
 EMAIL_PORT = config('EMAIL_PORT', default='587', cast=int)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+# EMAIL_USE_TLS is STARTTLS (typically port 587). EMAIL_USE_SSL is implicit
+# TLS (typically port 465). Set exactly one — they're mutually exclusive.
+# Dev defaults to STARTTLS so a hypothetical future 587-only environment
+# works out of the box; production sets EMAIL_USE_SSL=True for Migadu.
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
+# Defensive cap so a hung SMTP handshake can't tie up a gunicorn worker
+# indefinitely. Django's default is None (system default, ~minutes).
+EMAIL_TIMEOUT = config('EMAIL_TIMEOUT', default=15, cast=int)
 DEFAULT_FROM_EMAIL = config(
     'DEFAULT_FROM_EMAIL',
     default='Testimonies.world <noreply@linkedtrust.us>',
