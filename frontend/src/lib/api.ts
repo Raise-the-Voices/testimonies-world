@@ -119,7 +119,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 	const method = (options.method ?? 'GET').toUpperCase();
 	const stateChanging = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
 
-	// For FormData uploads we MUST NOT set Content-Type ourselves — the
+// For FormData uploads we MUST NOT set Content-Type ourselves — the
 	// browser needs to add the multipart boundary header itself, and a
 	// caller-supplied Content-Type without a boundary would silently
 	// drop the file on the floor. Detect FormData and skip the default.
@@ -210,20 +210,20 @@ export async function getCategories(): Promise<Paginated<PersonCategory> | Perso
 	return request<Paginated<PersonCategory> | PersonCategory[]>('/categories/');
 }
 
-export async function createPerson(data: Record<string, unknown>): Promise<Person> {
+export async function createPerson(data: Record<string, unknown> | FormData): Promise<Person> {
 	return request<Person>('/persons/', {
 		method: 'POST',
-		body: JSON.stringify(data),
+		body: data instanceof FormData ? data : JSON.stringify(data),
 	});
 }
 
 export async function updatePerson(
 	id: number | string,
-	data: Record<string, unknown>,
+	data: Record<string, unknown> | FormData,
 ): Promise<Person> {
 	return request<Person>(`/persons/${id}/`, {
 		method: 'PATCH',
-		body: JSON.stringify(data),
+		body: data instanceof FormData ? data : JSON.stringify(data),
 	});
 }
 
