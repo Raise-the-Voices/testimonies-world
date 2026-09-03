@@ -26,12 +26,13 @@ record tomorrow.
 7. [Frontend routes](#frontend-routes)
 8. [Roles & permissions](#roles--permissions)
 9. [Privacy model](#privacy-model)
-10. [Design system](#design-system)
-11. [Development workflow](#development-workflow)
-12. [Deployment](#deployment)
-13. [Repository conventions](#repository-conventions)
-14. [Further reading](#further-reading)
-15. [Contributing](#contributing)
+10. [Email & notifications](#email--notifications)
+11. [Design system](#design-system)
+12. [Development workflow](#development-workflow)
+13. [Deployment](#deployment)
+14. [Repository conventions](#repository-conventions)
+15. [Further reading](#further-reading)
+16. [Contributing](#contributing)
 
 ---
 
@@ -320,6 +321,59 @@ or admin to retrieve.
 Every access to sensitive data should be recorded in `AuditLog`
 (`viewed` / `downloaded` / `edited` / `deleted`) with `user`, `target_type`,
 `target_id`, and `ip_address`.
+
+---
+
+## Email & notifications
+
+Casework actions (create, update, "marked done", "seen by") generate
+both a Django in-app notification row and (by default) an email to
+eligible advocates + staff, with a per-record 24h anti-spam rule
+described inline in [`backend/casework/notifications.py`](backend/casework/notifications.py).
+The dispatch is wrapped in `transaction.on_commit` and pushed onto a
+daemon thread so the HTTP request never blocks on the SMTP handshake.
+
+### Provider: Migadu
+
+Production routes email through **Migadu**, an external transactional
+mailer chosen over a self-hosted Postfix to avoid deliverability /
+spam-classification risk on our IP range. See `backend/.env.example` for
+the canonical env var template.
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `EMAIL_BACKEND` | `django.core.mail.backends.console.EmailBackend` | Dev prints emails to stdout. Set to `django.core.mail.backends.smtp.EmailBackend` in prod. |
+| `EMAIL_HOST` | `''` | `smtp.migadu.com` in prod |
+| `EMAIL_PORT` | `587` | `465` recommended for Migadu (implicit SSL) |
+| `EMAIL_USE_TLS` | `True` | STARTTLS — pick *one* of `EMAIL_USE_TLS` / `EMAIL_USE_SSL` |
+| `EMAIL_USE_SSL` | `False` | Implicit TLS (port 465) |
+| `EMAIL_HOST_USER` | `''` | Full mailbox email address (e.g. `noreply@<migadu-domain>`) |
+| `EMAIL_HOST_PASSWORD` | `''` | Mailbox password — never commit |
+| `EMAIL_TIMEOUT` | `15` | Seconds; defensive cap on SMTP handshakes |
+| `DEFAULT_FROM_EMAIL` | `Testimonies.world <noreply@linkedtrust.us>` | The from-address must live on the same domain as the Migadu mailbox or recipients see "Sent on behalf of" and it looks phishy. |
+| `SITE_URL` | `https://demos.linkedtrust.us/testimonies` | Used for in-email links to records |
+
+### Migrating the from-address
+
+If the production mailbox is set up on a different domain than
+`linkedtrust.us`, both `EMAIL_HOST_USER` and `DEFAULT_FROM_EMAIL` must
+be updated together — keep them in lock-step or recipients will see a
+mismatched "on behalf of" stamp that looks like a phishing attempt.
+
+### Testing locally
+
+In dev, `EMAIL_BACKEND` defaults to the console backend — no setup
+needed. Trigger a casework create/update as an advocate and watch stdout
+for a `Subject:` line. The Django test runner overrides
+`EMAIL_BACKEND` to `locmem`, so unit tests can assert on
+`mail.outbox` (see `casework/tests.py`).
+
+### Required DNS for prod
+
+When the Migadu mailbox domain goes live, the ops team needs to publish
+SPF + DKIM + DMARC records (Migadu provides them in the admin panel).
+Without these, major receivers (Gmail, Outlook, etc.) will silently
+deliver the notification to spam.
 
 ---
 
