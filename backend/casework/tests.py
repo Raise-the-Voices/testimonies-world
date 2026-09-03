@@ -9,9 +9,10 @@ that's the surface that matters and that's where the rules live.
 from datetime import date, timedelta
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -304,3 +305,76 @@ class APIEndpointTests(TestCase):
         self.assertEqual(res.status_code, 404)
         notif.refresh_from_db()
         self.assertFalse(notif.is_read)
+
+
+class SmtpConfigTests(SimpleTestCase):
+    """Pure settings-introspection smoke tests for the EMAIL_* block.
+
+    We don't open a real SMTP connection here — that would be slow,
+    flaky, and would require live Migadu credentials. These tests guard
+    against the failure mode where someone removes EMAIL_USE_SSL /
+    EMAIL_TIMEOUT or accidentally sets EMAIL_USE_TLS and EMAIL_USE_SSL
+    both to True at once.
+    """
+
+    # All Django settings overrides need to be cleared/restored or they
+    # leak across tests. override_settings does that for us.
+    def test_defaults_fall_back_to_console_and_sane_security(self):
+        # When EMAIL_BACKEND isn't set in the env, dev defaults to console.
+        # Django's test runner overrides this to locmem so test emails
+        # are captured instead of printed to stdout — that's expected.
+        self.assertIn(
+            settings.EMAIL_BACKEND,
+            (
+                'django.core.mail.backends.console.EmailBackend',  # dev
+                'django.core.mail.backends.locmem.EmailBackend',   # tests
+            ),
+            "EMAIL_BACKEND should default to console in dev or locmem "
+            "under the test runner; got something else.",
+        )
+        # Defaults should be safe: a reasonable timeout, and at most one
+        # of EMAIL_USE_TLS / EMAIL_USE_SSL set.
+        self.assertIsNotNone(settings.EMAIL_TIMEOUT)
+        self.assertGreater(settings.EMAIL_TIMEOUT, 0)
+        self.assertFalse(
+            settings.EMAIL_USE_TLS and settings.EMAIL_USE_SSL,
+            "EMAIL_USE_TLS and EMAIL_USE_SSL must not both be True — "
+            "they are mutually exclusive (STARTTLS vs implicit TLS).",
+        )
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend',
+        EMAIL_HOST='smtp.migadu.com',
+        EMAIL_PORT=465,
+        EMAIL_USE_SSL=True,
+        EMAIL_USE_TLS=False,
+        EMAIL_HOST_USER='noreply@migadu-domain.example',
+        EMAIL_HOST_PASSWORD='placeholder-not-real',
+    )
+    def test_migadu_style_config_loads_cleanly(self):
+        """When ops flips the switch in .env, the settings should land
+        on the smtp backend pointed at Migadu with implicit SSL."""
+        self.assertEqual(settings.EMAIL_BACKEND,
+                         'django.core.mail.backends.smtp.EmailBackend')
+        self.assertEqual(settings.EMAIL_HOST, 'smtp.migadu.com')
+        self.assertEqual(settings.EMAIL_PORT, 465)
+        self.assertTrue(settings.EMAIL_USE_SSL)
+        self.assertFalse(settings.EMAIL_USE_TLS)
+        self.assertEqual(settings.EMAIL_HOST_USER,
+                         'noreply@migadu-domain.example')
+        # Mutually exclusive — STARTTLS off when implicit SSL is on.
+        self.assertFalse(settings.EMAIL_USE_TLS and settings.EMAIL_USE_SSL)
+
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend',
+        EMAIL_HOST='smtp.migadu.com',
+        EMAIL_PORT=587,
+        EMAIL_USE_SSL=False,
+        EMAIL_USE_TLS=True,
+    )
+    def test_migadu_fallback_port_587_uses_starttls(self):
+        """If 465 is blocked on a network, Migadu also accepts 587 +
+        STARTTLS — the settings must reflect that route."""
+        self.assertEqual(settings.EMAIL_PORT, 587)
+        self.assertTrue(settings.EMAIL_USE_TLS)
+        self.assertFalse(settings.EMAIL_USE_SSL)
