@@ -267,3 +267,30 @@ export async function getContacts(
 	const qs = new URLSearchParams(params).toString();
 	return request<Paginated<Contact> | Contact[]>(`/contacts/${qs ? '?' + qs : ''}`);
 }
+
+export async function getContact(id: number | string): Promise<Contact> {
+	return request<Contact>(`/contacts/${id}/`);
+}
+
+export async function createContact(data: Partial<Contact>): Promise<Contact> {
+	return request<Contact>('/contacts/', {
+		method: 'POST',
+		body: JSON.stringify(data),
+	});
+}
+
+export async function updateContact(
+	id: number | string,
+	data: Partial<Contact>,
+): Promise<Contact> {
+	return request<Contact>(`/contacts/${id}/`, {
+		method: 'PATCH',
+		body: JSON.stringify(data),
+	});
+}
+
+export async function deleteContact(id: number | string): Promise<void> {
+	await request<null>(`/contacts/${id}/`, {
+		method: 'DELETE',
+	});
+}

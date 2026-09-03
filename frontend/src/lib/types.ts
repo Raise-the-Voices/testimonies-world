@@ -186,4 +186,8 @@ export interface Contact {
 	email?: string;
 	phone?: string;
 	signal?: string;
+	whatsapp?: string;
+	notes?: string;
+	created_at?: string;
+	persons?: number[];
 }
