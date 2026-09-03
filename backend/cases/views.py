@@ -2,6 +2,7 @@ from django.db.models import Count, Max
 from django_filters import rest_framework as filters
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from .models import CaseCategory, FamilyRelationship, Media, Person, Report
@@ -183,8 +184,24 @@ class ReportViewSet(viewsets.ModelViewSet):
 
 
 class MediaViewSet(viewsets.ModelViewSet):
+    """Media CRUD.
+
+    Reads are gated by visibility (see `get_queryset`): anonymous sees only
+    public; authenticated non-advocates see public+restricted; advocates
+    and staff see everything. That's the existing behavior.
+
+    Permission: `IsAuthenticatedOrReadOnly` — public media remains
+    browsable without login (a person detail page with a public photo
+    should work for anonymous viewers). Sensitive media is gated separately
+    inside `perform_create` / `perform_update`: only advocates and staff
+    can put a row in the `sensitive` tier. This blocks a volunteer from
+    accidentally (or otherwise) marking evidence as sensitive, which
+    would hide it from other volunteers mid-investigation.
+    """
+
     serializer_class = MediaSerializer
     filterset_fields = ['person', 'report', 'media_type', 'visibility']
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
         qs = Media.objects.all()
@@ -194,8 +211,33 @@ class MediaViewSet(viewsets.ModelViewSet):
             qs = qs.exclude(visibility='sensitive')
         return qs
 
+    def _can_mark_sensitive(self, user) -> bool:
+        """Only advocates and staff can put media in the sensitive tier."""
+        if not user or not user.is_authenticated:
+            return False
+        return user.is_staff or user.groups.filter(name='Advocate').exists()
+
+    def _check_sensitive_upload(self, serializer):
+        # When updating, the field may be omitted (partial PATCH) — fall
+        # back to the existing value so we don't reject a PATCH that
+        # doesn't touch visibility at all.
+        visibility = serializer.validated_data.get(
+            'visibility',
+            getattr(serializer.instance, 'visibility', 'public'),
+        )
+        if visibility == Media.Visibility.SENSITIVE and not self._can_mark_sensitive(self.request.user):
+            raise PermissionDenied(
+                'Only advocates can upload or mark media as sensitive.'
+            )
+
     def perform_create(self, serializer):
+        self._check_sensitive_upload(serializer)
         serializer.save(uploaded_by=self.request.user)
+
+    def perform_update(self, serializer):
+        self._check_sensitive_upload(serializer)
+        # Don't overwrite uploaded_by on edit.
+        serializer.save()
 
 
 class CaseCategoryViewSet(viewsets.ReadOnlyModelViewSet):
