@@ -18,7 +18,7 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from .models import AuditLog, Media, Person, Report
+from .models import AuditLog, FamilyRelationship, Media, Person, Report
 
 
 User = get_user_model()
@@ -402,3 +402,159 @@ class ReportPermissionTests(TestCase):
         res = self.client.get('/api/reports/')
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()['results'], [])
+
+
+class PersonDeletePermissionTests(TestCase):
+    """Permission + cascade coverage for `PersonViewSet.perform_destroy`.
+
+    Mirrors `ReportPermissionTests` but for Person. There is no
+    authorship gate on Person delete (any volunteer+ may delete any
+    person — symmetrical with create/edit, which also accept any
+    volunteer). The interesting bits are: the gate, the audit row, and
+    the cascade.
+    """
+
+    def setUp(self):
+        self.volunteer = make_user('vol', in_group='Volunteer')
+        self.advocate = make_user('aisha', in_group='Advocate')
+        self.staff = make_user('admin', is_staff=True)
+        self.outsider = make_user('random')  # authenticated, no group
+        self.client = APIClient()
+
+    def _create_person(self, **overrides):
+        # use POST so we exercise the same wiring the frontend uses.
+        self.client.force_login(self.volunteer)
+        payload = {
+            'name': 'Test Person',
+            'country': 'Pakistan',
+            'summary_narrative': 'A test case for delete coverage.',
+        }
+        payload.update(overrides)
+        res = self.client.post('/api/persons/', payload, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        # Clear the session so the next phase of the test starts anonymous
+        # unless it explicitly re-authenticates. `force_login(None)` would
+        # raise — DRF's APIClient stores the user on the session dict,
+        # so popping it is the supported logout path in tests.
+        self.client.session.pop('_auth_user_id', None)
+        self.client.session.pop('_auth_user_backend', None)
+        self.client.session.pop('_auth_user_hash', None)
+        self.client.session.save()
+        return res.json()
+
+    # --- Permission gate --------------------------------------------------
+
+    def test_volunteer_can_delete_person(self):
+        person = self._create_person()
+        self.client.force_login(self.volunteer)
+        res = self.client.delete(f'/api/persons/{person["id"]}/')
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(Person.objects.filter(pk=person['id']).exists())
+
+    def test_advocate_can_delete_person(self):
+        person = self._create_person()
+        self.client.force_login(self.advocate)
+        res = self.client.delete(f'/api/persons/{person["id"]}/')
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(Person.objects.filter(pk=person['id']).exists())
+
+    def test_staff_can_delete_person(self):
+        person = self._create_person()
+        self.client.force_login(self.staff)
+        res = self.client.delete(f'/api/persons/{person["id"]}/')
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(Person.objects.filter(pk=person['id']).exists())
+
+    def test_outsider_cannot_delete_person(self):
+        person = self._create_person()
+        self.client.force_login(self.outsider)
+        res = self.client.delete(f'/api/persons/{person["id"]}/')
+        self.assertEqual(res.status_code, 403)
+        # Row must still exist.
+        self.assertTrue(Person.objects.filter(pk=person['id']).exists())
+
+    def test_anonymous_cannot_delete_person(self):
+        person = self._create_person()
+        # No force_login → anonymous. We need a fresh APIClient to ensure
+        # no session cookie is left over from earlier setUp calls.
+        anon = APIClient()
+        res = anon.delete(f'/api/persons/{person["id"]}/')
+        self.assertIn(res.status_code, (401, 403))
+        self.assertTrue(Person.objects.filter(pk=person['id']).exists())
+
+    # --- Audit log trail --------------------------------------------------
+
+    def test_delete_writes_audit_row_with_snapshot(self):
+        person = self._create_person()
+        # Add a couple of children so the snapshot is non-trivial.
+        Report.objects.create(
+            person_id=person['id'],
+            source_type=Report.SourceType.FIRSTHAND,
+            narrative='first report',
+        )
+        Media.objects.create(
+            person_id=person['id'],
+            url='https://example.org/x.jpg',
+            media_type=Media.MediaType.PHOTO,
+        )
+
+        self.client.force_login(self.volunteer)
+        res = self.client.delete(f'/api/persons/{person["id"]}/')
+        self.assertEqual(res.status_code, 204)
+
+        logs = AuditLog.objects.filter(
+            target_type='person',
+            target_id=person['id'],
+            action=AuditLog.Action.DELETED,
+        )
+        self.assertEqual(logs.count(), 1)
+        log = logs.first()
+        self.assertEqual(log.user, self.volunteer)
+        self.assertIn('Test Person', log.details)
+        self.assertIn('Pakistan', log.details)
+        self.assertIn('reports=1', log.details)
+        self.assertIn('media=1', log.details)
+
+    # --- Cascade ----------------------------------------------------------
+
+    def test_delete_cascades_reports_media_and_relationships(self):
+        # Build a small graph: primary person + relative + child report +
+        # child media. After deletion everything except the audit row
+        # should be gone.
+        primary = self._create_person(name='Primary')
+        relative = self._create_person(name='Relative')
+
+        report = Report.objects.create(
+            person_id=primary['id'],
+            source_type=Report.SourceType.FIRSTHAND,
+            narrative='a report',
+        )
+        media = Media.objects.create(
+            person_id=primary['id'],
+            url='https://example.org/x.jpg',
+            media_type=Media.MediaType.PHOTO,
+        )
+        rel = FamilyRelationship.objects.create(
+            person_a_id=primary['id'],
+            person_b_id=relative['id'],
+            relationship_type=FamilyRelationship.RelationType.SIBLING,
+        )
+
+        self.client.force_login(self.volunteer)
+        res = self.client.delete(f'/api/persons/{primary["id"]}/')
+        self.assertEqual(res.status_code, 204)
+
+        self.assertFalse(Person.objects.filter(pk=primary['id']).exists())
+        self.assertFalse(Report.objects.filter(pk=report.pk).exists())
+        self.assertFalse(Media.objects.filter(pk=media.pk).exists())
+        # FamilyRelationship is CASCADE on both sides — primary's side
+        # vanishes; the relative row itself is untouched.
+        self.assertFalse(FamilyRelationship.objects.filter(pk=rel.pk).exists())
+        self.assertTrue(Person.objects.filter(pk=relative['id']).exists())
+        # Audit row is the only surviving trace.
+        self.assertTrue(
+            AuditLog.objects.filter(
+                target_type='person', target_id=primary['id'],
+                action=AuditLog.Action.DELETED,
+            ).exists()
+        )
