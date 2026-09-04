@@ -2,6 +2,7 @@ import { base } from '$app/paths';
 import type {
 	CaseworkRecord,
 	Contact,
+	FamilyRelationshipRow,
 	Media,
 	Paginated,
 	Person,
@@ -11,7 +12,7 @@ import type {
 	User,
 } from './types';
 
-export type { CaseworkRecord, Contact, Person, PersonCategory, Report, User, Paginated } from './types';
+export type { CaseworkRecord, Contact, FamilyRelationshipRow, Person, PersonCategory, Report, User, Paginated } from './types';
 
 const API_BASE = `${base}/api`;
 
@@ -229,6 +230,47 @@ export async function updatePerson(
 
 export async function deletePerson(id: number | string): Promise<void> {
 	await request<null>(`/persons/${id}/`, {
+		method: 'DELETE',
+	});
+}
+
+/* --- Family Relationships ------------------------------------------------
+   The CRUD UI on the person-detail page reads/writes through
+   `/api/relationships/`. The endpoint accepts `?person=X` to filter by
+   either side (see FamilyRelationshipFilter in cases/views.py), and
+   returns rows with `person_a_name` / `person_b_name` already denormalised.
+*/
+
+export async function getRelationships(
+	params: { person?: string } = {},
+): Promise<Paginated<FamilyRelationshipRow> | FamilyRelationshipRow[]> {
+	const qs = new URLSearchParams(params).toString();
+	return request<Paginated<FamilyRelationshipRow> | FamilyRelationshipRow[]>(
+		`/relationships/${qs ? '?' + qs : ''}`,
+	);
+}
+
+export async function createRelationship(
+	data: Partial<FamilyRelationshipRow>,
+): Promise<FamilyRelationshipRow> {
+	return request<FamilyRelationshipRow>('/relationships/', {
+		method: 'POST',
+		body: JSON.stringify(data),
+	});
+}
+
+export async function updateRelationship(
+	id: number,
+	data: Partial<FamilyRelationshipRow>,
+): Promise<FamilyRelationshipRow> {
+	return request<FamilyRelationshipRow>(`/relationships/${id}/`, {
+		method: 'PATCH',
+		body: JSON.stringify(data),
+	});
+}
+
+export async function deleteRelationship(id: number): Promise<void> {
+	await request<null>(`/relationships/${id}/`, {
 		method: 'DELETE',
 	});
 }

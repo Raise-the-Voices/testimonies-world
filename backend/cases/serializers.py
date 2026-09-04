@@ -134,6 +134,88 @@ class PersonWriteSerializer(serializers.ModelSerializer):
 
 
 class FamilyRelationshipSerializer(serializers.ModelSerializer):
+    """Family-relationship CRUD payload.
+
+    Read shape: full row plus denormalised `person_a_name` /
+    `person_b_name` so the frontend can render the list without
+    resolving FK IDs separately.
+
+    Write shape: accepts `person_a` and `person_b` as FK IDs (DRF
+    `PrimaryKeyRelatedField` is the default for `IntegerField`-with-FK
+    in `ModelSerializer`).
+
+    Validation (see `validate`):
+        - `person_a != person_b` — no self-link.
+        - One row per ordered `(person_a, person_b)` pair, regardless
+          of type — the model already enforces this via
+          `unique_together = ['person_a', 'person_b']` but we drop
+          DRF's auto-validator (see `get_unique_together_validators`)
+          so the volunteer sees a friendlier message.
+        - For undirected types (`sibling`, `spouse`, `other`), the
+          reverse-ordered pair is also rejected. `parent` / `child`
+          allow either direction (direction carries meaning).
+    """
+
+    person_a_name = serializers.CharField(source='person_a.name', read_only=True)
+    person_b_name = serializers.CharField(source='person_b.name', read_only=True)
+
     class Meta:
         model = FamilyRelationship
-        fields = '__all__'
+        fields = [
+            'id', 'person_a', 'person_b',
+            'person_a_name', 'person_b_name',
+            'relationship_type', 'notes',
+        ]
+
+    def get_unique_together_validators(self):
+        # DRF's default UniqueTogetherValidator produces a generic
+        # 'non_field_errors: the fields person_a, person_b must make
+        # a unique set' that doesn't tell the volunteer what to fix.
+        # Our `validate()` below produces a clearer message; suppress
+        # the duplicate here so the user only sees ours.
+        return []
+
+    def validate(self, data):
+        # On PATCH the missing fields fall back to the existing row —
+        # otherwise `validate()` would reject an update that only
+        # changes `notes`.
+        instance = self.instance
+        person_a = data.get('person_a', getattr(instance, 'person_a_id', None))
+        person_b = data.get('person_b', getattr(instance, 'person_b_id', None))
+        rel_type = data.get(
+            'relationship_type',
+            getattr(instance, 'relationship_type', None),
+        )
+
+        if person_a is not None and person_a == person_b:
+            raise serializers.ValidationError(
+                {'person_b': 'A person cannot be related to themselves.'}
+            )
+
+        if person_a and person_b:
+            # Reject a second row on the same ordered pair regardless
+            # of type. unique_together on the model already does this,
+            # but a friendlier message helps the volunteer fix it.
+            dup_qs = FamilyRelationship.objects.filter(
+                person_a=person_a, person_b=person_b,
+            )
+            if instance:
+                dup_qs = dup_qs.exclude(pk=instance.pk)
+            if dup_qs.exists():
+                raise serializers.ValidationError(
+                    'A relationship already exists between these two persons.'
+                )
+
+            # For undirected types, also reject the reverse pair.
+            if rel_type in ('sibling', 'spouse', 'other'):
+                rev_qs = FamilyRelationship.objects.filter(
+                    person_a=person_b, person_b=person_a,
+                )
+                if instance:
+                    rev_qs = rev_qs.exclude(pk=instance.pk)
+                if rev_qs.exists():
+                    raise serializers.ValidationError(
+                        f'A {rel_type} relationship already exists in the opposite direction.'
+                    )
+
+        return data
