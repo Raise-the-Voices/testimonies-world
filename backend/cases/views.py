@@ -81,11 +81,35 @@ class PersonFilter(filters.FilterSet):
 
 
 class PersonViewSet(viewsets.ModelViewSet):
+    """Person CRUD.
+
+    Read access (list / retrieve): anyone (anonymous included) can read
+    published persons. `get_queryset` filters out unpublished rows for
+    anonymous viewers.
+
+    Write access (create / update / destroy):
+        - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+        - Must be a Volunteer, Advocate, or staff (`IsVolunteer`).
+
+    Delete is hard-delete (not soft) — Person has no provenance
+    requirement like Contact does (see contacts/views.py). FKs are CASCADE
+    in models.py, so deleting a Person removes its Reports (and any
+    Media those Reports reference), its Media rows, and any
+    FamilyRelationship rows on either end. The underlying files
+    (profile image, uploaded media) are removed automatically by
+    Django 3.1+'s FileField behaviour.
+
+    Every delete writes a single `AuditLog` row capturing the snapshot
+    *before* the row vanishes, so the deletion is traceable even after
+    the Person row is gone.
+    """
+
     filterset_class = PersonFilter
     search_fields = ['name', 'legal_name', 'aliases', 'country',
                      'summary_narrative']
     ordering_fields = ['name', 'country', 'current_status',
                        'updated_at', 'created_at']
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
 
     def get_queryset(self):
         qs = Person.objects.annotate(
@@ -94,6 +118,40 @@ class PersonViewSet(viewsets.ModelViewSet):
         if not self.request.user.is_authenticated:
             qs = qs.filter(is_published=True)
         return qs
+
+    # --- Audit log helpers (mirror ReportViewSet) -------------------------
+
+    def _client_ip(self) -> str | None:
+        xff = self.request.META.get('HTTP_X_FORWARDED_FOR')
+        if xff:
+            return xff.split(',')[0].strip()
+        return self.request.META.get('REMOTE_ADDR')
+
+    def _audit(self, action: str, instance: Person, details: str = '') -> None:
+        AuditLog.objects.create(
+            user=self.request.user if self.request.user.is_authenticated else None,
+            action=action,
+            target_type='person',
+            target_id=instance.pk,
+            details=details,
+            ip_address=self._client_ip(),
+        )
+
+    def perform_destroy(self, instance):
+        # Capture provenance BEFORE the row vanishes. CASCADE on
+        # Report.person, Media.person, and FamilyRelationship.person_a/b
+        # (cases/models.py) will delete those children + the underlying
+        # files; this audit row is the only surviving trace.
+        details = (
+            f'name={instance.name}; '
+            f'country={instance.country}; '
+            f'reports={instance.reports.count()}; '
+            f'media={instance.media_files.count()}; '
+            f'relationships='
+            f'{instance.relationships_as_a.count() + instance.relationships_as_b.count()}'
+        )
+        self._audit(AuditLog.Action.DELETED, instance, details)
+        instance.delete()
 
     def get_serializer_class(self):
         if self.action == 'list':

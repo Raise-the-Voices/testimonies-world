@@ -227,6 +227,12 @@ export async function updatePerson(
 	});
 }
 
+export async function deletePerson(id: number | string): Promise<void> {
+	await request<null>(`/persons/${id}/`, {
+		method: 'DELETE',
+	});
+}
+
 export async function createReport(data: Record<string, unknown>): Promise<Report> {
 	return request<Report>('/reports/', {
 		method: 'POST',
