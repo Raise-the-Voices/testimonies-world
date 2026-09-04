@@ -26,6 +26,7 @@
 				<li><a href="{base}/statistics" class:active={$page.url.pathname.startsWith(`${base}/statistics`)}>Statistics</a></li>
 				{#if isVolunteer(currentUser)}
 					<li><a href="{base}/submit" class:active={$page.url.pathname.startsWith(`${base}/submit`)}>Submit</a></li>
+					<li><a href="{base}/reports" class:active={$page.url.pathname.startsWith(`${base}/reports`)}>Reports</a></li>
 					<li><a href="{base}/watchdog" class:active={$page.url.pathname.startsWith(`${base}/watchdog`)}>Watchdog</a></li>
 				{/if}
 				{#if isAdvocate(currentUser)}
