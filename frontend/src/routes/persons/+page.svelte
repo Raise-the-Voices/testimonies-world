@@ -9,6 +9,8 @@
 	 */
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
+	import { page } from '$app/state';
+	import { fly } from 'svelte/transition';
 	import { getPersons, getCountries, getCategories } from '$lib/api';
 	import { statusLabels } from '$lib/StatusBadge.svelte';
 	import { debounce } from '$lib/debounce';
@@ -49,6 +51,40 @@
 	// View mode is owned by <ViewToggle>; we read it for the conditional
 	// markup but never write to localStorage directly here.
 	let viewMode: 'cards' | 'list' = $state('cards');
+
+	// --- Top-of-page banner (deleted=1 from /persons/[id] redirect) -------
+	// The detail page redirects here after a successful delete. We surface a
+	// transient banner mirroring /contacts/+page.svelte's pattern, then
+	// strip the query string so a refresh doesn't replay it.
+	type BannerKind = 'success' | 'error';
+	let bannerMsg = $state('');
+	let bannerKind = $state<BannerKind>('success');
+	const BANNER_TTL_MS = 3500;
+
+	$effect(() => {
+		if (!bannerMsg) return;
+		const id = setTimeout(() => (bannerMsg = ''), BANNER_TTL_MS);
+		return () => clearTimeout(id);
+	});
+
+	function consumeUrlBanner() {
+		const url = page.url;
+		const deleted = url.searchParams.get('deleted');
+		const err = url.searchParams.get('error');
+		if (deleted === '1') {
+			bannerKind = 'success';
+			bannerMsg = 'Case deleted.';
+		} else if (err) {
+			bannerKind = 'error';
+			bannerMsg = err;
+		}
+		if (deleted || err) {
+			const clean = new URL(url);
+			clean.searchParams.delete('deleted');
+			clean.searchParams.delete('error');
+			history.replaceState(history.state, '', clean.toString());
+		}
+	}
 
 	// Derived pagination + filter flag
 	let totalPages = $derived(Math.max(1, Math.ceil(totalCount / PAGE_SIZE)));
@@ -142,6 +178,9 @@
 	const debouncedSearch = debounce(() => applyFilters(), SEARCH_DEBOUNCE_MS);
 
 	onMount(async () => {
+		// Pull any `?deleted=1` / `?error=...` banner param first so the
+		// banner appears as soon as the catalog renders.
+		consumeUrlBanner();
 		// ViewToggle will overwrite viewMode from localStorage in its own
 		// onMount — see lib/ViewToggle.svelte.
 		const initial = currentFilterParams();
@@ -175,6 +214,25 @@
 			{/if}
 		</p>
 	</header>
+
+	{#if bannerMsg}
+		<div
+			class="banner banner-{bannerKind}"
+			role="status"
+			transition:fly={{ y: -8, duration: 220, opacity: 0 }}
+		>
+			<span class="banner-icon" aria-hidden="true">
+				{bannerKind === 'success' ? '✓' : '!'}
+			</span>
+			<span class="banner-text">{bannerMsg}</span>
+			<button
+				type="button"
+				class="banner-dismiss"
+				aria-label="Dismiss"
+				onclick={() => (bannerMsg = '')}
+			>×</button>
+		</div>
+	{/if}
 
 	{#if error}
 		<div class="error-banner-inline" role="alert">
@@ -384,4 +442,50 @@
 			transition: none;
 		}
 	}
+
+	/* Banner — success / error notification, top-of-page. Mirrors the
+	   same component on /contacts and /casework; duplicated locally
+	   rather than lifted to app.css because each page still defines it
+	   inline today. */
+		.banner {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			padding: 0.65rem 0.9rem;
+			border-radius: var(--radius-card);
+			font-size: 0.92rem;
+			margin-bottom: 1rem;
+		}
+		.banner-success {
+			background: #c6f6d5;
+			color: #22543d;
+			border: 1px solid #9ae6b4;
+		}
+		.banner-error {
+			background: #fed7d7;
+			color: #742a2a;
+			border: 1px solid #feb2b2;
+		}
+		.banner-icon {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 22px;
+			height: 22px;
+			border-radius: 50%;
+			font-weight: 700;
+			font-size: 0.85rem;
+		}
+		.banner-success .banner-icon { background: rgba(34, 84, 61, 0.18); color: #22543d; }
+		.banner-error .banner-icon { background: rgba(116, 42, 42, 0.2); color: #742a2a; }
+		.banner-text { flex: 1 1 auto; }
+		.banner-dismiss {
+			background: transparent;
+			border: none;
+			color: inherit;
+			font-size: 1.1rem;
+			padding: 0 0.25rem;
+			line-height: 1;
+			cursor: pointer;
+		}
 </style>

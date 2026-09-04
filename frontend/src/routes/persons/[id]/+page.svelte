@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { base } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
-	import { getPerson, getMedia, deleteMedia, deleteReport } from '$lib/api';
+	import { getPerson, getMedia, deleteMedia, deletePerson, deleteReport } from '$lib/api';
 	import { user, isVolunteer, isAdvocate } from '$lib/session';
 	import StatusBadge from '$lib/StatusBadge.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
@@ -24,6 +25,14 @@
 	let reportDeleteTarget = $state<Report | null>(null);
 	let reportDeleting = $state(false);
 	let reportDeleteError = $state('');
+
+	/* Person delete state — only one person in scope (this page IS the
+	   person), so no `personDeleteTarget` object is needed; we reuse
+	   the `person` value itself. Distinct `person*` names avoid
+	   collisions with the media / report delete state above. */
+	let personDeleteOpen = $state(false);
+	let personDeleting = $state(false);
+	let personDeleteError = $state('');
 
 	// Permission helper: only advocates+admin can put media in the
 	// 'sensitive' tier. Mirrors backend `_can_mark_sensitive` in
@@ -243,6 +252,41 @@
 		} finally {
 			reportDeleting = false;
 		}
+	}
+
+	/* Person delete — hard delete; on success we navigate away because
+	   the page itself is gone. The destination reads `?deleted=1` and
+	   surfaces a transient success banner (see /persons/+page.svelte).
+	   CASCADE on the FKs in cases/models.py means reports, media, and
+	   family links vanish along with the Person row; the audit row in
+	   AuditLog is the only surviving trace. */
+	function startPersonDelete() {
+		personDeleteOpen = true;
+		personDeleteError = '';
+	}
+
+	function cancelPersonDelete() {
+		if (personDeleting) return;
+		personDeleteOpen = false;
+		personDeleteError = '';
+	}
+
+	async function confirmPersonDelete() {
+		if (!person) return;
+		personDeleting = true;
+		try {
+			await deletePerson(person.id);
+			personDeleteOpen = false;
+			// `goto` preserves the `base` prefix automatically. The query
+			// param drives the success banner on /persons.
+			await goto(`${base}/persons?deleted=1`);
+		} catch (e: unknown) {
+			personDeleteError =
+				e instanceof Error ? e.message : "Couldn't delete that case.";
+			personDeleting = false;
+		}
+		// On success we navigate away — keep `personDeleting = true` so the
+		// modal button stays disabled during the redirect (no flicker).
 	}
 
 	onMount(loadPerson);
@@ -598,12 +642,23 @@
 		<!-- Sidebar -->
 		<div class="sidebar-container">
 			{#if isVolunteer(currentUser)}
-				<div class="mb-1">
+				<!--
+					Action group: Edit and Delete are siblings inside a flex
+					container — never nest a <button> inside an <a> (HTML
+					forbids interactive descendants, and it triggers an a11y
+					warning under Svelte's a11y rules). This mirrors the
+					sibling pattern in `.report-card-header` above.
+				-->
+				<div class="mb-1 sidebar-actions">
 					<a
 						href="{base}/persons/{person.id}/edit"
-						class="btn btn-primary"
-						style="width:100%;text-align:center;display:block;">Edit Case</a
+						class="btn btn-primary sidebar-actions-edit">Edit Case</a
 					>
+					<button
+						type="button"
+						class="btn btn-danger sidebar-actions-delete"
+						onclick={startPersonDelete}
+					>Delete Case</button>
 				</div>
 			{/if}
 			<div class="sidebar-top">
@@ -812,6 +867,40 @@
 				<button type="button" class="btn btn-secondary" onclick={cancelReportDelete} disabled={reportDeleting}>Cancel</button>
 				<button type="button" class="btn btn-danger" onclick={confirmReportDelete} disabled={reportDeleting}>
 					{reportDeleting ? 'Deleting…' : 'Delete'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Delete case confirm dialog — sibling to the report / media dialogs.
+     Warns the volunteer that the entire case (reports, media, family
+     links) will be cascaded away. On success we redirect to the catalog
+     with `?deleted=1`, which surfaces a transient banner there. -->
+{#if personDeleteOpen && person}
+	<div class="modal-overlay" onclick={cancelPersonDelete} role="presentation"></div>
+	<div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-person-title">
+		<header class="modal-header">
+			<h2 id="delete-person-title">Delete case?</h2>
+			<button type="button" class="modal-close" aria-label="Close" onclick={cancelPersonDelete} disabled={personDeleting}>×</button>
+		</header>
+		<div class="modal-body">
+			{#if personDeleteError}
+				<div class="form-error" role="alert">
+					<span class="form-error-icon" aria-hidden="true">!</span>
+					<span>{personDeleteError}</span>
+				</div>
+			{/if}
+			<p>
+				This will permanently delete
+				<strong>{person.name}</strong>
+				and <strong>every report, piece of media, and family link</strong>
+				attached to this case. It cannot be recovered.
+			</p>
+			<div class="modal-actions">
+				<button type="button" class="btn btn-secondary" onclick={cancelPersonDelete} disabled={personDeleting}>Cancel</button>
+				<button type="button" class="btn btn-danger" onclick={confirmPersonDelete} disabled={personDeleting}>
+					{personDeleting ? 'Deleting…' : 'Delete'}
 				</button>
 			</div>
 		</div>
@@ -1434,6 +1523,26 @@
 		.media-add-btn-icon {
 			transition: none;
 		}
+	}
+
+	/* Sidebar action group — Edit (anchor) + Delete (button) as siblings
+	   inside a flex column. Edit keeps its full-width primary look;
+	   Delete sits below as a secondary-feeling danger action (smaller
+	   padding) so the two don't compete visually. */
+	.sidebar-actions {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.sidebar-actions-edit {
+		display: block;
+		text-align: center;
+		width: 100%;
+	}
+	.sidebar-actions-delete {
+		width: 100%;
+		font-size: 0.88rem;
+		padding: 0.55rem 0.85rem;
 	}
 
 	/* Modal — shared styles used by both MediaUploadModal (mounted) and
