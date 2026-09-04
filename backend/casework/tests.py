@@ -19,6 +19,8 @@ from rest_framework.test import APIClient
 from .models import CaseworkRecord, Notification, UserPreference
 from . import notifications
 
+from cases.models import AuditLog
+
 
 User = get_user_model()
 
@@ -378,3 +380,78 @@ class SmtpConfigTests(SimpleTestCase):
         self.assertEqual(settings.EMAIL_PORT, 587)
         self.assertTrue(settings.EMAIL_USE_TLS)
         self.assertFalse(settings.EMAIL_USE_SSL)
+
+
+class CaseworkAuditLogTests(TestCase):
+    """Coverage for AuditLog wiring on CaseworkRecordViewSet.
+
+    The other viewsets (Person / Report / Media / Contact) had partial
+    audit coverage; CaseworkRecord had none. These tests pin the new
+    contract: create + update + retrieve + destroy all write audit rows,
+    with VIEWED for retrieves.
+    """
+
+    def setUp(self):
+        self.alice = make_user('alice', in_group='Advocate')
+        self.bob = make_user('bob', in_group='Advocate')
+        self.client = APIClient()
+        self.client.force_login(self.alice)
+
+    def _create_record(self):
+        return CaseworkRecord.objects.create(
+            action_type=CaseworkRecord.ActionType.OUTREACH,
+            description='x',
+            date=date(2026, 9, 2),
+            performed_by=self.bob,
+        )
+
+    def test_create_writes_edited_audit_row(self):
+        res = self.client.post('/api/casework/', {
+            'action_type': CaseworkRecord.ActionType.OUTREACH,
+            'description': 'a record',
+            'date': '2026-09-02',
+        })
+        self.assertEqual(res.status_code, 201)
+        rid = res.json()['id']
+        rows = AuditLog.objects.filter(
+            target_type='casework', target_id=rid,
+            action=AuditLog.Action.EDITED,
+        )
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows.first().user, self.alice)
+        self.assertEqual(rows.first().details, 'created')
+
+    def test_update_writes_edited_audit_row(self):
+        record = self._create_record()
+        self.client.patch(
+            f'/api/casework/{record.pk}/', {'description': 'updated'},
+        )
+        rows = AuditLog.objects.filter(
+            target_type='casework', target_id=record.pk,
+            action=AuditLog.Action.EDITED,
+        )
+        self.assertGreaterEqual(rows.count(), 1)
+        self.assertEqual(rows.last().details, 'updated')
+
+    def test_retrieve_writes_viewed_audit_row(self):
+        record = self._create_record()
+        self.client.get(f'/api/casework/{record.pk}/')
+        rows = AuditLog.objects.filter(
+            target_type='casework', target_id=record.pk,
+            action=AuditLog.Action.VIEWED,
+        )
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows.first().user, self.alice)
+
+    def test_destroy_writes_deleted_audit_row(self):
+        # The other viewsetsets already audited destroys; casework
+        # was the silent outlier. Pin it.
+        record = self._create_record()
+        self.client.delete(f'/api/casework/{record.pk}/')
+        self.assertFalse(CaseworkRecord.objects.filter(pk=record.pk).exists())
+        rows = AuditLog.objects.filter(
+            target_type='casework', target_id=record.pk,
+            action=AuditLog.Action.DELETED,
+        )
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows.first().user, self.alice)
