@@ -367,7 +367,12 @@ class MediaViewSet(viewsets.ModelViewSet):
 
     serializer_class = MediaSerializer
     filterset_fields = ['person', 'report', 'media_type', 'visibility']
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    # Tightened to IsVolunteer to match PersonViewSet / ReportViewSet /
+    # FamilyRelationshipViewSet. The previous IsAuthenticatedOrReadOnly
+    # gate let any logged-in user (even an authenticated outsider with
+    # no group) upload/edit/delete media. The sensitive-tier gate inside
+    # perform_create / perform_update still applies on top of this.
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
 
     def get_queryset(self):
         qs = Media.objects.all()
