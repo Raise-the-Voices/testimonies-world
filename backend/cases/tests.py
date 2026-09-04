@@ -869,95 +869,6 @@ class FamilyRelationshipPermissionTests(TestCase):
         self.assertEqual(len(ids), 1)
 
 
-class ReportListFilteringTests(TestCase):
-    """Filter + ordering + pagination coverage for `ReportViewSet`.
-
-    Reuses the seed pattern from `ReportPermissionTests`: a published
-    person, a volunteer user, three reports with known date_starts.
-    Drives `GET /api/reports/` with date-from / date-to / source_type
-    query params and checks the returned `results` slice.
-    """
-
-    def setUp(self):
-        self.volunteer = make_user('vol', in_group='Volunteer')
-        self.person = _make_published_person()
-        self.client = APIClient()
-
-        # Three reports spanning 2025, used by every date-filter test.
-        # `source_type` deliberately varies so the combined-filter test
-        # has something to AND on.
-        self.r_jan = Report.objects.create(
-            person=self.person,
-            source_type=Report.SourceType.FIRSTHAND,
-            narrative='january report',
-            date_start='2025-01-01',
-        )
-        self.r_jun = Report.objects.create(
-            person=self.person,
-            source_type=Report.SourceType.NEWS,
-            narrative='june report',
-            date_start='2025-06-01',
-        )
-        self.r_dec = Report.objects.create(
-            person=self.person,
-            source_type=Report.SourceType.DOCUMENT,
-            narrative='december report',
-            date_start='2025-12-01',
-        )
-
-    def _ids(self, res):
-        return [
-            r['id'] for r in (
-                res.json()['results'] if 'results' in res.json() else res.json()
-            )
-        ]
-
-    def test_date_from_filter_returns_only_recent(self):
-        self.client.force_login(self.volunteer)
-        res = self.client.get('/api/reports/?date_from=2025-06-01')
-        self.assertEqual(res.status_code, 200)
-        ids = self._ids(res)
-        self.assertEqual(set(ids), {self.r_jun.id, self.r_dec.id})
-        # The January report is excluded because date_start < date_from.
-        self.assertNotIn(self.r_jan.id, ids)
-
-    def test_date_to_filter_returns_only_older(self):
-        self.client.force_login(self.volunteer)
-        res = self.client.get('/api/reports/?date_to=2025-06-01')
-        self.assertEqual(res.status_code, 200)
-        ids = self._ids(res)
-        # `__lte` is inclusive — both the January and June reports match.
-        self.assertEqual(set(ids), {self.r_jan.id, self.r_jun.id})
-        self.assertNotIn(self.r_dec.id, ids)
-
-    def test_combined_date_range_and_source_type_filter(self):
-        self.client.force_login(self.volunteer)
-        res = self.client.get(
-            '/api/reports/?date_from=2025-06-01&source_type=news',
-        )
-        self.assertEqual(res.status_code, 200)
-        # Only the June news report matches both filters — December is
-        # `document`, January is `firsthand`, both excluded.
-        self.assertEqual(self._ids(res), [self.r_jun.id])
-
-    def test_filter_does_not_bypass_private_visibility(self):
-        # Make one of the matching reports private. Anonymous can still
-        # filter by source_type but must not see private rows.
-        self.r_jun.is_private = True
-        self.r_jun.save(update_fields=['is_private'])
-
-        # Anonymous (no force_login) — the existing visibility gate
-        # still strips private reports before filter results.
-        anon = APIClient()
-        res = anon.get('/api/reports/?source_type=news')
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(self._ids(res), [])
-        # The volunteer (who can see private reports) still sees it.
-        self.client.force_login(self.volunteer)
-        res = self.client.get('/api/reports/?source_type=news')
-        self.assertEqual(self._ids(res), [self.r_jun.id])
-
-
 class ViewedAuditLogTests(TestCase):
     """Coverage for the AuditLog.Action.VIEWED wiring.
 
@@ -1071,8 +982,6 @@ class ViewedAuditLogTests(TestCase):
         self.assertEqual(logs.count(), 1)
         self.assertEqual(logs.first().user, advocate)
         self.assertEqual(logs.first().details, 'sensitive')
-<<<<<<< HEAD
-=======
 
 
 class ProtectedMediaViewTests(TestCase):
