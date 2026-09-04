@@ -32,7 +32,7 @@ jobs:
           PUBLIC_BASE_PATH: '/testimonies'
 
   backend:
-    name: Backend smoke
+    name: Backend check + tests + migration drift
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,12 +45,34 @@ jobs:
       - name: Install dependencies
         run: cd backend && pip install --no-cache-dir -r requirements.txt
 
-      # `manage.py check` doesn't hit the database, so it works without
-      # the production DATABASE_URL. Fails loudly if Django itself won't
-      # boot (missing migration, bad import, syntax error, etc.).
+      # `manage.py check` catches missing migration, bad import,
+      # syntax error, etc. without needing the production DB.
       - name: Django check
         run: cd backend && python manage.py check
         env:
           DJANGO_SECRET_KEY: ci-placeholder-not-secret
           DATABASE_URL: sqlite:///db.sqlite3
+          USE_SQLITE: 'True'
+
+      # Block any PR that introduces model changes without a migration.
+      # Without this, the next deploy would 500 on the missing
+      # `CREATE TABLE`/`ALTER COLUMN` and only the prod alert catches
+      # it. Pin it in CI.
+      - name: Migration drift check
+        run: cd backend && python manage.py makemigrations --check --dry-run
+        env:
+          DJANGO_SECRET_KEY: ci-placeholder-not-secret
+          DATABASE_URL: sqlite:///db.sqlite3
+          USE_SQLITE: 'True'
+
+      # Real test suite against an in-memory sqlite. The previous
+      # version of this job ran only `manage.py check` which let
+      # regressions through silently. `--keepdb` reuses the same
+      # in-memory db across tests for speed; `--verbosity=2` makes
+      # CI logs show the per-test outcome.
+      - name: Run tests
+        run: cd backend && python manage.py test --noinput --keepdb --verbosity=2
+        env:
+          DJANGO_SECRET_KEY: ci-placeholder-not-secret
+          DATABASE_URL: sqlite://:memory:
           USE_SQLITE: 'True'
