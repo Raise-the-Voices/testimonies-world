@@ -378,3 +378,45 @@ class SmtpConfigTests(SimpleTestCase):
         self.assertEqual(settings.EMAIL_PORT, 587)
         self.assertTrue(settings.EMAIL_USE_TLS)
         self.assertFalse(settings.EMAIL_USE_SSL)
+
+
+class CaseworkPerformedByGuardTests(TestCase):
+    """Mass-assignment guard: `performed_by` must be server-controlled.
+
+    Without `read_only_fields = ['performed_by', ...]` on
+    CaseworkRecordSerializer, an authenticated advocate could PATCH
+    `{"performed_by": <other-id>}` to silently reassign authorship —
+    a quiet takeover that the audit log wouldn't catch.
+    """
+
+    def setUp(self):
+        self.alice = make_user('alice', in_group='Advocate')
+        self.bob = make_user('bob', in_group='Advocate')
+        self.client = APIClient()
+        self.client.force_login(self.alice)
+
+    def test_performed_by_is_not_writable_via_api(self):
+        record = CaseworkRecord.objects.create(
+            action_type=CaseworkRecord.ActionType.OUTREACH,
+            description='x',
+            date=date(2026, 9, 2),
+            performed_by=self.alice,
+        )
+        # Try to reassign authorship to bob. The serializer should
+        # silently drop performed_by since it's now read-only.
+        res = self.client.patch(
+            f'/api/casework/{record.pk}/',
+            {'performed_by': self.bob.pk, 'description': 'silent takeover'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200)
+        # Author must NOT have changed.
+        self.assertEqual(
+            CaseworkRecord.objects.get(pk=record.pk).performed_by,
+            self.alice,
+        )
+        # Other fields are applied normally.
+        self.assertEqual(
+            CaseworkRecord.objects.get(pk=record.pk).description,
+            'silent takeover',
+        )
