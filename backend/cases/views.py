@@ -163,6 +163,16 @@ class PersonViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
+    def retrieve(self, request, *args, **kwargs):
+        # Audit-log every detail view of a Person. Anonymous retrievals are
+        # already gated to `is_published=True` by `get_queryset`, so this
+        # mostly captures authenticated users browsing case details —
+        # which is the paper trail CLAUDE.md promises but `AuditLog.Action`
+        # never actually wired up before this commit.
+        instance = self.get_object()
+        self._audit(AuditLog.Action.VIEWED, instance, '')
+        return super().retrieve(request, *args, **kwargs)
+
     @action(detail=False, methods=['get'])
     def watchdog(self, request):
         """Persons ordered by urgency — days since last report, weighted by critical status."""
@@ -286,6 +296,15 @@ class ReportViewSet(viewsets.ModelViewSet):
 
     # --- Authorship gate -------------------------------------------------
 
+    def retrieve(self, request, *args, **kwargs):
+        # Audit-log only when the report is private. Public reports are
+        # noise; private reports are the canonical narrative and the
+        # paper trail CLAUDE.md promises.
+        instance = self.get_object()
+        if instance.is_private:
+            self._audit(AuditLog.Action.VIEWED, instance, 'private')
+        return super().retrieve(request, *args, **kwargs)
+
     def _user_can_modify(self, user, instance: Report) -> bool:
         """Staff and Advocates can modify any report. Volunteers can only
         modify their own. Returns False for everyone else."""
@@ -384,11 +403,37 @@ class MediaViewSet(viewsets.ModelViewSet):
             qs = qs.exclude(visibility='sensitive')
         return qs
 
+    def retrieve(self, request, *args, **kwargs):
+        # Audit-log sensitive-tier media. The sensitive tier is the
+        # evidence tier — every retrieval gets a row.
+        instance = self.get_object()
+        if instance.visibility == Media.Visibility.SENSITIVE:
+            self._audit(AuditLog.Action.VIEWED, instance, 'sensitive')
+        return super().retrieve(request, *args, **kwargs)
+
     def _can_mark_sensitive(self, user) -> bool:
         """Only advocates and staff can put media in the sensitive tier."""
         if not user or not user.is_authenticated:
             return False
         return user.is_staff or user.groups.filter(name='Advocate').exists()
+
+    # --- Audit log helpers (mirror the other viewsets) -------------------
+
+    def _client_ip(self) -> str | None:
+        xff = self.request.META.get('HTTP_X_FORWARDED_FOR')
+        if xff:
+            return xff.split(',')[0].strip()
+        return self.request.META.get('REMOTE_ADDR')
+
+    def _audit(self, action: str, instance: Media, details: str = '') -> None:
+        AuditLog.objects.create(
+            user=self.request.user if self.request.user.is_authenticated else None,
+            action=action,
+            target_type='media',
+            target_id=instance.pk,
+            details=details,
+            ip_address=self._client_ip(),
+        )
 
     def _check_sensitive_upload(self, serializer):
         # When updating, the field may be omitted (partial PATCH) — fall
