@@ -172,3 +172,25 @@ class AuditLogTests(TestCase):
             target_type='contact', target_id=res.json()['id'],
         ).first()
         self.assertEqual(row.ip_address, '203.0.113.42')
+
+    def test_deleted_at_is_not_writable_via_api(self):
+        # Mass-assignment guard: deleted_at is the soft-delete
+        # tombstone. With `read_only_fields = ['deleted_at', ...]`
+        # on the serializer, an advocate cannot PATCH {"deleted_at":
+        # null} to undelete a tombstoned contact — that would
+        # corrupt audit semantics. Pin the read-only behavior.
+        c = Contact.objects.create(name='Layla H.', role='lawyer')
+        self.client.delete(f'/api/contacts/{c.pk}/')  # soft-delete via API
+        self.assertIsNotNone(Contact.objects.get(pk=c.pk).deleted_at)
+
+        # Attempt to undelete via PATCH. The serializer silently
+        # drops the read-only field. Use format='json' so `null` is
+        # serialized correctly instead of triggering APIClient's
+        # form-encoded "Cannot encode None" error.
+        res = self.client.patch(
+            f'/api/contacts/{c.pk}/',
+            {'deleted_at': None},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertIsNotNone(Contact.objects.get(pk=c.pk).deleted_at)
