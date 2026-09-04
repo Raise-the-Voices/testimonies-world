@@ -168,17 +168,19 @@ class MediaPermissionTests(TestCase):
         self.client.get(f'/api/media/{mid}/')
         self.assertEqual(res.status_code, 403)
 
-    def test_outsider_can_write_media(self):
-        # Logged-in non-volunteer is still IsAuthenticated; the gate
-        # is on the sensitive tier, not on group membership for writes.
-        # This is intentional — anyone authenticated can upload.
+    def test_outsider_cannot_write_media(self):
+        # AfterH2: MediaViewSet is now gated by IsVolunteer (matches
+        # Person/Report/FamilyRelationship). An authenticated outsider
+        # with no group fails the gate entirely — 403, not 201.
+        # The previous "anyone authenticated can upload" stance
+        # was the inconsistency this PR closes.
         self.client.force_login(self.outsider)
         res = self.client.post('/api/media/', {
             'url': 'https://example.org/x.jpg',
             'media_type': 'photo',
             'visibility': 'public',
         }, format='json')
-        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.status_code, 403)
 
 
 def _make_published_person() -> Person:
