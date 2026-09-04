@@ -5,6 +5,8 @@ from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from cases.models import AuditLog
+
 from . import notifications
 from .models import CaseworkRecord, Notification, UserPreference
 from .serializers import (
@@ -24,11 +26,30 @@ class CaseworkRecordViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return CaseworkRecord.objects.prefetch_related('persons').select_related('performed_by')
 
+    # --- Audit log helpers (mirror cases/views.py) -----------------------
+
+    def _client_ip(self) -> str | None:
+        xff = self.request.META.get('HTTP_X_FORWARDED_FOR')
+        if xff:
+            return xff.split(',')[0].strip()
+        return self.request.META.get('REMOTE_ADDR')
+
+    def _audit(self, action: str, instance: CaseworkRecord, details: str = '') -> None:
+        AuditLog.objects.create(
+            user=self.request.user if self.request.user.is_authenticated else None,
+            action=action,
+            target_type='casework',
+            target_id=instance.pk,
+            details=details,
+            ip_address=self._client_ip(),
+        )
+
     def perform_create(self, serializer):
         record = serializer.save(performed_by=self.request.user)
         event = notifications.build_create_event(record, self.request.user)
         notifications.emit_event(event)
         notifications.record_seen_by(record, self.request.user)
+        self._audit(AuditLog.Action.EDITED, record, 'created')
 
     def perform_update(self, serializer):
         prior_status = serializer.instance.status if serializer.instance else None
@@ -42,11 +63,13 @@ class CaseworkRecordViewSet(viewsets.ModelViewSet):
         )
         notifications.emit_event(event)
         notifications.record_seen_by(record, self.request.user)
+        self._audit(AuditLog.Action.EDITED, record, 'updated')
 
     def retrieve(self, request, *args, **kwargs):
-        """GET a record. Side effect: mark the caller's own notifications
-        on this record as read, and emit a 'seen by' notification to the
-        author — the human-sense "verification" the feature is named for."""
+        """GET a record. Side effects:
+        - mark the caller's own notifications on this record as read,
+        - emit a 'seen by' notification to the author,
+        - write an AuditLog.VIEWED row (casework is sensitive narrative)."""
         instance = self.get_object()
         Notification.objects.filter(
             recipient=request.user,
@@ -54,8 +77,15 @@ class CaseworkRecordViewSet(viewsets.ModelViewSet):
             is_read=False,
         ).update(is_read=True, read_at=timezone.now())
         notifications.record_seen_by(instance, request.user)
+        self._audit(AuditLog.Action.VIEWED, instance, '')
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
+
+    def perform_destroy(self, instance):
+        # Audit-log deletes (the other viewsets already do this; casework
+        # was missing it, so deletes were silently untracked).
+        self._audit(AuditLog.Action.DELETED, instance, '')
+        instance.delete()
 
 
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):

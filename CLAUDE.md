@@ -8,6 +8,13 @@ Person-centered casework platform for people facing oppression — enforced disa
 - **Database**: PostgreSQL `testimonies_world` on VM 100 (10.0.0.100:5432)
 - **Deployment**: Ansible to dedicated VM (TBD)
 
+## Backup policy
+- **RPO (Recovery Point Objective)**: 24 hours — `rtv-cases-db-backup.timer` runs `pg_dump` daily at 03:00 UTC; `Persistent=true` on the timer catches up missed runs after VM downtime.
+- **RTO (Recovery Time Objective)**: ~30 minutes — restore is `pg_restore -d testimonies_world db-<timestamp>.sql.zst`. Custom-format dumps support parallel restore if the dataset grows.
+- **Retention**: 30 days, in `/var/backups/rtv-cases/db-*.sql.zst` (pruned by `mtime +30` on every run).
+- **Verify**: every successful backup is sanity-checked with `pg_restore -l` (TOC validation) — silent corruption would otherwise pass the size check.
+- **Audit**: the script logs every run to journald via `StandardOutput=journal` on the unit. Check `journalctl -u rtv-cases-db-backup.service --since='-7 days'`.
+
 ## Dev access
 - URL: `demos.linkedtrust.us/testimonies/`
 - Django admin: `demos.linkedtrust.us/testimonies/admin/` (admin / tw-admin-2026)
