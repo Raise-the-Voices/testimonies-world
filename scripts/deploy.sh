@@ -23,10 +23,24 @@ git stash push -u -m "deploy-autostash-$(date +%s)" || true
 git fetch origin main
 git reset --hard origin/main
 
-# Re-apply local customizations. If there are real merge conflicts
-# (rare, only when both local and upstream changed the same lines),
-# log a warning and continue — better than aborting the deploy.
-git stash pop || echo "WARNING: stash pop had conflicts — manual review needed"
+# Re-apply local customizations. ABORT on conflict — better than
+# shipping half-merged source. The old code did `git stash pop ||
+# echo "WARNING: ..."` which masked the failure: under `set -e`,
+# the `||` defang made the script continue into `pip install` /
+# `migrate` / `npm run build` against a half-merged tree, which is
+# the worst-case failure mode (a successful-looking deploy that's
+# silently inconsistent).
+#
+# Failure-recovery path: `git checkout --theirs backend/.env` is the
+# only known-good resolution — `.env` is per-host (see commit 58da23a)
+# and never wants upstream's copy. Operators who hit a real conflict
+# should resolve it manually and re-run deploy.
+if ! git stash pop; then
+    echo "DEPLOY FAILED: 'git stash pop' had conflicts — refusing to deploy half-merged code." >&2
+    echo "Inspect with: git status" >&2
+    echo "Clean up with: git checkout --theirs backend/.env && git stash drop && bash scripts/deploy.sh" >&2
+    exit 1
+fi
 
 # Backend
 cd backend
