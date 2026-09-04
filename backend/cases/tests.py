@@ -558,3 +558,312 @@ class PersonDeletePermissionTests(TestCase):
                 action=AuditLog.Action.DELETED,
             ).exists()
         )
+
+
+class FamilyRelationshipPermissionTests(TestCase):
+    """Permission + audit + validation coverage for FamilyRelationshipViewSet.
+
+    Mirrors `PersonDeletePermissionTests`. Coverage areas:
+        - Volunteer / outsider / anonymous gating on POST / PATCH / DELETE
+        - Audit log on each successful write with `target_type='relationship'`
+        - Validator: self-link rejected, same-pair duplicate rejected,
+          reverse-pair for undirected types rejected, reverse-pair for
+          directed types (parent/child) allowed
+        - `?person=X` filter returns rows where X is on either side
+    """
+
+    def setUp(self):
+        self.volunteer = make_user('vol', in_group='Volunteer')
+        self.advocate = make_user('aisha', in_group='Advocate')
+        self.staff = make_user('admin', is_staff=True)
+        self.outsider = make_user('random')  # authenticated, no group
+        self.client = APIClient()
+
+        # Two seed persons for relationship tests. Created via the API
+        # so we exercise the same gating the frontend uses.
+        self.client.force_login(self.volunteer)
+        self.alice = self.client.post(
+            '/api/persons/',
+            {'name': 'Alice', 'country': 'Pakistan'},
+            format='json',
+        ).json()
+        self.bob = self.client.post(
+            '/api/persons/',
+            {'name': 'Bob', 'country': 'Pakistan'},
+            format='json',
+        ).json()
+        # Reset session so subsequent phases start anonymous unless they
+        # explicitly re-authenticate.
+        self.client.session.pop('_auth_user_id', None)
+        self.client.session.pop('_auth_user_backend', None)
+        self.client.session.pop('_auth_user_hash', None)
+        self.client.session.save()
+
+    def _payload(self, **overrides):
+        p = {
+            'person_a': self.alice['id'],
+            'person_b': self.bob['id'],
+            'relationship_type': 'sibling',
+            'notes': '',
+        }
+        p.update(overrides)
+        return p
+
+    # --- Permission gate --------------------------------------------------
+
+    def test_volunteer_can_create_relationship(self):
+        self.client.force_login(self.volunteer)
+        res = self.client.post('/api/relationships/', self._payload(), format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertTrue(
+            FamilyRelationship.objects.filter(pk=res.json()['id']).exists()
+        )
+
+    def test_volunteer_can_update_relationship(self):
+        self.client.force_login(self.volunteer)
+        rid = self.client.post(
+            '/api/relationships/', self._payload(), format='json',
+        ).json()['id']
+
+        res = self.client.patch(
+            f'/api/relationships/{rid}/',
+            {'relationship_type': 'spouse'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        rel = FamilyRelationship.objects.get(pk=rid)
+        self.assertEqual(rel.relationship_type, 'spouse')
+
+    def test_volunteer_can_delete_relationship(self):
+        self.client.force_login(self.volunteer)
+        rid = self.client.post(
+            '/api/relationships/', self._payload(), format='json',
+        ).json()['id']
+
+        res = self.client.delete(f'/api/relationships/{rid}/')
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(FamilyRelationship.objects.filter(pk=rid).exists())
+
+    def test_outsider_cannot_modify_relationships(self):
+        anon = APIClient()
+
+        # POST → 403.
+        res = anon.post('/api/relationships/', self._payload(), format='json')
+        self.assertEqual(res.status_code, 403)
+
+        # PATCH → 403. (Create one as volunteer first so the user can attempt to patch it.)
+        self.client.force_login(self.volunteer)
+        rid = self.client.post(
+            '/api/relationships/', self._payload(), format='json',
+        ).json()['id']
+        anon.force_login(self.outsider)
+        res = anon.patch(
+            f'/api/relationships/{rid}/',
+            {'relationship_type': 'spouse'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 403)
+        # Row untouched.
+        self.assertEqual(
+            FamilyRelationship.objects.get(pk=rid).relationship_type, 'sibling',
+        )
+
+        # DELETE → 403.
+        res = anon.delete(f'/api/relationships/{rid}/')
+        self.assertEqual(res.status_code, 403)
+        self.assertTrue(FamilyRelationship.objects.filter(pk=rid).exists())
+
+    def test_anonymous_cannot_write(self):
+        anon = APIClient()
+        for verb, path, body in [
+            ('post', '/api/relationships/', self._payload()),
+            ('patch', f'/api/relationships/{self.alice['id']}/', {'notes': 'x'}),
+            ('delete', f'/api/relationships/{self.alice['id']}/', None),
+        ]:
+            if body is None:
+                res = getattr(anon, verb)(path)
+            else:
+                res = getattr(anon, verb)(path, body, format='json')
+            self.assertIn(res.status_code, (401, 403), f'{verb} {path}: {res.content}')
+
+    def test_reads_are_open_to_anonymous(self):
+        # Volunteer creates a row; anonymous can still GET the list.
+        self.client.force_login(self.volunteer)
+        rid = self.client.post(
+            '/api/relationships/', self._payload(), format='json',
+        ).json()['id']
+        anon = APIClient()
+        res = anon.get('/api/relationships/')
+        self.assertEqual(res.status_code, 200)
+        ids = [
+            r['id'] for r in (
+                res.json()['results'] if 'results' in res.json() else res.json()
+            )
+        ]
+        self.assertIn(rid, ids)
+
+    # --- Audit log -------------------------------------------------------
+
+    def test_create_writes_audit_row(self):
+        self.client.force_login(self.volunteer)
+        res = self.client.post('/api/relationships/', self._payload(), format='json')
+        rid = res.json()['id']
+
+        logs = AuditLog.objects.filter(
+            target_type='relationship', target_id=rid,
+        )
+        self.assertEqual(logs.count(), 1)
+        self.assertEqual(logs.first().action, AuditLog.Action.EDITED)
+        self.assertEqual(logs.first().user, self.volunteer)
+        self.assertIn('created', logs.first().details)
+
+    def test_update_writes_audit_row_with_changed_fields(self):
+        self.client.force_login(self.volunteer)
+        rid = self.client.post(
+            '/api/relationships/', self._payload(), format='json',
+        ).json()['id']
+
+        self.client.patch(
+            f'/api/relationships/{rid}/',
+            {'relationship_type': 'spouse', 'notes': 'updated'},
+            format='json',
+        )
+
+        logs = AuditLog.objects.filter(
+            target_type='relationship', target_id=rid,
+            action=AuditLog.Action.EDITED,
+        ).order_by('timestamp')
+        # 1 from create + 1 from update.
+        self.assertEqual(logs.count(), 2)
+        update_log = logs.last()
+        self.assertIn('relationship_type', update_log.details)
+        self.assertIn('notes', update_log.details)
+
+    def test_delete_writes_audit_row_with_provenance(self):
+        self.client.force_login(self.volunteer)
+        rid = self.client.post(
+            '/api/relationships/', self._payload(), format='json',
+        ).json()['id']
+
+        self.client.delete(f'/api/relationships/{rid}/')
+
+        self.assertFalse(FamilyRelationship.objects.filter(pk=rid).exists())
+        logs = AuditLog.objects.filter(
+            target_type='relationship', target_id=rid,
+            action=AuditLog.Action.DELETED,
+        )
+        self.assertEqual(logs.count(), 1)
+        details = logs.first().details
+        self.assertIn(f'person_a_id={self.alice["id"]}', details)
+        self.assertIn(f'person_b_id={self.bob["id"]}', details)
+        self.assertIn('relationship_type=sibling', details)
+
+    # --- Validation ------------------------------------------------------
+
+    def test_self_relationship_rejected(self):
+        self.client.force_login(self.volunteer)
+        res = self.client.post(
+            '/api/relationships/',
+            self._payload(person_b=self.alice['id']),
+            format='json',
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('themselves', str(res.content).lower())
+
+    def test_same_pair_duplicate_rejected(self):
+        self.client.force_login(self.volunteer)
+        self.client.post('/api/relationships/', self._payload(), format='json')
+
+        # Same A, B, different type — should still fail (one row per
+        # ordered pair regardless of type).
+        res = self.client.post(
+            '/api/relationships/',
+            self._payload(relationship_type='spouse'),
+            format='json',
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('already exists', str(res.content).lower())
+
+    def test_reverse_pair_undirected_rejected(self):
+        # sibling: reverse (B, A, sibling) should fail.
+        self.client.force_login(self.volunteer)
+        self.client.post('/api/relationships/', self._payload(), format='json')
+
+        res = self.client.post(
+            '/api/relationships/',
+            self._payload(person_a=self.bob['id'], person_b=self.alice['id']),
+            format='json',
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('opposite direction', str(res.content).lower())
+
+    def test_reverse_pair_directed_allowed(self):
+        # parent: reverse (B, A, parent) should succeed — direction
+        # carries meaning (B is parent of A is a different fact from
+        # A is parent of B).
+        self.client.force_login(self.volunteer)
+        first = self.client.post(
+            '/api/relationships/',
+            self._payload(relationship_type='parent'),
+            format='json',
+        )
+        self.assertEqual(first.status_code, 201, first.content)
+
+        second = self.client.post(
+            '/api/relationships/',
+            self._payload(
+                person_a=self.bob['id'],
+                person_b=self.alice['id'],
+                relationship_type='parent',
+            ),
+            format='json',
+        )
+        self.assertEqual(second.status_code, 201, second.content)
+
+    # --- Filter ----------------------------------------------------------
+
+    def test_filter_by_person_returns_both_sides(self):
+        # Create a row where Alice is on side A and another where Alice
+        # is on side B (with a third person, Carol).
+        self.client.force_login(self.volunteer)
+        carol = self.client.post(
+            '/api/persons/',
+            {'name': 'Carol', 'country': 'Pakistan'},
+            format='json',
+        ).json()
+
+        self.client.post(
+            '/api/relationships/',
+            self._payload(),  # alice ↔ bob (alice is person_a)
+            format='json',
+        )
+        self.client.post(
+            '/api/relationships/',
+            {
+                'person_a': carol['id'],
+                'person_b': self.alice['id'],
+                'relationship_type': 'sibling',
+                'notes': '',
+            },
+            format='json',
+        )
+
+        # ?person=alice should return both rows.
+        res = self.client.get(f'/api/relationships/?person={self.alice["id"]}')
+        self.assertEqual(res.status_code, 200)
+        ids = [
+            r['id'] for r in (
+                res.json()['results'] if 'results' in res.json() else res.json()
+            )
+        ]
+        self.assertEqual(len(ids), 2)
+
+        # ?person=bob should return just the one row.
+        res = self.client.get(f'/api/relationships/?person={self.bob["id"]}')
+        self.assertEqual(res.status_code, 200)
+        ids = [
+            r['id'] for r in (
+                res.json()['results'] if 'results' in res.json() else res.json()
+            )
+        ]
+        self.assertEqual(len(ids), 1)

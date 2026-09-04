@@ -1,4 +1,4 @@
-from django.db.models import Count, Max
+from django.db.models import Count, Max, Q
 from django_filters import rest_framework as filters
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
@@ -392,6 +392,117 @@ class CaseCategoryViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny]
 
 
+class FamilyRelationshipFilter(filters.FilterSet):
+    """Filter for /api/relationships/.
+
+    `relationship_type` is a plain equality filter; `person=X` matches
+    rows where X is on either side (the model has both `person_a` and
+    `person_b` FKs, so a default equality on either would silently
+    miss the other side).
+    """
+
+    person = filters.NumberFilter(method='filter_person')
+
+    def filter_person(self, queryset, name, value):
+        return queryset.filter(Q(person_a_id=value) | Q(person_b_id=value))
+
+    class Meta:
+        model = FamilyRelationship
+        fields = ['relationship_type']
+
+
 class FamilyRelationshipViewSet(viewsets.ModelViewSet):
-    queryset = FamilyRelationship.objects.select_related('person_a', 'person_b')
+    """Family-relationship CRUD.
+
+    Read access: anyone (anonymous included) — the family list is part
+    of every person-detail response.
+
+    Write access (create / update / destroy):
+        - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+        - Must be a Volunteer / Advocate / staff (`IsVolunteer`).
+
+    Audit log: every successful create/update/delete writes an `AuditLog`
+    row with `target_type='relationship'`, mirroring the Report / Person
+    / Contact viewsets. Provenance is captured *before* delete so the
+    audit row survives the cascade.
+
+    Validation: the serializer enforces no-self-link and no-duplicate-
+    pair (see `FamilyRelationshipSerializer.validate`). Schema-level
+    validation only — no business logic in the viewset beyond the
+    gate + audit trail.
+    """
+
+    queryset = (
+        FamilyRelationship.objects
+        .select_related('person_a', 'person_b')
+        .order_by('id')
+    )
     serializer_class = FamilyRelationshipSerializer
+    filterset_class = FamilyRelationshipFilter
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
+
+    # --- Audit log helpers (mirror ContactViewSet / PersonViewSet) -------
+
+    def _client_ip(self) -> str | None:
+        xff = self.request.META.get('HTTP_X_FORWARDED_FOR')
+        if xff:
+            return xff.split(',')[0].strip()
+        return self.request.META.get('REMOTE_ADDR')
+
+    def _audit(self, action: str, instance: FamilyRelationship, details: str = '') -> None:
+        AuditLog.objects.create(
+            user=self.request.user if self.request.user.is_authenticated else None,
+            action=action,
+            target_type='relationship',
+            target_id=instance.pk,
+            details=details,
+            ip_address=self._client_ip(),
+        )
+
+    # --- Write hooks -----------------------------------------------------
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        self._audit(AuditLog.Action.EDITED, instance, 'created')
+
+    def perform_update(self, serializer):
+        # Capture the field-level delta so the audit row tells us what
+        # actually changed, not just that something did. We snapshot
+        # only the writable primitive fields — read-only derived
+        # fields like `person_a_name` have no model attribute, and FK
+        # fields need `to_representation` to give us the underlying
+        # ID rather than the related object.
+        before = {
+            name: serializer.fields[name].to_representation(
+                getattr(serializer.instance, name)
+            )
+            for name in serializer.fields
+            if not serializer.fields[name].read_only
+        }
+        instance = serializer.save()
+        after = {
+            name: serializer.fields[name].to_representation(
+                getattr(instance, name)
+            )
+            for name in serializer.fields
+            if not serializer.fields[name].read_only
+        }
+        changed = [
+            f for f in before
+            if str(before[f]) != str(after[f])
+        ]
+        details = f'updated fields: {", ".join(changed) or "(none)"}'
+        self._audit(AuditLog.Action.EDITED, instance, details)
+
+    def perform_destroy(self, instance):
+        # Capture provenance BEFORE the row vanishes. CASCADE on the
+        # FKs will fire if either Person is later hard-deleted, but
+        # the audit row is the only surviving trace of *this*
+        # relationship regardless.
+        details = (
+            f'person_a_id={instance.person_a_id}; '
+            f'person_b_id={instance.person_b_id}; '
+            f'relationship_type={instance.relationship_type}'
+        )
+        self._audit(AuditLog.Action.DELETED, instance, details)
+        instance.delete()
