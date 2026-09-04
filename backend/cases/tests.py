@@ -183,6 +183,70 @@ class MediaPermissionTests(TestCase):
         self.assertEqual(res.status_code, 403)
 
 
+class MediaUploadValidationTests(TestCase):
+    """Coverage for the file-extension + size validators on Media.file.
+
+    Backend validation closes a gap where a direct API POST could
+    upload any file type or any size up to nginx's transport-layer
+    cap. With these validators:
+      - extensions outside the allow-list → 400
+      - files larger than 50 MB → 400
+    The frontend already caps at 25 MB but the backend must hold the
+    line independently — clients should not be able to smuggle
+    .exe / .html / multi-GB files via curl.
+    """
+
+    def setUp(self):
+        self.volunteer = make_user('vol', in_group='Volunteer')
+        self.person = _make_published_person()
+        self.client = APIClient()
+        self.client.force_login(self.volunteer)
+
+    def test_disallowed_extension_rejected(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        payload = {
+            'person': self.person.id,
+            'media_type': 'photo',
+            'visibility': 'public',
+            'file': SimpleUploadedFile(
+                'malware.exe',
+                b'MZ' + b'\x00' * 100,
+                'application/octet-stream',
+            ),
+        }
+        res = self.client.post('/api/media/', payload, format='multipart')
+        self.assertEqual(res.status_code, 400)
+
+    def test_allowed_extension_accepted(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        payload = {
+            'person': self.person.id,
+            'media_type': 'photo',
+            'visibility': 'public',
+            'file': SimpleUploadedFile(
+                'photo.jpg', b'fake-jpeg', 'image/jpeg',
+            ),
+        }
+        res = self.client.post('/api/media/', payload, format='multipart')
+        self.assertEqual(res.status_code, 201)
+
+    def test_oversized_file_rejected(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        # 51 MB — over the 50 MB cap.
+        big = b'\x00' * (51 * 1024 * 1024)
+        payload = {
+            'person': self.person.id,
+            'media_type': 'photo',
+            'visibility': 'public',
+            'file': SimpleUploadedFile('huge.jpg', big, 'image/jpeg'),
+        }
+        res = self.client.post('/api/media/', payload, format='multipart')
+        self.assertEqual(res.status_code, 400)
+        # Body should mention the cap.
+        body = res.content.decode().lower()
+        self.assertIn('too large', body)
+
+
 def _make_published_person() -> Person:
     """Tiny helper so each test starts from a known published Person row."""
     return Person.objects.create(
