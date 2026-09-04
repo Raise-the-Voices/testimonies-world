@@ -3,6 +3,7 @@ Django settings for testimonies project (testimonies.world).
 """
 
 import os
+import sys
 from pathlib import Path
 
 from decouple import config
@@ -23,6 +24,46 @@ FORCE_SCRIPT_NAME = SCRIPT_NAME or None
 # otherwise Google rejects the handshake with `redirect_uri_mismatch`
 # (2026-08-27 outage on cases.raisethevoices.org).
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# --- Cookie + transport security ---------------------------------------
+# Defaults are safe (HTTPS-only, SameSite=Lax) for any DEBUG=False
+# deployment. We pin them explicitly rather than relying on Django's
+# auto-derived defaults — explicit settings make the security posture
+# auditable from a single grep.
+#
+# Test-environment note: the .env on this VM sets DEBUG=False (matching
+# prod), but the Django test client runs over plain HTTP and can't
+# `Set-Cookie: Secure` or follow SECURE_SSL_REDIRECT. So we disable
+# the runtime-only settings (cookie-secure, ssl-redirect) under the
+# test runner; HSTS settings are kept because they're response headers
+# — test client ignores them.
+#
+# `not DEBUG` is preserved as the default so a real prod deploy
+# (DEBUG=False) gets the hardened behavior automatically.
+
+_IS_TEST_RUNNER = 'test' in sys.argv
+_PROD_HARDEN = not DEBUG and not _IS_TEST_RUNNER
+
+SESSION_COOKIE_SECURE = _PROD_HARDEN
+CSRF_COOKIE_SECURE = _PROD_HARDEN
+SESSION_COOKIE_HTTPONLY = True  # not a default in older Django versions
+CSRF_COOKIE_HTTPONLY = False     # JS needs to read the CSRF cookie
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+
+# HSTS — once a browser has seen the header, all subsequent
+# requests to the domain must be HTTPS for the configured lifetime.
+# 1 year is the recommended production floor. Include subdomains
+# since cases.raisethevoices.org lives on the same infra as other
+# properties (e.g. help.raisethevoices.org) that share the same
+# CA / cert chain.
+SECURE_HSTS_SECONDS = 31536000  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+
+# Always redirect plain-HTTP requests to HTTPS. Disabled in tests
+# (the test client can't follow TLS redirects on a plain-HTTP loopback).
+SECURE_SSL_REDIRECT = _PROD_HARDEN
 
 INSTALLED_APPS = [
     'django.contrib.admin',
