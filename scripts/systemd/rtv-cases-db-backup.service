@@ -1,0 +1,41 @@
+[Unit]
+Description=rtv-cases DB backup — pg_dump of the testimonies-world database
+Documentation=https://github.com/Raise-the-Voices/testimonies-world
+# Run after the backend is up — though the backup doesn't depend on
+# the Django process directly, we want pg_dump to take its
+# connection from the same Postgres instance the backend uses, and
+# any Postgres restart races are minimized by sequencing.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+# Run the backup script. Sudo isn't needed because /opt/rtv-cases
+# is owned by the deploy group; the script itself reads its own
+# .env file. Output goes to journald — keep the unit free of
+# file-based logs so logrotate doesn't need to know about us.
+ExecStart=/opt/rtv-cases/scripts/backup_db.sh
+
+# Environment overrides — defaults inside the script are also
+# sensible, but documenting them here makes the schedule clear.
+Environment=BACKUP_DIR=/var/backups/rtv-cases
+Environment=BACKUP_RETENTION_DAYS=30
+
+# Don't auto-restart on failure — a daily timer-driven oneshot
+# that fails should stay failed until an operator investigates,
+# not hammer Postgres at boot. Persistent=true on the timer side
+# means a missed run gets caught up on the next boot.
+Restart=no
+
+# Reasonable hardening:
+# - NoNewPrivileges: the backup script doesn't need escalation.
+# - PrivateTmp: nothing in /tmp to leak.
+# - ProtectSystem=strict: writes only allowed via BACKUP_DIR
+#   (which is /var/backups/rtv-cases, not under /usr or /boot).
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

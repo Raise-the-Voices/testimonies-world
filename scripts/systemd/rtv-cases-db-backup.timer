@@ -1,0 +1,19 @@
+[Unit]
+Description=Daily pg_dump for the testimonies-world database
+Documentation=https://github.com/Raise-the-Voices/testimonies-world
+
+[Timer]
+# Run once a day at 03:00 UTC. Off-peak for the volunteer team in
+# every region we serve (US/EU late night, MENA early morning before
+# the working day).
+OnCalendar=*-*-* 03:00:00 UTC
+AccuracySec=15m
+# Persistent=true means a missed run (e.g. the VM was off at 03:00)
+# gets caught up the next time the unit is started — typically the
+# next boot. Without this, you silently lose days of backups when
+# the VM goes down for an OS update.
+Persistent=true
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target
