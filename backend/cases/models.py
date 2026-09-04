@@ -1,5 +1,52 @@
 from django.conf import settings
+from django.core.validators import FileExtensionValidator
 from django.db import models
+
+
+# Centralized allow-list for uploaded evidence files. Photos, PDFs, and
+# short videos — what the platform actually accepts. Rejecting
+# arbitrary extensions at the model layer (rather than only at the
+# frontend) means a direct API POST can't smuggle a .exe or .html
+# into the bucket. nginx also caps request size at 25m but that's a
+# transport-layer limit; this is the application-layer contract.
+ALLOWED_UPLOAD_EXTENSIONS = [
+    # Images
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'tiff', 'bmp',
+    # Documents
+    'pdf',
+    # Video (small clips; large uploads use signed URLs in a future PR)
+    'mp4', 'mov', 'webm',
+]
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB — slightly above the 25 MB
+                                       # nginx cap to leave room for
+                                       # multipart overhead without
+                                       # letting the bucket fill with
+                                       # 1GB junk.
+
+# Single validator instance reused per save — Django looks up
+# `validators` on the field and runs each on every full_clean().
+upload_extension_validator = FileExtensionValidator(
+    allowed_extensions=ALLOWED_UPLOAD_EXTENSIONS,
+)
+
+
+def _upload_size_validator(file_obj):
+    """Reject oversized uploads at the model layer.
+
+    FileField doesn't accept `max_length` for size; we use a custom
+    validator that inspects `.size`. Runs on every `full_clean()` —
+    DRF's ModelSerializer calls `full_clean()` via `is_valid()` for
+    write operations, so an oversized direct API POST gets a clean
+    400 with the validator's message instead of silently filling
+    the bucket.
+    """
+    if file_obj.size > MAX_UPLOAD_BYTES:
+        from django.core.exceptions import ValidationError
+        raise ValidationError(
+            f'File too large: {file_obj.size} bytes '
+            f'(max {MAX_UPLOAD_BYTES} = {MAX_UPLOAD_BYTES // 1024 // 1024} MB).',
+            code='file_too_large',
+        )
 
 
 class CaseCategory(models.Model):
@@ -205,7 +252,11 @@ class Media(models.Model):
         Report, on_delete=models.CASCADE,
         null=True, blank=True, related_name='media_files'
     )
-    file = models.FileField(upload_to='uploads/', null=True, blank=True)
+    file = models.FileField(
+        upload_to='uploads/',
+        null=True, blank=True,
+        validators=[upload_extension_validator, _upload_size_validator],
+    )
     url = models.URLField(max_length=1000, blank=True, default='')
     media_type = models.CharField(
         max_length=20, choices=MediaType.choices, default=MediaType.PHOTO
