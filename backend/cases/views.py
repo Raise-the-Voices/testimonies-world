@@ -226,6 +226,27 @@ class PersonViewSet(viewsets.ModelViewSet):
         ])
 
 
+class ReportFilter(filters.FilterSet):
+    """Filter for `/api/reports/` used by the global `/reports` page.
+
+    Adds explicit `date_from` / `date_to` lookups on `date_start` (the
+    event date, NOT `created_at` — the latter would include back-dated
+    imports in the wrong bucket). The `filterset_fields = [...]` shortcut
+    only generates exact-match filters; lookup suffixes like
+    `date_start__gte` are not auto-generated, so they need to be declared
+    here. Query-param names (`date_from` / `date_to`) are cleaner than
+    the raw `date_start__gte` / `date_start__lte` lookups and let the
+    frontend stay agnostic to the underlying field name.
+    """
+
+    date_from = filters.DateFilter(field_name='date_start', lookup_expr='gte')
+    date_to = filters.DateFilter(field_name='date_start', lookup_expr='lte')
+
+    class Meta:
+        model = Report
+        fields = ['person', 'source_type', 'is_private']
+
+
 class ReportViewSet(viewsets.ModelViewSet):
     """Report CRUD.
 
@@ -239,6 +260,12 @@ class ReportViewSet(viewsets.ModelViewSet):
         - For update / destroy on an existing row, must additionally be
           the report's author OR staff OR in the Advocate group.
 
+    Filtering: `?search=` runs `SearchFilter` over `narrative` +
+    `source_attribution`. `?source_type=`, `?person=`, `?is_private=`
+    run `DjangoFilterBackend` via `ReportFilter`. `?date_from=` /
+    `?date_to=` are added by `ReportFilter` for the global reports
+    list page.
+
     Audit log: every update and destroy writes an `AuditLog` row with the
     actor, the changed field list, and the request IP. Matches the
     privacy model in CLAUDE.md (reports are the canonical narrative and
@@ -247,7 +274,7 @@ class ReportViewSet(viewsets.ModelViewSet):
 
     serializer_class = ReportSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
-    filterset_fields = ['person', 'source_type', 'is_private']
+    filterset_class = ReportFilter
     search_fields = ['narrative', 'source_attribution']
     ordering_fields = ['date_start', 'created_at']
 
