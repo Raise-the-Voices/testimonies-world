@@ -211,6 +211,23 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
+    # Rate limiting — protects against scrapers enumerating /api/persons/?
+    # search= and authenticated spammers POSTing /submit. Limits are
+    # generous enough not to trip real users but block obvious abuse:
+    #   - anon: 60 reads/min — covers a normal anon browser session
+    #     (catalog + a few detail views) without false positives
+    #   - user: 600 reads/min — 10/sec, well above any human pace
+    # Per-view overrides via `throttle_scope` on a per-action basis if
+    # a future endpoint needs a different rate.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '60/minute',
+        'user': '600/minute',
+    },
 }
 
 # CORS — allow SvelteKit dev server
