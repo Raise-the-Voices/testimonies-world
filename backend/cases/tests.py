@@ -956,3 +956,118 @@ class ReportListFilteringTests(TestCase):
         self.client.force_login(self.volunteer)
         res = self.client.get('/api/reports/?source_type=news')
         self.assertEqual(self._ids(res), [self.r_jun.id])
+
+
+class ViewedAuditLogTests(TestCase):
+    """Coverage for the AuditLog.Action.VIEWED wiring.
+
+    CLAUDE.md promises the audit log "tracks access to sensitive data",
+    but `VIEWED` was declared as an enum value and never called. This
+    change wires it into:
+        - PersonViewSet.retrieve         (every detail view)
+        - ReportViewSet.retrieve          (only when is_private=True)
+        - MediaViewSet.retrieve           (only when visibility='sensitive')
+    (Contact and CaseworkRecord have their own test classes — see
+    contacts/tests.py and casework/tests.py.)
+
+    The list endpoint (`GET /api/persons/` etc.) intentionally does NOT
+    write VIEWED rows — list traffic would balloon the audit table.
+    """
+
+    def setUp(self):
+        self.volunteer = make_user('vol', in_group='Volunteer')
+        self.person = _make_published_person()
+        self.client = APIClient()
+
+    def test_person_retrieve_writes_viewed_audit_row(self):
+        self.client.force_login(self.volunteer)
+        res = self.client.get(f'/api/persons/{self.person.id}/')
+        self.assertEqual(res.status_code, 200)
+        logs = AuditLog.objects.filter(
+            target_type='person', target_id=self.person.id,
+            action=AuditLog.Action.VIEWED,
+        )
+        self.assertEqual(logs.count(), 1)
+        self.assertEqual(logs.first().user, self.volunteer)
+
+    def test_person_list_does_not_write_viewed_audit_rows(self):
+        self.client.force_login(self.volunteer)
+        self.client.get('/api/persons/')
+        self.assertEqual(
+            AuditLog.objects.filter(action=AuditLog.Action.VIEWED).count(),
+            0,
+        )
+
+    def test_report_retrieve_logs_viewed_only_when_private(self):
+        public_report = Report.objects.create(
+            person=self.person,
+            source_type=Report.SourceType.FIRSTHAND,
+            narrative='public',
+            is_private=False,
+        )
+        private_report = Report.objects.create(
+            person=self.person,
+            source_type=Report.SourceType.FIRSTHAND,
+            narrative='private',
+            is_private=True,
+        )
+        self.client.force_login(self.volunteer)
+
+        # Public — no VIEWED row.
+        self.client.get(f'/api/reports/{public_report.id}/')
+        self.assertFalse(
+            AuditLog.objects.filter(
+                target_type='report', target_id=public_report.id,
+                action=AuditLog.Action.VIEWED,
+            ).exists()
+        )
+
+        # Private — VIEWED row written.
+        self.client.get(f'/api/reports/{private_report.id}/')
+        logs = AuditLog.objects.filter(
+            target_type='report', target_id=private_report.id,
+            action=AuditLog.Action.VIEWED,
+        )
+        self.assertEqual(logs.count(), 1)
+        self.assertEqual(logs.first().user, self.volunteer)
+        self.assertEqual(logs.first().details, 'private')
+
+    def test_media_retrieve_logs_viewed_only_when_sensitive(self):
+        advocate = make_user('aisha', in_group='Advocate')
+        public = Media.objects.create(
+            person=self.person,
+            url='https://example.org/p.jpg',
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.PUBLIC,
+        )
+        restricted = Media.objects.create(
+            person=self.person,
+            url='https://example.org/r.jpg',
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.RESTRICTED,
+        )
+        sensitive = Media.objects.create(
+            person=self.person,
+            url='https://example.org/s.jpg',
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.SENSITIVE,
+        )
+        self.client.force_login(advocate)
+
+        self.client.get(f'/api/media/{public.id}/')
+        self.client.get(f'/api/media/{restricted.id}/')
+        self.assertFalse(
+            AuditLog.objects.filter(
+                target_type='media', target_id__in=[public.id, restricted.id],
+                action=AuditLog.Action.VIEWED,
+            ).exists()
+        )
+
+        self.client.get(f'/api/media/{sensitive.id}/')
+        logs = AuditLog.objects.filter(
+            target_type='media', target_id=sensitive.id,
+            action=AuditLog.Action.VIEWED,
+        )
+        self.assertEqual(logs.count(), 1)
+        self.assertEqual(logs.first().user, advocate)
+        self.assertEqual(logs.first().details, 'sensitive')
