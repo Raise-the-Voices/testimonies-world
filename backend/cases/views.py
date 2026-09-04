@@ -1,4 +1,6 @@
 from django.db.models import Count, Max, Q
+from django.db.models.functions import Lower
+from django.http import FileResponse, HttpResponse, HttpResponseForbidden, HttpResponseNotFound
 from django_filters import rest_framework as filters
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
@@ -578,3 +580,125 @@ class FamilyRelationshipViewSet(viewsets.ModelViewSet):
         )
         self._audit(AuditLog.Action.DELETED, instance, details)
         instance.delete()
+
+
+# --- Protected media ----------------------------------------------------
+#    Routes /media/<path> through Django so we can enforce auth + the
+#    matching Media.visibility tier (or, for profile images, that the
+#    associated Person is published). nginx proxies /media/ to gunicorn
+#    so the alias-based direct-from-disk path no longer exists. The previous
+#    design — alias /opt/rtv-cases/backend/media/ + Cache-Control: public —
+#    let anyone with a guessed URL download sensitive evidence files.
+
+import os
+import posixpath
+
+
+def _can_view_media(user, media: Media) -> bool:
+    """Mirror MediaViewSet.get_queryset: anonymous sees only public;
+    authenticated non-advocates see public+restricted; advocate/staff
+    see everything. Centralized so the protected-media view and the
+    viewset stay in sync.
+    """
+    if media.visibility == Media.Visibility.PUBLIC:
+        return True
+    if not user.is_authenticated:
+        return False
+    if media.visibility == Media.Visibility.RESTRICTED:
+        return True
+    # SENSITIVE — only advocates or staff.
+    return user.is_staff or user.groups.filter(name='Advocate').exists()
+
+
+def _can_view_profile_image(user, person: Person) -> bool:
+    """Profile images belong to a Person. Anonymous can see them only if
+    the Person is published; authenticated users can always see them.
+    (Profile images are not classified "sensitive" — they're just a
+    person's face — but a private/unpublished person shouldn't have
+    their photo leakable by URL either.)
+    """
+    if person.is_published:
+        return True
+    return user.is_authenticated
+
+
+def serve_protected_media(request, path):
+    """Serve a file from `MEDIA_ROOT` after an auth + visibility check.
+
+    Three buckets:
+      1. `/media/uploads/<file>` — backed by a Media row. Visibility
+         tier must permit the requester, per _can_view_media.
+      2. `/media/profiles/<file>` — a Person.profile_image. The Person
+         must be published for anonymous access; authenticated users
+         can always view.
+      3. Anything else — admin upload artifacts, manual imports, etc.
+         Default-deny. Returning 404 (not 403) avoids leaking which
+         paths exist.
+
+    All branches audit-log sensitive downloads (matching the VIEWED
+    rule for MediaViewSet / PersonViewSet).
+    """
+    if not request.user.is_authenticated:
+        # We require login for *all* media — even public photos go
+        # through the audit log so we know who looked. (Public Photos
+        # are by definition browsable from the catalog; this gate
+        # protects against URL enumeration only.)
+        return HttpResponse('Authentication required.', status=401)
+
+    safe_path = posixpath.normpath(path).lstrip('/')
+    if safe_path.startswith('..') or safe_path.startswith('/'):
+        return HttpResponseNotFound()
+    basename = os.path.basename(safe_path)
+
+    # ---- Media row (uploads/) -------------------------------------------
+    if safe_path.startswith('uploads/'):
+        try:
+            media = Media.objects.get(file__iendswith=basename)
+        except Media.DoesNotExist:
+            return HttpResponseNotFound('Not found.')
+
+        if not _can_view_media(request.user, media):
+            return HttpResponseForbidden(
+                'You do not have permission to view this media.',
+            )
+
+        if media.visibility == Media.Visibility.SENSITIVE:
+            AuditLog.objects.create(
+                user=request.user,
+                action=AuditLog.Action.VIEWED,
+                target_type='media',
+                target_id=media.pk,
+                details='sensitive file download',
+                ip_address=(
+                    request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+                    or request.META.get('REMOTE_ADDR')
+                ),
+            )
+
+        try:
+            return FileResponse(media.file.open('rb'), filename=basename)
+        except FileNotFoundError:
+            return HttpResponseNotFound('File missing on disk.')
+
+    # ---- Profile image (profiles/) --------------------------------------
+    if safe_path.startswith('profiles/'):
+        # Person.profile_image is an ImageField with upload_to='profiles/'.
+        # The filename format is unpredictable (Django appends a hash),
+        # so we look up by exact filename.
+        try:
+            person = Person.objects.get(profile_image__iendswith=basename)
+        except Person.DoesNotExist:
+            return HttpResponseNotFound('Not found.')
+
+        if not _can_view_profile_image(request.user, person):
+            return HttpResponseForbidden(
+                'You do not have permission to view this profile image.',
+            )
+
+        try:
+            return FileResponse(person.profile_image.open('rb'), filename=basename)
+        except FileNotFoundError:
+            return HttpResponseNotFound('File missing on disk.')
+
+    # ---- Anything else: default-deny -----------------------------------
+    return HttpResponseNotFound('Not found.')

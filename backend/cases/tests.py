@@ -1071,3 +1071,150 @@ class ViewedAuditLogTests(TestCase):
         self.assertEqual(logs.count(), 1)
         self.assertEqual(logs.first().user, advocate)
         self.assertEqual(logs.first().details, 'sensitive')
+<<<<<<< HEAD
+=======
+
+
+class ProtectedMediaViewTests(TestCase):
+    """Coverage for serve_protected_media() — the auth gate that replaces
+    nginx's old direct-from-disk alias. The view handles three buckets:
+
+      1. /media/uploads/*  — backed by a Media row, visibility tier check.
+      2. /media/profiles/* — Person.profile_image, published-only for anon.
+      3. /media/<other>    — default-deny (404).
+
+    Each test uses real SimpleUploadedFile content (no actual disk write
+    is required for the URL/path tests — only the lookup + permission
+    branch matters).
+    """
+
+    def setUp(self):
+        self.volunteer = make_user('vol', in_group='Volunteer')
+        self.advocate = make_user('aisha', in_group='Advocate')
+        self.outsider = make_user('random')
+        self.client = APIClient()
+        self.person = _make_published_person()
+
+    # --- auth gate ------------------------------------------------------
+
+    def test_anonymous_is_rejected_with_401(self):
+        res = self.client.get('/media/uploads/anything.jpg')
+        self.assertEqual(res.status_code, 401)
+
+    def test_default_deny_for_unknown_path(self):
+        self.client.force_login(self.volunteer)
+        res = self.client.get('/media/random/file.jpg')
+        self.assertEqual(res.status_code, 404)
+
+    def test_path_traversal_is_blocked(self):
+        self.client.force_login(self.volunteer)
+        # `..` segments must be normalized away and rejected.
+        res = self.client.get('/media/uploads/../../../etc/passwd')
+        # Either 404 (no Media row) or 400 — both are acceptable, but
+        # NEVER 200. The view's safe_path check should bounce the `..`.
+        self.assertIn(res.status_code, (400, 404))
+
+    # --- media row lookup + visibility ---------------------------------
+
+    def test_public_media_served_to_authenticated_user(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        media = Media.objects.create(
+            person=self.person,
+            file=SimpleUploadedFile('photo.jpg', b'fake-jpeg-bytes', 'image/jpeg'),
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.PUBLIC,
+        )
+        self.client.force_login(self.volunteer)
+        res = self.client.get(f'/media/uploads/{media.file.name.split("/")[-1]}')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res['Content-Type'], 'image/jpeg')
+
+    def test_sensitive_media_served_only_to_advocate(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        sensitive = Media.objects.create(
+            person=self.person,
+            file=SimpleUploadedFile('secret.jpg', b'fake-jpeg-bytes', 'image/jpeg'),
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.SENSITIVE,
+        )
+        filename = sensitive.file.name.split('/')[-1]
+
+        # Outsider: 403.
+        self.client.force_login(self.outsider)
+        self.assertEqual(
+            self.client.get(f'/media/uploads/{filename}').status_code, 403,
+        )
+        # Volunteer (no Advocate group): 403.
+        self.client.force_login(self.volunteer)
+        self.assertEqual(
+            self.client.get(f'/media/uploads/{filename}').status_code, 403,
+        )
+        # Advocate: 200 + audit row.
+        self.client.force_login(self.advocate)
+        self.assertEqual(
+            self.client.get(f'/media/uploads/{filename}').status_code, 200,
+        )
+        rows = AuditLog.objects.filter(
+            target_type='media', target_id=sensitive.pk,
+            action=AuditLog.Action.VIEWED,
+            details='sensitive file download',
+        )
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows.first().user, self.advocate)
+
+    def test_restricted_media_served_to_authenticated_volunteer(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        restricted = Media.objects.create(
+            person=self.person,
+            file=SimpleUploadedFile('restricted.jpg', b'bytes', 'image/jpeg'),
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.RESTRICTED,
+        )
+        filename = restricted.file.name.split('/')[-1]
+        self.client.force_login(self.volunteer)
+        res = self.client.get(f'/media/uploads/{filename}')
+        self.assertEqual(res.status_code, 200)
+
+    def test_unknown_filename_returns_404(self):
+        # Volunteer authenticated, but no Media row has this filename.
+        self.client.force_login(self.volunteer)
+        res = self.client.get('/media/uploads/totally-fake-file.jpg')
+        self.assertEqual(res.status_code, 404)
+
+    # --- profile image bucket ------------------------------------------
+
+    def test_profile_image_served_to_authenticated_user(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        person = Person.objects.create(
+            name='Has Photo',
+            country='Pakistan',
+            is_published=True,
+        )
+        person.profile_image.save(
+            'face.jpg',
+            SimpleUploadedFile('face.jpg', b'jpeg', 'image/jpeg'),
+            save=True,
+        )
+        self.client.force_login(self.volunteer)
+        res = self.client.get(f'/media/profiles/{person.profile_image.name.split("/")[-1]}')
+        self.assertEqual(res.status_code, 200)
+
+    def test_profile_image_served_to_authenticated_user_for_unpublished_person(self):
+        # Profile images follow the same visibility rule as the parent
+        # Person: anonymous → 401 (whole site gate); authenticated →
+        # 200 (matches PersonViewSet.get_queryset). Volunteers can
+        # see unpublished persons; advocates can too.
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        person = Person.objects.create(
+            name='Unpublished',
+            country='Pakistan',
+            is_published=False,
+        )
+        person.profile_image.save(
+            'face.jpg',
+            SimpleUploadedFile('face.jpg', b'jpeg', 'image/jpeg'),
+            save=True,
+        )
+        self.client.force_login(self.volunteer)
+        res = self.client.get(f'/media/profiles/{person.profile_image.name.split("/")[-1]}')
+        self.assertEqual(res.status_code, 200)
