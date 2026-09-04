@@ -11,6 +11,7 @@ from cases.views import (
     MediaViewSet,
     PersonViewSet,
     ReportViewSet,
+    serve_protected_media,
 )
 from casework.views import (
     CaseworkRecordViewSet,
@@ -50,9 +51,18 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path('api/session/', session_info),
     path('accounts/', include('allauth.urls')),
+    # Protected media — see serve_protected_media() in cases/views.py.
+    # Authenticated only; visibility-tier check is performed inside
+    # the view so sensitive / restricted media can't be downloaded by
+    # guessing the filename. Nginx proxies /media/ to gunicorn; this
+    # route handles the actual access-control + file streaming.
+    path('media/<path:path>', serve_protected_media, name='protected-media'),
 ]
 
 if settings.DEBUG:
+    # In DEBUG, keep Django's media serving for collectstatic-style
+    # convenience. The protected view is still authoritative — these
+    # static() URLs only run when DEBUG=True (i.e. local dev).
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 admin.site.site_header = 'Raise the Voices — Admin'
