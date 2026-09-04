@@ -3,12 +3,23 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
-	import { getPerson, getMedia, deleteMedia, deletePerson, deleteReport } from '$lib/api';
+	import {
+		getPerson,
+		getMedia,
+		getPersons,
+		getRelationships,
+		createRelationship,
+		updateRelationship,
+		deleteRelationship,
+		deleteMedia,
+		deletePerson,
+		deleteReport,
+	} from '$lib/api';
 	import { user, isVolunteer, isAdvocate } from '$lib/session';
 	import StatusBadge from '$lib/StatusBadge.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import MediaUploadModal from '$lib/MediaUploadModal.svelte';
-	import type { Media, Person, Report } from '$lib/types';
+	import type { FamilyRelationshipRow, Media, Person, Report } from '$lib/types';
 
 	let currentUser = $derived($user);
 	let mediaList = $state<Media[]>([]);
@@ -33,6 +44,31 @@
 	let personDeleteOpen = $state(false);
 	let personDeleting = $state(false);
 	let personDeleteError = $state('');
+
+	/* Family relationships state — full CRUD via /api/relationships/.
+	   We store the *full row* (not the flattened display shape) so we
+	   have the `id` for edit/delete. `relationshipPickerList` is the
+	   one-shot fetch used by the create/edit picker; we exclude the
+	   current person on the client (the picker doesn't include them). */
+	let relationships = $state<FamilyRelationshipRow[]>([]);
+	let loadingRelationships = $state(true);
+	let relationshipError = $state('');
+	let relationshipPickerList = $state<Array<{ id: number; name: string; country: string }>>([]);
+	let pickerLoaded = $state(false);
+
+	// Create/edit form state.
+	let relationshipFormOpen = $state(false);
+	let editingRel = $state<FamilyRelationshipRow | null>(null);
+	let relationshipSaving = $state(false);
+	let relationshipFormOtherId = $state<number | ''>('');
+	let relationshipFormType = $state<FamilyRelationshipRow['relationship_type']>('sibling');
+	let relationshipFormNotes = $state('');
+	let relationshipFormError = $state('');
+
+	// Delete state.
+	let relationshipDelTarget = $state<FamilyRelationshipRow | null>(null);
+	let relationshipDeleting = $state(false);
+	let relationshipDeleteError = $state('');
 
 	// Permission helper: only advocates+admin can put media in the
 	// 'sensitive' tier. Mirrors backend `_can_mark_sensitive` in
@@ -153,10 +189,51 @@
 			person = await getPerson(page.params.id!);
 			// Reload media with the freshly-loaded person in scope.
 			await loadMedia();
+			// Family links also refresh on person change.
+			await loadRelationships();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : 'Failed to load case.';
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadRelationships() {
+		if (!person) return;
+		loadingRelationships = true;
+		relationshipError = '';
+		try {
+			const data = await getRelationships({ person: String(person.id) });
+			relationships = Array.isArray(data) ? data : data.results ?? [];
+		} catch (e: unknown) {
+			relationshipError =
+				e instanceof Error ? e.message : 'Failed to load family links.';
+			relationships = [];
+		} finally {
+			loadingRelationships = false;
+		}
+	}
+
+	// Picker: single-shot fetch of all published persons. Used by the
+	// create/edit form so the user can pick the *other* side of the
+	// relationship. Fails gracefully — if the fetch errors, the form
+	// still opens with an empty picker and a visible error.
+	async function loadPicker() {
+		if (pickerLoaded) return;
+		try {
+			const data = await getPersons({
+				is_published: 'true',
+				page_size: '1000',
+			});
+			const list = Array.isArray(data) ? data : data.results ?? [];
+			relationshipPickerList = list.map((p) => ({
+				id: p.id,
+				name: p.name,
+				country: p.country,
+			}));
+			pickerLoaded = true;
+		} catch (e: unknown) {
+			relationshipPickerList = [];
 		}
 	}
 
@@ -287,6 +364,125 @@
 		}
 		// On success we navigate away — keep `personDeleting = true` so the
 		// modal button stays disabled during the redirect (no flicker).
+	}
+
+	/* --- Family relationship handlers ------------------------------------
+	   Mirrors the media / report / case delete patterns: distinct
+	   `relationship*` state, inline error via `.form-error`, in-place
+	   list refresh on success. The create/edit form posts
+	   `person_a = currentPerson.id, person_b = otherPerson.id` — we
+	   fix the direction so the same row doesn't get re-created in the
+	   opposite direction by mistake. */
+
+	const RELATIONSHIP_TYPE_LABELS: Record<FamilyRelationshipRow['relationship_type'], string> = {
+		parent: 'Parent',
+		child: 'Child',
+		sibling: 'Sibling',
+		spouse: 'Spouse',
+		other: 'Other relative',
+	};
+
+	// The "other" side from the current person's perspective.
+	function otherPerson(rel: FamilyRelationshipRow): { id: number; name: string } {
+		if (rel.person_a === person?.id) return { id: rel.person_b, name: rel.person_b_name };
+		return { id: rel.person_a, name: rel.person_a_name };
+	}
+
+	function resetRelForm() {
+		editingRel = null;
+		relationshipFormOtherId = '';
+		relationshipFormType = 'sibling';
+		relationshipFormNotes = '';
+		relationshipFormError = '';
+		relationshipSaving = false;
+	}
+
+	function startRelCreate() {
+		resetRelForm();
+		relationshipFormOpen = true;
+		void loadPicker();
+	}
+
+	function startRelEdit(rel: FamilyRelationshipRow) {
+		editingRel = rel;
+		const other = otherPerson(rel);
+		relationshipFormOtherId = other.id;
+		relationshipFormType = rel.relationship_type;
+		relationshipFormNotes = rel.notes ?? '';
+		relationshipFormError = '';
+		relationshipSaving = false;
+		relationshipFormOpen = true;
+		void loadPicker();
+	}
+
+	function cancelRelForm() {
+		if (relationshipSaving) return;
+		relationshipFormOpen = false;
+		resetRelForm();
+	}
+
+	async function submitRelForm() {
+		if (!person) return;
+		if (relationshipFormOtherId === '' || relationshipFormOtherId === person.id) {
+			relationshipFormError = 'Pick a different person to relate to.';
+			return;
+		}
+		relationshipSaving = true;
+		relationshipFormError = '';
+		try {
+			if (editingRel) {
+				// Edit preserves direction (we never change person_a/person_b).
+				// The backend validator accepts a PATCH that omits them.
+				const updated = await updateRelationship(editingRel.id, {
+					relationship_type: relationshipFormType,
+					notes: relationshipFormNotes,
+				});
+				relationships = relationships.map((r) =>
+					r.id === updated.id ? updated : r,
+				);
+			} else {
+				const created = await createRelationship({
+					person_a: person.id,
+					person_b: relationshipFormOtherId,
+					relationship_type: relationshipFormType,
+					notes: relationshipFormNotes,
+				});
+				relationships = [...relationships, created];
+			}
+			relationshipFormOpen = false;
+			resetRelForm();
+		} catch (e: unknown) {
+			relationshipFormError =
+				e instanceof Error ? e.message : "Couldn't save the relationship.";
+		} finally {
+			relationshipSaving = false;
+		}
+	}
+
+	function startRelDelete(rel: FamilyRelationshipRow) {
+		relationshipDelTarget = rel;
+		relationshipDeleteError = '';
+	}
+
+	function cancelRelDelete() {
+		if (relationshipDeleting) return;
+		relationshipDelTarget = null;
+		relationshipDeleteError = '';
+	}
+
+	async function confirmRelDelete() {
+		if (!relationshipDelTarget) return;
+		relationshipDeleting = true;
+		try {
+			await deleteRelationship(relationshipDelTarget.id);
+			relationships = relationships.filter((r) => r.id !== relationshipDelTarget!.id);
+			relationshipDelTarget = null;
+		} catch (e: unknown) {
+			relationshipDeleteError =
+				e instanceof Error ? e.message : "Couldn't delete that link.";
+		} finally {
+			relationshipDeleting = false;
+		}
 	}
 
 	onMount(loadPerson);
@@ -771,16 +967,83 @@
 				</div>
 			{/if}
 
-			{#if person.family && person.family.length > 0}
+			{#if loadingRelationships || relationships.length > 0 || isVolunteer(currentUser)}
 				<div class="meta-card">
 					<div class="meta-card-body">
-						<h3 class="meta-section-title">Family</h3>
-						{#each person.family as rel (rel.person_id)}
-							<p class="meta-family-row">
-								<a href="{base}/persons/{rel.person_id}">{rel.person_name}</a>
-								<span class="muted">({rel.relationship})</span>
-							</p>
-						{/each}
+						<div class="family-header">
+							<h3 class="meta-section-title">Family</h3>
+							{#if isVolunteer(currentUser)}
+								<button
+									type="button"
+									class="row-action row-action-add"
+									aria-label="Add family relationship"
+									title="Add family relationship"
+									onclick={startRelCreate}
+								>
+									<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+										<path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+									</svg>
+								</button>
+							{/if}
+						</div>
+						{#if relationshipError}
+							<div class="form-error" role="alert">
+								<span class="form-error-icon" aria-hidden="true">!</span>
+								<span>{relationshipError}</span>
+							</div>
+						{/if}
+						{#if loadingRelationships}
+							<Skeleton variant="text" width="80%" />
+							<Skeleton variant="text" width="60%" />
+						{:else if relationships.length === 0}
+							<p class="muted meta-empty">No family links yet.</p>
+						{:else}
+							<ul class="meta-family-list">
+								{#each relationships as rel (rel.id)}
+									{@const other = otherPerson(rel)}
+									<li class="meta-family-row">
+										<a href="{base}/persons/{other.id}" class="meta-family-name">
+											{other.name}
+										</a>
+										<span class="muted meta-family-type">
+											{RELATIONSHIP_TYPE_LABELS[rel.relationship_type] ?? rel.relationship_type}
+										</span>
+										{#if isVolunteer(currentUser)}
+											<span class="meta-family-actions" role="group" aria-label="Relationship actions">
+												<button
+													type="button"
+													class="row-action"
+													aria-label="Edit relationship with {other.name}"
+													title="Edit"
+													onclick={() => startRelEdit(rel)}
+												>
+													<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+														<path
+															fill="currentColor"
+															d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+														/>
+													</svg>
+												</button>
+												<button
+													type="button"
+													class="row-action row-action-danger"
+													aria-label="Delete relationship with {other.name}"
+													title="Delete"
+													onclick={() => startRelDelete(rel)}
+												>
+													<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+														<path
+															fill="currentColor"
+															d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+														/>
+													</svg>
+												</button>
+											</span>
+										{/if}
+									</li>
+								{/each}
+							</ul>
+						{/if}
 					</div>
 				</div>
 			{/if}
@@ -901,6 +1164,131 @@
 				<button type="button" class="btn btn-secondary" onclick={cancelPersonDelete} disabled={personDeleting}>Cancel</button>
 				<button type="button" class="btn btn-danger" onclick={confirmPersonDelete} disabled={personDeleting}>
 					{personDeleting ? 'Deleting…' : 'Delete'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Family relationship create / edit modal -->
+{#if relationshipFormOpen && person}
+	<div class="modal-overlay" onclick={cancelRelForm} role="presentation"></div>
+	<div class="modal" role="dialog" aria-modal="true" aria-labelledby="rel-form-title">
+		<header class="modal-header">
+			<h2 id="rel-form-title">
+				{editingRel ? 'Edit family link' : 'Add family link'}
+			</h2>
+			<button
+				type="button"
+				class="modal-close"
+				aria-label="Close"
+				onclick={cancelRelForm}
+				disabled={relationshipSaving}
+			>×</button>
+		</header>
+		<div class="modal-body">
+			{#if relationshipFormError}
+				<div class="form-error" role="alert">
+					<span class="form-error-icon" aria-hidden="true">!</span>
+					<span>{relationshipFormError}</span>
+				</div>
+			{/if}
+			<p class="muted small">
+				Linking <strong>{person.name}</strong>
+				{#if editingRel}
+					{@const other = otherPerson(editingRel)}
+					to <strong>{other.name}</strong>.
+				{:else}
+					to another person on the platform.
+				{/if}
+			</p>
+			{#if !editingRel}
+				<label class="form-field" for="rel-other">
+					<span class="form-label">Person</span>
+					<select
+						id="rel-other"
+						class="form-select"
+						bind:value={relationshipFormOtherId}
+						disabled={relationshipSaving}
+					>
+						<option value="" disabled>Pick a person…</option>
+						{#each relationshipPickerList as p (p.id)}
+							{#if p.id !== person.id}
+								<option value={p.id}>{p.name} — {p.country}</option>
+							{/if}
+						{/each}
+					</select>
+				</label>
+			{/if}
+			<label class="form-field" for="rel-type">
+				<span class="form-label">Relationship</span>
+				<select
+					id="rel-type"
+					class="form-select"
+					bind:value={relationshipFormType}
+					disabled={relationshipSaving}
+				>
+					{#each Object.entries(RELATIONSHIP_TYPE_LABELS) as [value, label] (value)}
+						<option {value}>{label}</option>
+					{/each}
+				</select>
+			</label>
+			<label class="form-field" for="rel-notes">
+				<span class="form-label">Notes <span class="muted">(optional)</span></span>
+				<textarea
+					id="rel-notes"
+					class="form-textarea"
+					bind:value={relationshipFormNotes}
+					rows="2"
+					disabled={relationshipSaving}
+				></textarea>
+			</label>
+			<div class="modal-actions">
+				<button type="button" class="btn btn-secondary" onclick={cancelRelForm} disabled={relationshipSaving}>
+					Cancel
+				</button>
+				<button type="button" class="btn btn-primary" onclick={submitRelForm} disabled={relationshipSaving}>
+					{relationshipSaving ? 'Saving…' : (editingRel ? 'Save' : 'Add')}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Family relationship delete confirm dialog -->
+{#if relationshipDelTarget && person}
+	{@const other = otherPerson(relationshipDelTarget)}
+	<div class="modal-overlay" onclick={cancelRelDelete} role="presentation"></div>
+	<div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="rel-delete-title">
+		<header class="modal-header">
+			<h2 id="rel-delete-title">Remove family link?</h2>
+			<button
+				type="button"
+				class="modal-close"
+				aria-label="Close"
+				onclick={cancelRelDelete}
+				disabled={relationshipDeleting}
+			>×</button>
+		</header>
+		<div class="modal-body">
+			{#if relationshipDeleteError}
+				<div class="form-error" role="alert">
+					<span class="form-error-icon" aria-hidden="true">!</span>
+					<span>{relationshipDeleteError}</span>
+				</div>
+			{/if}
+			<p>
+				Remove the link between
+				<strong>{person.name}</strong> and
+				<strong>{other.name}</strong>?
+				It cannot be recovered.
+			</p>
+			<div class="modal-actions">
+				<button type="button" class="btn btn-secondary" onclick={cancelRelDelete} disabled={relationshipDeleting}>
+					Cancel
+				</button>
+				<button type="button" class="btn btn-danger" onclick={confirmRelDelete} disabled={relationshipDeleting}>
+					{relationshipDeleting ? 'Removing…' : 'Remove'}
 				</button>
 			</div>
 		</div>
@@ -1228,11 +1616,88 @@
 		color: var(--color-primary);
 	}
 	.meta-family-row {
-		margin: 0 0 0.3rem 0;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.35rem 0;
+		border-bottom: 1px solid var(--color-border-subtle);
 		font-size: 0.88rem;
 	}
 	.meta-family-row:last-child {
-		margin-bottom: 0;
+		border-bottom: none;
+	}
+	.meta-family-name {
+		flex: 1 1 auto;
+		min-width: 0;
+		font-weight: 600;
+		color: var(--color-primary);
+		text-decoration: none;
+	}
+	.meta-family-name:hover {
+		text-decoration: underline;
+	}
+	.meta-family-type {
+		flex: 0 0 auto;
+		font-size: 0.78rem;
+	}
+	.meta-family-actions {
+		flex: 0 0 auto;
+		display: inline-flex;
+		gap: 0.3rem;
+	}
+	.meta-family-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.meta-empty {
+		margin: 0.3rem 0 0 0;
+		font-size: 0.86rem;
+	}
+	.family-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		margin-bottom: 0.5rem;
+	}
+	.row-action-add {
+		color: var(--color-primary);
+	}
+	/* Form fields inside the relationship modal — reusable label/input
+	   pair styling consistent with other modals in the app. */
+	.form-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+	.form-label {
+		font-size: 0.72rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06rem;
+		color: var(--color-text-muted);
+	}
+	.form-select,
+	.form-textarea {
+		font: inherit;
+		padding: 0.5rem 0.65rem;
+		border: 1px solid var(--color-border-light);
+		border-radius: var(--radius-card);
+		background: var(--color-bg-white);
+		color: var(--color-text);
+		width: 100%;
+		box-sizing: border-box;
+	}
+	.form-select:focus-visible,
+	.form-textarea:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+		border-color: var(--color-primary);
+	}
+	.form-textarea {
+		resize: vertical;
+		min-height: 3rem;
 	}
 	.meta-row {
 		display: flex;
