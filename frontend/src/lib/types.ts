@@ -109,6 +109,23 @@ export interface FamilyRelationship {
 	relationship: string;
 }
 
+/**
+ * Full row returned by `/api/relationships/`. Distinct from the
+ * flattened `FamilyRelationship` above (which `get_family` produces
+ * inside `PersonDetailSerializer`) — the CRUD endpoint returns the
+ * raw row so the UI can edit/delete by id. Both names live side-by-side
+ * because the public-facing family list still uses the flattened shape.
+ */
+export interface FamilyRelationshipRow {
+	id: number;
+	person_a: number;
+	person_b: number;
+	person_a_name: string;
+	person_b_name: string;
+	relationship_type: 'parent' | 'child' | 'sibling' | 'spouse' | 'other';
+	notes: string;
+}
+
 export interface Person {
 	id: number;
 	name: string;
