@@ -277,15 +277,22 @@ for attempt in 1 2 3 4 5 6 7 8 9 10; do
         # a 404 here means the nginx site config is missing the /accounts/ block
         # and admins are about to be locked out. Accept 200 or 302 (redirect).
         accounts=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/accounts/google/login/" || true)
+        # /media/ must NOT be a static 200 (the old setup served files
+        # straight from disk) — it must reach Django, which returns
+        # 401 (no session) on a fresh deploy. Anything else means the
+        # /media/ block didn't get rewritten by the new nginx config.
+        media=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/media/" || true)
         if [ "$code" = 200 ] && [ "$api" = 200 ] \
-           && { [ "$accounts" = 200 ] || [ "$accounts" = 302 ]; }; then
+           && { [ "$accounts" = 200 ] || [ "$accounts" = 302 ]; } \
+           && [ "$media" = 401 ]; then
             echo "  entry asset OK: $asset_url"
             echo "  api OK"
             echo "  /accounts/google/login/ OK ($accounts)"
+            echo "  /media/ routed to Django (401 unauthenticated)"
             ok=1
             break
         fi
-        echo "  attempt $attempt: assets=$code api=$api accounts=$accounts"
+        echo "  attempt $attempt: assets=$code api=$api accounts=$accounts media=$media"
     fi
     echo "  attempt $attempt: not ready yet"
     sleep 3
