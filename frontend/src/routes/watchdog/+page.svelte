@@ -1,14 +1,18 @@
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { onMount } from 'svelte';
 	import { getWatchdog } from '$lib/api';
 	import StatusBadge from '$lib/StatusBadge.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
+	import type { PageData } from './$types';
 	import type { Person } from '$lib/types';
 
-	let persons: Person[] = $state([]);
-	let loading = $state(true);
-	let error: string | null = $state(null);
+	let { data }: { data: PageData } = $props();
+
+	// Initial paint from +page.ts universal load. Client-side refetch
+	// is not exposed (the watchdog view is read-only).
+	let persons: Person[] = $state(data.persons ?? []);
+	let loading = $state(false);
+	let error: string | null = $state(data.error);
 
 	async function loadWatchdog() {
 		loading = true;
@@ -22,8 +26,6 @@
 			loading = false;
 		}
 	}
-
-	onMount(loadWatchdog);
 
 	// Returns a relative-time string. Older entries read as more urgent
 	// so the watchdog column has natural visual weight — newer entries

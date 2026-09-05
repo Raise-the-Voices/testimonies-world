@@ -194,3 +194,13 @@ class AuditLogTests(TestCase):
         )
         self.assertEqual(res.status_code, 200)
         self.assertIsNotNone(Contact.objects.get(pk=c.pk).deleted_at)
+
+    def test_retrieve_writes_viewed_audit_row(self):
+        # Contacts are always-private — every detail view gets a paper trail.
+        c = Contact.objects.create(name='Layla H.', role='lawyer')
+        self.client.get(f'/api/contacts/{c.pk}/')
+        rows = AuditLog.objects.filter(
+            target_type='contact', target_id=c.pk, action='viewed',
+        )
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows.first().user, self.advocate)

@@ -55,7 +55,12 @@ class CaseworkRecordViewSet(viewsets.ModelViewSet):
         """GET a record. Side effect: mark the caller's own notifications
         on this record as read, and emit a 'seen by' notification to the
         author — the human-sense "verification" the feature is named for."""
-        instance = self.get_object()
+        # Pull through get_queryset() instead of self.get_object() so the
+        # prefetch_related('persons') / select_related('performed_by') on
+        # get_queryset is honored — otherwise the serializer's read of
+        # `instance.persons` and `instance.performed_by.get_full_name()`
+        # would each fire a separate query.
+        instance = self.get_queryset().get(pk=kwargs.get(self.lookup_field))
         Notification.objects.filter(
             recipient=request.user,
             casework=instance,

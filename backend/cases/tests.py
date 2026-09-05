@@ -1026,3 +1026,263 @@ class MassAssignmentGuardTests(TestCase):
         )
         self.assertEqual(res.status_code, 201)
         self.assertTrue(Person.objects.get(pk=res.json()['id']).is_published)
+
+class ViewedAuditLogTests(TestCase):
+    """Coverage for the AuditLog.Action.VIEWED wiring.
+
+    CLAUDE.md promises the audit log "tracks access to sensitive data",
+    but `VIEWED` was declared as an enum value and never called. This
+    change wires it into:
+        - PersonViewSet.retrieve         (every detail view)
+        - ReportViewSet.retrieve          (only when is_private=True)
+        - MediaViewSet.retrieve           (only when visibility='sensitive')
+    (Contact and CaseworkRecord have their own test classes — see
+    contacts/tests.py and casework/tests.py.)
+
+    The list endpoint (`GET /api/persons/` etc.) intentionally does NOT
+    write VIEWED rows — list traffic would balloon the audit table.
+    """
+
+    def setUp(self):
+        self.volunteer = make_user('vol', in_group='Volunteer')
+        self.person = _make_published_person()
+        self.client = APIClient()
+
+    def test_person_retrieve_writes_viewed_audit_row(self):
+        self.client.force_login(self.volunteer)
+        res = self.client.get(f'/api/persons/{self.person.id}/')
+        self.assertEqual(res.status_code, 200)
+        logs = AuditLog.objects.filter(
+            target_type='person', target_id=self.person.id,
+            action=AuditLog.Action.VIEWED,
+        )
+        self.assertEqual(logs.count(), 1)
+        self.assertEqual(logs.first().user, self.volunteer)
+
+    def test_person_list_does_not_write_viewed_audit_rows(self):
+        self.client.force_login(self.volunteer)
+        self.client.get('/api/persons/')
+        self.assertEqual(
+            AuditLog.objects.filter(action=AuditLog.Action.VIEWED).count(),
+            0,
+        )
+
+    def test_report_retrieve_logs_viewed_only_when_private(self):
+        public_report = Report.objects.create(
+            person=self.person,
+            source_type=Report.SourceType.FIRSTHAND,
+            narrative='public',
+            is_private=False,
+        )
+        private_report = Report.objects.create(
+            person=self.person,
+            source_type=Report.SourceType.FIRSTHAND,
+            narrative='private',
+            is_private=True,
+        )
+        self.client.force_login(self.volunteer)
+
+        # Public — no VIEWED row.
+        self.client.get(f'/api/reports/{public_report.id}/')
+        self.assertFalse(
+            AuditLog.objects.filter(
+                target_type='report', target_id=public_report.id,
+                action=AuditLog.Action.VIEWED,
+            ).exists()
+        )
+
+        # Private — VIEWED row written.
+        self.client.get(f'/api/reports/{private_report.id}/')
+        logs = AuditLog.objects.filter(
+            target_type='report', target_id=private_report.id,
+            action=AuditLog.Action.VIEWED,
+        )
+        self.assertEqual(logs.count(), 1)
+        self.assertEqual(logs.first().user, self.volunteer)
+        self.assertEqual(logs.first().details, 'private')
+
+    def test_media_retrieve_logs_viewed_only_when_sensitive(self):
+        advocate = make_user('aisha', in_group='Advocate')
+        public = Media.objects.create(
+            person=self.person,
+            url='https://example.org/p.jpg',
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.PUBLIC,
+        )
+        restricted = Media.objects.create(
+            person=self.person,
+            url='https://example.org/r.jpg',
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.RESTRICTED,
+        )
+        sensitive = Media.objects.create(
+            person=self.person,
+            url='https://example.org/s.jpg',
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.SENSITIVE,
+        )
+        self.client.force_login(advocate)
+
+        self.client.get(f'/api/media/{public.id}/')
+        self.client.get(f'/api/media/{restricted.id}/')
+        self.assertFalse(
+            AuditLog.objects.filter(
+                target_type='media', target_id__in=[public.id, restricted.id],
+                action=AuditLog.Action.VIEWED,
+            ).exists()
+        )
+
+        self.client.get(f'/api/media/{sensitive.id}/')
+        logs = AuditLog.objects.filter(
+            target_type='media', target_id=sensitive.id,
+            action=AuditLog.Action.VIEWED,
+        )
+        self.assertEqual(logs.count(), 1)
+        self.assertEqual(logs.first().user, advocate)
+        self.assertEqual(logs.first().details, 'sensitive')
+
+
+
+class ProtectedMediaViewTests(TestCase):
+    """Coverage for serve_protected_media() — the auth gate that replaces
+    nginx's old direct-from-disk alias. The view handles three buckets:
+
+      1. /media/uploads/*  — backed by a Media row, visibility tier check.
+      2. /media/profiles/* — Person.profile_image, published-only for anon.
+      3. /media/<other>    — default-deny (404).
+
+    Each test uses real SimpleUploadedFile content (no actual disk write
+    is required for the URL/path tests — only the lookup + permission
+    branch matters).
+    """
+
+    def setUp(self):
+        self.volunteer = make_user('vol', in_group='Volunteer')
+        self.advocate = make_user('aisha', in_group='Advocate')
+        self.outsider = make_user('random')
+        self.client = APIClient()
+        self.person = _make_published_person()
+
+    # --- auth gate ------------------------------------------------------
+
+    def test_anonymous_is_rejected_with_401(self):
+        res = self.client.get('/media/uploads/anything.jpg')
+        self.assertEqual(res.status_code, 401)
+
+    def test_default_deny_for_unknown_path(self):
+        self.client.force_login(self.volunteer)
+        res = self.client.get('/media/random/file.jpg')
+        self.assertEqual(res.status_code, 404)
+
+    def test_path_traversal_is_blocked(self):
+        self.client.force_login(self.volunteer)
+        # `..` segments must be normalized away and rejected.
+        res = self.client.get('/media/uploads/../../../etc/passwd')
+        # Either 404 (no Media row) or 400 — both are acceptable, but
+        # NEVER 200. The view's safe_path check should bounce the `..`.
+        self.assertIn(res.status_code, (400, 404))
+
+    # --- media row lookup + visibility ---------------------------------
+
+    def test_public_media_served_to_authenticated_user(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        media = Media.objects.create(
+            person=self.person,
+            file=SimpleUploadedFile('photo.jpg', b'fake-jpeg-bytes', 'image/jpeg'),
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.PUBLIC,
+        )
+        self.client.force_login(self.volunteer)
+        res = self.client.get(f'/media/uploads/{media.file.name.split("/")[-1]}')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res['Content-Type'], 'image/jpeg')
+
+    def test_sensitive_media_served_only_to_advocate(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        sensitive = Media.objects.create(
+            person=self.person,
+            file=SimpleUploadedFile('secret.jpg', b'fake-jpeg-bytes', 'image/jpeg'),
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.SENSITIVE,
+        )
+        filename = sensitive.file.name.split('/')[-1]
+
+        # Outsider: 403.
+        self.client.force_login(self.outsider)
+        self.assertEqual(
+            self.client.get(f'/media/uploads/{filename}').status_code, 403,
+        )
+        # Volunteer (no Advocate group): 403.
+        self.client.force_login(self.volunteer)
+        self.assertEqual(
+            self.client.get(f'/media/uploads/{filename}').status_code, 403,
+        )
+        # Advocate: 200 + audit row.
+        self.client.force_login(self.advocate)
+        self.assertEqual(
+            self.client.get(f'/media/uploads/{filename}').status_code, 200,
+        )
+        rows = AuditLog.objects.filter(
+            target_type='media', target_id=sensitive.pk,
+            action=AuditLog.Action.VIEWED,
+            details='sensitive file download',
+        )
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows.first().user, self.advocate)
+
+    def test_restricted_media_served_to_authenticated_volunteer(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        restricted = Media.objects.create(
+            person=self.person,
+            file=SimpleUploadedFile('restricted.jpg', b'bytes', 'image/jpeg'),
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.RESTRICTED,
+        )
+        filename = restricted.file.name.split('/')[-1]
+        self.client.force_login(self.volunteer)
+        res = self.client.get(f'/media/uploads/{filename}')
+        self.assertEqual(res.status_code, 200)
+
+    def test_unknown_filename_returns_404(self):
+        # Volunteer authenticated, but no Media row has this filename.
+        self.client.force_login(self.volunteer)
+        res = self.client.get('/media/uploads/totally-fake-file.jpg')
+        self.assertEqual(res.status_code, 404)
+
+    # --- profile image bucket ------------------------------------------
+
+    def test_profile_image_served_to_authenticated_user(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        person = Person.objects.create(
+            name='Has Photo',
+            country='Pakistan',
+            is_published=True,
+        )
+        person.profile_image.save(
+            'face.jpg',
+            SimpleUploadedFile('face.jpg', b'jpeg', 'image/jpeg'),
+            save=True,
+        )
+        self.client.force_login(self.volunteer)
+        res = self.client.get(f'/media/profiles/{person.profile_image.name.split("/")[-1]}')
+        self.assertEqual(res.status_code, 200)
+
+    def test_profile_image_served_to_authenticated_user_for_unpublished_person(self):
+        # Profile images follow the same visibility rule as the parent
+        # Person: anonymous → 401 (whole site gate); authenticated →
+        # 200 (matches PersonViewSet.get_queryset). Volunteers can
+        # see unpublished persons; advocates can too.
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        person = Person.objects.create(
+            name='Unpublished',
+            country='Pakistan',
+            is_published=False,
+        )
+        person.profile_image.save(
+            'face.jpg',
+            SimpleUploadedFile('face.jpg', b'jpeg', 'image/jpeg'),
+            save=True,
+        )
+        self.client.force_login(self.volunteer)
+        res = self.client.get(f'/media/profiles/{person.profile_image.name.split("/")[-1]}')
+        self.assertEqual(res.status_code, 200)
