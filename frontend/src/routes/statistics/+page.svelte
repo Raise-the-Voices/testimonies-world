@@ -1,15 +1,20 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { getStatistics } from '$lib/api';
 	import { statusLabels } from '$lib/StatusBadge.svelte';
 	import StatCard from '$lib/StatCard.svelte';
 	import StatRow from '$lib/StatRow.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
+	import type { PageData } from './$types';
 	import type { MedicalStatus, Statistics as StatisticsT } from '$lib/types';
 
-	let stats = $state<StatisticsT | null>(null);
-	let loading = $state(true);
-	let error: string | null = $state(null);
+	let { data }: { data: PageData } = $props();
+
+	// Initialize from server-side data; if the load() returned null
+	// (error or empty), the client may refetch via getStatistics() on
+	// user-initiated actions (currently none — this page is read-only).
+	let stats = $state<StatisticsT | null>(data.statistics);
+	let loading = $state(false);
+	let error: string | null = $state(data.error);
 
 	const medicalLabels: Record<string, string> = {
 		unknown: 'Unknown',
@@ -80,7 +85,9 @@
 		}
 	}
 
-	onMount(loadStats);
+	// Initial paint is served by +page.ts universal load; no onMount
+// refetch needed (this page is read-only — no user action triggers
+// a new fetch). loadStats() is kept available for the Retry button.
 </script>
 
 <svelte:head>
