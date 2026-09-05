@@ -74,5 +74,5 @@ jobs:
         run: cd backend && python manage.py test --noinput --keepdb --verbosity=2
         env:
           DJANGO_SECRET_KEY: ci-placeholder-not-secret
-          DATABASE_URL: sqlite://:memory:
+          DATABASE_URL: 'sqlite://:memory:'
           USE_SQLITE: 'True'
