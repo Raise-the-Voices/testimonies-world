@@ -8,8 +8,9 @@ Behavior changes vs. the original:
   Contacts appear in historical casework narratives; we preserve
   provenance. `get_queryset` filters out soft-deleted rows by default.
 - Audit log: every create / update / delete writes an `AuditLog` row
-  with the actor, action, target, and request IP. Matches the privacy
-  model in CLAUDE.md (contacts are always-private).
+  with the actor, action, target, and request IP. Every retrieve
+  writes a VIEWED row — contacts are always-private per the privacy
+  model in CLAUDE.md, so access is the canonical paper trail.
 """
 
 from django.utils import timezone
@@ -95,3 +96,10 @@ class ContactViewSet(viewsets.ModelViewSet):
         instance.deleted_at = timezone.now()
         instance.save(update_fields=['deleted_at'])
         self._audit(AuditLog.Action.DELETED, instance, 'soft-deleted')
+
+    def retrieve(self, request, *args, **kwargs):
+        # Audit-log every detail view. Contacts are always-private; the
+        # audit row is the only record of who looked at whom.
+        instance = self.get_object()
+        self._audit(AuditLog.Action.VIEWED, instance, '')
+        return super().retrieve(request, *args, **kwargs)

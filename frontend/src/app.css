@@ -36,6 +36,20 @@
 	--color-sidebar-header: #5f9ea0; /* cadetblue from Marturia view */
 	--color-primary-tint: rgba(37, 100, 106, 0.1); /* icon wells, count badges */
 
+	/* Banner / toast palette — used by <Banner> and inline error callouts.
+	   Mirrors the previous local hex colors on /persons and /contacts so
+	   existing pages render identically when migrated to the shared
+	   component. */
+	--color-success-bg: #c6f6d5;
+	--color-success-border: #9ae6b4;
+	--color-success-text: #22543d;
+	--color-success-icon-bg: rgba(34, 84, 61, 0.18);
+	--color-danger-bg: #fed7d7;
+	--color-danger-border: #feb2b2;
+	--color-danger-text: #742a2a;
+	--color-danger-text-strong: #c53030;
+	--color-danger-icon-bg: rgba(116, 42, 42, 0.2);
+
 	/* Skeleton — base color + shimmer highlight + reduced-motion static.
 	   Keep the static tone darker than the base so it still reads as
 	   "placeholder" when the shimmer animation is disabled. */

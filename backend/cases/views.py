@@ -1,4 +1,6 @@
 from django.db.models import Count, Max, Q
+from django.db.models.functions import Lower
+from django.http import FileResponse, HttpResponse, HttpResponseForbidden, HttpResponseNotFound
 from django_filters import rest_framework as filters
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
@@ -112,9 +114,27 @@ class PersonViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
 
     def get_queryset(self):
-        qs = Person.objects.annotate(
-            report_count=Count('reports'),
-        ).prefetch_related('categories')
+        # Prefetch reverse-FK chains that PersonDetailSerializer walks on
+        # every retrieve. Without these, a single person-detail request
+        # triggered ~5 follow-up queries (reports, media_files, both
+        # relationship sides, and the related Person on the other end of
+        # each relationship). Trade-off: anonymous viewers also fetch
+        # private reports + their media and then filter in Python in
+        # PersonDetailSerializer.get_reports. For low-cardinality case
+        # records this over-fetch is cheaper than per-row queries; if
+        # profiling shows otherwise, gate the prefetch on auth.
+        qs = (
+            Person.objects
+            .annotate(report_count=Count('reports'))
+            .prefetch_related(
+                'categories',
+                'reports',
+                'reports__media_files',
+                'media_files',
+                'relationships_as_a__person_b',
+                'relationships_as_b__person_a',
+            )
+        )
         if not self.request.user.is_authenticated:
             qs = qs.filter(is_published=True)
         return qs
@@ -183,14 +203,30 @@ class PersonViewSet(viewsets.ModelViewSet):
             serializer.validated_data.pop('is_published', None)
         serializer.save()
 
+    def retrieve(self, request, *args, **kwargs):
+        # Audit-log every detail view of a Person. Anonymous retrievals are
+        # already gated to `is_published=True` by `get_queryset`, so this
+        # mostly captures authenticated users browsing case details —
+        # which is the paper trail CLAUDE.md promises but `AuditLog.Action`
+        # never actually wired up before this commit.
+        instance = self.get_object()
+        self._audit(AuditLog.Action.VIEWED, instance, '')
+        return super().retrieve(request, *args, **kwargs)
+
     @action(detail=False, methods=['get'])
     def watchdog(self, request):
         """Persons ordered by urgency — days since last report, weighted by critical status."""
-        persons = self.get_queryset().annotate(
-            last_report_date=Max('reports__date_start'),
-        ).exclude(
-            current_status__in=['released', 'deceased']
-        ).order_by('last_report_date')[:50]
+        persons = (
+            self.get_queryset()
+            .annotate(last_report_date=Max('reports__date_start'))
+            .exclude(current_status__in=['released', 'deceased'])
+            .order_by('last_report_date')[:50]
+            # prefetch AFTER the slice so Django only walks categories
+            # for the 50 returned rows, not every excluded/non-excluded
+            # person. PersonListSerializer iterates `categories` so this
+            # would otherwise be 50 follow-up queries.
+            .prefetch_related('categories')
+        )
         serializer = PersonListSerializer(persons, many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -246,6 +282,27 @@ class PersonViewSet(viewsets.ModelViewSet):
         ])
 
 
+class ReportFilter(filters.FilterSet):
+    """Filter for `/api/reports/` used by the global `/reports` page.
+
+    Adds explicit `date_from` / `date_to` lookups on `date_start` (the
+    event date, NOT `created_at` — the latter would include back-dated
+    imports in the wrong bucket). The `filterset_fields = [...]` shortcut
+    only generates exact-match filters; lookup suffixes like
+    `date_start__gte` are not auto-generated, so they need to be declared
+    here. Query-param names (`date_from` / `date_to`) are cleaner than
+    the raw `date_start__gte` / `date_start__lte` lookups and let the
+    frontend stay agnostic to the underlying field name.
+    """
+
+    date_from = filters.DateFilter(field_name='date_start', lookup_expr='gte')
+    date_to = filters.DateFilter(field_name='date_start', lookup_expr='lte')
+
+    class Meta:
+        model = Report
+        fields = ['person', 'source_type', 'is_private']
+
+
 class ReportViewSet(viewsets.ModelViewSet):
     """Report CRUD.
 
@@ -259,6 +316,12 @@ class ReportViewSet(viewsets.ModelViewSet):
         - For update / destroy on an existing row, must additionally be
           the report's author OR staff OR in the Advocate group.
 
+    Filtering: `?search=` runs `SearchFilter` over `narrative` +
+    `source_attribution`. `?source_type=`, `?person=`, `?is_private=`
+    run `DjangoFilterBackend` via `ReportFilter`. `?date_from=` /
+    `?date_to=` are added by `ReportFilter` for the global reports
+    list page.
+
     Audit log: every update and destroy writes an `AuditLog` row with the
     actor, the changed field list, and the request IP. Matches the
     privacy model in CLAUDE.md (reports are the canonical narrative and
@@ -267,17 +330,30 @@ class ReportViewSet(viewsets.ModelViewSet):
 
     serializer_class = ReportSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
-    filterset_fields = ['person', 'source_type', 'is_private']
+    filterset_class = ReportFilter
     search_fields = ['narrative', 'source_attribution']
     ordering_fields = ['date_start', 'created_at']
 
     def get_queryset(self):
-        qs = Report.objects.select_related('person')
+        # media_files reverse-FK is iterated by ReportSerializer.media_files
+        # (nested serializer) — without prefetch_related this is N+1 over
+        # every report in the list. select_related('person') covers the FK
+        # lookup in ReportSerializer's Person field.
+        qs = Report.objects.select_related('person').prefetch_related('media_files')
         if not self.request.user.is_authenticated:
             qs = qs.filter(is_private=False, person__is_published=True)
         return qs
 
     # --- Authorship gate -------------------------------------------------
+
+    def retrieve(self, request, *args, **kwargs):
+        # Audit-log only when the report is private. Public reports are
+        # noise; private reports are the canonical narrative and the
+        # paper trail CLAUDE.md promises.
+        instance = self.get_object()
+        if instance.is_private:
+            self._audit(AuditLog.Action.VIEWED, instance, 'private')
+        return super().retrieve(request, *args, **kwargs)
 
     def _user_can_modify(self, user, instance: Report) -> bool:
         """Staff and Advocates can modify any report. Volunteers can only
@@ -375,18 +451,47 @@ class MediaViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
 
     def get_queryset(self):
-        qs = Media.objects.all()
+        # select_related the three FKs that MediaSerializer renders as
+        # nested objects (person, report, uploaded_by) so a list view
+        # doesn't trigger one query per row per FK.
+        qs = Media.objects.select_related('person', 'report', 'uploaded_by')
         if not self.request.user.is_authenticated:
             qs = qs.filter(visibility='public')
         elif not self.request.user.groups.filter(name__in=['Advocate', 'Admin']).exists():
             qs = qs.exclude(visibility='sensitive')
         return qs
 
+    def retrieve(self, request, *args, **kwargs):
+        # Audit-log sensitive-tier media. The sensitive tier is the
+        # evidence tier — every retrieval gets a row.
+        instance = self.get_object()
+        if instance.visibility == Media.Visibility.SENSITIVE:
+            self._audit(AuditLog.Action.VIEWED, instance, 'sensitive')
+        return super().retrieve(request, *args, **kwargs)
+
     def _can_mark_sensitive(self, user) -> bool:
         """Only advocates and staff can put media in the sensitive tier."""
         if not user or not user.is_authenticated:
             return False
         return user.is_staff or user.groups.filter(name='Advocate').exists()
+
+    # --- Audit log helpers (mirror the other viewsets) -------------------
+
+    def _client_ip(self) -> str | None:
+        xff = self.request.META.get('HTTP_X_FORWARDED_FOR')
+        if xff:
+            return xff.split(',')[0].strip()
+        return self.request.META.get('REMOTE_ADDR')
+
+    def _audit(self, action: str, instance: Media, details: str = '') -> None:
+        AuditLog.objects.create(
+            user=self.request.user if self.request.user.is_authenticated else None,
+            action=action,
+            target_type='media',
+            target_id=instance.pk,
+            details=details,
+            ip_address=self._client_ip(),
+        )
 
     def _check_sensitive_upload(self, serializer):
         # When updating, the field may be omitted (partial PATCH) — fall
@@ -531,3 +636,125 @@ class FamilyRelationshipViewSet(viewsets.ModelViewSet):
         )
         self._audit(AuditLog.Action.DELETED, instance, details)
         instance.delete()
+
+
+# --- Protected media ----------------------------------------------------
+#    Routes /media/<path> through Django so we can enforce auth + the
+#    matching Media.visibility tier (or, for profile images, that the
+#    associated Person is published). nginx proxies /media/ to gunicorn
+#    so the alias-based direct-from-disk path no longer exists. The previous
+#    design — alias /opt/rtv-cases/backend/media/ + Cache-Control: public —
+#    let anyone with a guessed URL download sensitive evidence files.
+
+import os
+import posixpath
+
+
+def _can_view_media(user, media: Media) -> bool:
+    """Mirror MediaViewSet.get_queryset: anonymous sees only public;
+    authenticated non-advocates see public+restricted; advocate/staff
+    see everything. Centralized so the protected-media view and the
+    viewset stay in sync.
+    """
+    if media.visibility == Media.Visibility.PUBLIC:
+        return True
+    if not user.is_authenticated:
+        return False
+    if media.visibility == Media.Visibility.RESTRICTED:
+        return True
+    # SENSITIVE — only advocates or staff.
+    return user.is_staff or user.groups.filter(name='Advocate').exists()
+
+
+def _can_view_profile_image(user, person: Person) -> bool:
+    """Profile images belong to a Person. Anonymous can see them only if
+    the Person is published; authenticated users can always see them.
+    (Profile images are not classified "sensitive" — they're just a
+    person's face — but a private/unpublished person shouldn't have
+    their photo leakable by URL either.)
+    """
+    if person.is_published:
+        return True
+    return user.is_authenticated
+
+
+def serve_protected_media(request, path):
+    """Serve a file from `MEDIA_ROOT` after an auth + visibility check.
+
+    Three buckets:
+      1. `/media/uploads/<file>` — backed by a Media row. Visibility
+         tier must permit the requester, per _can_view_media.
+      2. `/media/profiles/<file>` — a Person.profile_image. The Person
+         must be published for anonymous access; authenticated users
+         can always view.
+      3. Anything else — admin upload artifacts, manual imports, etc.
+         Default-deny. Returning 404 (not 403) avoids leaking which
+         paths exist.
+
+    All branches audit-log sensitive downloads (matching the VIEWED
+    rule for MediaViewSet / PersonViewSet).
+    """
+    if not request.user.is_authenticated:
+        # We require login for *all* media — even public photos go
+        # through the audit log so we know who looked. (Public Photos
+        # are by definition browsable from the catalog; this gate
+        # protects against URL enumeration only.)
+        return HttpResponse('Authentication required.', status=401)
+
+    safe_path = posixpath.normpath(path).lstrip('/')
+    if safe_path.startswith('..') or safe_path.startswith('/'):
+        return HttpResponseNotFound()
+    basename = os.path.basename(safe_path)
+
+    # ---- Media row (uploads/) -------------------------------------------
+    if safe_path.startswith('uploads/'):
+        try:
+            media = Media.objects.get(file__iendswith=basename)
+        except Media.DoesNotExist:
+            return HttpResponseNotFound('Not found.')
+
+        if not _can_view_media(request.user, media):
+            return HttpResponseForbidden(
+                'You do not have permission to view this media.',
+            )
+
+        if media.visibility == Media.Visibility.SENSITIVE:
+            AuditLog.objects.create(
+                user=request.user,
+                action=AuditLog.Action.VIEWED,
+                target_type='media',
+                target_id=media.pk,
+                details='sensitive file download',
+                ip_address=(
+                    request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+                    or request.META.get('REMOTE_ADDR')
+                ),
+            )
+
+        try:
+            return FileResponse(media.file.open('rb'), filename=basename)
+        except FileNotFoundError:
+            return HttpResponseNotFound('File missing on disk.')
+
+    # ---- Profile image (profiles/) --------------------------------------
+    if safe_path.startswith('profiles/'):
+        # Person.profile_image is an ImageField with upload_to='profiles/'.
+        # The filename format is unpredictable (Django appends a hash),
+        # so we look up by exact filename.
+        try:
+            person = Person.objects.get(profile_image__iendswith=basename)
+        except Person.DoesNotExist:
+            return HttpResponseNotFound('Not found.')
+
+        if not _can_view_profile_image(request.user, person):
+            return HttpResponseForbidden(
+                'You do not have permission to view this profile image.',
+            )
+
+        try:
+            return FileResponse(person.profile_image.open('rb'), filename=basename)
+        except FileNotFoundError:
+            return HttpResponseNotFound('File missing on disk.')
+
+    # ---- Anything else: default-deny -----------------------------------
+    return HttpResponseNotFound('Not found.')

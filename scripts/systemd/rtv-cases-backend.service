@@ -31,6 +31,17 @@ ExecStart=/opt/rtv-cases/backend/.venv/bin/gunicorn \
     --error-logfile -
 Restart=always
 RestartSec=5
+# Cap how aggressively systemd will restart the service if it keeps
+# failing — without these, a tight crash loop fills journald and
+# thrashes the CPU. 10 restarts in 5 minutes is well above any
+# legitimate deploy-time recycling but still catches a runaway crash.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+# Explicit journal routing (also the default for simple services, but
+# pinned here so a future maintainer changing the gunicorn logfile
+# flags above won't accidentally break log collection).
+StandardOutput=journal
+StandardError=journal
 MemoryMax=512M
 CPUQuota=100%
 

@@ -72,6 +72,29 @@ server {
     proxy_set_header X-Forwarded-Host  $host;
     proxy_redirect off;
 
+    # ---- auth-protected media (proxied to Django) ----
+    # All media downloads go through gunicorn so the
+    # `serve_protected_media` view in cases/views.py can enforce the
+    # auth + Media.visibility tier check. The previous alias-based
+    # setup (`alias /opt/rtv-cases/backend/media/` + Cache-Control:
+    # public) let anyone with a guessed filename download sensitive
+    # evidence files. This is the only path to /media/<file> now; the
+    # Django-side handler returns 401 / 403 / 404 as appropriate.
+    location /media/ {
+        proxy_pass http://rtv_cases_backend;
+        # Don't let nginx cache protected downloads — they are
+        # per-request authorization-gated and a 200 with `Cache-Control`
+        # would let the wrong user re-fetch on a 304.
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_hide_header Cache-Control;
+        proxy_hide_header Expires;
+        proxy_buffering off;
+    }
+
     # ---- static assets served directly off disk (no upstream hop) ----
     # `_app/` is where SvelteKit's immutable client bundle lives; rsync'd
     # here by deploy.sh from /opt/rtv-cases/frontend/build/client/_app/.
@@ -95,26 +118,7 @@ server {
     location /admin/    { proxy_pass http://rtv_cases_backend; }
     location /accounts/ { proxy_pass http://rtv_cases_backend; }
     location /events/   { proxy_pass http://rtv_cases_backend; }
-
-    # Serve uploaded media directly from disk. Django doesn't serve these
-    # in prod because settings.DEBUG=False skips the dev-only
-    # `urlpatterns += static(MEDIA_URL, ...)` in testimonies/urls.py —
-    # proxying to Django here would 404 with an HTML body. Reading from
-    # disk is also faster (no gunicorn hop) and doesn't require MEDIA_ROOT
-    # to be readable by the gunicorn user (only by www-data).
-    #
-    # The alias path matches `MEDIA_ROOT = BASE_DIR / 'media'` when the
-    # backend is run from /opt/rtv-cases/backend. The `sensitive_media/`
-    # directory is NOT under /media/ — it's a separate MEDIA_ROOT-equivalent
-    # that Django controls; add a Django-routed location for it if/when a
-    # public route for sensitive media is needed.
-    location /media/ {
-        alias /opt/rtv-cases/backend/media/;
-        expires 30d;
-        add_header Cache-Control "public";
-        access_log off;
-        try_files $uri =404;
-    }
+    # /media/ is now defined above (auth-protected proxy to Django).
 
     # ---- SvelteKit frontend catch-all (must come last) ----
     location / {

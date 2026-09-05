@@ -18,6 +18,7 @@
 	import { user, isVolunteer, isAdvocate } from '$lib/session';
 	import StatusBadge from '$lib/StatusBadge.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
+	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import MediaUploadModal from '$lib/MediaUploadModal.svelte';
 	import type { FamilyRelationshipRow, Media, Person, Report } from '$lib/types';
 
@@ -1077,63 +1078,63 @@
 
 <!-- Delete media confirm dialog -->
 {#if deleteTarget}
-	<div class="modal-overlay" onclick={cancelDelete} role="presentation"></div>
-	<div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-media-title">
-		<header class="modal-header">
-			<h2 id="delete-media-title">Delete media?</h2>
-			<button type="button" class="modal-close" aria-label="Close" onclick={cancelDelete} disabled={deleting}>×</button>
-		</header>
-		<div class="modal-body">
-			{#if deleteError}
-				<div class="form-error" role="alert">
-					<span class="form-error-icon" aria-hidden="true">!</span>
-					<span>{deleteError}</span>
-				</div>
-			{/if}
-			<p>
-				This will permanently delete
-				<strong>{deleteTarget.description || mediaTypeLabels[deleteTarget.media_type] || 'this media item'}</strong>.
-				It cannot be recovered.
-			</p>
-			<div class="modal-actions">
-				<button type="button" class="btn btn-secondary" onclick={cancelDelete} disabled={deleting}>Cancel</button>
-				<button type="button" class="btn btn-danger" onclick={confirmDelete} disabled={deleting}>
-					{deleting ? 'Deleting…' : 'Delete'}
-				</button>
+	{@const mediaTarget = deleteTarget}
+	<ConfirmModal
+		open
+		stage={deleting ? 'pending' : 'confirming'}
+		title="Delete media?"
+		body=""
+		destructive
+		onConfirm={confirmDelete}
+		onCancel={cancelDelete}
+	>
+		{#snippet bodyContent()}
+			<div class="confirm-rich-body">
+				{#if deleteError}
+					<div class="form-error" role="alert">
+						<span class="form-error-icon" aria-hidden="true">!</span>
+						<span>{deleteError}</span>
+					</div>
+				{/if}
+				<p>
+					This will permanently delete
+					<strong>{mediaTarget.description || mediaTypeLabels[mediaTarget.media_type] || 'this media item'}</strong>.
+					It cannot be recovered.
+				</p>
 			</div>
-		</div>
-	</div>
+		{/snippet}
+	</ConfirmModal>
 {/if}
 
 <!-- Delete report confirm dialog — mirrors the media dialog but warns
      about the Media FK cascade (cases/models.py: Media.report CASCADE). -->
 {#if reportDeleteTarget}
-	<div class="modal-overlay" onclick={cancelReportDelete} role="presentation"></div>
-	<div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-report-title">
-		<header class="modal-header">
-			<h2 id="delete-report-title">Delete report?</h2>
-			<button type="button" class="modal-close" aria-label="Close" onclick={cancelReportDelete} disabled={reportDeleting}>×</button>
-		</header>
-		<div class="modal-body">
-			{#if reportDeleteError}
-				<div class="form-error" role="alert">
-					<span class="form-error-icon" aria-hidden="true">!</span>
-					<span>{reportDeleteError}</span>
-				</div>
-			{/if}
-			<p>
-				This will permanently delete
-				<strong>{reportDeleteTarget.source_attribution || sourceTypeLabels[reportDeleteTarget.source_type] || 'this report'}</strong>
-				<strong>and any media attached to it</strong>. It cannot be recovered.
-			</p>
-			<div class="modal-actions">
-				<button type="button" class="btn btn-secondary" onclick={cancelReportDelete} disabled={reportDeleting}>Cancel</button>
-				<button type="button" class="btn btn-danger" onclick={confirmReportDelete} disabled={reportDeleting}>
-					{reportDeleting ? 'Deleting…' : 'Delete'}
-				</button>
+	{@const reportTarget = reportDeleteTarget}
+	<ConfirmModal
+		open
+		stage={reportDeleting ? 'pending' : 'confirming'}
+		title="Delete report?"
+		body=""
+		destructive
+		onConfirm={confirmReportDelete}
+		onCancel={cancelReportDelete}
+	>
+		{#snippet bodyContent()}
+			<div class="confirm-rich-body">
+				{#if reportDeleteError}
+					<div class="form-error" role="alert">
+						<span class="form-error-icon" aria-hidden="true">!</span>
+						<span>{reportDeleteError}</span>
+					</div>
+				{/if}
+				<p>
+					This will permanently delete
+					<strong>{reportTarget.source_attribution || sourceTypeLabels[reportTarget.source_type] || 'this report'}</strong>
+					<strong>and any media attached to it</strong>. It cannot be recovered.
+				</p>
 			</div>
-		</div>
-	</div>
+		{/snippet}
+	</ConfirmModal>
 {/if}
 
 <!-- Delete case confirm dialog — sibling to the report / media dialogs.
@@ -1141,33 +1142,33 @@
      links) will be cascaded away. On success we redirect to the catalog
      with `?deleted=1`, which surfaces a transient banner there. -->
 {#if personDeleteOpen && person}
-	<div class="modal-overlay" onclick={cancelPersonDelete} role="presentation"></div>
-	<div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-person-title">
-		<header class="modal-header">
-			<h2 id="delete-person-title">Delete case?</h2>
-			<button type="button" class="modal-close" aria-label="Close" onclick={cancelPersonDelete} disabled={personDeleting}>×</button>
-		</header>
-		<div class="modal-body">
-			{#if personDeleteError}
-				<div class="form-error" role="alert">
-					<span class="form-error-icon" aria-hidden="true">!</span>
-					<span>{personDeleteError}</span>
-				</div>
-			{/if}
-			<p>
-				This will permanently delete
-				<strong>{person.name}</strong>
-				and <strong>every report, piece of media, and family link</strong>
-				attached to this case. It cannot be recovered.
-			</p>
-			<div class="modal-actions">
-				<button type="button" class="btn btn-secondary" onclick={cancelPersonDelete} disabled={personDeleting}>Cancel</button>
-				<button type="button" class="btn btn-danger" onclick={confirmPersonDelete} disabled={personDeleting}>
-					{personDeleting ? 'Deleting…' : 'Delete'}
-				</button>
+	{@const targetPerson = person}
+	<ConfirmModal
+		open
+		stage={personDeleting ? 'pending' : 'confirming'}
+		title="Delete case?"
+		body=""
+		destructive
+		onConfirm={confirmPersonDelete}
+		onCancel={cancelPersonDelete}
+	>
+		{#snippet bodyContent()}
+			<div class="confirm-rich-body">
+				{#if personDeleteError}
+					<div class="form-error" role="alert">
+						<span class="form-error-icon" aria-hidden="true">!</span>
+						<span>{personDeleteError}</span>
+					</div>
+				{/if}
+				<p>
+					This will permanently delete
+					<strong>{targetPerson.name}</strong>
+					and <strong>every report, piece of media, and family link</strong>
+					attached to this case. It cannot be recovered.
+				</p>
 			</div>
-		</div>
-	</div>
+		{/snippet}
+	</ConfirmModal>
 {/if}
 
 <!-- Family relationship create / edit modal -->
@@ -1258,41 +1259,35 @@
 <!-- Family relationship delete confirm dialog -->
 {#if relationshipDelTarget && person}
 	{@const other = otherPerson(relationshipDelTarget)}
-	<div class="modal-overlay" onclick={cancelRelDelete} role="presentation"></div>
-	<div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="rel-delete-title">
-		<header class="modal-header">
-			<h2 id="rel-delete-title">Remove family link?</h2>
-			<button
-				type="button"
-				class="modal-close"
-				aria-label="Close"
-				onclick={cancelRelDelete}
-				disabled={relationshipDeleting}
-			>×</button>
-		</header>
-		<div class="modal-body">
-			{#if relationshipDeleteError}
-				<div class="form-error" role="alert">
-					<span class="form-error-icon" aria-hidden="true">!</span>
-					<span>{relationshipDeleteError}</span>
-				</div>
-			{/if}
-			<p>
-				Remove the link between
-				<strong>{person.name}</strong> and
-				<strong>{other.name}</strong>?
-				It cannot be recovered.
-			</p>
-			<div class="modal-actions">
-				<button type="button" class="btn btn-secondary" onclick={cancelRelDelete} disabled={relationshipDeleting}>
-					Cancel
-				</button>
-				<button type="button" class="btn btn-danger" onclick={confirmRelDelete} disabled={relationshipDeleting}>
-					{relationshipDeleting ? 'Removing…' : 'Remove'}
-				</button>
+	{@const anchorPerson = person}
+	<ConfirmModal
+		open
+		stage={relationshipDeleting ? 'pending' : 'confirming'}
+		title="Remove family link?"
+		body=""
+		confirmLabel="Remove"
+		cancelLabel="Cancel"
+		destructive
+		onConfirm={confirmRelDelete}
+		onCancel={cancelRelDelete}
+	>
+		{#snippet bodyContent()}
+			<div class="confirm-rich-body">
+				{#if relationshipDeleteError}
+					<div class="form-error" role="alert">
+						<span class="form-error-icon" aria-hidden="true">!</span>
+						<span>{relationshipDeleteError}</span>
+					</div>
+				{/if}
+				<p>
+					Remove the link between
+					<strong>{anchorPerson.name}</strong> and
+					<strong>{other.name}</strong>?
+					It cannot be recovered.
+				</p>
 			</div>
-		</div>
-	</div>
+		{/snippet}
+	</ConfirmModal>
 {/if}
 
 <style>
