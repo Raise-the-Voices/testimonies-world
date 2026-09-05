@@ -108,6 +108,21 @@ class Person(models.Model):
     class Meta:
         verbose_name_plural = 'persons'
         ordering = ['-updated_at']
+        indexes = [
+            # Single-column indexes accelerate common equality / ordering
+            # paths used by the filter UI and statistics endpoint.
+            models.Index(fields=['country'], name='person_country_idx'),
+            models.Index(fields=['current_status'], name='person_current_status_idx'),
+            models.Index(fields=['is_published'], name='person_is_published_idx'),
+            models.Index(fields=['-updated_at'], name='person_updated_desc_idx'),
+            # Composite covers the most common access path:
+            # "published persons grouped by status" (statistics endpoint)
+            # and the default list filter for unauthenticated viewers.
+            models.Index(
+                fields=['is_published', 'current_status'],
+                name='person_pub_status_idx',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.name} ({self.country})'
@@ -180,6 +195,16 @@ class Report(models.Model):
 
     class Meta:
         ordering = ['-date_start', '-created_at']
+        indexes = [
+            # The default anonymous-viewer path filters by
+            # `person__is_published=True AND is_private=False`. This
+            # composite covers the per-person private-filter scan inside
+            # ReportViewSet.get_queryset.
+            models.Index(
+                fields=['person', 'is_private'],
+                name='report_person_private_idx',
+            ),
+        ]
 
     def __str__(self):
         return f'Report on {self.person.name} ({self.get_source_type_display()})'
@@ -223,6 +248,25 @@ class Media(models.Model):
     class Meta:
         verbose_name_plural = 'media'
         ordering = ['-created_at']
+        indexes = [
+            # Person/media-by-visibility is the most common media lookup
+            # (person-detail page rendering photos first, then filtered
+            # to visibility for the requester).
+            models.Index(
+                fields=['person', 'visibility'],
+                name='media_person_visibility_idx',
+            ),
+            models.Index(
+                fields=['report', 'visibility'],
+                name='media_report_visibility_idx',
+            ),
+            # For the "show me photos for this person" / "show me docs
+            # for this report" gallery views.
+            models.Index(
+                fields=['person', 'media_type'],
+                name='media_person_type_idx',
+            ),
+        ]
 
     def __str__(self):
         target = self.person or self.report
@@ -250,6 +294,14 @@ class FamilyRelationship(models.Model):
 
     class Meta:
         unique_together = ['person_a', 'person_b']
+        indexes = [
+            # relationship_type is low-cardinality but cheap to index;
+            # speeds up `?relationship_type=sibling` style filters.
+            models.Index(
+                fields=['relationship_type'],
+                name='familyrel_type_idx',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.person_a.name} — {self.get_relationship_type_display()} — {self.person_b.name}'
@@ -275,6 +327,21 @@ class AuditLog(models.Model):
 
     class Meta:
         ordering = ['-timestamp']
+        indexes = [
+            # AuditLog is the canonical "what happened to object X?" log —
+            # (target_type, target_id) is the lookup that powers that view.
+            models.Index(
+                fields=['target_type', 'target_id'],
+                name='audit_target_idx',
+            ),
+            # "Show me everything user U did, newest first" — the
+            # accountability surface for advocates reviewing their own
+            # activity.
+            models.Index(
+                fields=['user', '-timestamp'],
+                name='audit_user_time_idx',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.user} {self.action} {self.target_type}#{self.target_id}'

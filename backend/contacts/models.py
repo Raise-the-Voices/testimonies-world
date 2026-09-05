@@ -33,6 +33,11 @@ class Contact(models.Model):
 
     class Meta:
         ordering = ['name']
+        indexes = [
+            # `?role=lawyer` is the only filter on the contacts list;
+            # a single-column index is enough for the equality lookup.
+            models.Index(fields=['role'], name='contact_role_idx'),
+        ]
 
     def __str__(self):
         return f'{self.name} ({self.get_role_display()})'
