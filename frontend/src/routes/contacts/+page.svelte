@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
-	import { fly } from 'svelte/transition';
 	import { page } from '$app/stores';
 	import { user, isAdvocate } from '$lib/session';
 	import { getContacts, deleteContact } from '$lib/api';
+	import Banner from '$lib/Banner.svelte';
+	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import type { Contact, ContactRole } from '$lib/types';
 
@@ -30,13 +31,6 @@
 	type BannerKind = 'success' | 'error';
 	let bannerMsg = $state('');
 	let bannerKind = $state<BannerKind>('success');
-	const BANNER_TTL_MS = 3500;
-
-	$effect(() => {
-		if (!bannerMsg) return;
-		const id = setTimeout(() => (bannerMsg = ''), BANNER_TTL_MS);
-		return () => clearTimeout(id);
-	});
 
 	function consumeUrlBanner() {
 		const url = $page.url;
@@ -57,8 +51,10 @@
 		}
 	}
 
-	// --- Delete toast (confirming → deleting → success | error) ------------
-	type DeleteStage = 'confirming' | 'deleting' | 'success' | 'error';
+	// --- Delete confirm (confirming → deleting → success | error) ----------
+	// Drives a single ConfirmModal across the whole flow. The modal's
+	// own Escape / focus-trap / body-scroll-lock handle the rest.
+	type DeleteStage = 'confirming' | 'pending' | 'success' | 'error';
 	interface DeleteToast {
 		id: number;
 		name: string;
@@ -75,27 +71,6 @@
 		}
 	}
 
-	// Global Esc handler while the toast is open.
-	$effect(() => {
-		if (!deleteToast) return;
-		const handler = (e: KeyboardEvent) => {
-			if (e.key === 'Escape' && deleteToast) {
-				e.preventDefault();
-				cancelDelete();
-			}
-		};
-		document.addEventListener('keydown', handler);
-		return () => document.removeEventListener('keydown', handler);
-	});
-
-	// Svelte action: focus an element when it's mounted. Used on the toast's
-	// Cancel button so a stray Enter is a no-op rather than a destructive
-	// confirm. Same pattern /casework uses — svelte's `autofocus` warns
-	// under a11y rules, so we do it imperatively.
-	function autofocus(node: HTMLElement) {
-		node.focus();
-	}
-
 	function startDelete(id: number, name: string) {
 		clearToastTimer();
 		deleteToast = { id, name, stage: 'confirming' };
@@ -108,9 +83,10 @@
 	}
 
 	async function performDelete() {
-		if (!deleteToast || deleteToast.stage !== 'confirming') return;
+		if (!deleteToast) return;
+		// Allow Retry from `error` and the initial Confirm from `confirming`.
 		const target = deleteToast;
-		deleteToast = { ...target, stage: 'deleting' };
+		deleteToast = { ...target, stage: 'pending' };
 		try {
 			await deleteContact(target.id);
 			contacts = contacts.filter((c) => c.id !== target.id);
@@ -149,6 +125,26 @@
 		consumeUrlBanner();
 		loadContacts();
 	});
+
+	// Derived body copy for the ConfirmModal across the 4 stages.
+	const modalTitle = $derived(
+		deleteToast?.stage === 'pending'
+			? 'Deleting…'
+			: deleteToast?.stage === 'success'
+				? 'Contact deleted'
+				: deleteToast?.stage === 'error'
+					? "Couldn't delete"
+					: 'Delete contact?',
+	);
+	const modalBody = $derived(
+		deleteToast?.stage === 'pending'
+			? `Removing ${deleteToast.name}…`
+			: deleteToast?.stage === 'success'
+				? `${deleteToast.name} has been removed.`
+				: deleteToast?.stage === 'error'
+					? (deleteToast.errorMessage ?? 'Something went wrong.')
+					: `${deleteToast?.name ?? ''} will be removed from the list. The record is preserved internally for audit history.`,
+	);
 </script>
 
 <svelte:head>
@@ -174,91 +170,26 @@
 		</header>
 
 		{#if bannerMsg}
-			<div
-				class="banner banner-{bannerKind}"
-				role="status"
-				transition:fly={{ y: -8, duration: 220, opacity: 0 }}
-			>
-				<span class="banner-icon" aria-hidden="true">
-					{bannerKind === 'success' ? '✓' : '!'}
-				</span>
-				<span class="banner-text">{bannerMsg}</span>
-				<button
-					type="button"
-					class="banner-dismiss"
-					aria-label="Dismiss"
-					onclick={() => (bannerMsg = '')}
-				>×</button>
-			</div>
+			<Banner
+				kind={bannerKind}
+				message={bannerMsg}
+				onDismiss={() => (bannerMsg = '')}
+			/>
 		{/if}
 
 		{#if deleteToast}
-			<!-- Backdrop: dimmed + blurred; clicks dismiss the toast (safe default
-			     because the destructive Confirm needs a deliberate click). -->
-			<div class="delete-toast-overlay" onclick={cancelDelete} role="presentation"></div>
-
-			<!-- Toast: fixed top-of-page, dialog semantics, autofocus on Cancel. -->
-			<div
-				class="delete-toast"
-				class:delete-toast-success={deleteToast.stage === 'success'}
-				class:delete-toast-error={deleteToast.stage === 'error'}
-				role="alertdialog"
-				aria-modal="true"
-				aria-labelledby="delete-toast-title"
-				aria-describedby="delete-toast-text"
-			>
-				<div class="delete-toast-body">
-					<h2 id="delete-toast-title" class="delete-toast-title">
-						{#if deleteToast.stage === 'confirming'}
-							Delete contact?
-						{:else if deleteToast.stage === 'deleting'}
-							Deleting…
-						{:else if deleteToast.stage === 'success'}
-							Contact deleted
-						{:else}
-							Couldn't delete
-						{/if}
-					</h2>
-					<p id="delete-toast-text" class="delete-toast-text">
-						{#if deleteToast.stage === 'confirming'}
-							<strong>{deleteToast.name}</strong> will be removed from the list.
-							The record is preserved internally for audit history.
-						{:else if deleteToast.stage === 'deleting'}
-							Removing <strong>{deleteToast.name}</strong>…
-						{:else if deleteToast.stage === 'success'}
-							<strong>{deleteToast.name}</strong> has been removed.
-						{:else}
-							{deleteToast.errorMessage || 'Something went wrong.'}
-						{/if}
-					</p>
-				</div>
-				<div class="delete-toast-actions">
-					{#if deleteToast.stage === 'confirming'}
-						<button
-							type="button"
-							class="btn btn-secondary"
-							onclick={cancelDelete}
-							use:autofocus
-						>Cancel</button>
-						<button
-							type="button"
-							class="btn btn-danger"
-							onclick={performDelete}
-						>Delete</button>
-					{:else if deleteToast.stage === 'error'}
-						<button
-							type="button"
-							class="btn btn-secondary"
-							onclick={cancelDelete}
-						>Close</button>
-						<button
-							type="button"
-							class="btn btn-primary"
-							onclick={performDelete}
-						>Retry</button>
-					{/if}
-				</div>
-			</div>
+			<ConfirmModal
+				open
+				stage={deleteToast.stage}
+				title={modalTitle}
+				body={modalBody}
+				confirmLabel="Delete"
+				cancelLabel="Cancel"
+				destructive
+				errorMessage={deleteToast.errorMessage}
+				onConfirm={performDelete}
+				onCancel={cancelDelete}
+			/>
 		{/if}
 
 		<section class="contacts-card" aria-label="Contacts list">
@@ -421,95 +352,9 @@
 		text-decoration: none;
 	}
 
-	/* === Banner (success / error, top-of-page) === */
-	.banner {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.65rem 0.9rem;
-		border-radius: var(--radius-card);
-		font-size: 0.92rem;
-	}
-	.banner-success {
-		background: #c6f6d5;
-		color: #22543d;
-		border: 1px solid #9ae6b4;
-	}
-	.banner-error {
-		background: #fed7d7;
-		color: #742a2a;
-		border: 1px solid #feb2b2;
-	}
-	.banner-icon {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 22px;
-		height: 22px;
-		border-radius: 50%;
-		font-weight: 700;
-		font-size: 0.85rem;
-	}
-	.banner-success .banner-icon { background: rgba(34, 84, 61, 0.18); color: #22543d; }
-	.banner-error .banner-icon { background: rgba(116, 42, 42, 0.2); color: #742a2a; }
-	.banner-text { flex: 1 1 auto; }
-	.banner-dismiss {
-		background: transparent;
-		border: none;
-		color: inherit;
-		font-size: 1.1rem;
-		padding: 0 0.25rem;
-		line-height: 1;
-		cursor: pointer;
-	}
-
-	/* === Delete toast (matches /casework pattern) === */
-	.delete-toast-overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.35);
-		backdrop-filter: blur(2px);
-		-webkit-backdrop-filter: blur(2px);
-		z-index: 60;
-	}
-	.delete-toast {
-		position: fixed;
-		top: 1.25rem;
-		left: 50%;
-		transform: translateX(-50%);
-		max-width: 460px;
-		width: calc(100% - 2rem);
-		background: var(--color-bg-white);
-		border: 1px solid var(--color-border-light);
-		border-left: 3px solid var(--color-danger);
-		border-radius: var(--radius-card-lg);
-		box-shadow: var(--shadow-card-lg);
-		padding: 1rem 1.25rem;
-		z-index: 70;
-		display: flex;
-		flex-direction: column;
-		gap: 0.85rem;
-	}
-	.delete-toast-success { border-left-color: var(--color-success); }
-	.delete-toast-error { border-left-color: var(--color-danger); }
-	.delete-toast-title {
-		margin: 0;
-		font-size: 1rem;
-		font-weight: 700;
-		color: var(--color-text);
-	}
-	.delete-toast-text {
-		margin: 0;
-		font-size: 0.88rem;
-		color: var(--color-text-muted);
-		line-height: 1.5;
-	}
-	.delete-toast-text strong { color: var(--color-text); }
-	.delete-toast-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.5rem;
-	}
+	/* Banner + delete-confirm are now <Banner> and <ConfirmModal>; see
+	   src/lib/. .btn-danger is still used by inline delete buttons on
+	   other pages (e.g. MediaUploadModal) so keep the styling here. */
 	.btn-danger {
 		background: var(--color-danger);
 		color: var(--color-text-light);
@@ -790,8 +635,7 @@
 
 	@media (prefers-reduced-motion: reduce) {
 		.contacts-table tbody tr,
-		.row-action,
-		.banner {
+		.row-action {
 			transition: none;
 		}
 	}
