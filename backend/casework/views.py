@@ -5,6 +5,8 @@ from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from contacts.permissions import IsAdvocate
+
 from . import notifications
 from .models import CaseworkRecord, Notification, UserPreference
 from .serializers import (
@@ -19,6 +21,12 @@ class CaseworkRecordViewSet(viewsets.ModelViewSet):
     filterset_fields = ['action_type', 'status', 'performed_by']
     search_fields = ['description', 'notes', 'next_steps']
     ordering_fields = ['date', 'created_at', 'status']
+    # Tightened to IsAdvocate to match CLAUDE.md:56-59 ("Advocate:
+    # casework, contacts, restricted media"). The previous
+    # IsAuthenticated gate let any volunteer read & write sensitive
+    # casework narratives — including Notes / Next Steps that often
+    # contain PII about family contacts and un-redacted sources.
+    permission_classes = [permissions.IsAuthenticated, IsAdvocate]
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):

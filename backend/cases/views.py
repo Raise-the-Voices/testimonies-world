@@ -181,7 +181,27 @@ class PersonViewSet(viewsets.ModelViewSet):
         return PersonDetailSerializer
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        # Mass-assignment guard: `is_published` is a publication gate
+        # that only staff / advocates should control. Volunteers can
+        # still submit cases (the /submit page), but the rows land as
+        # drafts (is_published=False). Silently drop the field rather
+        # than 403-ing — the volunteer shouldn't see the request
+        # fail over a field they can't see in the UI anyway.
+        user = self.request.user
+        if not (user.is_staff or user.groups.filter(name='Advocate').exists()):
+            serializer.validated_data.pop('is_published', None)
+        serializer.save(created_by=user)
+
+    def perform_update(self, serializer):
+        # Same `is_published` guard as perform_create. A volunteer
+        # who somehow PATCHes the published flag silently has it
+        # dropped instead of 403-ing — fail-open on this field because
+        # the alternative breaks the /submit flow which legitimately
+        # sends other writable fields alongside it.
+        user = self.request.user
+        if not (user.is_staff or user.groups.filter(name='Advocate').exists()):
+            serializer.validated_data.pop('is_published', None)
+        serializer.save()
 
     def retrieve(self, request, *args, **kwargs):
         # Audit-log every detail view of a Person. Anonymous retrievals are
@@ -423,7 +443,12 @@ class MediaViewSet(viewsets.ModelViewSet):
 
     serializer_class = MediaSerializer
     filterset_fields = ['person', 'report', 'media_type', 'visibility']
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    # Tightened to IsVolunteer to match PersonViewSet / ReportViewSet /
+    # FamilyRelationshipViewSet. The previous IsAuthenticatedOrReadOnly
+    # gate let any logged-in user (even an authenticated outsider with
+    # no group) upload/edit/delete media. The sensitive-tier gate inside
+    # perform_create / perform_update still applies on top of this.
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
 
     def get_queryset(self):
         # select_related the three FKs that MediaSerializer renders as
