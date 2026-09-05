@@ -5,6 +5,7 @@ from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from cases.models import AuditLog
 from contacts.permissions import IsAdvocate
 
 from . import notifications
@@ -32,8 +33,35 @@ class CaseworkRecordViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return CaseworkRecord.objects.prefetch_related('persons').select_related('performed_by')
 
+    # --- Audit log helpers (mirror PersonViewSet / ReportViewSet) --------
+
+    def _client_ip(self) -> str | None:
+        xff = self.request.META.get('HTTP_X_FORWARDED_FOR')
+        if xff:
+            return xff.split(',')[0].strip()
+        return self.request.META.get('REMOTE_ADDR')
+
+    def _audit(self, action: str, instance: CaseworkRecord, details: str = '') -> None:
+        """Write an AuditLog row for a CaseworkRecord action.
+
+        Mirrors the `_audit()` helper on PersonViewSet / ReportViewSet /
+        MediaViewSet. CaseworkRecord was the silent outlier — the other
+        viewsets audited CRUD, this one only emitted in-app notifications.
+        Closing the gap so a casework record's edit/destroy trail is
+        queryable the same way Person / Report / Media trails are.
+        """
+        AuditLog.objects.create(
+            user=self.request.user if self.request.user.is_authenticated else None,
+            action=action,
+            target_type='casework',
+            target_id=instance.pk,
+            details=details,
+            ip_address=self._client_ip(),
+        )
+
     def perform_create(self, serializer):
         record = serializer.save(performed_by=self.request.user)
+        self._audit(AuditLog.Action.EDITED, record, 'created')
         event = notifications.build_create_event(record, self.request.user)
         notifications.emit_event(event)
         notifications.record_seen_by(record, self.request.user)
@@ -41,6 +69,7 @@ class CaseworkRecordViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         prior_status = serializer.instance.status if serializer.instance else None
         record = serializer.save()
+        self._audit(AuditLog.Action.EDITED, record, 'updated')
         became_done = (
             prior_status != CaseworkRecord.Status.DONE
             and record.status == CaseworkRecord.Status.DONE
@@ -51,16 +80,25 @@ class CaseworkRecordViewSet(viewsets.ModelViewSet):
         notifications.emit_event(event)
         notifications.record_seen_by(record, self.request.user)
 
+    def perform_destroy(self, instance):
+        # Audit BEFORE delete so the row references the still-existing
+        # primary key. Mirrors PersonViewSet.perform_destroy.
+        self._audit(AuditLog.Action.DELETED, instance, '')
+        instance.delete()
+
     def retrieve(self, request, *args, **kwargs):
         """GET a record. Side effect: mark the caller's own notifications
         on this record as read, and emit a 'seen by' notification to the
-        author — the human-sense "verification" the feature is named for."""
+        author — the human-sense "verification" the feature is named for.
+        Also writes an AuditLog.VIEWED row so casework-record views are
+        in the same paper trail as Person / Report / Media views."""
         # Pull through get_queryset() instead of self.get_object() so the
         # prefetch_related('persons') / select_related('performed_by') on
         # get_queryset is honored — otherwise the serializer's read of
         # `instance.persons` and `instance.performed_by.get_full_name()`
         # would each fire a separate query.
         instance = self.get_queryset().get(pk=kwargs.get(self.lookup_field))
+        self._audit(AuditLog.Action.VIEWED, instance, '')
         Notification.objects.filter(
             recipient=request.user,
             casework=instance,
