@@ -168,17 +168,83 @@ class MediaPermissionTests(TestCase):
         self.client.get(f'/api/media/{mid}/')
         self.assertEqual(res.status_code, 403)
 
-    def test_outsider_can_write_media(self):
-        # Logged-in non-volunteer is still IsAuthenticated; the gate
-        # is on the sensitive tier, not on group membership for writes.
-        # This is intentional — anyone authenticated can upload.
+    def test_outsider_cannot_write_media(self):
+        # AfterH2: MediaViewSet is now gated by IsVolunteer (matches
+        # Person/Report/FamilyRelationship). An authenticated outsider
+        # with no group fails the gate entirely — 403, not 201.
+        # The previous "anyone authenticated can upload" stance
+        # was the inconsistency this PR closes.
         self.client.force_login(self.outsider)
         res = self.client.post('/api/media/', {
             'url': 'https://example.org/x.jpg',
             'media_type': 'photo',
             'visibility': 'public',
         }, format='json')
+        self.assertEqual(res.status_code, 403)
+
+
+class MediaUploadValidationTests(TestCase):
+    """Coverage for the file-extension + size validators on Media.file.
+
+    Backend validation closes a gap where a direct API POST could
+    upload any file type or any size up to nginx's transport-layer
+    cap. With these validators:
+      - extensions outside the allow-list → 400
+      - files larger than 50 MB → 400
+    The frontend already caps at 25 MB but the backend must hold the
+    line independently — clients should not be able to smuggle
+    .exe / .html / multi-GB files via curl.
+    """
+
+    def setUp(self):
+        self.volunteer = make_user('vol', in_group='Volunteer')
+        self.person = _make_published_person()
+        self.client = APIClient()
+        self.client.force_login(self.volunteer)
+
+    def test_disallowed_extension_rejected(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        payload = {
+            'person': self.person.id,
+            'media_type': 'photo',
+            'visibility': 'public',
+            'file': SimpleUploadedFile(
+                'malware.exe',
+                b'MZ' + b'\x00' * 100,
+                'application/octet-stream',
+            ),
+        }
+        res = self.client.post('/api/media/', payload, format='multipart')
+        self.assertEqual(res.status_code, 400)
+
+    def test_allowed_extension_accepted(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        payload = {
+            'person': self.person.id,
+            'media_type': 'photo',
+            'visibility': 'public',
+            'file': SimpleUploadedFile(
+                'photo.jpg', b'fake-jpeg', 'image/jpeg',
+            ),
+        }
+        res = self.client.post('/api/media/', payload, format='multipart')
         self.assertEqual(res.status_code, 201)
+
+    def test_oversized_file_rejected(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        # 51 MB — over the 50 MB cap.
+        big = b'\x00' * (51 * 1024 * 1024)
+        payload = {
+            'person': self.person.id,
+            'media_type': 'photo',
+            'visibility': 'public',
+            'file': SimpleUploadedFile('huge.jpg', big, 'image/jpeg'),
+        }
+        res = self.client.post('/api/media/', payload, format='multipart')
+        self.assertEqual(res.status_code, 400)
+        # Body should mention the cap.
+        body = res.content.decode().lower()
+        self.assertIn('too large', body)
 
 
 def _make_published_person() -> Person:
@@ -869,6 +935,98 @@ class FamilyRelationshipPermissionTests(TestCase):
         self.assertEqual(len(ids), 1)
 
 
+class MassAssignmentGuardTests(TestCase):
+    """Coverage for the `is_published` mass-assignment guard on
+    PersonViewSet — staff/advocate can change it, volunteer/outsider
+    silently drop it (rather than 403, so the /submit flow doesn't
+    fail over a field the volunteer can't see in the UI anyway).
+    """
+
+    def setUp(self):
+        self.volunteer = make_user('vol', in_group='Volunteer')
+        self.advocate = make_user('aisha', in_group='Advocate')
+        self.staff = make_user('admin', is_staff=True)
+        self.outsider = make_user('random')
+        self.client = APIClient()
+
+    def base_payload(self, **overrides):
+        p = {
+            'name': 'A. Person',
+            'country': 'PK',
+            'summary_narrative': 'test',
+        }
+        p.update(overrides)
+        return p
+
+    def test_volunteer_cannot_set_is_published_on_create(self):
+        # The model default is is_published=True. The guard fires
+        # when a volunteer tries to override it. To prove the guard
+        # is doing something, send is_published=False — the volunteer
+        # must NOT be able to hide a case they just submitted.
+        self.client.force_login(self.volunteer)
+        res = self.client.post(
+            '/api/persons/',
+            self.base_payload(is_published=False),
+            format='json',
+        )
+        self.assertEqual(res.status_code, 201)
+        # Guard dropped is_published=False, so model default (True)
+        # applies — volunteer cannot hide the case.
+        self.assertTrue(Person.objects.get(pk=res.json()['id']).is_published)
+
+    def test_outsider_cannot_create_person_at_all(self):
+        # Outsider is authenticated but not in Volunteer/Advocate — the
+        # IsVolunteer gate fails entirely (403) before perform_create
+        # even runs. Pin the existing gate behavior so this stays
+        # covered as we add more guards.
+        self.client.force_login(self.outsider)
+        res = self.client.post(
+            '/api/persons/',
+            self.base_payload(is_published=True),
+            format='json',
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_volunteer_cannot_set_is_published_on_update(self):
+        # Volunteer creates a draft (model default is_published=True),
+        # then tries to flip it to unpublished (False). The PATCH must
+        # silently drop the field.
+        self.client.force_login(self.volunteer)
+        created = self.client.post(
+            '/api/persons/', self.base_payload(), format='json',
+        ).json()
+        self.assertTrue(Person.objects.get(pk=created['id']).is_published)
+
+        res = self.client.patch(
+            f'/api/persons/{created["id"]}/',
+            {'is_published': False},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200)
+        # Guard dropped the field, so is_published stays at its current
+        # value (True).
+        self.assertTrue(Person.objects.get(pk=created['id']).is_published)
+
+    def test_advocate_can_set_is_published(self):
+        self.client.force_login(self.advocate)
+        res = self.client.post(
+            '/api/persons/',
+            self.base_payload(is_published=True),
+            format='json',
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertTrue(Person.objects.get(pk=res.json()['id']).is_published)
+
+    def test_staff_can_set_is_published(self):
+        self.client.force_login(self.staff)
+        res = self.client.post(
+            '/api/persons/',
+            self.base_payload(is_published=True),
+            format='json',
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertTrue(Person.objects.get(pk=res.json()['id']).is_published)
+
 class ViewedAuditLogTests(TestCase):
     """Coverage for the AuditLog.Action.VIEWED wiring.
 
@@ -982,6 +1140,7 @@ class ViewedAuditLogTests(TestCase):
         self.assertEqual(logs.count(), 1)
         self.assertEqual(logs.first().user, advocate)
         self.assertEqual(logs.first().details, 'sensitive')
+
 
 
 class ProtectedMediaViewTests(TestCase):

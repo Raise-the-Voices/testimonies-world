@@ -12,7 +12,15 @@ class CaseworkRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = CaseworkRecord
         fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at']
+        # Mass-assignment guards:
+        # - performed_by is server-controlled (set in
+        #   perform_create to request.user; perform_update doesn't
+        #   override it, so making it read_only prevents an
+        #   authenticated advocate from PATCH-ing another user's id
+        #   onto a record they didn't author — a quiet authorship
+        #   reassignment that the audit log wouldn't catch).
+        # - created_at / updated_at are framework-set.
+        read_only_fields = ['performed_by', 'created_at', 'updated_at']
 
     def get_seen_by(self, obj):
         """Compact list of advocates who have opened this record since
