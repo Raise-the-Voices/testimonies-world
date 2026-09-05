@@ -2,9 +2,10 @@
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { fly } from 'svelte/transition';
 	import { user, isAdvocate } from '$lib/session';
 	import { getCasework, deleteCasework } from '$lib/api';
+	import Banner from '$lib/Banner.svelte';
+	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 
 	let currentUser = $derived($user);
@@ -29,30 +30,10 @@
 	let deleteToast = $state<DeleteToast | null>(null);
 	let toastTimer: ReturnType<typeof setTimeout> | null = null;
 
-	// Esc closes the toast (confirming + error stages). Modal-like behavior
-	// only when the toast is open — Cancel already handles clicks.
-	function onToastKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape' && deleteToast) {
-			e.preventDefault();
-			cancelDelete();
-		}
-	}
-
 	// Banner state — sourced from URL on mount, can be set directly too.
-	// Auto-dismisses after BANNER_TTL_MS unless the X button clears it
-	// sooner. Re-showing the banner (e.g. after a second save) resets the
-	// timer via the $effect cleanup.
+	// Auto-dismiss is handled by <Banner>.
 	let bannerMsg = $state('');
 	let bannerKind = $state<'success' | 'error'>('success');
-	const BANNER_TTL_MS = 3500;
-
-	$effect(() => {
-		if (!bannerMsg) return;
-		const id = setTimeout(() => {
-			bannerMsg = '';
-		}, BANNER_TTL_MS);
-		return () => clearTimeout(id);
-	});
 
 	const actionLabels: Record<string, string> = {
 		outreach: 'Outreach',
@@ -142,29 +123,6 @@
 		}
 	}
 
-	// Svelte action: focus an element when it's mounted. Used on the toast's
-	// Cancel button so a stray Enter is a no-op rather than a destructive
-	// confirm. Svelte's `autofocus` attribute warns under a11y rules; doing
-	// it imperatively via an action keeps the focus management explicit and
-	// reviewable, and avoids the warning.
-	function autofocus(node: HTMLElement) {
-		node.focus();
-	}
-
-	// Global Esc handler while the toast is open. Mounted/unmounted with the
-	// toast so we don't leak listeners when the page goes away mid-flow.
-	$effect(() => {
-		if (!deleteToast) return;
-		const handler = (e: KeyboardEvent) => {
-			if (e.key === 'Escape' && deleteToast) {
-				e.preventDefault();
-				cancelDelete();
-			}
-		};
-		document.addEventListener('keydown', handler);
-		return () => document.removeEventListener('keydown', handler);
-	});
-
 	function startDelete(id: number, actionType: string, date: string) {
 		clearToastTimer();
 		deleteToast = { id, actionType, date, stage: 'confirming' };
@@ -177,8 +135,11 @@
 	}
 
 	async function performDelete() {
-		if (!deleteToast || deleteToast.stage !== 'confirming') return;
+		if (!deleteToast) return;
 		const target = deleteToast;
+		// If we're already mid-delete or done, don't restart. The only
+		// valid restart is from `error` (Retry button).
+		if (target.stage !== 'confirming' && target.stage !== 'error') return;
 		deleteToast = { ...target, stage: 'deleting' };
 		try {
 			await deleteCasework(target.id);
@@ -229,104 +190,38 @@
 		</header>
 
 		{#if bannerMsg}
-			<div
-				class="banner banner-{bannerKind}"
-				role="status"
-				transition:fly={{ y: -8, duration: 220, opacity: 0 }}
-			>
-				<span class="banner-icon" aria-hidden="true">
-					{bannerKind === 'success' ? '✓' : '!'}
-				</span>
-				<span class="banner-text">{bannerMsg}</span>
-				<button
-					type="button"
-					class="banner-dismiss"
-					aria-label="Dismiss"
-					onclick={() => (bannerMsg = '')}
-				>×</button>
-			</div>
+			<Banner
+				kind={bannerKind}
+				message={bannerMsg}
+				onDismiss={() => (bannerMsg = '')}
+			/>
 		{/if}
 
 		{#if deleteToast}
-			<!--
-				Backdrop: dimmed, blurred. Clicks dismiss the toast (safe default —
-				destructive confirmations require a deliberate Confirm click).
-				`role="presentation"` because the dialog itself is the focusable surface.
-			-->
-			<div
-				class="delete-toast-overlay"
-				onclick={cancelDelete}
-				role="presentation"
-			></div>
-
-			<!--
-				Fixed top-of-page toast. Lives here in DOM order (just under the
-				banner) for logical reading order; CSS positions it at the viewport
-				top with backdrop blur over the rest of the page. Cancel button is
-				auto-focused so a stray Enter is a no-op rather than a delete.
-			-->
-			<div
-				class="delete-toast"
-				class:delete-toast-success={deleteToast.stage === 'success'}
-				class:delete-toast-error={deleteToast.stage === 'error'}
-				role="alertdialog"
-				aria-modal="true"
-				aria-labelledby="delete-toast-title"
-				aria-describedby="delete-toast-text"
-			>
-				<div class="delete-toast-body">
-					<h2 id="delete-toast-title" class="delete-toast-title">
-						{#if deleteToast.stage === 'confirming'}
-							Delete this record?
-						{:else if deleteToast.stage === 'deleting'}
-							Deleting record…
-						{:else if deleteToast.stage === 'success'}
-							Record deleted
-						{:else}
-							Couldn’t delete this record
-						{/if}
-					</h2>
-					<p id="delete-toast-text" class="delete-toast-text">
-						{#if deleteToast.stage === 'confirming'}
-							This <strong>{actionLabels[deleteToast.actionType] || deleteToast.actionType}</strong>
-							from {formatDate(deleteToast.date)} will be permanently removed. This action cannot be undone.
-						{:else if deleteToast.stage === 'deleting'}
-							Please wait while the record is removed.
-						{:else if deleteToast.stage === 'success'}
-							The record has been removed from your list.
-						{:else}
-							{deleteToast.errorMessage}
-						{/if}
-					</p>
-				</div>
-				<div class="delete-toast-actions">
-					{#if deleteToast.stage === 'confirming'}
-						<button
-							type="button"
-							class="btn btn-secondary btn-sm"
-							onclick={cancelDelete}
-							use:autofocus
-						>Cancel</button>
-						<button
-							type="button"
-							class="btn btn-danger btn-sm"
-							onclick={performDelete}
-						>Delete</button>
-					{:else if deleteToast.stage === 'deleting'}
-						<button
-							type="button"
-							class="btn btn-secondary btn-sm"
-							disabled
-						>Deleting…</button>
-					{:else}
-						<button
-							type="button"
-							class="btn btn-secondary btn-sm"
-							onclick={cancelDelete}
-						>Close</button>
-					{/if}
-				</div>
-			</div>
+			<ConfirmModal
+				open
+				stage={deleteToast.stage === 'deleting' ? 'pending' : deleteToast.stage}
+				title={deleteToast.stage === 'deleting'
+					? 'Deleting record…'
+					: deleteToast.stage === 'success'
+						? 'Record deleted'
+						: deleteToast.stage === 'error'
+							? "Couldn't delete this record"
+							: 'Delete this record?'}
+				body={deleteToast.stage === 'deleting'
+					? 'Please wait while the record is removed.'
+					: deleteToast.stage === 'success'
+						? 'The record has been removed from your list.'
+						: deleteToast.stage === 'error'
+							? (deleteToast.errorMessage ?? 'Something went wrong.')
+							: `This ${actionLabels[deleteToast.actionType] || deleteToast.actionType} from ${formatDate(deleteToast.date)} will be permanently removed. This action cannot be undone.`}
+				confirmLabel="Delete"
+				cancelLabel="Cancel"
+				destructive
+				errorMessage={deleteToast.errorMessage}
+				onConfirm={performDelete}
+				onCancel={cancelDelete}
+			/>
 		{/if}
 
 		<div class="filters">
@@ -479,51 +374,6 @@
 		white-space: nowrap;
 		align-self: center;
 	}
-
-	.banner {
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
-		padding: 0.7rem 0.9rem;
-		margin-bottom: 1.25rem;
-		background: var(--color-bg-white);
-		border: 1px solid var(--color-border-subtle);
-		border-left: 4px solid var(--color-primary);
-		border-radius: var(--radius-input);
-		box-shadow: var(--shadow-card);
-	}
-	.banner-success { border-left-color: var(--color-success); }
-	.banner-error { border-left-color: var(--color-danger); }
-	.banner-icon {
-		flex: 0 0 auto;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 22px;
-		height: 22px;
-		border-radius: 50%;
-		font-size: 0.85rem;
-		font-weight: 700;
-		font-family: 'Georgia', serif;
-		color: white;
-	}
-	.banner-success .banner-icon { background: var(--color-success); }
-	.banner-error .banner-icon { background: var(--color-danger); }
-	.banner-text {
-		flex: 1 1 auto;
-		color: var(--color-text);
-		font-size: 0.92rem;
-	}
-	.banner-dismiss {
-		flex: 0 0 auto;
-		background: transparent;
-		border: 0;
-		color: var(--color-text-muted);
-		font-size: 1.3rem;
-		cursor: pointer;
-		padding: 0 0.2rem;
-	}
-	.banner-dismiss:hover { color: var(--color-text); }
 
 	.filters {
 		display: flex;
@@ -776,76 +626,6 @@
 		color: var(--color-text-muted);
 		font-weight: 500;
 		letter-spacing: 0.01em;
-	}
-
-	/* ============================================================
-	   Delete toast (fixed top-of-page)
-	   - Backdrop dims + blurs the page so the user's eye lands here
-	   - Card sits at the viewport top, not nested inside any card
-	   - Top border color encodes stage: danger / success / danger
-	   ============================================================ */
-	.delete-toast-overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.28);
-		backdrop-filter: blur(4px);
-		-webkit-backdrop-filter: blur(4px);
-		z-index: 90;
-		animation: deleteToastFadeIn 0.18s ease both;
-	}
-	.delete-toast {
-		position: fixed;
-		top: 1.25rem;
-		left: 50%;
-		transform: translateX(-50%);
-		z-index: 100;
-		width: min(560px, calc(100vw - 2rem));
-		background: var(--color-bg-white);
-		border: 1px solid var(--color-border-subtle);
-		border-left: 4px solid var(--color-danger);
-		border-radius: var(--radius-card-lg);
-		box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
-		padding: 1.1rem 1.25rem;
-		display: flex;
-		gap: 0.9rem;
-		align-items: flex-start;
-		animation: deleteToastSlideDown 0.22s ease both;
-	}
-	.delete-toast-success { border-left-color: var(--color-success); }
-	.delete-toast-error { border-left-color: var(--color-danger); }
-	/* Stage indicator — a small left accent bar instead of the old circular
-	   icon well. Reads as part of the card, not as a cartoon badge. */
-	.delete-toast-body { flex: 1 1 auto; min-width: 0; }
-	.delete-toast-title {
-		margin: 0 0 0.2rem 0;
-		color: var(--color-text);
-		font-size: 1rem;
-		font-weight: 700;
-		line-height: 1.3;
-	}
-	.delete-toast-text {
-		margin: 0;
-		color: var(--color-text-muted);
-		font-size: 0.9rem;
-		line-height: 1.5;
-	}
-	.delete-toast-text strong {
-		color: var(--color-text);
-		font-weight: 600;
-	}
-	.delete-toast-actions {
-		flex: 0 0 auto;
-		display: flex;
-		gap: 0.4rem;
-		align-items: center;
-	}
-	@keyframes deleteToastFadeIn {
-		from { opacity: 0; }
-		to   { opacity: 1; }
-	}
-	@keyframes deleteToastSlideDown {
-		from { opacity: 0; transform: translate(-50%, -10px); }
-		to   { opacity: 1; transform: translate(-50%, 0); }
 	}
 
 	.casework-skeleton {

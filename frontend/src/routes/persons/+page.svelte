@@ -10,10 +10,10 @@
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
-	import { fly } from 'svelte/transition';
 	import { getPersons, getCountries, getCategories } from '$lib/api';
 	import { statusLabels } from '$lib/StatusBadge.svelte';
 	import { debounce } from '$lib/debounce';
+	import Banner from '$lib/Banner.svelte';
 	import FilterToolbar from '$lib/FilterToolbar.svelte';
 	import PersonCard from '$lib/PersonCard.svelte';
 	import Icon from '$lib/Icon.svelte';
@@ -59,13 +59,6 @@
 	type BannerKind = 'success' | 'error';
 	let bannerMsg = $state('');
 	let bannerKind = $state<BannerKind>('success');
-	const BANNER_TTL_MS = 3500;
-
-	$effect(() => {
-		if (!bannerMsg) return;
-		const id = setTimeout(() => (bannerMsg = ''), BANNER_TTL_MS);
-		return () => clearTimeout(id);
-	});
 
 	function consumeUrlBanner() {
 		const url = page.url;
@@ -216,22 +209,11 @@
 	</header>
 
 	{#if bannerMsg}
-		<div
-			class="banner banner-{bannerKind}"
-			role="status"
-			transition:fly={{ y: -8, duration: 220, opacity: 0 }}
-		>
-			<span class="banner-icon" aria-hidden="true">
-				{bannerKind === 'success' ? '✓' : '!'}
-			</span>
-			<span class="banner-text">{bannerMsg}</span>
-			<button
-				type="button"
-				class="banner-dismiss"
-				aria-label="Dismiss"
-				onclick={() => (bannerMsg = '')}
-			>×</button>
-		</div>
+		<Banner
+			kind={bannerKind}
+			message={bannerMsg}
+			onDismiss={() => (bannerMsg = '')}
+		/>
 	{/if}
 
 	{#if error}
@@ -442,50 +424,4 @@
 			transition: none;
 		}
 	}
-
-	/* Banner — success / error notification, top-of-page. Mirrors the
-	   same component on /contacts and /casework; duplicated locally
-	   rather than lifted to app.css because each page still defines it
-	   inline today. */
-		.banner {
-			display: flex;
-			align-items: center;
-			gap: 0.5rem;
-			padding: 0.65rem 0.9rem;
-			border-radius: var(--radius-card);
-			font-size: 0.92rem;
-			margin-bottom: 1rem;
-		}
-		.banner-success {
-			background: #c6f6d5;
-			color: #22543d;
-			border: 1px solid #9ae6b4;
-		}
-		.banner-error {
-			background: #fed7d7;
-			color: #742a2a;
-			border: 1px solid #feb2b2;
-		}
-		.banner-icon {
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-			width: 22px;
-			height: 22px;
-			border-radius: 50%;
-			font-weight: 700;
-			font-size: 0.85rem;
-		}
-		.banner-success .banner-icon { background: rgba(34, 84, 61, 0.18); color: #22543d; }
-		.banner-error .banner-icon { background: rgba(116, 42, 42, 0.2); color: #742a2a; }
-		.banner-text { flex: 1 1 auto; }
-		.banner-dismiss {
-			background: transparent;
-			border: none;
-			color: inherit;
-			font-size: 1.1rem;
-			padding: 0 0.25rem;
-			line-height: 1;
-			cursor: pointer;
-		}
 </style>
