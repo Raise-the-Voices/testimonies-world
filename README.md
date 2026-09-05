@@ -426,7 +426,7 @@ The full per-component polish history + verification checklists live in
 # Frontend
 cd frontend
 npm install                # first time / after package.json changes
-npm run dev                # vite dev (default :5173)
+npm run dev                # vite dev — defaults to :5173 unless --port given
 npm run dev -- --host 0.0.0.0 --port 3040
 PUBLIC_BASE_PATH=/testimonies npm run dev -- --host 0.0.0.0 --port 3040
 npm run check              # type-check (svelte-check)
@@ -466,6 +466,13 @@ Per `SYSTEM_RULES.md` §3, every production build **must**:
 - **Path-drifted assets in subpath deploys** — `PUBLIC_BASE_PATH` was
   non-empty during build. Rebuild with `PUBLIC_BASE_PATH=""` for the
   root domain, or with `/testimonies` for the demo subpath.
+- **`PUBLIC_BASE_PATH` is set at *both* build time and runtime.** The
+  build-time value is embedded in the bundle (asset URLs); the
+  systemd unit's `Environment=PUBLIC_BASE_PATH=...` sets the runtime
+  value (SvelteKit's request URL rewrite). Changing the env var
+  without rebuilding causes asset 404s because the bundle still
+  references the old prefix. Rebuild AND restart the Node service
+  to change it.
 - **Empty DB on first run** — `python manage.py migrate` against the
   remote PG; the `getStatistics()` call on the landing page handles an
   empty DB by returning `{ total: 0 }` and the stats bar is suppressed.
@@ -495,6 +502,28 @@ CI (`.github/workflows/deploy.yml`) triggers this on push to `main`.
 
 Future direction: convert to an **Ansible playbook** (referenced in
 `CLAUDE.md`, not yet built).
+
+### Logs
+
+All app logs are routed to journald. The systemd unit files set
+`StandardOutput=journal` / `StandardError=journal` explicitly so the
+gunicorn `--access-logfile -` / `--error-logfile -` flags (and the
+Node server's stdout) end up in journal rather than a file that
+fills `/var/log`.
+
+Triage:
+
+```bash
+sudo journalctl -u rtv-cases-backend -f               # follow backend
+sudo journalctl -u rtv-cases-frontend -f              # follow frontend
+sudo journalctl -u rtv-cases-backend --since "1 hour ago"
+sudo journalctl -u rtv-cases-backend -n 200 --no-pager
+```
+
+The backend unit is capped at 10 restarts in any 5-minute window
+(`StartLimitIntervalSec=300` + `StartLimitBurst=10`) — if you see a
+`Start request repeated too quickly` in the journal, the service is
+crash-looping and needs manual intervention, not another restart.
 
 ---
 

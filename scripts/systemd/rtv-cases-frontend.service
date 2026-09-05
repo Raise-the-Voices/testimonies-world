@@ -32,6 +32,13 @@ Environment=NODE_ENV=production
 ExecStart=/usr/bin/node build/index.js
 Restart=always
 RestartSec=5
+# Same restart-storm guard as the backend. SvelteKit's Node adapter
+# is more resilient than gunicorn but a Node crash loop is still
+# expensive; cap the same way.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+StandardOutput=journal
+StandardError=journal
 MemoryMax=512M
 CPUQuota=100%
 
