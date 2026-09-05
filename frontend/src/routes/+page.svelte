@@ -1,14 +1,17 @@
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { onMount } from 'svelte';
 	import { getStatistics } from '$lib/api';
 	import Icon from '$lib/Icon.svelte';
 	import SkeletonStatItem from '$lib/SkeletonStatItem.svelte';
+	import type { PageData } from './$types';
 	import type { Statistics } from '$lib/types';
 
-	let stats: Statistics | null = $state(null);
-	let statsLoading = $state(true);
-	let statsError: string | null = $state(null);
+	let { data }: { data: PageData } = $props();
+
+	// Initial paint comes from +page.ts universal load.
+	let stats: Statistics | null = $state(data.statistics);
+	let statsLoading = $state(false);
+	let statsError: string | null = $state(data.error);
 
 	// Stat counters, defined as data so the markup is one {#each} loop.
 	// `value` is a thunk so we evaluate stats.* lazily (the page must
@@ -72,7 +75,9 @@
 		}
 	}
 
-	onMount(loadStats);
+	// Initial paint comes from +page.ts universal load; no onMount refetch
+	// needed for the landing page (read-only). loadStats() is kept available
+	// for the Retry button.
 </script>
 
 <svelte:head>
