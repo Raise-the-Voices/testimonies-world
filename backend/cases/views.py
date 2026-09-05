@@ -114,9 +114,27 @@ class PersonViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
 
     def get_queryset(self):
-        qs = Person.objects.annotate(
-            report_count=Count('reports'),
-        ).prefetch_related('categories')
+        # Prefetch reverse-FK chains that PersonDetailSerializer walks on
+        # every retrieve. Without these, a single person-detail request
+        # triggered ~5 follow-up queries (reports, media_files, both
+        # relationship sides, and the related Person on the other end of
+        # each relationship). Trade-off: anonymous viewers also fetch
+        # private reports + their media and then filter in Python in
+        # PersonDetailSerializer.get_reports. For low-cardinality case
+        # records this over-fetch is cheaper than per-row queries; if
+        # profiling shows otherwise, gate the prefetch on auth.
+        qs = (
+            Person.objects
+            .annotate(report_count=Count('reports'))
+            .prefetch_related(
+                'categories',
+                'reports',
+                'reports__media_files',
+                'media_files',
+                'relationships_as_a__person_b',
+                'relationships_as_b__person_a',
+            )
+        )
         if not self.request.user.is_authenticated:
             qs = qs.filter(is_published=True)
         return qs
@@ -178,11 +196,17 @@ class PersonViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def watchdog(self, request):
         """Persons ordered by urgency — days since last report, weighted by critical status."""
-        persons = self.get_queryset().annotate(
-            last_report_date=Max('reports__date_start'),
-        ).exclude(
-            current_status__in=['released', 'deceased']
-        ).order_by('last_report_date')[:50]
+        persons = (
+            self.get_queryset()
+            .annotate(last_report_date=Max('reports__date_start'))
+            .exclude(current_status__in=['released', 'deceased'])
+            .order_by('last_report_date')[:50]
+            # prefetch AFTER the slice so Django only walks categories
+            # for the 50 returned rows, not every excluded/non-excluded
+            # person. PersonListSerializer iterates `categories` so this
+            # would otherwise be 50 follow-up queries.
+            .prefetch_related('categories')
+        )
         serializer = PersonListSerializer(persons, many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -291,7 +315,11 @@ class ReportViewSet(viewsets.ModelViewSet):
     ordering_fields = ['date_start', 'created_at']
 
     def get_queryset(self):
-        qs = Report.objects.select_related('person')
+        # media_files reverse-FK is iterated by ReportSerializer.media_files
+        # (nested serializer) — without prefetch_related this is N+1 over
+        # every report in the list. select_related('person') covers the FK
+        # lookup in ReportSerializer's Person field.
+        qs = Report.objects.select_related('person').prefetch_related('media_files')
         if not self.request.user.is_authenticated:
             qs = qs.filter(is_private=False, person__is_published=True)
         return qs
@@ -398,7 +426,10 @@ class MediaViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
-        qs = Media.objects.all()
+        # select_related the three FKs that MediaSerializer renders as
+        # nested objects (person, report, uploaded_by) so a list view
+        # doesn't trigger one query per row per FK.
+        qs = Media.objects.select_related('person', 'report', 'uploaded_by')
         if not self.request.user.is_authenticated:
             qs = qs.filter(visibility='public')
         elif not self.request.user.groups.filter(name__in=['Advocate', 'Admin']).exists():
