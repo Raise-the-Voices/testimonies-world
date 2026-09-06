@@ -15,6 +15,7 @@
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
+	import { afterNavigate, replaceState } from '$app/navigation';
 	import { getPersons, getCountries, getCategories } from '$lib/api';
 	import { statusLabels } from '$lib/StatusBadge.svelte';
 	import { debounce } from '$lib/debounce';
@@ -85,7 +86,7 @@
 	let bannerMsg = $state('');
 	let bannerKind = $state<BannerKind>('success');
 
-	function consumeUrlBanner() {
+	async function consumeUrlBanner() {
 		const url = page.url;
 		const deleted = url.searchParams.get('deleted');
 		const err = url.searchParams.get('error');
@@ -100,7 +101,10 @@
 			const clean = new URL(url);
 			clean.searchParams.delete('deleted');
 			clean.searchParams.delete('error');
-			history.replaceState(history.state, '', clean.toString());
+			// Use $app/navigation's replaceState so SvelteKit's internal
+			// history.state is preserved by API contract — direct
+			// history.replaceState could lose it on a future refactor.
+			await replaceState(clean.pathname + clean.search, {});
 		}
 	}
 
@@ -195,10 +199,24 @@
 
 	const debouncedSearch = debounce(() => applyFilters(), SEARCH_DEBOUNCE_MS);
 
+	// Re-sync filter state on same-route Back/Forward (e.g. /persons?country=USA
+	// → /persons?country=FR → Back). SvelteKit re-runs `+page.ts` load() but
+	// keeps this component mounted, so without this block the bound <select>
+	// values would stay on the old filter and the rendered list would not
+	// reflect the URL. Cross-route navigation unmounts the component and
+	// onMount handles initial state, so we filter on from.url.pathname.
+	afterNavigate(({ from, to }) => {
+		if (!from || !to) return;
+		if (from.url.pathname !== to.url.pathname) return;
+		readFiltersFromUrl();
+		void applyFilters();
+		void loadCountries(currentCountryParams());
+	});
+
 	onMount(async () => {
 		// Pull any `?deleted=1` / `?error=...` banner param first so the
 		// banner appears as soon as the catalog renders.
-		consumeUrlBanner();
+		await consumeUrlBanner();
 		// Sync filter controls from URL (the load() already used these to
 		// fetch, but the bound <select>/<input> values still reflect
 		// their initial $state defaults unless we copy them across).

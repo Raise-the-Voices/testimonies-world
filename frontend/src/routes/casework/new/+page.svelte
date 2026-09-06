@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { user, isAdvocate, loadSession } from '$lib/session';
 	import {
@@ -24,7 +23,13 @@
 	let selectedPersons: number[] = $state([]);
 
 	// Edit mode: when ?id=X is present, we load and PATCH instead of POST.
-	let recordId = $state<number | null>(null);
+	// Reactive so Back/Forward between ?id=5 and ?id=7 re-hydrates the form.
+	let recordId: number | null = $derived.by(() => {
+		const raw = $page.url.searchParams.get('id');
+		if (!raw) return null;
+		const n = Number(raw);
+		return Number.isFinite(n) && n > 0 ? n : null;
+	});
 	const isEdit = $derived(recordId !== null);
 
 	let actionType = $state('outreach');
@@ -48,40 +53,68 @@
 	const validActions = new Set(Object.keys(actionLabels));
 	const validStatuses = new Set(['open', 'in_progress', 'done']);
 
-	onMount(async () => {
-		const idStr = $page.url.searchParams.get('id');
-		if (idStr) {
-			const id = Number(idStr);
-			if (Number.isFinite(id) && id > 0) {
-				recordId = id;
-				try {
-					const r = await getCaseworkRecord(id);
-					actionType = r.action_type;
-					description = r.description;
-					date = r.date;
-					status = r.status;
-					nextSteps = r.next_steps ?? '';
-					notes = r.notes ?? '';
-					selectedPersons = Array.isArray(r.persons) ? r.persons.slice() : [];
-				} catch (e: any) {
-					if (e instanceof ApiError && e.status === 404) {
-						loadError = 'That record no longer exists.';
-					} else if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
-						loadError = "You don't have permission to edit this record.";
-					} else {
-						loadError = e?.message || "Couldn't load this record.";
-					}
-				}
-			}
-		}
-		loading = false;
+	// Refetch-guard token: Back/Forward between ?id=5 and ?id=7 must not
+	// let a slow response for 5 clobber the form populated for 7.
+	let loadToken = 0;
 
+	async function load() {
+		const token = ++loadToken;
+		loadError = '';
+		if (recordId === null) {
+			// edit → create: clear stale fields.
+			actionType = 'outreach';
+			description = '';
+			date = new Date().toISOString().split('T')[0];
+			status = 'open';
+			nextSteps = '';
+			notes = '';
+			selectedPersons = [];
+			loading = false;
+			// Still need the persons picker.
+			void loadPersonsList(token);
+			return;
+		}
+		loading = true;
+		try {
+			const r = await getCaseworkRecord(recordId);
+			if (token !== loadToken) return;
+			actionType = r.action_type;
+			description = r.description;
+			date = r.date;
+			status = r.status;
+			nextSteps = r.next_steps ?? '';
+			notes = r.notes ?? '';
+			selectedPersons = Array.isArray(r.persons) ? r.persons.slice() : [];
+		} catch (e: any) {
+			if (token !== loadToken) return;
+			if (e instanceof ApiError && e.status === 404) {
+				loadError = 'That record no longer exists.';
+			} else if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+				loadError = "You don't have permission to edit this record.";
+			} else {
+				loadError = e?.message || "Couldn't load this record.";
+			}
+		} finally {
+			if (token === loadToken) loading = false;
+		}
+		void loadPersonsList(token);
+	}
+
+	async function loadPersonsList(tok: number = loadToken) {
 		try {
 			const data = await getPersons({ page_size: '1000' });
+			if (tok !== loadToken) return;
 			persons = data.results;
 		} catch (e) {
 			console.error(e);
 		}
+	}
+
+	// Re-fetch whenever the route or its ?id= param changes. $effect
+	// dedupes unchanged deps, so first-mount + reactive on subsequent nav.
+	$effect(() => {
+		void recordId;
+		void load();
 	});
 
 	function togglePerson(id: number) {
@@ -189,10 +222,12 @@
 			};
 			if (recordId !== null) {
 				await updateCasework(recordId, payload);
-				goto(`${base}/casework?saved=1`);
+				// replaceState: true so Back from the list doesn't return to
+				// a stale form with the record we just saved.
+				await goto(`${base}/casework?saved=1`, { replaceState: true });
 			} else {
 				await createCasework(payload);
-				goto(`${base}/casework?saved=1`);
+				await goto(`${base}/casework?saved=1`, { replaceState: true });
 			}
 		} catch (e: any) {
 			if (e instanceof ApiError) {

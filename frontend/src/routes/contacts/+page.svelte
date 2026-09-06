@@ -2,6 +2,7 @@
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { replaceState } from '$app/navigation';
 	import { user, isAdvocate } from '$lib/session';
 	import { getContacts, deleteContact } from '$lib/api';
 	import Banner from '$lib/Banner.svelte';
@@ -32,7 +33,7 @@
 	let bannerMsg = $state('');
 	let bannerKind = $state<BannerKind>('success');
 
-	function consumeUrlBanner() {
+	async function consumeUrlBanner() {
 		const url = $page.url;
 		const saved = url.searchParams.get('saved');
 		const err = url.searchParams.get('error');
@@ -47,7 +48,10 @@
 			const clean = new URL(url);
 			clean.searchParams.delete('saved');
 			clean.searchParams.delete('error');
-			history.replaceState(history.state, '', clean.toString());
+			// $app/navigation's replaceState preserves SvelteKit's internal
+			// history.state by API contract; direct history.replaceState
+			// could silently drop it if a future refactor strips the arg.
+			await replaceState(clean.pathname + clean.search, {});
 		}
 	}
 
@@ -122,7 +126,7 @@
 	}
 
 	onMount(() => {
-		consumeUrlBanner();
+		void consumeUrlBanner();
 		loadContacts();
 	});
 
