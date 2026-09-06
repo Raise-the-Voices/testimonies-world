@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import CaseworkRecord, Notification, UserPreference
@@ -22,6 +23,11 @@ class CaseworkRecordSerializer(serializers.ModelSerializer):
         # - created_at / updated_at are framework-set.
         read_only_fields = ['performed_by', 'created_at', 'updated_at']
 
+    @extend_schema_field(
+        serializers.ListField(
+            child=serializers.DictField(child=serializers.CharField()),
+        )
+    )
     def get_seen_by(self, obj):
         """Compact list of advocates who have opened this record since
         it was last edited by the current author. Hidden from the record's
@@ -69,6 +75,7 @@ class NotificationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
     def get_casework_persons(self, obj):
         if not obj.casework:
             return []

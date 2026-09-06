@@ -26,6 +26,16 @@ jobs:
       - name: Typecheck (svelte-check)
         run: cd frontend && npm run check
 
+      # API-drift gate. Regenerates the OpenAPI schema from the
+      # backend's serializers and the TypeScript client from that
+      # schema, then fails if the committed copy differs. Any
+      # serializer change without regenerating, or any frontend-side
+      # type divergence, surfaces here.
+      - name: API drift gate (gen:api:check)
+        run: cd frontend && npm run gen:api:check
+        env:
+          PUBLIC_BASE_PATH: '/testimonies'
+
       - name: Production build
         run: cd frontend && npm run build
         env:

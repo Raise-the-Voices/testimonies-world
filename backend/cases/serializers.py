@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import CaseCategory, FamilyRelationship, Media, Person, Report
@@ -49,6 +50,7 @@ class PersonListSerializer(serializers.ModelSerializer):
         exclude = ['medical_notes', 'precise_location']
         read_only_fields = ['created_by', 'created_at', 'updated_at']
 
+    @extend_schema_field(serializers.URLField(allow_null=True))
     def get_profile_image_url(self, obj):
         if obj.profile_image:
             request = self.context.get('request')
@@ -75,6 +77,7 @@ class PersonDetailSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['created_by', 'created_at', 'updated_at']
 
+    @extend_schema_field(serializers.URLField(allow_null=True))
     def get_profile_image_url(self, obj):
         if obj.profile_image:
             request = self.context.get('request')
@@ -86,6 +89,7 @@ class PersonDetailSerializer(serializers.ModelSerializer):
             return photo.url
         return None
 
+    @extend_schema_field(ReportSerializer(many=True))
     def get_reports(self, obj):
         request = self.context.get('request')
         reports = obj.reports.all()
@@ -93,6 +97,7 @@ class PersonDetailSerializer(serializers.ModelSerializer):
             reports = reports.filter(is_private=False)
         return ReportSerializer(reports, many=True, context=self.context).data
 
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
     def get_family(self, obj):
         rels_a = obj.relationships_as_a.select_related('person_b')
         rels_b = obj.relationships_as_b.select_related('person_a')
