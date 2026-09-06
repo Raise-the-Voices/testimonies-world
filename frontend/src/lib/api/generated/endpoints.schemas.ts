@@ -740,8 +740,8 @@ export interface PatchedMediaRequest {
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
 /**
- * @minimum -2147483648
- * @maximum 2147483647
+ * @minimum -9223372036854776000
+ * @maximum 9223372036854776000
  * @nullable
  */
 export type PatchedPersonWriteRequestQualityTier = typeof PatchedPersonWriteRequestQualityTier[keyof typeof PatchedPersonWriteRequestQualityTier]  | null;
@@ -799,8 +799,8 @@ export interface PatchedPersonWriteRequest {
    */
   authoritative_url?: string;
   /**
-   * @minimum -2147483648
-   * @maximum 2147483647
+   * @minimum -9223372036854776000
+   * @maximum 9223372036854776000
    * @nullable
    */
   quality_tier?: PatchedPersonWriteRequestQualityTier;
@@ -853,8 +853,8 @@ export type PersonDetailFamilyItem = {[key: string]: unknown};
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
 /**
- * @minimum -2147483648
- * @maximum 2147483647
+ * @minimum -9223372036854776000
+ * @maximum 9223372036854776000
  * @nullable
  */
 export type PersonDetailQualityTier = typeof PersonDetailQualityTier[keyof typeof PersonDetailQualityTier]  | null;
@@ -913,8 +913,8 @@ export interface PersonDetail {
    */
   authoritative_url?: string;
   /**
-   * @minimum -2147483648
-   * @maximum 2147483647
+   * @minimum -9223372036854776000
+   * @maximum 9223372036854776000
    * @nullable
    */
   quality_tier?: PersonDetailQualityTier;
@@ -930,8 +930,8 @@ export interface PersonDetail {
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
 /**
- * @minimum -2147483648
- * @maximum 2147483647
+ * @minimum -9223372036854776000
+ * @maximum 9223372036854776000
  * @nullable
  */
 export type PersonListQualityTier = typeof PersonListQualityTier[keyof typeof PersonListQualityTier]  | null;
@@ -982,8 +982,8 @@ export interface PersonList {
    */
   authoritative_url?: string;
   /**
-   * @minimum -2147483648
-   * @maximum 2147483647
+   * @minimum -9223372036854776000
+   * @maximum 9223372036854776000
    * @nullable
    */
   quality_tier?: PersonListQualityTier;
@@ -999,8 +999,8 @@ export interface PersonList {
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
 /**
- * @minimum -2147483648
- * @maximum 2147483647
+ * @minimum -9223372036854776000
+ * @maximum 9223372036854776000
  * @nullable
  */
 export type PersonWriteQualityTier = typeof PersonWriteQualityTier[keyof typeof PersonWriteQualityTier]  | null;
@@ -1053,8 +1053,8 @@ export interface PersonWrite {
    */
   authoritative_url?: string;
   /**
-   * @minimum -2147483648
-   * @maximum 2147483647
+   * @minimum -9223372036854776000
+   * @maximum 9223372036854776000
    * @nullable
    */
   quality_tier?: PersonWriteQualityTier;
@@ -1070,8 +1070,8 @@ export interface PersonWrite {
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
 /**
- * @minimum -2147483648
- * @maximum 2147483647
+ * @minimum -9223372036854776000
+ * @maximum 9223372036854776000
  * @nullable
  */
 export type PersonWriteRequestQualityTier = typeof PersonWriteRequestQualityTier[keyof typeof PersonWriteRequestQualityTier]  | null;
@@ -1129,8 +1129,8 @@ export interface PersonWriteRequest {
    */
   authoritative_url?: string;
   /**
-   * @minimum -2147483648
-   * @maximum 2147483647
+   * @minimum -9223372036854776000
+   * @maximum 9223372036854776000
    * @nullable
    */
   quality_tier?: PersonWriteRequestQualityTier;
