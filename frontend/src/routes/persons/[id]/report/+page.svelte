@@ -2,7 +2,6 @@
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
 	import { fly, fade } from 'svelte/transition';
 	import { user, isVolunteer } from '$lib/session';
 	import { getPerson, createReport, getReport, updateReport, ApiError } from '$lib/api';
@@ -16,8 +15,8 @@
 	let fieldErrors = $state<Record<string, string>>({});
 
 	// `?id=` in the URL → edit mode. Without it → create mode.
-	// We resolve the id once at component init from $page.url so navigating
-	// between create and edit via the same route just works.
+	// Reactive so Back/Forward between /persons/X/report?id=5 and
+	// /persons/X/report?id=7 re-hydrates the form with the right report.
 	let reportId: number | null = $derived.by(() => {
 		const raw = page.url.searchParams.get('id');
 		if (!raw) return null;
@@ -54,12 +53,24 @@
 		document: 'From an official document, court filing, or organizational report.',
 	};
 
-	onMount(async () => {
+	// Refetch-guard token so Back/Forward between /persons/X/report?id=5
+	// and /persons/X/report?id=7 can't let a slow response for 5 clobber
+	// the form populated for 7.
+	let loadToken = 0;
+
+	async function load() {
+		const token = ++loadToken;
+		loading = true;
+		errorMsg = '';
+		fieldErrors = {};
 		try {
-			person = await getPerson(page.params.id!);
+			const p = await getPerson(page.params.id!);
+			if (token !== loadToken) return;
+			person = p;
 			// Edit mode → hydrate the form from the existing report.
 			if (reportId !== null) {
 				const r = await getReport(reportId);
+				if (token !== loadToken) return;
 				sourceType = r.source_type;
 				sourceAttribution = r.source_attribution ?? '';
 				reporterName = r.reporter_name ?? '';
@@ -71,11 +82,36 @@
 				suspectedReason = r.suspected_reason ?? '';
 				officialReason = r.official_reason ?? '';
 				isPrivate = !!r.is_private;
+			} else {
+				// Switching from edit → create: reset fields that would
+				// otherwise leak from the previous report.
+				sourceType = 'firsthand';
+				sourceAttribution = '';
+				reporterName = '';
+				reporterContact = '';
+				dateStart = '';
+				dateEnd = '';
+				roughLocation = '';
+				narrative = '';
+				suspectedReason = '';
+				officialReason = '';
+				isPrivate = false;
 			}
 		} catch (e: unknown) {
+			if (token !== loadToken) return;
 			errorMsg = e instanceof Error ? e.message : "Couldn't load this case.";
+		} finally {
+			if (token === loadToken) loading = false;
 		}
-		loading = false;
+	}
+
+	// Re-fetch whenever either the route param (person) or the ?id=
+	// query param (report) changes. $effect dedupes unchanged deps, so
+	// this is effectively onMount + reactive on subsequent nav.
+	$effect(() => {
+		void page.params.id;
+		void reportId;
+		void load();
 	});
 
 	function validate(): boolean {
@@ -117,7 +153,9 @@
 			} else {
 				await createReport(payload);
 			}
-			await goto(`${base}/persons/${person.id}`);
+			// replaceState: true so Back from the case page doesn't return
+			// to a stale form with the report we just saved.
+			await goto(`${base}/persons/${person.id}`, { replaceState: true });
 		} catch (err: unknown) {
 			// DRF returns per-field errors on 400 — surface them inline.
 			if (err instanceof ApiError && err.isValidation) {

@@ -2,7 +2,6 @@
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { onMount } from 'svelte';
 	import {
 		getPerson,
 		getMedia,
@@ -175,6 +174,13 @@
 	let error: string = $state('');
 	let expandedId: number | null = $state(null);
 
+	// Refetch-guard token: increments on every navigation-driven refetch.
+	// Async helpers capture it locally and bail out if loadToken has moved on,
+	// so a slow request for person 123 doesn't clobber state after they've
+	// already navigated to person 456 (Back/Forward race).
+	let loadToken = 0;
+	let currentId = $derived(page.params.id);
+
 	const medicalLabels: Record<string, string> = {
 		unknown: 'Unknown',
 		healthy: 'Healthy',
@@ -184,34 +190,50 @@
 	};
 
 	async function loadPerson() {
+		const token = ++loadToken;
+		// Reset per-page UI that doesn't survive a person switch. Without
+		// these resets, an expanded report card or an open delete-modal from
+		// the previous person would carry over to the new one.
+		expandedId = null;
+		deleteTarget = null;
+		reportDeleteTarget = null;
+		personDeleteOpen = false;
+		relationshipFormOpen = false;
+		relationshipDelTarget = null;
+		uploadOpen = false;
+		editTarget = null;
+
 		loading = true;
 		error = '';
 		try {
-			person = await getPerson(page.params.id!);
-			// Reload media with the freshly-loaded person in scope.
-			await loadMedia();
-			// Family links also refresh on person change.
-			await loadRelationships();
+			const p = await getPerson(currentId!);
+			if (token !== loadToken) return;
+			person = p;
+			// Reload media + family links with the freshly-loaded person.
+			await Promise.all([loadMedia(token), loadRelationships(token)]);
 		} catch (e: unknown) {
+			if (token !== loadToken) return;
 			error = e instanceof Error ? e.message : 'Failed to load case.';
 		} finally {
-			loading = false;
+			if (token === loadToken) loading = false;
 		}
 	}
 
-	async function loadRelationships() {
+	async function loadRelationships(tok: number = loadToken) {
 		if (!person) return;
 		loadingRelationships = true;
 		relationshipError = '';
 		try {
 			const data = await getRelationships({ person: String(person.id) });
+			if (tok !== loadToken) return;
 			relationships = Array.isArray(data) ? data : data.results ?? [];
 		} catch (e: unknown) {
+			if (tok !== loadToken) return;
 			relationshipError =
 				e instanceof Error ? e.message : 'Failed to load family links.';
 			relationships = [];
 		} finally {
-			loadingRelationships = false;
+			if (tok === loadToken) loadingRelationships = false;
 		}
 	}
 
@@ -238,19 +260,21 @@
 		}
 	}
 
-	async function loadMedia() {
+	async function loadMedia(tok: number = loadToken) {
 		if (!person) return;
 		loadingMedia = true;
 		mediaError = '';
 		try {
 			const data = await getMedia({ person: String(person.id) });
+			if (tok !== loadToken) return;
 			mediaList = Array.isArray(data) ? data : data.results ?? [];
 		} catch (e: unknown) {
+			if (tok !== loadToken) return;
 			mediaError =
 				e instanceof Error ? e.message : 'Failed to load media for this case.';
 			mediaList = [];
 		} finally {
-			loadingMedia = false;
+			if (tok === loadToken) loadingMedia = false;
 		}
 	}
 
@@ -486,7 +510,13 @@
 		}
 	}
 
-	onMount(loadPerson);
+	// Refetch whenever the route param changes (Back/Forward between
+	// different person IDs). The loadToken guard inside loadPerson / loadMedia /
+	// loadRelationships discards any in-flight response from a prior param.
+	$effect(() => {
+		void currentId;
+		void loadPerson();
+	});
 </script>
 
 <svelte:head>
@@ -753,7 +783,7 @@
 			{:else if mediaError}
 				<div class="media-error" role="alert">
 					<p>{mediaError}</p>
-					<button type="button" class="btn btn-secondary btn-sm" onclick={loadMedia}>Retry</button>
+					<button type="button" class="btn btn-secondary btn-sm" onclick={() => loadMedia()}>Retry</button>
 				</div>
 			{:else if mediaList.length === 0}
 				<div class="media-empty">
