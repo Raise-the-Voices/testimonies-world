@@ -4,6 +4,8 @@ django-allauth==0.63.2
 django-cors-headers==4.6.0
 django-filter==25.1
 djangorestframework==3.15.2
+drf-spectacular==0.28.0
+drf-spectacular[sidecar]==0.28.0
 pillow==11.1.0
 psycopg2-binary==2.9.10
 python-decouple==3.8
