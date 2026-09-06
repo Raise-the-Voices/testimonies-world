@@ -1,0 +1,3940 @@
+openapi: 3.0.3
+info:
+  title: Testimonies.world API
+  version: 1.0.0
+  description: Casework platform for documenting human rights cases. Sensitive endpoints
+    (contacts, sensitive media) require authentication.
+paths:
+  /api/casework/:
+    get:
+      operationId: casework_list
+      parameters:
+      - in: query
+        name: action_type
+        schema:
+          type: string
+          enum:
+          - advocacy
+          - investigation
+          - legal_filing
+          - media
+          - other
+          - outreach
+        description: |-
+          * `outreach` - Outreach
+          * `legal_filing` - Legal filing
+          * `media` - Media engagement
+          * `advocacy` - Advocacy
+          * `investigation` - Investigation
+          * `other` - Other
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: performed_by
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - done
+          - in_progress
+          - open
+        description: |-
+          * `open` - Open
+          * `in_progress` - In progress
+          * `done` - Done
+      tags:
+      - casework
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCaseworkRecordList'
+          description: ''
+    post:
+      operationId: casework_create
+      tags:
+      - casework
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaseworkRecordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CaseworkRecordRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CaseworkRecordRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseworkRecord'
+          description: ''
+  /api/casework/{id}/:
+    get:
+      operationId: casework_retrieve
+      description: |-
+        GET a record. Side effect: mark the caller's own notifications
+        on this record as read, and emit a 'seen by' notification to the
+        author — the human-sense "verification" the feature is named for.
+        Also writes an AuditLog.VIEWED row so casework-record views are
+        in the same paper trail as Person / Report / Media views.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this casework record.
+        required: true
+      tags:
+      - casework
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseworkRecord'
+          description: ''
+    put:
+      operationId: casework_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this casework record.
+        required: true
+      tags:
+      - casework
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaseworkRecordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CaseworkRecordRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CaseworkRecordRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseworkRecord'
+          description: ''
+    patch:
+      operationId: casework_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this casework record.
+        required: true
+      tags:
+      - casework
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCaseworkRecordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCaseworkRecordRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCaseworkRecordRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseworkRecord'
+          description: ''
+    delete:
+      operationId: casework_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this casework record.
+        required: true
+      tags:
+      - casework
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/categories/:
+    get:
+      operationId: categories_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - categories
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCaseCategoryList'
+          description: ''
+  /api/categories/{id}/:
+    get:
+      operationId: categories_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this case category.
+        required: true
+      tags:
+      - categories
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseCategory'
+          description: ''
+  /api/contacts/:
+    get:
+      operationId: contacts_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: role
+        schema:
+          type: string
+          enum:
+          - advocate
+          - family
+          - journalist
+          - lawyer
+          - official
+          - other
+          - reporter
+        description: |-
+          * `family` - Family member
+          * `advocate` - Advocate
+          * `lawyer` - Lawyer
+          * `official` - Government official
+          * `journalist` - Journalist
+          * `reporter` - Reporter/witness
+          * `other` - Other
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - contacts
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedContactList'
+          description: ''
+    post:
+      operationId: contacts_create
+      tags:
+      - contacts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ContactRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ContactRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+          description: ''
+  /api/contacts/{id}/:
+    get:
+      operationId: contacts_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this contact.
+        required: true
+      tags:
+      - contacts
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+          description: ''
+    put:
+      operationId: contacts_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this contact.
+        required: true
+      tags:
+      - contacts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ContactRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ContactRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+          description: ''
+    patch:
+      operationId: contacts_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this contact.
+        required: true
+      tags:
+      - contacts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedContactRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedContactRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedContactRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+          description: ''
+    delete:
+      operationId: contacts_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this contact.
+        required: true
+      tags:
+      - contacts
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/media/:
+    get:
+      operationId: media_list
+      description: |-
+        Media CRUD.
+
+        Reads are gated by visibility (see `get_queryset`): anonymous sees only
+        public; authenticated non-advocates see public+restricted; advocates
+        and staff see everything. That's the existing behavior.
+
+        Permission: `IsAuthenticatedOrReadOnly` — public media remains
+        browsable without login (a person detail page with a public photo
+        should work for anonymous viewers). Sensitive media is gated separately
+        inside `perform_create` / `perform_update`: only advocates and staff
+        can put a row in the `sensitive` tier. This blocks a volunteer from
+        accidentally (or otherwise) marking evidence as sensitive, which
+        would hide it from other volunteers mid-investigation.
+      parameters:
+      - in: query
+        name: media_type
+        schema:
+          type: string
+          enum:
+          - document
+          - link
+          - photo
+          - video
+        description: |-
+          * `photo` - Photo
+          * `document` - Document
+          * `video` - Video
+          * `link` - External link
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: person
+        schema:
+          type: integer
+      - in: query
+        name: report
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: visibility
+        schema:
+          type: string
+          enum:
+          - public
+          - restricted
+          - sensitive
+        description: |-
+          * `public` - Public
+          * `restricted` - Restricted — authenticated users only
+          * `sensitive` - Sensitive — advocates/admin only
+      tags:
+      - media
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMediaList'
+          description: ''
+    post:
+      operationId: media_create
+      description: |-
+        Media CRUD.
+
+        Reads are gated by visibility (see `get_queryset`): anonymous sees only
+        public; authenticated non-advocates see public+restricted; advocates
+        and staff see everything. That's the existing behavior.
+
+        Permission: `IsAuthenticatedOrReadOnly` — public media remains
+        browsable without login (a person detail page with a public photo
+        should work for anonymous viewers). Sensitive media is gated separately
+        inside `perform_create` / `perform_update`: only advocates and staff
+        can put a row in the `sensitive` tier. This blocks a volunteer from
+        accidentally (or otherwise) marking evidence as sensitive, which
+        would hide it from other volunteers mid-investigation.
+      tags:
+      - media
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MediaRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MediaRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MediaRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Media'
+          description: ''
+  /api/media/{id}/:
+    get:
+      operationId: media_retrieve
+      description: |-
+        Media CRUD.
+
+        Reads are gated by visibility (see `get_queryset`): anonymous sees only
+        public; authenticated non-advocates see public+restricted; advocates
+        and staff see everything. That's the existing behavior.
+
+        Permission: `IsAuthenticatedOrReadOnly` — public media remains
+        browsable without login (a person detail page with a public photo
+        should work for anonymous viewers). Sensitive media is gated separately
+        inside `perform_create` / `perform_update`: only advocates and staff
+        can put a row in the `sensitive` tier. This blocks a volunteer from
+        accidentally (or otherwise) marking evidence as sensitive, which
+        would hide it from other volunteers mid-investigation.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this media.
+        required: true
+      tags:
+      - media
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Media'
+          description: ''
+    put:
+      operationId: media_update
+      description: |-
+        Media CRUD.
+
+        Reads are gated by visibility (see `get_queryset`): anonymous sees only
+        public; authenticated non-advocates see public+restricted; advocates
+        and staff see everything. That's the existing behavior.
+
+        Permission: `IsAuthenticatedOrReadOnly` — public media remains
+        browsable without login (a person detail page with a public photo
+        should work for anonymous viewers). Sensitive media is gated separately
+        inside `perform_create` / `perform_update`: only advocates and staff
+        can put a row in the `sensitive` tier. This blocks a volunteer from
+        accidentally (or otherwise) marking evidence as sensitive, which
+        would hide it from other volunteers mid-investigation.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this media.
+        required: true
+      tags:
+      - media
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MediaRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MediaRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MediaRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Media'
+          description: ''
+    patch:
+      operationId: media_partial_update
+      description: |-
+        Media CRUD.
+
+        Reads are gated by visibility (see `get_queryset`): anonymous sees only
+        public; authenticated non-advocates see public+restricted; advocates
+        and staff see everything. That's the existing behavior.
+
+        Permission: `IsAuthenticatedOrReadOnly` — public media remains
+        browsable without login (a person detail page with a public photo
+        should work for anonymous viewers). Sensitive media is gated separately
+        inside `perform_create` / `perform_update`: only advocates and staff
+        can put a row in the `sensitive` tier. This blocks a volunteer from
+        accidentally (or otherwise) marking evidence as sensitive, which
+        would hide it from other volunteers mid-investigation.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this media.
+        required: true
+      tags:
+      - media
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMediaRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMediaRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMediaRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Media'
+          description: ''
+    delete:
+      operationId: media_destroy
+      description: |-
+        Media CRUD.
+
+        Reads are gated by visibility (see `get_queryset`): anonymous sees only
+        public; authenticated non-advocates see public+restricted; advocates
+        and staff see everything. That's the existing behavior.
+
+        Permission: `IsAuthenticatedOrReadOnly` — public media remains
+        browsable without login (a person detail page with a public photo
+        should work for anonymous viewers). Sensitive media is gated separately
+        inside `perform_create` / `perform_update`: only advocates and staff
+        can put a row in the `sensitive` tier. This blocks a volunteer from
+        accidentally (or otherwise) marking evidence as sensitive, which
+        would hide it from other volunteers mid-investigation.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this media.
+        required: true
+      tags:
+      - media
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/notifications/:
+    get:
+      operationId: notifications_list
+      description: |-
+        List, mark-read, read-all, unread-count. No write endpoint from
+        the client other than 'mark read' — notifications are server-generated
+        only.
+      parameters:
+      - in: query
+        name: is_read
+        schema:
+          type: boolean
+      - in: query
+        name: kind
+        schema:
+          type: string
+          enum:
+          - record_created
+          - record_seen
+          - record_updated
+          - status_done
+        description: |-
+          * `record_created` - New casework record
+          * `record_updated` - Casework record updated
+          * `status_done` - Casework marked done
+          * `record_seen` - A peer opened this record
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - notifications
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNotificationList'
+          description: ''
+  /api/notifications/{id}/:
+    get:
+      operationId: notifications_retrieve
+      description: |-
+        List, mark-read, read-all, unread-count. No write endpoint from
+        the client other than 'mark read' — notifications are server-generated
+        only.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this notification.
+        required: true
+      tags:
+      - notifications
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/notifications/{id}/read/:
+    post:
+      operationId: notifications_read_create
+      description: Mark a single notification as read for the current user.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this notification.
+        required: true
+      tags:
+      - notifications
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/notifications/read-all/:
+    post:
+      operationId: notifications_read_all_create
+      description: Mark every unread notification as read for the current user.
+      tags:
+      - notifications
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkAllReadResponse'
+          description: ''
+  /api/notifications/unread-count/:
+    get:
+      operationId: notifications_unread_count_retrieve
+      description: Count of unread notifications for the current user.
+      tags:
+      - notifications
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadCountResponse'
+          description: ''
+  /api/persons/:
+    get:
+      operationId: persons_list
+      description: |-
+        Person CRUD.
+
+        Read access (list / retrieve): anyone (anonymous included) can read
+        published persons. `get_queryset` filters out unpublished rows for
+        anonymous viewers.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer, Advocate, or staff (`IsVolunteer`).
+
+        Delete is hard-delete (not soft) — Person has no provenance
+        requirement like Contact does (see contacts/views.py). FKs are CASCADE
+        in models.py, so deleting a Person removes its Reports (and any
+        Media those Reports reference), its Media rows, and any
+        FamilyRelationship rows on either end. The underlying files
+        (profile image, uploaded media) are removed automatically by
+        Django 3.1+'s FileField behaviour.
+
+        Every delete writes a single `AuditLog` row capturing the snapshot
+        *before* the row vanishes, so the deletion is traceable even after
+        the Person row is gone.
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: array
+          items:
+            type: integer
+        explode: true
+        style: form
+      - in: query
+        name: country
+        schema:
+          type: string
+      - in: query
+        name: current_status
+        schema:
+          type: string
+          enum:
+          - deceased
+          - detained
+          - disappeared
+          - released
+          - restricted_movement
+          - rights_restricted
+          - stateless
+          - unknown
+        description: |-
+          * `detained` - Detained
+          * `disappeared` - Disappeared
+          * `restricted_movement` - Restricted Movement
+          * `released` - Released
+          * `deceased` - Deceased
+          * `unknown` - Unknown
+          * `stateless` - Stateless
+          * `rights_restricted` - Rights Restricted
+      - in: query
+        name: gender
+        schema:
+          type: string
+          enum:
+          - F
+          - M
+          - O
+          - U
+        description: |-
+          * `M` - Male
+          * `F` - Female
+          * `O` - Other
+          * `U` - Unknown
+      - in: query
+        name: is_published
+        schema:
+          type: boolean
+      - in: query
+        name: medical_status
+        schema:
+          type: string
+          enum:
+          - critical
+          - deceased
+          - health_concerns
+          - healthy
+          - unknown
+        description: |-
+          * `unknown` - Unknown
+          * `healthy` - Healthy
+          * `health_concerns` - Health Concerns
+          * `critical` - Critical
+          * `deceased` - Deceased
+      - in: query
+        name: name
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: quality
+        schema:
+          type: integer
+      - in: query
+        name: quality_tier
+        schema:
+          type: integer
+          nullable: true
+          enum:
+          - 1
+          - 2
+          - 3
+        description: |-
+          * `1` - Tier 1 — Strong evidence
+          * `2` - Tier 2 — Average evidence
+          * `3` - Tier 3 — Weak evidence
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - persons
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPersonListList'
+          description: ''
+    post:
+      operationId: persons_create
+      description: |-
+        Person CRUD.
+
+        Read access (list / retrieve): anyone (anonymous included) can read
+        published persons. `get_queryset` filters out unpublished rows for
+        anonymous viewers.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer, Advocate, or staff (`IsVolunteer`).
+
+        Delete is hard-delete (not soft) — Person has no provenance
+        requirement like Contact does (see contacts/views.py). FKs are CASCADE
+        in models.py, so deleting a Person removes its Reports (and any
+        Media those Reports reference), its Media rows, and any
+        FamilyRelationship rows on either end. The underlying files
+        (profile image, uploaded media) are removed automatically by
+        Django 3.1+'s FileField behaviour.
+
+        Every delete writes a single `AuditLog` row capturing the snapshot
+        *before* the row vanishes, so the deletion is traceable even after
+        the Person row is gone.
+      tags:
+      - persons
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PersonWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PersonWriteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonWrite'
+          description: ''
+  /api/persons/{id}/:
+    get:
+      operationId: persons_retrieve
+      description: |-
+        Person CRUD.
+
+        Read access (list / retrieve): anyone (anonymous included) can read
+        published persons. `get_queryset` filters out unpublished rows for
+        anonymous viewers.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer, Advocate, or staff (`IsVolunteer`).
+
+        Delete is hard-delete (not soft) — Person has no provenance
+        requirement like Contact does (see contacts/views.py). FKs are CASCADE
+        in models.py, so deleting a Person removes its Reports (and any
+        Media those Reports reference), its Media rows, and any
+        FamilyRelationship rows on either end. The underlying files
+        (profile image, uploaded media) are removed automatically by
+        Django 3.1+'s FileField behaviour.
+
+        Every delete writes a single `AuditLog` row capturing the snapshot
+        *before* the row vanishes, so the deletion is traceable even after
+        the Person row is gone.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this person.
+        required: true
+      tags:
+      - persons
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonDetail'
+          description: ''
+    put:
+      operationId: persons_update
+      description: |-
+        Person CRUD.
+
+        Read access (list / retrieve): anyone (anonymous included) can read
+        published persons. `get_queryset` filters out unpublished rows for
+        anonymous viewers.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer, Advocate, or staff (`IsVolunteer`).
+
+        Delete is hard-delete (not soft) — Person has no provenance
+        requirement like Contact does (see contacts/views.py). FKs are CASCADE
+        in models.py, so deleting a Person removes its Reports (and any
+        Media those Reports reference), its Media rows, and any
+        FamilyRelationship rows on either end. The underlying files
+        (profile image, uploaded media) are removed automatically by
+        Django 3.1+'s FileField behaviour.
+
+        Every delete writes a single `AuditLog` row capturing the snapshot
+        *before* the row vanishes, so the deletion is traceable even after
+        the Person row is gone.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this person.
+        required: true
+      tags:
+      - persons
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PersonWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PersonWriteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonWrite'
+          description: ''
+    patch:
+      operationId: persons_partial_update
+      description: |-
+        Person CRUD.
+
+        Read access (list / retrieve): anyone (anonymous included) can read
+        published persons. `get_queryset` filters out unpublished rows for
+        anonymous viewers.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer, Advocate, or staff (`IsVolunteer`).
+
+        Delete is hard-delete (not soft) — Person has no provenance
+        requirement like Contact does (see contacts/views.py). FKs are CASCADE
+        in models.py, so deleting a Person removes its Reports (and any
+        Media those Reports reference), its Media rows, and any
+        FamilyRelationship rows on either end. The underlying files
+        (profile image, uploaded media) are removed automatically by
+        Django 3.1+'s FileField behaviour.
+
+        Every delete writes a single `AuditLog` row capturing the snapshot
+        *before* the row vanishes, so the deletion is traceable even after
+        the Person row is gone.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this person.
+        required: true
+      tags:
+      - persons
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPersonWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPersonWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPersonWriteRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonWrite'
+          description: ''
+    delete:
+      operationId: persons_destroy
+      description: |-
+        Person CRUD.
+
+        Read access (list / retrieve): anyone (anonymous included) can read
+        published persons. `get_queryset` filters out unpublished rows for
+        anonymous viewers.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer, Advocate, or staff (`IsVolunteer`).
+
+        Delete is hard-delete (not soft) — Person has no provenance
+        requirement like Contact does (see contacts/views.py). FKs are CASCADE
+        in models.py, so deleting a Person removes its Reports (and any
+        Media those Reports reference), its Media rows, and any
+        FamilyRelationship rows on either end. The underlying files
+        (profile image, uploaded media) are removed automatically by
+        Django 3.1+'s FileField behaviour.
+
+        Every delete writes a single `AuditLog` row capturing the snapshot
+        *before* the row vanishes, so the deletion is traceable even after
+        the Person row is gone.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this person.
+        required: true
+      tags:
+      - persons
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/persons/countries/:
+    get:
+      operationId: persons_countries_list
+      description: List of countries with case counts. Counts are dynamic — when other
+        filters are present, counts reflect the filtered subset. The `country` filter
+        itself is ignored (the dropdown always shows every country regardless of which
+        is selected).
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: array
+          items:
+            type: integer
+        explode: true
+        style: form
+      - in: query
+        name: country
+        schema:
+          type: string
+      - in: query
+        name: current_status
+        schema:
+          type: string
+          enum:
+          - deceased
+          - detained
+          - disappeared
+          - released
+          - restricted_movement
+          - rights_restricted
+          - stateless
+          - unknown
+        description: |-
+          * `detained` - Detained
+          * `disappeared` - Disappeared
+          * `restricted_movement` - Restricted Movement
+          * `released` - Released
+          * `deceased` - Deceased
+          * `unknown` - Unknown
+          * `stateless` - Stateless
+          * `rights_restricted` - Rights Restricted
+      - in: query
+        name: gender
+        schema:
+          type: string
+          enum:
+          - F
+          - M
+          - O
+          - U
+        description: |-
+          * `M` - Male
+          * `F` - Female
+          * `O` - Other
+          * `U` - Unknown
+      - in: query
+        name: is_published
+        schema:
+          type: boolean
+      - in: query
+        name: medical_status
+        schema:
+          type: string
+          enum:
+          - critical
+          - deceased
+          - health_concerns
+          - healthy
+          - unknown
+        description: |-
+          * `unknown` - Unknown
+          * `healthy` - Healthy
+          * `health_concerns` - Health Concerns
+          * `critical` - Critical
+          * `deceased` - Deceased
+      - in: query
+        name: name
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: quality
+        schema:
+          type: integer
+      - in: query
+        name: quality_tier
+        schema:
+          type: integer
+          nullable: true
+          enum:
+          - 1
+          - 2
+          - 3
+        description: |-
+          * `1` - Tier 1 — Strong evidence
+          * `2` - Tier 2 — Average evidence
+          * `3` - Tier 3 — Weak evidence
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - persons
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCountryCountEntryList'
+          description: ''
+  /api/persons/statistics/:
+    get:
+      operationId: persons_statistics_retrieve
+      description: Aggregate statistics for dashboard.
+      tags:
+      - persons
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatisticsResponse'
+          description: Aggregated counts by status / country / category / medical
+            status.
+  /api/persons/watchdog/:
+    get:
+      operationId: persons_watchdog_list
+      description: Persons ordered by urgency — most stale first. Excludes `released`
+        and `deceased` status. Limited to 50 rows.
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: array
+          items:
+            type: integer
+        explode: true
+        style: form
+      - in: query
+        name: country
+        schema:
+          type: string
+      - in: query
+        name: current_status
+        schema:
+          type: string
+          enum:
+          - deceased
+          - detained
+          - disappeared
+          - released
+          - restricted_movement
+          - rights_restricted
+          - stateless
+          - unknown
+        description: |-
+          * `detained` - Detained
+          * `disappeared` - Disappeared
+          * `restricted_movement` - Restricted Movement
+          * `released` - Released
+          * `deceased` - Deceased
+          * `unknown` - Unknown
+          * `stateless` - Stateless
+          * `rights_restricted` - Rights Restricted
+      - in: query
+        name: gender
+        schema:
+          type: string
+          enum:
+          - F
+          - M
+          - O
+          - U
+        description: |-
+          * `M` - Male
+          * `F` - Female
+          * `O` - Other
+          * `U` - Unknown
+      - in: query
+        name: is_published
+        schema:
+          type: boolean
+      - in: query
+        name: medical_status
+        schema:
+          type: string
+          enum:
+          - critical
+          - deceased
+          - health_concerns
+          - healthy
+          - unknown
+        description: |-
+          * `unknown` - Unknown
+          * `healthy` - Healthy
+          * `health_concerns` - Health Concerns
+          * `critical` - Critical
+          * `deceased` - Deceased
+      - in: query
+        name: name
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: quality
+        schema:
+          type: integer
+      - in: query
+        name: quality_tier
+        schema:
+          type: integer
+          nullable: true
+          enum:
+          - 1
+          - 2
+          - 3
+        description: |-
+          * `1` - Tier 1 — Strong evidence
+          * `2` - Tier 2 — Average evidence
+          * `3` - Tier 3 — Weak evidence
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - persons
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPersonListList'
+          description: ''
+  /api/preferences/:
+    get:
+      operationId: preferences_list
+      description: |-
+        One row per user; we look it up by `me` rather than pk so the
+        client never has to know its preference row id.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - preferences
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUserPreferenceList'
+          description: ''
+    post:
+      operationId: preferences_create
+      description: |-
+        One row per user; we look it up by `me` rather than pk so the
+        client never has to know its preference row id.
+      tags:
+      - preferences
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserPreferenceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserPreferenceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserPreferenceRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPreference'
+          description: ''
+  /api/preferences/{id}/:
+    get:
+      operationId: preferences_retrieve
+      description: |-
+        One row per user; we look it up by `me` rather than pk so the
+        client never has to know its preference row id.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user preference.
+        required: true
+      tags:
+      - preferences
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPreference'
+          description: ''
+    put:
+      operationId: preferences_update
+      description: |-
+        One row per user; we look it up by `me` rather than pk so the
+        client never has to know its preference row id.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user preference.
+        required: true
+      tags:
+      - preferences
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserPreferenceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserPreferenceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserPreferenceRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPreference'
+          description: ''
+    patch:
+      operationId: preferences_partial_update
+      description: |-
+        One row per user; we look it up by `me` rather than pk so the
+        client never has to know its preference row id.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user preference.
+        required: true
+      tags:
+      - preferences
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserPreferenceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserPreferenceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserPreferenceRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPreference'
+          description: ''
+    delete:
+      operationId: preferences_destroy
+      description: |-
+        One row per user; we look it up by `me` rather than pk so the
+        client never has to know its preference row id.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user preference.
+        required: true
+      tags:
+      - preferences
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/relationships/:
+    get:
+      operationId: relationships_list
+      description: |-
+        Family-relationship CRUD.
+
+        Read access: anyone (anonymous included) — the family list is part
+        of every person-detail response.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer / Advocate / staff (`IsVolunteer`).
+
+        Audit log: every successful create/update/delete writes an `AuditLog`
+        row with `target_type='relationship'`, mirroring the Report / Person
+        / Contact viewsets. Provenance is captured *before* delete so the
+        audit row survives the cascade.
+
+        Validation: the serializer enforces no-self-link and no-duplicate-
+        pair (see `FamilyRelationshipSerializer.validate`). Schema-level
+        validation only — no business logic in the viewset beyond the
+        gate + audit trail.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: person
+        schema:
+          type: number
+      - in: query
+        name: relationship_type
+        schema:
+          type: string
+          enum:
+          - child
+          - other
+          - parent
+          - sibling
+          - spouse
+        description: |-
+          * `parent` - Parent
+          * `child` - Child
+          * `sibling` - Sibling
+          * `spouse` - Spouse
+          * `other` - Other relative
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - relationships
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFamilyRelationshipList'
+          description: ''
+    post:
+      operationId: relationships_create
+      description: |-
+        Family-relationship CRUD.
+
+        Read access: anyone (anonymous included) — the family list is part
+        of every person-detail response.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer / Advocate / staff (`IsVolunteer`).
+
+        Audit log: every successful create/update/delete writes an `AuditLog`
+        row with `target_type='relationship'`, mirroring the Report / Person
+        / Contact viewsets. Provenance is captured *before* delete so the
+        audit row survives the cascade.
+
+        Validation: the serializer enforces no-self-link and no-duplicate-
+        pair (see `FamilyRelationshipSerializer.validate`). Schema-level
+        validation only — no business logic in the viewset beyond the
+        gate + audit trail.
+      tags:
+      - relationships
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FamilyRelationshipRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FamilyRelationshipRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FamilyRelationshipRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamilyRelationship'
+          description: ''
+  /api/relationships/{id}/:
+    get:
+      operationId: relationships_retrieve
+      description: |-
+        Family-relationship CRUD.
+
+        Read access: anyone (anonymous included) — the family list is part
+        of every person-detail response.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer / Advocate / staff (`IsVolunteer`).
+
+        Audit log: every successful create/update/delete writes an `AuditLog`
+        row with `target_type='relationship'`, mirroring the Report / Person
+        / Contact viewsets. Provenance is captured *before* delete so the
+        audit row survives the cascade.
+
+        Validation: the serializer enforces no-self-link and no-duplicate-
+        pair (see `FamilyRelationshipSerializer.validate`). Schema-level
+        validation only — no business logic in the viewset beyond the
+        gate + audit trail.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this family relationship.
+        required: true
+      tags:
+      - relationships
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamilyRelationship'
+          description: ''
+    put:
+      operationId: relationships_update
+      description: |-
+        Family-relationship CRUD.
+
+        Read access: anyone (anonymous included) — the family list is part
+        of every person-detail response.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer / Advocate / staff (`IsVolunteer`).
+
+        Audit log: every successful create/update/delete writes an `AuditLog`
+        row with `target_type='relationship'`, mirroring the Report / Person
+        / Contact viewsets. Provenance is captured *before* delete so the
+        audit row survives the cascade.
+
+        Validation: the serializer enforces no-self-link and no-duplicate-
+        pair (see `FamilyRelationshipSerializer.validate`). Schema-level
+        validation only — no business logic in the viewset beyond the
+        gate + audit trail.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this family relationship.
+        required: true
+      tags:
+      - relationships
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FamilyRelationshipRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FamilyRelationshipRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FamilyRelationshipRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamilyRelationship'
+          description: ''
+    patch:
+      operationId: relationships_partial_update
+      description: |-
+        Family-relationship CRUD.
+
+        Read access: anyone (anonymous included) — the family list is part
+        of every person-detail response.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer / Advocate / staff (`IsVolunteer`).
+
+        Audit log: every successful create/update/delete writes an `AuditLog`
+        row with `target_type='relationship'`, mirroring the Report / Person
+        / Contact viewsets. Provenance is captured *before* delete so the
+        audit row survives the cascade.
+
+        Validation: the serializer enforces no-self-link and no-duplicate-
+        pair (see `FamilyRelationshipSerializer.validate`). Schema-level
+        validation only — no business logic in the viewset beyond the
+        gate + audit trail.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this family relationship.
+        required: true
+      tags:
+      - relationships
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFamilyRelationshipRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFamilyRelationshipRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFamilyRelationshipRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamilyRelationship'
+          description: ''
+    delete:
+      operationId: relationships_destroy
+      description: |-
+        Family-relationship CRUD.
+
+        Read access: anyone (anonymous included) — the family list is part
+        of every person-detail response.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer / Advocate / staff (`IsVolunteer`).
+
+        Audit log: every successful create/update/delete writes an `AuditLog`
+        row with `target_type='relationship'`, mirroring the Report / Person
+        / Contact viewsets. Provenance is captured *before* delete so the
+        audit row survives the cascade.
+
+        Validation: the serializer enforces no-self-link and no-duplicate-
+        pair (see `FamilyRelationshipSerializer.validate`). Schema-level
+        validation only — no business logic in the viewset beyond the
+        gate + audit trail.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this family relationship.
+        required: true
+      tags:
+      - relationships
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/reports/:
+    get:
+      operationId: reports_list
+      description: |-
+        Report CRUD.
+
+        Read access: anyone (anonymous included) can list + retrieve reports
+        on **published** persons where `is_private=False`. The default
+        `IsAuthenticatedOrReadOnly` already enforces write authentication.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer, Advocate, or staff (`IsVolunteer`).
+            - For update / destroy on an existing row, must additionally be
+              the report's author OR staff OR in the Advocate group.
+
+        Filtering: `?search=` runs `SearchFilter` over `narrative` +
+        `source_attribution`. `?source_type=`, `?person=`, `?is_private=`
+        run `DjangoFilterBackend` via `ReportFilter`. `?date_from=` /
+        `?date_to=` are added by `ReportFilter` for the global reports
+        list page.
+
+        Audit log: every update and destroy writes an `AuditLog` row with the
+        actor, the changed field list, and the request IP. Matches the
+        privacy model in CLAUDE.md (reports are the canonical narrative and
+        we want a paper trail of every correction).
+      parameters:
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: is_private
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: person
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: source_type
+        schema:
+          type: string
+          enum:
+          - document
+          - firsthand
+          - news
+          - secondhand
+        description: |-
+          * `firsthand` - Firsthand
+          * `secondhand` - Secondhand
+          * `news` - News report
+          * `document` - Document
+      tags:
+      - reports
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReportList'
+          description: ''
+    post:
+      operationId: reports_create
+      description: |-
+        Report CRUD.
+
+        Read access: anyone (anonymous included) can list + retrieve reports
+        on **published** persons where `is_private=False`. The default
+        `IsAuthenticatedOrReadOnly` already enforces write authentication.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer, Advocate, or staff (`IsVolunteer`).
+            - For update / destroy on an existing row, must additionally be
+              the report's author OR staff OR in the Advocate group.
+
+        Filtering: `?search=` runs `SearchFilter` over `narrative` +
+        `source_attribution`. `?source_type=`, `?person=`, `?is_private=`
+        run `DjangoFilterBackend` via `ReportFilter`. `?date_from=` /
+        `?date_to=` are added by `ReportFilter` for the global reports
+        list page.
+
+        Audit log: every update and destroy writes an `AuditLog` row with the
+        actor, the changed field list, and the request IP. Matches the
+        privacy model in CLAUDE.md (reports are the canonical narrative and
+        we want a paper trail of every correction).
+      tags:
+      - reports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+          description: ''
+  /api/reports/{id}/:
+    get:
+      operationId: reports_retrieve
+      description: |-
+        Report CRUD.
+
+        Read access: anyone (anonymous included) can list + retrieve reports
+        on **published** persons where `is_private=False`. The default
+        `IsAuthenticatedOrReadOnly` already enforces write authentication.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer, Advocate, or staff (`IsVolunteer`).
+            - For update / destroy on an existing row, must additionally be
+              the report's author OR staff OR in the Advocate group.
+
+        Filtering: `?search=` runs `SearchFilter` over `narrative` +
+        `source_attribution`. `?source_type=`, `?person=`, `?is_private=`
+        run `DjangoFilterBackend` via `ReportFilter`. `?date_from=` /
+        `?date_to=` are added by `ReportFilter` for the global reports
+        list page.
+
+        Audit log: every update and destroy writes an `AuditLog` row with the
+        actor, the changed field list, and the request IP. Matches the
+        privacy model in CLAUDE.md (reports are the canonical narrative and
+        we want a paper trail of every correction).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this report.
+        required: true
+      tags:
+      - reports
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+          description: ''
+    put:
+      operationId: reports_update
+      description: |-
+        Report CRUD.
+
+        Read access: anyone (anonymous included) can list + retrieve reports
+        on **published** persons where `is_private=False`. The default
+        `IsAuthenticatedOrReadOnly` already enforces write authentication.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer, Advocate, or staff (`IsVolunteer`).
+            - For update / destroy on an existing row, must additionally be
+              the report's author OR staff OR in the Advocate group.
+
+        Filtering: `?search=` runs `SearchFilter` over `narrative` +
+        `source_attribution`. `?source_type=`, `?person=`, `?is_private=`
+        run `DjangoFilterBackend` via `ReportFilter`. `?date_from=` /
+        `?date_to=` are added by `ReportFilter` for the global reports
+        list page.
+
+        Audit log: every update and destroy writes an `AuditLog` row with the
+        actor, the changed field list, and the request IP. Matches the
+        privacy model in CLAUDE.md (reports are the canonical narrative and
+        we want a paper trail of every correction).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this report.
+        required: true
+      tags:
+      - reports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+          description: ''
+    patch:
+      operationId: reports_partial_update
+      description: |-
+        Report CRUD.
+
+        Read access: anyone (anonymous included) can list + retrieve reports
+        on **published** persons where `is_private=False`. The default
+        `IsAuthenticatedOrReadOnly` already enforces write authentication.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer, Advocate, or staff (`IsVolunteer`).
+            - For update / destroy on an existing row, must additionally be
+              the report's author OR staff OR in the Advocate group.
+
+        Filtering: `?search=` runs `SearchFilter` over `narrative` +
+        `source_attribution`. `?source_type=`, `?person=`, `?is_private=`
+        run `DjangoFilterBackend` via `ReportFilter`. `?date_from=` /
+        `?date_to=` are added by `ReportFilter` for the global reports
+        list page.
+
+        Audit log: every update and destroy writes an `AuditLog` row with the
+        actor, the changed field list, and the request IP. Matches the
+        privacy model in CLAUDE.md (reports are the canonical narrative and
+        we want a paper trail of every correction).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this report.
+        required: true
+      tags:
+      - reports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedReportRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+          description: ''
+    delete:
+      operationId: reports_destroy
+      description: |-
+        Report CRUD.
+
+        Read access: anyone (anonymous included) can list + retrieve reports
+        on **published** persons where `is_private=False`. The default
+        `IsAuthenticatedOrReadOnly` already enforces write authentication.
+
+        Write access (create / update / destroy):
+            - Must be authenticated (`IsAuthenticatedOrReadOnly`).
+            - Must be a Volunteer, Advocate, or staff (`IsVolunteer`).
+            - For update / destroy on an existing row, must additionally be
+              the report's author OR staff OR in the Advocate group.
+
+        Filtering: `?search=` runs `SearchFilter` over `narrative` +
+        `source_attribution`. `?source_type=`, `?person=`, `?is_private=`
+        run `DjangoFilterBackend` via `ReportFilter`. `?date_from=` /
+        `?date_to=` are added by `ReportFilter` for the global reports
+        list page.
+
+        Audit log: every update and destroy writes an `AuditLog` row with the
+        actor, the changed field list, and the request IP. Matches the
+        privacy model in CLAUDE.md (reports are the canonical narrative and
+        we want a paper trail of every correction).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this report.
+        required: true
+      tags:
+      - reports
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+components:
+  schemas:
+    ActionTypeEnum:
+      enum:
+      - outreach
+      - legal_filing
+      - media
+      - advocacy
+      - investigation
+      - other
+      type: string
+      description: |-
+        * `outreach` - Outreach
+        * `legal_filing` - Legal filing
+        * `media` - Media engagement
+        * `advocacy` - Advocacy
+        * `investigation` - Investigation
+        * `other` - Other
+    BlankEnum:
+      enum:
+      - ''
+    CaseCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+      required:
+      - id
+      - name
+    CaseworkRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        performed_by_name:
+          type: string
+          readOnly: true
+        seen_by:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: string
+          readOnly: true
+        action_type:
+          $ref: '#/components/schemas/ActionTypeEnum'
+        description:
+          type: string
+        date:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        next_steps:
+          type: string
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        performed_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        persons:
+          type: array
+          items:
+            type: integer
+      required:
+      - created_at
+      - date
+      - description
+      - id
+      - performed_by
+      - performed_by_name
+      - seen_by
+      - updated_at
+    CaseworkRecordRequest:
+      type: object
+      properties:
+        action_type:
+          $ref: '#/components/schemas/ActionTypeEnum'
+        description:
+          type: string
+          minLength: 1
+        date:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        next_steps:
+          type: string
+        notes:
+          type: string
+        persons:
+          type: array
+          items:
+            type: integer
+      required:
+      - date
+      - description
+    CategoryCount:
+      type: object
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+      required:
+      - count
+      - name
+    Contact:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        phone:
+          type: string
+          maxLength: 50
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        signal:
+          type: string
+          maxLength: 50
+        whatsapp:
+          type: string
+          maxLength: 50
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        deleted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        persons:
+          type: array
+          items:
+            type: integer
+      required:
+      - created_at
+      - deleted_at
+      - id
+      - name
+    ContactRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        phone:
+          type: string
+          maxLength: 50
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        signal:
+          type: string
+          maxLength: 50
+        whatsapp:
+          type: string
+          maxLength: 50
+        notes:
+          type: string
+        persons:
+          type: array
+          items:
+            type: integer
+      required:
+      - name
+    CountryCountEntry:
+      type: object
+      properties:
+        country:
+          type: string
+        count:
+          type: integer
+      required:
+      - count
+      - country
+    CurrentStatusEnum:
+      enum:
+      - detained
+      - disappeared
+      - restricted_movement
+      - released
+      - deceased
+      - unknown
+      - stateless
+      - rights_restricted
+      type: string
+      description: |-
+        * `detained` - Detained
+        * `disappeared` - Disappeared
+        * `restricted_movement` - Restricted Movement
+        * `released` - Released
+        * `deceased` - Deceased
+        * `unknown` - Unknown
+        * `stateless` - Stateless
+        * `rights_restricted` - Rights Restricted
+    FamilyRelationship:
+      type: object
+      description: |-
+        Family-relationship CRUD payload.
+
+        Read shape: full row plus denormalised `person_a_name` /
+        `person_b_name` so the frontend can render the list without
+        resolving FK IDs separately.
+
+        Write shape: accepts `person_a` and `person_b` as FK IDs (DRF
+        `PrimaryKeyRelatedField` is the default for `IntegerField`-with-FK
+        in `ModelSerializer`).
+
+        Validation (see `validate`):
+            - `person_a != person_b` — no self-link.
+            - One row per ordered `(person_a, person_b)` pair, regardless
+              of type — the model already enforces this via
+              `unique_together = ['person_a', 'person_b']` but we drop
+              DRF's auto-validator (see `get_unique_together_validators`)
+              so the volunteer sees a friendlier message.
+            - For undirected types (`sibling`, `spouse`, `other`), the
+              reverse-ordered pair is also rejected. `parent` / `child`
+              allow either direction (direction carries meaning).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        person_a:
+          type: integer
+        person_b:
+          type: integer
+        person_a_name:
+          type: string
+          readOnly: true
+        person_b_name:
+          type: string
+          readOnly: true
+        relationship_type:
+          $ref: '#/components/schemas/RelationshipTypeEnum'
+        notes:
+          type: string
+          maxLength: 255
+      required:
+      - id
+      - person_a
+      - person_a_name
+      - person_b
+      - person_b_name
+      - relationship_type
+    FamilyRelationshipRequest:
+      type: object
+      description: |-
+        Family-relationship CRUD payload.
+
+        Read shape: full row plus denormalised `person_a_name` /
+        `person_b_name` so the frontend can render the list without
+        resolving FK IDs separately.
+
+        Write shape: accepts `person_a` and `person_b` as FK IDs (DRF
+        `PrimaryKeyRelatedField` is the default for `IntegerField`-with-FK
+        in `ModelSerializer`).
+
+        Validation (see `validate`):
+            - `person_a != person_b` — no self-link.
+            - One row per ordered `(person_a, person_b)` pair, regardless
+              of type — the model already enforces this via
+              `unique_together = ['person_a', 'person_b']` but we drop
+              DRF's auto-validator (see `get_unique_together_validators`)
+              so the volunteer sees a friendlier message.
+            - For undirected types (`sibling`, `spouse`, `other`), the
+              reverse-ordered pair is also rejected. `parent` / `child`
+              allow either direction (direction carries meaning).
+      properties:
+        person_a:
+          type: integer
+        person_b:
+          type: integer
+        relationship_type:
+          $ref: '#/components/schemas/RelationshipTypeEnum'
+        notes:
+          type: string
+          maxLength: 255
+      required:
+      - person_a
+      - person_b
+      - relationship_type
+    GenderEnum:
+      enum:
+      - M
+      - F
+      - O
+      - U
+      type: string
+      description: |-
+        * `M` - Male
+        * `F` - Female
+        * `O` - Other
+        * `U` - Unknown
+    KindEnum:
+      enum:
+      - record_created
+      - record_updated
+      - status_done
+      - record_seen
+      type: string
+      description: |-
+        * `record_created` - New casework record
+        * `record_updated` - Casework record updated
+        * `status_done` - Casework marked done
+        * `record_seen` - A peer opened this record
+    MarkAllReadResponse:
+      type: object
+      properties:
+        updated:
+          type: integer
+      required:
+      - updated
+    Media:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        file:
+          type: string
+          format: uri
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|webp|heic|tiff|bmp|pdf|mp4|mov|webm)$
+        url:
+          type: string
+          format: uri
+          maxLength: 1000
+        media_type:
+          $ref: '#/components/schemas/MediaTypeEnum'
+        visibility:
+          $ref: '#/components/schemas/VisibilityEnum'
+        description:
+          type: string
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        person:
+          type: integer
+          nullable: true
+        report:
+          type: integer
+          nullable: true
+        uploaded_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - created_at
+      - id
+      - uploaded_by
+    MediaRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|webp|heic|tiff|bmp|pdf|mp4|mov|webm)$
+        url:
+          type: string
+          format: uri
+          maxLength: 1000
+        media_type:
+          $ref: '#/components/schemas/MediaTypeEnum'
+        visibility:
+          $ref: '#/components/schemas/VisibilityEnum'
+        description:
+          type: string
+          maxLength: 500
+        person:
+          type: integer
+          nullable: true
+        report:
+          type: integer
+          nullable: true
+    MediaTypeEnum:
+      enum:
+      - photo
+      - document
+      - video
+      - link
+      type: string
+      description: |-
+        * `photo` - Photo
+        * `document` - Document
+        * `video` - Video
+        * `link` - External link
+    MedicalStatusEnum:
+      enum:
+      - unknown
+      - healthy
+      - health_concerns
+      - critical
+      - deceased
+      type: string
+      description: |-
+        * `unknown` - Unknown
+        * `healthy` - Healthy
+        * `health_concerns` - Health Concerns
+        * `critical` - Critical
+        * `deceased` - Deceased
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/KindEnum'
+          readOnly: true
+        casework:
+          type: integer
+          readOnly: true
+          nullable: true
+        actor:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: The user whose action caused this notification (often ≠ recipient).
+        actor_name:
+          type: string
+          readOnly: true
+        casework_action_type:
+          type: string
+          readOnly: true
+        casework_persons:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        is_read:
+          type: boolean
+          readOnly: true
+        read_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - actor
+      - actor_name
+      - casework
+      - casework_action_type
+      - casework_persons
+      - created_at
+      - id
+      - is_read
+      - kind
+      - read_at
+    NullEnum:
+      enum:
+      - null
+    PaginatedCaseCategoryList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaseCategory'
+    PaginatedCaseworkRecordList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaseworkRecord'
+    PaginatedContactList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contact'
+    PaginatedCountryCountEntryList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CountryCountEntry'
+    PaginatedFamilyRelationshipList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/FamilyRelationship'
+    PaginatedMediaList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Media'
+    PaginatedNotificationList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+    PaginatedPersonListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PersonList'
+    PaginatedReportList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Report'
+    PaginatedUserPreferenceList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserPreference'
+    PatchedCaseworkRecordRequest:
+      type: object
+      properties:
+        action_type:
+          $ref: '#/components/schemas/ActionTypeEnum'
+        description:
+          type: string
+          minLength: 1
+        date:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        next_steps:
+          type: string
+        notes:
+          type: string
+        persons:
+          type: array
+          items:
+            type: integer
+    PatchedContactRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        phone:
+          type: string
+          maxLength: 50
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        signal:
+          type: string
+          maxLength: 50
+        whatsapp:
+          type: string
+          maxLength: 50
+        notes:
+          type: string
+        persons:
+          type: array
+          items:
+            type: integer
+    PatchedFamilyRelationshipRequest:
+      type: object
+      description: |-
+        Family-relationship CRUD payload.
+
+        Read shape: full row plus denormalised `person_a_name` /
+        `person_b_name` so the frontend can render the list without
+        resolving FK IDs separately.
+
+        Write shape: accepts `person_a` and `person_b` as FK IDs (DRF
+        `PrimaryKeyRelatedField` is the default for `IntegerField`-with-FK
+        in `ModelSerializer`).
+
+        Validation (see `validate`):
+            - `person_a != person_b` — no self-link.
+            - One row per ordered `(person_a, person_b)` pair, regardless
+              of type — the model already enforces this via
+              `unique_together = ['person_a', 'person_b']` but we drop
+              DRF's auto-validator (see `get_unique_together_validators`)
+              so the volunteer sees a friendlier message.
+            - For undirected types (`sibling`, `spouse`, `other`), the
+              reverse-ordered pair is also rejected. `parent` / `child`
+              allow either direction (direction carries meaning).
+      properties:
+        person_a:
+          type: integer
+        person_b:
+          type: integer
+        relationship_type:
+          $ref: '#/components/schemas/RelationshipTypeEnum'
+        notes:
+          type: string
+          maxLength: 255
+    PatchedMediaRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+          nullable: true
+          pattern: (?:jpg|jpeg|png|gif|webp|heic|tiff|bmp|pdf|mp4|mov|webm)$
+        url:
+          type: string
+          format: uri
+          maxLength: 1000
+        media_type:
+          $ref: '#/components/schemas/MediaTypeEnum'
+        visibility:
+          $ref: '#/components/schemas/VisibilityEnum'
+        description:
+          type: string
+          maxLength: 500
+        person:
+          type: integer
+          nullable: true
+        report:
+          type: integer
+          nullable: true
+    PatchedPersonWriteRequest:
+      type: object
+      description: Serializer for creating/updating persons.
+      properties:
+        category_ids:
+          type: array
+          items:
+            type: integer
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        legal_name:
+          type: string
+          maxLength: 255
+        aliases:
+          type: string
+          maxLength: 500
+        country:
+          type: string
+          minLength: 1
+          maxLength: 100
+        ethnicity:
+          type: string
+          maxLength: 100
+        gender:
+          oneOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        current_status:
+          $ref: '#/components/schemas/CurrentStatusEnum'
+        medical_status:
+          $ref: '#/components/schemas/MedicalStatusEnum'
+        medical_notes:
+          type: string
+        rough_location:
+          type: string
+          description: Country/region level — shown publicly
+          maxLength: 255
+        precise_location:
+          type: string
+          description: City/address level — private by default
+          maxLength: 500
+        last_known_date:
+          type: string
+          format: date
+          nullable: true
+        summary_narrative:
+          type: string
+        profile_image:
+          type: string
+          format: binary
+          nullable: true
+        authoritative_source:
+          type: string
+          description: Name of source database — e.g. "AAPP", "HRW", "shahit.biz"
+          maxLength: 255
+        authoritative_url:
+          type: string
+          format: uri
+          description: Link to this case in the original database
+          maxLength: 1000
+        quality_tier:
+          nullable: true
+          minimum: -2147483648
+          maximum: 2147483647
+          oneOf:
+          - $ref: '#/components/schemas/QualityTierEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        is_published:
+          type: boolean
+    PatchedReportRequest:
+      type: object
+      properties:
+        source_type:
+          $ref: '#/components/schemas/SourceTypeEnum'
+        source_attribution:
+          type: string
+          description: Public attribution — e.g. "family member", "BBC report"
+          maxLength: 500
+        reporter_name:
+          type: string
+          maxLength: 255
+        reporter_contact:
+          type: string
+        date_start:
+          type: string
+          format: date
+          nullable: true
+        date_end:
+          type: string
+          format: date
+          nullable: true
+          description: Leave blank for single-date events
+        rough_location:
+          type: string
+          maxLength: 255
+        precise_location:
+          type: string
+          maxLength: 500
+        narrative:
+          type: string
+          minLength: 1
+        suspected_reason:
+          type: string
+          description: What family/source believes is the reason
+        official_reason:
+          type: string
+          description: What the state officially charged
+        is_private:
+          type: boolean
+          description: If true, entire report hidden from public view
+        person:
+          type: integer
+    PatchedUserPreferenceRequest:
+      type: object
+      properties:
+        notify_email:
+          type: boolean
+          description: Receive an email when casework events affect you.
+        notify_inapp:
+          type: boolean
+          description: Show in-app notifications in the bell.
+    PersonDetail:
+      type: object
+      description: Full serializer with reports and media for detail views.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaseCategory'
+          readOnly: true
+        reports:
+          type: array
+          items:
+            $ref: '#/components/schemas/Report'
+          readOnly: true
+        media_files:
+          type: array
+          items:
+            $ref: '#/components/schemas/Media'
+          readOnly: true
+        days_since_last_report:
+          type: integer
+          readOnly: true
+        family:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
+        profile_image_url:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        legal_name:
+          type: string
+          maxLength: 255
+        aliases:
+          type: string
+          maxLength: 500
+        country:
+          type: string
+          maxLength: 100
+        ethnicity:
+          type: string
+          maxLength: 100
+        gender:
+          oneOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        current_status:
+          $ref: '#/components/schemas/CurrentStatusEnum'
+        medical_status:
+          $ref: '#/components/schemas/MedicalStatusEnum'
+        medical_notes:
+          type: string
+        rough_location:
+          type: string
+          description: Country/region level — shown publicly
+          maxLength: 255
+        precise_location:
+          type: string
+          description: City/address level — private by default
+          maxLength: 500
+        last_known_date:
+          type: string
+          format: date
+          nullable: true
+        summary_narrative:
+          type: string
+        profile_image:
+          type: string
+          format: uri
+          nullable: true
+        authoritative_source:
+          type: string
+          description: Name of source database — e.g. "AAPP", "HRW", "shahit.biz"
+          maxLength: 255
+        authoritative_url:
+          type: string
+          format: uri
+          description: Link to this case in the original database
+          maxLength: 1000
+        quality_tier:
+          nullable: true
+          minimum: -2147483648
+          maximum: 2147483647
+          oneOf:
+          - $ref: '#/components/schemas/QualityTierEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        is_published:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - categories
+      - country
+      - created_at
+      - created_by
+      - days_since_last_report
+      - family
+      - id
+      - media_files
+      - name
+      - profile_image_url
+      - reports
+      - updated_at
+    PersonList:
+      type: object
+      description: Lightweight serializer for list views.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaseCategory'
+          readOnly: true
+        report_count:
+          type: integer
+          readOnly: true
+        days_since_last_report:
+          type: integer
+          readOnly: true
+        profile_image_url:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        legal_name:
+          type: string
+          maxLength: 255
+        aliases:
+          type: string
+          maxLength: 500
+        country:
+          type: string
+          maxLength: 100
+        ethnicity:
+          type: string
+          maxLength: 100
+        gender:
+          oneOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        current_status:
+          $ref: '#/components/schemas/CurrentStatusEnum'
+        medical_status:
+          $ref: '#/components/schemas/MedicalStatusEnum'
+        rough_location:
+          type: string
+          description: Country/region level — shown publicly
+          maxLength: 255
+        last_known_date:
+          type: string
+          format: date
+          nullable: true
+        summary_narrative:
+          type: string
+        profile_image:
+          type: string
+          format: uri
+          nullable: true
+        authoritative_source:
+          type: string
+          description: Name of source database — e.g. "AAPP", "HRW", "shahit.biz"
+          maxLength: 255
+        authoritative_url:
+          type: string
+          format: uri
+          description: Link to this case in the original database
+          maxLength: 1000
+        quality_tier:
+          nullable: true
+          minimum: -2147483648
+          maximum: 2147483647
+          oneOf:
+          - $ref: '#/components/schemas/QualityTierEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        is_published:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - categories
+      - country
+      - created_at
+      - created_by
+      - days_since_last_report
+      - id
+      - name
+      - profile_image_url
+      - report_count
+      - updated_at
+    PersonWrite:
+      type: object
+      description: Serializer for creating/updating persons.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        category_ids:
+          type: array
+          items:
+            type: integer
+        name:
+          type: string
+          maxLength: 255
+        legal_name:
+          type: string
+          maxLength: 255
+        aliases:
+          type: string
+          maxLength: 500
+        country:
+          type: string
+          maxLength: 100
+        ethnicity:
+          type: string
+          maxLength: 100
+        gender:
+          oneOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        current_status:
+          $ref: '#/components/schemas/CurrentStatusEnum'
+        medical_status:
+          $ref: '#/components/schemas/MedicalStatusEnum'
+        medical_notes:
+          type: string
+        rough_location:
+          type: string
+          description: Country/region level — shown publicly
+          maxLength: 255
+        precise_location:
+          type: string
+          description: City/address level — private by default
+          maxLength: 500
+        last_known_date:
+          type: string
+          format: date
+          nullable: true
+        summary_narrative:
+          type: string
+        profile_image:
+          type: string
+          format: uri
+          nullable: true
+        authoritative_source:
+          type: string
+          description: Name of source database — e.g. "AAPP", "HRW", "shahit.biz"
+          maxLength: 255
+        authoritative_url:
+          type: string
+          format: uri
+          description: Link to this case in the original database
+          maxLength: 1000
+        quality_tier:
+          nullable: true
+          minimum: -2147483648
+          maximum: 2147483647
+          oneOf:
+          - $ref: '#/components/schemas/QualityTierEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        is_published:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - country
+      - created_at
+      - created_by
+      - id
+      - name
+      - updated_at
+    PersonWriteRequest:
+      type: object
+      description: Serializer for creating/updating persons.
+      properties:
+        category_ids:
+          type: array
+          items:
+            type: integer
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        legal_name:
+          type: string
+          maxLength: 255
+        aliases:
+          type: string
+          maxLength: 500
+        country:
+          type: string
+          minLength: 1
+          maxLength: 100
+        ethnicity:
+          type: string
+          maxLength: 100
+        gender:
+          oneOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        current_status:
+          $ref: '#/components/schemas/CurrentStatusEnum'
+        medical_status:
+          $ref: '#/components/schemas/MedicalStatusEnum'
+        medical_notes:
+          type: string
+        rough_location:
+          type: string
+          description: Country/region level — shown publicly
+          maxLength: 255
+        precise_location:
+          type: string
+          description: City/address level — private by default
+          maxLength: 500
+        last_known_date:
+          type: string
+          format: date
+          nullable: true
+        summary_narrative:
+          type: string
+        profile_image:
+          type: string
+          format: binary
+          nullable: true
+        authoritative_source:
+          type: string
+          description: Name of source database — e.g. "AAPP", "HRW", "shahit.biz"
+          maxLength: 255
+        authoritative_url:
+          type: string
+          format: uri
+          description: Link to this case in the original database
+          maxLength: 1000
+        quality_tier:
+          nullable: true
+          minimum: -2147483648
+          maximum: 2147483647
+          oneOf:
+          - $ref: '#/components/schemas/QualityTierEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        is_published:
+          type: boolean
+      required:
+      - country
+      - name
+    QualityTierEnum:
+      enum:
+      - 1
+      - 2
+      - 3
+      type: integer
+      description: |-
+        * `1` - Tier 1 — Strong evidence
+        * `2` - Tier 2 — Average evidence
+        * `3` - Tier 3 — Weak evidence
+    RelationshipTypeEnum:
+      enum:
+      - parent
+      - child
+      - sibling
+      - spouse
+      - other
+      type: string
+      description: |-
+        * `parent` - Parent
+        * `child` - Child
+        * `sibling` - Sibling
+        * `spouse` - Spouse
+        * `other` - Other relative
+    Report:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        media_files:
+          type: array
+          items:
+            $ref: '#/components/schemas/Media'
+          readOnly: true
+        source_type:
+          $ref: '#/components/schemas/SourceTypeEnum'
+        source_attribution:
+          type: string
+          description: Public attribution — e.g. "family member", "BBC report"
+          maxLength: 500
+        reporter_name:
+          type: string
+          maxLength: 255
+        reporter_contact:
+          type: string
+        date_start:
+          type: string
+          format: date
+          nullable: true
+        date_end:
+          type: string
+          format: date
+          nullable: true
+          description: Leave blank for single-date events
+        rough_location:
+          type: string
+          maxLength: 255
+        precise_location:
+          type: string
+          maxLength: 500
+        narrative:
+          type: string
+        suspected_reason:
+          type: string
+          description: What family/source believes is the reason
+        official_reason:
+          type: string
+          description: What the state officially charged
+        is_private:
+          type: boolean
+          description: If true, entire report hidden from public view
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        person:
+          type: integer
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - created_at
+      - created_by
+      - id
+      - media_files
+      - narrative
+      - person
+      - updated_at
+    ReportRequest:
+      type: object
+      properties:
+        source_type:
+          $ref: '#/components/schemas/SourceTypeEnum'
+        source_attribution:
+          type: string
+          description: Public attribution — e.g. "family member", "BBC report"
+          maxLength: 500
+        reporter_name:
+          type: string
+          maxLength: 255
+        reporter_contact:
+          type: string
+        date_start:
+          type: string
+          format: date
+          nullable: true
+        date_end:
+          type: string
+          format: date
+          nullable: true
+          description: Leave blank for single-date events
+        rough_location:
+          type: string
+          maxLength: 255
+        precise_location:
+          type: string
+          maxLength: 500
+        narrative:
+          type: string
+          minLength: 1
+        suspected_reason:
+          type: string
+          description: What family/source believes is the reason
+        official_reason:
+          type: string
+          description: What the state officially charged
+        is_private:
+          type: boolean
+          description: If true, entire report hidden from public view
+        person:
+          type: integer
+      required:
+      - narrative
+      - person
+    RoleEnum:
+      enum:
+      - family
+      - advocate
+      - lawyer
+      - official
+      - journalist
+      - reporter
+      - other
+      type: string
+      description: |-
+        * `family` - Family member
+        * `advocate` - Advocate
+        * `lawyer` - Lawyer
+        * `official` - Government official
+        * `journalist` - Journalist
+        * `reporter` - Reporter/witness
+        * `other` - Other
+    SourceTypeEnum:
+      enum:
+      - firsthand
+      - secondhand
+      - news
+      - document
+      type: string
+      description: |-
+        * `firsthand` - Firsthand
+        * `secondhand` - Secondhand
+        * `news` - News report
+        * `document` - Document
+    StatisticsCountryCount:
+      type: object
+      properties:
+        country:
+          type: string
+        count:
+          type: integer
+      required:
+      - count
+      - country
+    StatisticsResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        by_status:
+          type: object
+          additionalProperties:
+            type: integer
+        by_country:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatisticsCountryCount'
+        by_category:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryCount'
+        by_medical:
+          type: object
+          additionalProperties:
+            type: integer
+      required:
+      - by_category
+      - by_country
+      - by_medical
+      - by_status
+      - total
+    StatusEnum:
+      enum:
+      - open
+      - in_progress
+      - done
+      type: string
+      description: |-
+        * `open` - Open
+        * `in_progress` - In progress
+        * `done` - Done
+    UnreadCountResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+      required:
+      - count
+    UserPreference:
+      type: object
+      properties:
+        notify_email:
+          type: boolean
+          description: Receive an email when casework events affect you.
+        notify_inapp:
+          type: boolean
+          description: Show in-app notifications in the bell.
+    UserPreferenceRequest:
+      type: object
+      properties:
+        notify_email:
+          type: boolean
+          description: Receive an email when casework events affect you.
+        notify_inapp:
+          type: boolean
+          description: Show in-app notifications in the bell.
+    VisibilityEnum:
+      enum:
+      - public
+      - restricted
+      - sensitive
+      type: string
+      description: |-
+        * `public` - Public
+        * `restricted` - Restricted — authenticated users only
+        * `sensitive` - Sensitive — advocates/admin only
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
+tags:
+- name: persons
+  description: Person records (cases) — read public, write auth
+- name: media
+  description: Media files (photos, videos, documents, links)
+- name: reports
+  description: Chronological reports on a person
+- name: relationships
+  description: Family relationships between persons
+- name: contacts
+  description: Always-private contact records (advocate-only)
+- name: casework
+  description: Casework records (advocacy actions)
+- name: categories
+  description: Case categories
+- name: session
+  description: Current session / authentication
