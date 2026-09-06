@@ -133,15 +133,16 @@ DATABASES = {
     }
 }
 
+# SQLite swap — used by:
+#   - the test runner (always, unless USE_POSTGRES_FOR_TESTS=1)
+#   - CI commands that need Django's app registry but no real DB
+#     connection (e.g. `manage.py spectacular` for OpenAPI generation).
 # The shared dev Postgres user lacks CREATEDB, and the schema is portable
-# (no PG-specific features), so the test runner swaps to SQLite. Detect
-# `manage.py test` via sys.argv; opt out with USE_POSTGRES_FOR_TESTS=1
-# (e.g. in CI with a superuser). NAME is a string here so Django's PG
-# connection code never tries to parse it as a SQL identifier.
+# (no PG-specific features), so the swap is safe. NAME is a string here so
+# Django's PG connection code never tries to parse it as a SQL identifier.
 import sys as _sys
-if (
-    'test' in _sys.argv
-    and not config('USE_POSTGRES_FOR_TESTS', default=False, cast=bool)
+if not config('USE_POSTGRES_FOR_TESTS', default=False, cast=bool) and (
+    'test' in _sys.argv or config('USE_SQLITE', default=False, cast=bool)
 ):
     DATABASES['default'] = {
         'ENGINE': 'django.db.backends.sqlite3',

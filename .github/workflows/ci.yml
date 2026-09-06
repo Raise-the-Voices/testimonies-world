@@ -99,4 +99,5 @@ jobs:
           cd frontend && npm run gen:api:check
         env:
           DJANGO_SECRET_KEY: ci-placeholder-not-secret
+          USE_SQLITE: 'True'
           PUBLIC_BASE_PATH: '/testimonies'
