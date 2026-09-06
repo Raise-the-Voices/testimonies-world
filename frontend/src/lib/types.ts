@@ -1,12 +1,33 @@
 /**
  * Domain types for testimonies.world.
  *
- * These mirror the Django backend serializers closely enough for the
- * SvelteKit frontend to stay type-safe without runtime overhead. Where
- * the backend returns paginated lists, the wrapper type is `Paginated<T>`.
+ * ⚠️ DEPRECATION NOTE — these interfaces are now auto-generated.
  *
- * IMPORTANT: when you add a field on the backend, add it here too — and
- * audit every consumer in a route or component.
+ * As of 2026-09, the canonical source for API types is the OpenAPI
+ * schema (drf-spectacular) → orval → generated TypeScript. The Zod
+ * overlay layer (`src/lib/schemas/overlays.ts`) wraps the generated
+ * wire types and converts date strings to `Date` objects at the API
+ * boundary.
+ *
+ * The interfaces in this file are kept for backwards compatibility —
+ * many call sites still import `Person`, `Media`, `Contact`, etc.
+ * directly. New code should import from:
+ *
+ *   import type { PersonDetail } from '$lib/schemas/overlays'; // parsed (Date fields)
+ *   import type { PersonDetail as PersonDetailWire } from '$lib/api/generated/endpoints.schemas'; // raw wire (strings)
+ *
+ * When the next refactor migrates call sites to the generated types,
+ * this file can shrink to the generic helpers (`Paginated<T>`, `User`,
+ * the local enum types).
+ *
+ * The interfaces below mirror the Django backend serializers closely
+ * enough for the SvelteKit frontend to stay type-safe without runtime
+ * overhead. Where the backend returns paginated lists, the wrapper
+ * type is `Paginated<T>`.
+ *
+ * IMPORTANT: when you add a field on the backend, regenerate via
+ * `npm run gen:api` rather than editing here — the gen:api:check CI
+ * step will fail otherwise.
  */
 
 import type { StatusValue } from './StatusBadge.svelte';
