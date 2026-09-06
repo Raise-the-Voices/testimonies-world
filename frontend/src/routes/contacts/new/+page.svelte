@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { user, isAdvocate } from '$lib/session';
 	import { createContact, getContact, updateContact, ApiError } from '$lib/api';
@@ -15,7 +14,13 @@
 	let errors = $state<Record<string, string>>({});
 
 	// Edit mode: when ?id=X is present, we PATCH instead of POST.
-	let contactId = $state<number | null>(null);
+	// Reactive so Back/Forward between ?id=5 and ?id=7 re-hydrates the form.
+	let contactId: number | null = $derived.by(() => {
+		const raw = $page.url.searchParams.get('id');
+		if (!raw) return null;
+		const n = Number(raw);
+		return Number.isFinite(n) && n > 0 ? n : null;
+	});
 	const isEdit = $derived(contactId !== null);
 
 	// Form fields. Match the backend Contact model:
@@ -41,34 +46,56 @@
 
 	const MAX_FIELD = 1000;
 
-	onMount(async () => {
-		const idStr = $page.url.searchParams.get('id');
-		if (idStr) {
-			const id = Number(idStr);
-			if (Number.isFinite(id) && id > 0) {
-				contactId = id;
-				try {
-					const c = await getContact(id);
-					name = c.name ?? '';
-					role = c.role ?? 'other';
-					email = c.email ?? '';
-					phone = c.phone ?? '';
-					signal = c.signal ?? '';
-					whatsapp = c.whatsapp ?? '';
-					notes = c.notes ?? '';
-				} catch (e: unknown) {
-					if (e instanceof ApiError && e.status === 404) {
-						loadError = 'That contact no longer exists.';
-					} else if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
-						loadError = "You don't have permission to edit this contact.";
-					} else {
-						loadError =
-							e instanceof Error ? e.message : "Couldn't load this contact.";
-					}
-				}
-			}
+	// Refetch-guard token: Back/Forward between ?id=5 and ?id=7 must not
+	// let a slow response for 5 clobber the form populated for 7.
+	let loadToken = 0;
+
+	async function load() {
+		const token = ++loadToken;
+		loadError = '';
+		if (contactId === null) {
+			// Switching edit → create: clear stale fields.
+			name = '';
+			role = 'other';
+			email = '';
+			phone = '';
+			signal = '';
+			whatsapp = '';
+			notes = '';
+			loading = false;
+			return;
 		}
-		loading = false;
+		loading = true;
+		try {
+			const c = await getContact(contactId);
+			if (token !== loadToken) return;
+			name = c.name ?? '';
+			role = c.role ?? 'other';
+			email = c.email ?? '';
+			phone = c.phone ?? '';
+			signal = c.signal ?? '';
+			whatsapp = c.whatsapp ?? '';
+			notes = c.notes ?? '';
+		} catch (e: unknown) {
+			if (token !== loadToken) return;
+			if (e instanceof ApiError && e.status === 404) {
+				loadError = 'That contact no longer exists.';
+			} else if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+				loadError = "You don't have permission to edit this contact.";
+			} else {
+				loadError =
+					e instanceof Error ? e.message : "Couldn't load this contact.";
+			}
+		} finally {
+			if (token === loadToken) loading = false;
+		}
+	}
+
+	// Re-fetch whenever the route or its ?id= param changes. $effect
+	// dedupes unchanged deps, so first-mount + reactive on subsequent nav.
+	$effect(() => {
+		void contactId;
+		void load();
 	});
 
 	function validate(): boolean {

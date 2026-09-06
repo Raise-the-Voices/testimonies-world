@@ -2,7 +2,6 @@
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { onMount } from 'svelte';
 	import { user, isVolunteer, isAdmin, loadSession } from '$lib/session';
 	import { getPerson, updatePerson, getCategories, ApiError } from '$lib/api';
 	import type { Person } from '$lib/types';
@@ -55,19 +54,38 @@
 
 	let personId = $derived(page.params.id!);
 
-	onMount(async () => {
+	// Refetch-guard token so Back/Forward between /persons/X/edit and
+	// /persons/Y/edit can't let a slow response for X clobber state for Y.
+	let loadToken = 0;
+
+	async function load() {
+		const token = ++loadToken;
+		loading = true;
+		formError = '';
+		errors = {};
 		try {
 			const [person, catData] = await Promise.all([
 				getPerson(personId),
 				getCategories(),
 			]);
+			if (token !== loadToken) return;
 			categories = Array.isArray(catData) ? catData : catData.results ?? [];
 
 			populateFromPerson(person);
 		} catch (e: unknown) {
+			if (token !== loadToken) return;
 			formError = e instanceof Error ? e.message : 'Failed to load case data.';
+		} finally {
+			if (token === loadToken) loading = false;
 		}
-		loading = false;
+	}
+
+	// Re-fetch on every navigation to this route. Svelte's $effect dedupes
+	// when personId is unchanged, so this is effectively a one-shot on first
+	// mount and then re-runs only when the param actually moves.
+	$effect(() => {
+		void personId;
+		void load();
 	});
 
 	function populateFromPerson(person: Person) {
@@ -272,7 +290,9 @@
 			}
 
 			await updatePerson(personId, payload);
-			goto(`${base}/persons/${personId}`);
+			// replaceState: true so Back from the saved case doesn't return
+			// to a stale form with the data we just persisted.
+			await goto(`${base}/persons/${personId}`, { replaceState: true });
 		} catch (e: unknown) {
 			if (e instanceof ApiError) {
 				if (e.isValidation && Object.keys(e.fieldErrors).length > 0) {
@@ -304,7 +324,9 @@
 	}
 
 	function cancel() {
-		goto(`${base}/persons/${personId}`);
+		// await keeps the navigation completion in the same micro-task as
+		// the click, so the click handler can't fire twice on slow links.
+		void goto(`${base}/persons/${personId}`);
 	}
 </script>
 
