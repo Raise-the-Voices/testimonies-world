@@ -1,7 +1,8 @@
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import permissions, viewsets
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import permissions, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -116,6 +117,11 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = NotificationSerializer
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['is_read', 'kind']
+    # Required by drf-spectacular so it can resolve the queryset during
+    # schema generation. We still override get_queryset() below to scope
+    # by recipient=user, but the empty placeholder lets the introspector
+    # walk the serializer fields without needing an auth context.
+    queryset = Notification.objects.none()
 
     def get_queryset(self):
         qs = Notification.objects.filter(recipient=self.request.user).select_related(
@@ -125,17 +131,37 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(is_read=False)
         return qs
 
+    @extend_schema(
+        request=None,
+        responses=NotificationSerializer,
+        description='Mark a single notification as read for the current user.',
+    )
     @action(detail=True, methods=['post'], url_path='read')
     def mark_one_read(self, request, pk=None):
         notif = get_object_or_404(Notification, pk=pk, recipient=request.user)
         notifications.mark_read(notif, request.user)
         return Response(NotificationSerializer(notif).data)
 
+    @extend_schema(
+        request=None,
+        responses=inline_serializer(
+            name='MarkAllReadResponse',
+            fields={'updated': serializers.IntegerField()},
+        ),
+        description='Mark every unread notification as read for the current user.',
+    )
     @action(detail=False, methods=['post'], url_path='read-all')
     def mark_all_read(self, request):
         count = notifications.mark_all_read(request.user)
         return Response({'updated': count})
 
+    @extend_schema(
+        responses=inline_serializer(
+            name='UnreadCountResponse',
+            fields={'count': serializers.IntegerField()},
+        ),
+        description='Count of unread notifications for the current user.',
+    )
     @action(detail=False, methods=['get'], url_path='unread-count')
     def unread_count(self, request):
         return Response({'count': notifications.unread_count(request.user)})
@@ -146,6 +172,10 @@ class UserPreferenceViewSet(viewsets.ModelViewSet):
     client never has to know its preference row id."""
     serializer_class = UserPreferenceSerializer
     permission_classes = [permissions.IsAuthenticated]
+    # drf-spectacular requires either a queryset or get_queryset() override.
+    # We override get_object() to scope by user, but the placeholder queryset
+    # lets the schema introspector walk the serializer without auth.
+    queryset = UserPreference.objects.none()
 
     def get_object(self):
         pref, _ = UserPreference.objects.get_or_create(user=self.request.user)

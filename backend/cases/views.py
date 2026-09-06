@@ -2,7 +2,8 @@ from django.db.models import Count, Max, Q
 from django.db.models.functions import Lower
 from django.http import FileResponse, HttpResponse, HttpResponseForbidden, HttpResponseNotFound
 from django_filters import rest_framework as filters
-from rest_framework import permissions, viewsets
+from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
+from rest_framework import permissions, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
@@ -213,6 +214,13 @@ class PersonViewSet(viewsets.ModelViewSet):
         self._audit(AuditLog.Action.VIEWED, instance, '')
         return super().retrieve(request, *args, **kwargs)
 
+    @extend_schema(
+        responses={200: PersonListSerializer(many=True)},
+        description=(
+            'Persons ordered by urgency — most stale first. Excludes '
+            '`released` and `deceased` status. Limited to 50 rows.'
+        ),
+    )
     @action(detail=False, methods=['get'])
     def watchdog(self, request):
         """Persons ordered by urgency — days since last report, weighted by critical status."""
@@ -230,6 +238,36 @@ class PersonViewSet(viewsets.ModelViewSet):
         serializer = PersonListSerializer(persons, many=True, context={'request': request})
         return Response(serializer.data)
 
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(
+                description='Aggregated counts by status / country / category / medical status.',
+                response=inline_serializer(
+                    name='StatisticsResponse',
+                    fields={
+                        'total': serializers.IntegerField(),
+                        'by_status': serializers.DictField(child=serializers.IntegerField()),
+                        'by_country': serializers.ListField(child=inline_serializer(
+                            name='StatisticsCountryCount',
+                            fields={
+                                'country': serializers.CharField(),
+                                'count': serializers.IntegerField(),
+                            },
+                        )),
+                        'by_category': inline_serializer(
+                            name='CategoryCount',
+                            fields={
+                                'name': serializers.CharField(),
+                                'count': serializers.IntegerField(),
+                            },
+                            many=True,
+                        ),
+                        'by_medical': serializers.DictField(child=serializers.IntegerField()),
+                    },
+                ),
+            ),
+        },
+    )
     @action(detail=False, methods=['get'])
     def statistics(self, request):
         """Aggregate statistics for dashboard."""
@@ -250,6 +288,22 @@ class PersonViewSet(viewsets.ModelViewSet):
             ),
         })
 
+    @extend_schema(
+        responses=inline_serializer(
+            name='CountryCountEntry',
+            fields={
+                'country': serializers.CharField(),
+                'count': serializers.IntegerField(),
+            },
+            many=True,
+        ),
+        description=(
+            'List of countries with case counts. Counts are dynamic — when '
+            'other filters are present, counts reflect the filtered subset. '
+            'The `country` filter itself is ignored (the dropdown always '
+            'shows every country regardless of which is selected).'
+        ),
+    )
     @action(detail=False, methods=['get'])
     def countries(self, request):
         """List of countries with case counts — case-insensitive merge.

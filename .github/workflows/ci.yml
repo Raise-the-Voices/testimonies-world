@@ -76,3 +76,28 @@ jobs:
           DJANGO_SECRET_KEY: ci-placeholder-not-secret
           DATABASE_URL: 'sqlite://:memory:'
           USE_SQLITE: 'True'
+
+      # API-drift gate. Runs in the backend job because it needs
+      # Django + drf-spectacular (installed by `pip install -r
+      # requirements.txt` above). Regenerates the OpenAPI schema
+      # from the live serializers, generates the TypeScript client
+      # from that schema, and fails if the committed copy differs.
+      # Any serializer change without regenerating, or any
+      # frontend-side type divergence, surfaces here.
+      #
+      # Node is bootstrapped here (the frontend job has it but the
+      # backend job doesn't). orval is installed globally rather
+      # than via `npm ci` because the drift gate only needs the CLI.
+      - name: Setup Node for drift gate
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: API drift gate (gen:api:check)
+        run: |
+          npm install -g orval@^7
+          cd frontend && npm run gen:api:check
+        env:
+          DJANGO_SECRET_KEY: ci-placeholder-not-secret
+          USE_SQLITE: 'True'
+          PUBLIC_BASE_PATH: '/testimonies'

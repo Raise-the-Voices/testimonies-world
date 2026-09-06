@@ -78,6 +78,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'django_filters',
     'corsheaders',
+    'drf_spectacular',
+    'drf_spectacular_sidecar',
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
@@ -131,15 +133,16 @@ DATABASES = {
     }
 }
 
+# SQLite swap — used by:
+#   - the test runner (always, unless USE_POSTGRES_FOR_TESTS=1)
+#   - CI commands that need Django's app registry but no real DB
+#     connection (e.g. `manage.py spectacular` for OpenAPI generation).
 # The shared dev Postgres user lacks CREATEDB, and the schema is portable
-# (no PG-specific features), so the test runner swaps to SQLite. Detect
-# `manage.py test` via sys.argv; opt out with USE_POSTGRES_FOR_TESTS=1
-# (e.g. in CI with a superuser). NAME is a string here so Django's PG
-# connection code never tries to parse it as a SQL identifier.
+# (no PG-specific features), so the swap is safe. NAME is a string here so
+# Django's PG connection code never tries to parse it as a SQL identifier.
 import sys as _sys
-if (
-    'test' in _sys.argv
-    and not config('USE_POSTGRES_FOR_TESTS', default=False, cast=bool)
+if not config('USE_POSTGRES_FOR_TESTS', default=False, cast=bool) and (
+    'test' in _sys.argv or config('USE_SQLITE', default=False, cast=bool)
 ):
     DATABASES['default'] = {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -245,6 +248,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
@@ -269,6 +273,40 @@ REST_FRAMEWORK = {
         'anon': '60/minute',
         'user': '600/minute',
     },
+}
+
+# --- OpenAPI schema (drf-spectacular) -----------------------------------
+# The frontend's `gen:api` script (see frontend/package.json) calls
+# `manage.py spectacular --file openapi.yml` and feeds the result to
+# `orval` to generate TypeScript types + Zod schemas. CI runs
+# `gen:api:check` on every PR; if the freshly-generated TS differs
+# from the committed copy, the build fails — that's the drift gate.
+#
+# COMPONENT_SPLIT_REQUEST is critical: DRF PATCH serializers often have
+# different fields than GET serializers (write_only for input, read_only
+# for output). Without this split, orval would generate one merged type
+# and PATCH requests would either fail validation (extra fields) or
+# silently drop fields (missing required).
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Testimonies.world API',
+    'DESCRIPTION': (
+        'Casework platform for documenting human rights cases. '
+        'Sensitive endpoints (contacts, sensitive media) require authentication.'
+    ),
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'GENERIC_ADDITIONAL_PROPERTIES': False,
+    'TAGS': [
+        {'name': 'persons', 'description': 'Person records (cases) — read public, write auth'},
+        {'name': 'media', 'description': 'Media files (photos, videos, documents, links)'},
+        {'name': 'reports', 'description': 'Chronological reports on a person'},
+        {'name': 'relationships', 'description': 'Family relationships between persons'},
+        {'name': 'contacts', 'description': 'Always-private contact records (advocate-only)'},
+        {'name': 'casework', 'description': 'Casework records (advocacy actions)'},
+        {'name': 'categories', 'description': 'Case categories'},
+        {'name': 'session', 'description': 'Current session / authentication'},
+    ],
 }
 
 # CORS — allow SvelteKit dev server

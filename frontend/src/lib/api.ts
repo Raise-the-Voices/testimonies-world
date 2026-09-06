@@ -190,7 +190,17 @@ export async function getPerson(
 	id: number | string,
 	opts: { signal?: AbortSignal } = {},
 ): Promise<Person> {
-	return request<Person>(`/persons/${id}/`, { signal: opts.signal });
+	// Parsed through Zod schema: dates become `Date` (not ISO strings),
+	// nullables are validated, drift in the wire shape is caught by
+	// `WireFormatError` at this boundary. See `src/lib/schemas/overlays.ts`.
+	const raw = await request<unknown>(`/persons/${id}/`, { signal: opts.signal });
+	const { PersonDetailSchema } = await import('./schemas/overlays');
+	const parsed = PersonDetailSchema.safeParse(raw);
+	if (!parsed.success) {
+		const { WireFormatError } = await import('./api/parser');
+		throw new WireFormatError(`/persons/${id}/`, parsed.error);
+	}
+	return parsed.data as unknown as Person;
 }
 
 export async function getWatchdog(): Promise<Person[]> {

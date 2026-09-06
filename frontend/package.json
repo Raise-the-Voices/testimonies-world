@@ -9,18 +9,23 @@
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"gen:api": "node scripts/run-spectacular.js && orval --config ./orval.config.ts",
+		"gen:api:check": "node scripts/run-spectacular.js && orval --config ./orval.config.ts && cd .. && git diff --exit-code -- frontend/src/lib/api/generated/ openapi.yml"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^7.0.0",
 		"@sveltejs/kit": "^2.50.2",
 		"@sveltejs/vite-plugin-svelte": "^6.2.4",
+		"orval": "^7.21.0",
 		"svelte": "^5.51.0",
 		"svelte-check": "^4.4.2",
 		"typescript": "^5.9.3",
 		"vite": "^7.3.1"
 	},
 	"dependencies": {
-		"@sveltejs/adapter-node": "^5.5.4"
+		"@sveltejs/adapter-node": "^5.5.4",
+		"decimal.js": "^10.6.0",
+		"zod": "^4.5.4"
 	}
 }
