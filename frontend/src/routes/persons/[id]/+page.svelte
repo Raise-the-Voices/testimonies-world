@@ -2,6 +2,7 @@
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { createLoader } from '$lib/dataLoader.svelte';
 	import {
 		getPerson,
 		getMedia,
@@ -174,12 +175,21 @@
 	let error: string = $state('');
 	let expandedId: number | null = $state(null);
 
-	// Refetch-guard token: increments on every navigation-driven refetch.
-	// Async helpers capture it locally and bail out if loadToken has moved on,
-	// so a slow request for person 123 doesn't clobber state after they've
-	// already navigated to person 456 (Back/Forward race).
-	let loadToken = 0;
 	let currentId = $derived(page.params.id);
+
+	// Three independent loaders. Each owns its own AbortController + token,
+	// so navigating 123 → 456 aborts the in-flight 123 fetch in each loader
+	// and discards any buffered response that slips past the abort. Each
+	// loader auto-cancels on component unmount via its internal onDestroy.
+	const personLoader = createLoader((signal, id: string) =>
+		getPerson(id, { signal }),
+	);
+	const mediaLoader = createLoader((signal, personId: number) =>
+		getMedia({ person: String(personId) }, { signal }),
+	);
+	const relationshipsLoader = createLoader((signal, personId: number) =>
+		getRelationships({ person: String(personId) }, { signal }),
+	);
 
 	const medicalLabels: Record<string, string> = {
 		unknown: 'Unknown',
@@ -189,8 +199,7 @@
 		deceased: 'Deceased',
 	};
 
-	async function loadPerson() {
-		const token = ++loadToken;
+	async function load() {
 		// Reset per-page UI that doesn't survive a person switch. Without
 		// these resets, an expanded report card or an open delete-modal from
 		// the previous person would carry over to the new one.
@@ -206,34 +215,50 @@
 		loading = true;
 		error = '';
 		try {
-			const p = await getPerson(currentId!);
-			if (token !== loadToken) return;
+			const p = await personLoader.load(currentId!);
+			if (p === undefined) return; // cancelled mid-flight
 			person = p;
-			// Reload media + family links with the freshly-loaded person.
-			await Promise.all([loadMedia(token), loadRelationships(token)]);
+
+			loadingMedia = true;
+			mediaError = '';
+			loadingRelationships = true;
+			relationshipError = '';
+
+			// Media + relationships fire in parallel; each loader handles
+			// its own cancellation independently if the user navigates on.
+			const [m, r] = await Promise.all([
+				mediaLoader.load(p.id),
+				relationshipsLoader.load(p.id),
+			]);
+			if (m !== undefined) {
+				mediaList = Array.isArray(m) ? m : m.results ?? [];
+				loadingMedia = false;
+			}
+			if (r !== undefined) {
+				relationships = Array.isArray(r) ? r : r.results ?? [];
+				loadingRelationships = false;
+			}
 		} catch (e: unknown) {
-			if (token !== loadToken) return;
 			error = e instanceof Error ? e.message : 'Failed to load case.';
 		} finally {
-			if (token === loadToken) loading = false;
+			loading = false;
 		}
 	}
 
-	async function loadRelationships(tok: number = loadToken) {
+	async function retryMedia() {
 		if (!person) return;
-		loadingRelationships = true;
-		relationshipError = '';
+		loadingMedia = true;
+		mediaError = '';
 		try {
-			const data = await getRelationships({ person: String(person.id) });
-			if (tok !== loadToken) return;
-			relationships = Array.isArray(data) ? data : data.results ?? [];
+			const m = await mediaLoader.load(person.id);
+			if (m === undefined) return;
+			mediaList = Array.isArray(m) ? m : m.results ?? [];
 		} catch (e: unknown) {
-			if (tok !== loadToken) return;
-			relationshipError =
-				e instanceof Error ? e.message : 'Failed to load family links.';
-			relationships = [];
+			mediaError =
+				e instanceof Error ? e.message : 'Failed to load media for this case.';
+			mediaList = [];
 		} finally {
-			if (tok === loadToken) loadingRelationships = false;
+			loadingMedia = false;
 		}
 	}
 
@@ -257,24 +282,6 @@
 			pickerLoaded = true;
 		} catch (e: unknown) {
 			relationshipPickerList = [];
-		}
-	}
-
-	async function loadMedia(tok: number = loadToken) {
-		if (!person) return;
-		loadingMedia = true;
-		mediaError = '';
-		try {
-			const data = await getMedia({ person: String(person.id) });
-			if (tok !== loadToken) return;
-			mediaList = Array.isArray(data) ? data : data.results ?? [];
-		} catch (e: unknown) {
-			if (tok !== loadToken) return;
-			mediaError =
-				e instanceof Error ? e.message : 'Failed to load media for this case.';
-			mediaList = [];
-		} finally {
-			if (tok === loadToken) loadingMedia = false;
 		}
 	}
 
@@ -511,11 +518,12 @@
 	}
 
 	// Refetch whenever the route param changes (Back/Forward between
-	// different person IDs). The loadToken guard inside loadPerson / loadMedia /
-	// loadRelationships discards any in-flight response from a prior param.
+	// different person IDs). Each createLoader handles its own
+	// cancellation; calling load() aborts the prior in-flight fetch for
+	// each loader before issuing the new one.
 	$effect(() => {
 		void currentId;
-		void loadPerson();
+		void load();
 	});
 </script>
 
@@ -576,7 +584,7 @@
 {:else if error}
 	<div class="error-state" role="alert">
 		<p class="error-state-message">Could not load this case: {error}</p>
-		<button type="button" class="btn btn-secondary" onclick={loadPerson}>Retry</button>
+		<button type="button" class="btn btn-secondary" onclick={load}>Retry</button>
 	</div>
 {:else if person}
 	<div class="view-container">
@@ -783,7 +791,7 @@
 			{:else if mediaError}
 				<div class="media-error" role="alert">
 					<p>{mediaError}</p>
-					<button type="button" class="btn btn-secondary btn-sm" onclick={() => loadMedia()}>Retry</button>
+					<button type="button" class="btn btn-secondary btn-sm" onclick={retryMedia}>Retry</button>
 				</div>
 			{:else if mediaList.length === 0}
 				<div class="media-empty">

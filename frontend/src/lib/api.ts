@@ -186,8 +186,11 @@ export async function getPersons(
 	return request<Paginated<Person>>(`/persons/${qs ? '?' + qs : ''}`);
 }
 
-export async function getPerson(id: number | string): Promise<Person> {
-	return request<Person>(`/persons/${id}/`);
+export async function getPerson(
+	id: number | string,
+	opts: { signal?: AbortSignal } = {},
+): Promise<Person> {
+	return request<Person>(`/persons/${id}/`, { signal: opts.signal });
 }
 
 export async function getWatchdog(): Promise<Person[]> {
@@ -243,10 +246,12 @@ export async function deletePerson(id: number | string): Promise<void> {
 
 export async function getRelationships(
 	params: { person?: string } = {},
+	opts: { signal?: AbortSignal } = {},
 ): Promise<Paginated<FamilyRelationshipRow> | FamilyRelationshipRow[]> {
 	const qs = new URLSearchParams(params).toString();
 	return request<Paginated<FamilyRelationshipRow> | FamilyRelationshipRow[]>(
 		`/relationships/${qs ? '?' + qs : ''}`,
+		{ signal: opts.signal },
 	);
 }
 
@@ -388,9 +393,10 @@ export async function deleteContact(id: number | string): Promise<void> {
 
 export async function getMedia(
 	params: Record<string, string> = {},
+	opts: { signal?: AbortSignal } = {},
 ): Promise<Paginated<Media> | Media[]> {
 	const qs = new URLSearchParams(params).toString();
-	return request<Paginated<Media> | Media[]>(`/media/${qs ? '?' + qs : ''}`);
+	return request<Paginated<Media> | Media[]>(`/media/${qs ? '?' + qs : ''}`, { signal: opts.signal });
 }
 
 export async function getMediaItem(id: number | string): Promise<Media> {
