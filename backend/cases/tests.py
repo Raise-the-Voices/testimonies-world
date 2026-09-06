@@ -1169,6 +1169,15 @@ class ProtectedMediaViewTests(TestCase):
         res = self.client.get('/media/uploads/anything.jpg')
         self.assertEqual(res.status_code, 401)
 
+    def test_bare_media_path_returns_401_not_404(self):
+        # `/media/` (no filename) must hit the auth gate, not Django's
+        # 404 handler. The deploy smoke test (scripts/deploy.sh) uses
+        # this same assertion to prove nginx is routing /media/ to
+        # Django — a 404 here would mean Django's URL pattern doesn't
+        # match and the smoke test fails, blocking deploys.
+        res = self.client.get('/media/')
+        self.assertEqual(res.status_code, 401)
+
     def test_default_deny_for_unknown_path(self):
         self.client.force_login(self.volunteer)
         res = self.client.get('/media/random/file.jpg')
