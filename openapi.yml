@@ -3201,8 +3201,8 @@ components:
           maxLength: 1000
         quality_tier:
           nullable: true
-          minimum: -2147483648
-          maximum: 2147483647
+          minimum: -9223372036854775808
+          maximum: 9223372036854775807
           oneOf:
           - $ref: '#/components/schemas/QualityTierEnum'
           - $ref: '#/components/schemas/NullEnum'
@@ -3354,8 +3354,8 @@ components:
           maxLength: 1000
         quality_tier:
           nullable: true
-          minimum: -2147483648
-          maximum: 2147483647
+          minimum: -9223372036854775808
+          maximum: 9223372036854775807
           oneOf:
           - $ref: '#/components/schemas/QualityTierEnum'
           - $ref: '#/components/schemas/NullEnum'
@@ -3461,8 +3461,8 @@ components:
           maxLength: 1000
         quality_tier:
           nullable: true
-          minimum: -2147483648
-          maximum: 2147483647
+          minimum: -9223372036854775808
+          maximum: 9223372036854775807
           oneOf:
           - $ref: '#/components/schemas/QualityTierEnum'
           - $ref: '#/components/schemas/NullEnum'
@@ -3560,8 +3560,8 @@ components:
           maxLength: 1000
         quality_tier:
           nullable: true
-          minimum: -2147483648
-          maximum: 2147483647
+          minimum: -9223372036854775808
+          maximum: 9223372036854775807
           oneOf:
           - $ref: '#/components/schemas/QualityTierEnum'
           - $ref: '#/components/schemas/NullEnum'
@@ -3654,8 +3654,8 @@ components:
           maxLength: 1000
         quality_tier:
           nullable: true
-          minimum: -2147483648
-          maximum: 2147483647
+          minimum: -9223372036854775808
+          maximum: 9223372036854775807
           oneOf:
           - $ref: '#/components/schemas/QualityTierEnum'
           - $ref: '#/components/schemas/NullEnum'
