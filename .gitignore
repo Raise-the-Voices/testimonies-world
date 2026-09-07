@@ -5,6 +5,7 @@ backend/**/__pycache__/
 backend/**/*.pyc
 backend/.env
 backend/db.sqlite3
+backend/test_db.sqlite3
 backend/staticfiles/
 backend/media/
 backend/sensitive_media/
