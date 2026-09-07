@@ -20,10 +20,13 @@
 	import { user, isVolunteer } from '$lib/session';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import StatusBadge from '$lib/StatusBadge.svelte';
+	import type { PageData } from './$types';
 	import type { Paginated, Report } from '$lib/types';
 
 	const PAGE_SIZE = 10;
 	const SEARCH_DEBOUNCE_MS = 300;
+
+	let { data }: { data: PageData } = $props();
 
 	let currentUser = $derived($user);
 
@@ -34,11 +37,15 @@
 	let dateTo = $state('');   // YYYY-MM-DD
 	let currentPage = $state(1);
 
-	// Data state.
-	let reports = $state<Report[]>([]);
-	let totalCount = $state(0);
-	let loading = $state(true);
-	let error: string | null = $state(null);
+	// Data state — seeded from the +page.ts universal load. SSR has
+	// populated this before first paint, so `loading` defaults to
+	// false (no skeleton flash). If the SSR load returned an error
+	// (e.g. anonymous user hitting the endpoint before the layout's
+	// session is hydrated), `onMount` retries once via loadReports().
+	let reports = $state<Report[]>(data.reports ?? []);
+	let totalCount = $state(data.reportCount ?? 0);
+	let loading = $state(false);
+	let error: string | null = $state<string | null>(data.error ?? null);
 
 	// Source type labels — mirror backend `Report.SourceType.choices`.
 	// Kept here (not in api.ts) so the source-of-truth for display stays
@@ -148,7 +155,12 @@
 		return iso;
 	}
 
-	onMount(loadReports);
+	onMount(() => {
+		// The SSR load has already populated `reports` / `totalCount`
+		// (or set `error`). Only retry if the SSR fetch failed —
+		// otherwise this would duplicate the on-paint request.
+		if (data.error) void loadReports();
+	});
 </script>
 
 <svelte:head>
