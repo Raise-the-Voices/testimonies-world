@@ -8,13 +8,21 @@
 	import Banner from '$lib/Banner.svelte';
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
+	import type { PageData } from './$types';
 	import type { Contact, ContactRole } from '$lib/types';
 
+	let { data }: { data: PageData } = $props();
+
 	let currentUser = $derived($user);
-	let contacts: Contact[] = $state([]);
-	let loading = $state(true);
-	let error: string | null = $state(null);
-	let filterRole = $state('');
+	// Seeded from the +page.ts universal load. SSR has populated this
+	// before first paint, so `loading` defaults to false (no skeleton
+	// flash). If the SSR load returned an error (e.g. anonymous user
+	// hitting the endpoint before the layout's session is hydrated),
+	// `onMount` retries once via loadContacts().
+	let contacts = $state<Contact[]>(data.contacts ?? []);
+	let loading = $state(false);
+	let error: string | null = $state<string | null>(data.error ?? null);
+	let filterRole = $state<'' | ContactRole>('');
 
 	// Human-readable labels per role — kept here (not in app.css) so the
 	// source of truth for "what we call each role" stays in one place.
@@ -127,7 +135,10 @@
 
 	onMount(() => {
 		void consumeUrlBanner();
-		loadContacts();
+		// Recovery: if SSR returned an error (e.g. anonymous SSR
+		// returned 401 before the layout's session hydrated), retry
+		// once now that the session cookie is in scope.
+		if (data.error) void loadContacts();
 	});
 
 	// Derived body copy for the ConfirmModal across the 4 stages.
