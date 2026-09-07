@@ -9,11 +9,16 @@
 		type Notification,
 	} from '$lib/notification';
 	import Skeleton from '$lib/Skeleton.svelte';
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
 
 	let filter = $state<'all' | 'unread'>('all');
-	let loading = $state(true);
-	let error = $state('');
-	let items = $state<Notification[]>([]);
+	// SSR has populated `items` (or set `error`). `loading` starts
+	// false so there is no skeleton flash on the first paint.
+	let loading = $state(false);
+	let error = $state<string>(data.error ?? '');
+	let items = $state<Notification[]>(data.notifications ?? []);
 
 	async function load() {
 		loading = true;
@@ -29,10 +34,30 @@
 		}
 	}
 
-	onMount(load);
+	onMount(() => {
+		// Recovery: if SSR returned an error (anonymous SSR hitting
+		// the endpoint before the layout's session hydrated, since the
+		// /api/notifications/ viewset requires auth), retry once now
+		// that the session cookie is in scope. If SSR succeeded,
+		// skip — the data is already in `items`.
+		if (data.error) void load();
+	});
+
+	// Re-fetch on filter change. The pre-migration code did this in
+	// both `onMount(load)` AND `$effect(() => { filter; load(); })`,
+	// which fired `load()` twice on first paint. With SSR having
+	// populated `items`, an additional unconditional first fetch is
+	// redundant. The `initialized` guard suppresses the very first
+	// $effect run (which always fires once after mount in Svelte 5)
+	// so subsequent effect runs correspond to actual filter changes.
+	let initialized = false;
 	$effect(() => {
-		filter;
-		load();
+		filter; // track dependency
+		if (!initialized) {
+			initialized = true;
+			return;
+		}
+		void load();
 	});
 
 	async function onItem(n: Notification) {
