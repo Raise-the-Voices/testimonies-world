@@ -8,11 +8,20 @@
 	import Banner from '$lib/Banner.svelte';
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
+	import type { PageData } from './$types';
+	import type { CaseworkRecord } from '$lib/types';
+
+	let { data }: { data: PageData } = $props();
 
 	let currentUser = $derived($user);
-	let records: any[] = $state([]);
-	let loading = $state(true);
-	let loadError = $state('');
+	// Seeded from the +page.ts universal load. SSR has populated this
+	// before first paint, so `loading` defaults to false (no skeleton
+	// flash). If the SSR load returned an error (e.g. anonymous user
+	// hitting the endpoint before the layout's session is hydrated),
+	// `onMount` retries once via loadRecords().
+	let records = $state<CaseworkRecord[]>(data.records ?? []);
+	let loading = $state(false);
+	let loadError = $state<string>(data.error ?? '');
 	let filterStatus = $state('');
 	let filterAction = $state('');
 
@@ -86,7 +95,10 @@
 
 	onMount(() => {
 		void consumeUrlBanner();
-		loadRecords();
+		// Recovery: if SSR returned an error (e.g. anonymous SSR
+		// returned 401 before the layout's session hydrated), retry
+		// once now that the session cookie is in scope.
+		if (data.error) void loadRecords();
 	});
 
 	async function loadRecords() {
