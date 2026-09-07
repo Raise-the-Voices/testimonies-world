@@ -136,7 +136,17 @@ DATABASES = {
 # SQLite swap — used by:
 #   - the test runner (always, unless USE_POSTGRES_FOR_TESTS=1)
 #   - CI commands that need Django's app registry but no real DB
-#     connection (e.g. `manage.py spectacular` for OpenAPI generation).
+#     connection (e.g. `manage.py spectacular` for OpenAPI generation,
+#     and `manage.py check`, `manage.py makemigrations` on runners
+#     without network access to the prod Postgres host).
+#
+# Why SQLite and not Postgres in CI:
+#   - No DB credentials in the runner secret store
+#   - No network hop to 10.0.0.100 (PG host) from a fresh ubuntu-latest
+#   - The OpenAPI bounds it emits for BigIntegerField (±2^31) are the
+#     CANONICAL bounds committed to openapi.yml — see SPECTACULAR_SETTINGS
+#     comment and CI_CD_TROUBLESHOOTING.md for why this matters.
+#
 # The shared dev Postgres user lacks CREATEDB, and the schema is portable
 # (no PG-specific features), so the swap is safe. NAME is a string here so
 # Django's PG connection code never tries to parse it as a SQL identifier.
@@ -287,6 +297,37 @@ REST_FRAMEWORK = {
 # for output). Without this split, orval would generate one merged type
 # and PATCH requests would either fail validation (extra fields) or
 # silently drop fields (missing required).
+#
+# Determinism contract.
+#
+#   The committed openapi.yml is the canonical artifact — every setting
+#   here was chosen so spectacular regenerates that file bit-for-bit.
+#   **Do not add new keys without regenerating and committing the file.**
+#   Adding seemingly-inert keys (e.g. SORT_OPERATIONS=False when the
+#   default is True) changes the iteration order spectacular uses,
+#   which cascades into a 2,500-line diff that breaks the drift gate.
+#
+#   Verified keys you can change safely without disturbing the schema:
+#     - TITLE, DESCRIPTION, VERSION      metadata only
+#     - SERVE_INCLUDE_SCHEMA            schema-serving flag
+#     - GENERIC_ADDITIONAL_PROPERTIES   schema-validation policy
+#     - TAGS                            tag-list for the docs UI
+#     - COMPONENT_SPLIT_REQUEST         serializer splitting (already on)
+#
+#   Keys you must NOT change without regenerating:
+#     - SORT_OPERATIONS                 default True → alphabetical; setting
+#                                       False reorders ops and explodes
+#                                       the diff
+#     - SCHEMA_PATH_PREFIX              changes path-stripping in tags/IDs
+#     - OPERATION_ID_* / ENUM_NAME_OVERRIDES  any operation/enum naming
+#
+#   The drift gate (CI .github/workflows/ci.yml, job `api-drift`) is the
+#   final authority. If you change something here and the gate fails,
+#   look at the diff in the CI logs — the affected section tells you
+#   exactly which key to revert.
+#
+#   See CI_CD_TROUBLESHOOTING.md for the diagnostic flow when this gate
+#   fires for a real serializer change.
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Testimonies.world API',
     'DESCRIPTION': (
