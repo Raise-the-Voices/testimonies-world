@@ -187,6 +187,71 @@ export interface Statistics {
 }
 
 /* ============================================================================
+   Dashboard payload (GET /api/dashboard/)
+   See backend/cases/dashboard.py — the response shape is mirrored here.
+   The `scope` field lets the frontend branch on role without re-running
+   the helpers from $lib/session.ts.
+   ========================================================================== */
+
+export type DashboardScope = 'staff' | 'advocate' | 'volunteer';
+
+export interface DashboardSummary {
+	open_cases: number;
+	my_open_casework: number;
+	unread_notifications: number;
+	stale_cases: number;
+}
+
+export interface DashboardRecentPerson {
+	id: number;
+	name: string;
+	country: string;
+	current_status: string;
+	updated_at: string;
+	profile_image_url: string | null;
+}
+
+export interface DashboardRecentReport {
+	id: number;
+	person: number;
+	person_name: string;
+	date_start: string;
+	source_type: string;
+	is_private: boolean;
+}
+
+export interface DashboardRecentCasework {
+	id: number;
+	action_type: CaseworkActionType;
+	status: CaseworkStatus;
+	date: string;
+	description: string;
+	performed_by_name: string | null;
+	person_ids: number[];
+}
+
+export interface DashboardActivityEntry {
+	id: number;
+	timestamp: string;
+	user: string | null;
+	action: string;
+	target_type: string;
+	target_id: number;
+	details: string;
+	ip_address: string | null;
+}
+
+export interface DashboardData {
+	scope: DashboardScope;
+	summary: DashboardSummary;
+	recent_persons: DashboardRecentPerson[];
+	recent_reports: DashboardRecentReport[];
+	recent_casework: DashboardRecentCasework[];
+	activity: DashboardActivityEntry[];
+	by_status: Partial<Record<StatusValue, number>>;
+}
+
+/* ============================================================================
    Casework records
    ========================================================================== */
 

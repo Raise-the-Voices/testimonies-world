@@ -21,7 +21,12 @@
 		| 'list'
 		| 'chevron-down'
 		| 'x'
-		| 'envelope';
+		| 'envelope'
+		| 'dashboard'
+		| 'plus'
+		| 'people'
+		| 'eye'
+		| 'book';
 
 	// All icons share the same 24×24 viewBox + the same stroke style so
 	// they read as a coherent family regardless of where they're used.
@@ -47,6 +52,16 @@
 		// fold line dipping into the body. Stroke-only so it inherits
 		// color and stacks cleanly on the dark header.
 		envelope: `<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5 12 13l8.5-6.5"/>`,
+		// 4-square dashboard glyph: read as "overview tiles."
+		dashboard: `<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>`,
+		// Plus: used on QuickActions "Submit a case" tile.
+		plus: `<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>`,
+		// People: two overlapping circles for the contacts/casework tiles.
+		people: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
+		// Eye: used on the "Audit log" tile for Admin.
+		eye: `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`,
+		// Open book: used on "Reports" tile.
+		book: `<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>`,
 	};
 </script>
 
