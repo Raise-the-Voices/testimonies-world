@@ -18,6 +18,7 @@ from cases.views import (
     ReportViewSet,
     serve_protected_media,
 )
+from cases.dashboard import DashboardViewSet
 from casework.views import (
     CaseworkRecordViewSet,
     NotificationViewSet,
@@ -35,6 +36,9 @@ router.register(r'casework', CaseworkRecordViewSet, basename='casework')
 router.register(r'notifications', NotificationViewSet, basename='notification')
 router.register(r'preferences', UserPreferenceViewSet, basename='preference')
 router.register(r'contacts', ContactViewSet, basename='contact')
+# /api/dashboard/ — role-scoped aggregator for the SvelteKit
+# /dashboard page. See cases/dashboard.py for the role scoping rules.
+router.register(r'dashboard', DashboardViewSet, basename='dashboard')
 
 
 def session_info(request):
