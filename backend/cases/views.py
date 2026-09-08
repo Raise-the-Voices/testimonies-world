@@ -1,4 +1,4 @@
-from django.db.models import Count, Max, Q
+from django.db.models import Case, Count, IntegerField, Max, Q, When
 from django.db.models.functions import Lower
 from django.http import FileResponse, HttpResponse, HttpResponseForbidden, HttpResponseNotFound
 from django_filters import rest_framework as filters
@@ -335,6 +335,97 @@ class PersonViewSet(viewsets.ModelViewSet):
             {'country': name, 'count': count}
             for name, count in rows
         ])
+
+    @extend_schema(
+        responses=inline_serializer(
+            name='RelatedPersonsResponse',
+            fields={
+                # Reuse PersonListSerializer shape. Inline definition
+                # would duplicate PersonListSerializer's fields — the
+                # serializer referenced here is the same class the
+                # /watchdog and /statistics actions return, so the
+                # generated TS client types line up across endpoints.
+                'results': PersonListSerializer(many=True),
+            },
+        ),
+        description=(
+            'Top related persons for the given person ID. Heuristic: '
+            'published persons who share the same country OR at least '
+            'one category with the target, ranked by shared-category '
+            'count (descending), then same-country (descending), then '
+            'most-recently-updated. The target person is excluded. '
+            'Results are capped at 6.'
+        ),
+    )
+    @action(detail=True, methods=['get'])
+    def related(self, request, pk=None):
+        """Top-N persons related to this one.
+
+        Why "country OR shared category" rather than AND:
+          Same-country alone is a meaningful but weak signal — two
+          citizens of a country often have nothing in common. Same-
+          category alone is a meaningful but weak signal — "journalist"
+          is shared by journalists everywhere. Combining with OR widens
+          the candidate set without forcing an artificial intersection,
+          and ranking by both scores gives the strongest relationships
+          the top slots. (AND would over-filter and return empty sets
+          for niche categories in countries with few published persons.)
+
+        Limits:
+          - Top 6 (UI sweet spot for a sidebar — more would push the
+            layout past one row on desktop).
+          - Same N for any role; this endpoint isn't role-gated because
+            the heuristic is the same regardless of who's asking
+            (authenticated vs not affects `is_published` filter only,
+            which PersonViewSet.get_queryset already handles).
+        """
+        target = self.get_object()
+
+        # Pull the M2M values once so the subquery in the annotation
+        # doesn't have to re-evaluate the categories list per row.
+        # .all() triggers the M2M fetch; values_list('pk', flat=True)
+        # gives a plain list usable in a subquery filter.
+        target_category_ids = list(target.categories.values_list('pk', flat=True))
+
+        qs = self.get_queryset().exclude(pk=target.pk)
+
+        # Pre-filter: same country OR shared category. Without this,
+        # the annotation could produce zeros for totally unrelated
+        # persons — and "no related cases" is what we want for
+        # unrelated matches anyway.
+        if target.country:
+            qs = qs.filter(Q(country=target.country) | Q(categories__in=target_category_ids))
+        else:
+            qs = qs.filter(categories__in=target_category_ids)
+
+        # Annotate with the two scoring columns. The conditional
+        # expression lets same_country sort work even when the target
+        # has no country set (returns 0 for every row, no break).
+        qs = qs.annotate(
+            same_country=Case(
+                When(country=target.country, then=1),
+                default=0,
+                output_field=IntegerField(),
+            ),
+            shared_categories=Count(
+                'categories',
+                filter=Q(categories__in=target_category_ids),
+                distinct=True,
+            ),
+        ).distinct()
+
+        # Rank: most-shared-categories first, then same-country, then
+        # recency. The .distinct() above collapses the M2M JOIN
+        # duplicates the annotation would otherwise produce.
+        qs = qs.order_by('-shared_categories', '-same_country', '-updated_at')[:6]
+
+        # prefetch_related so PersonListSerializer.categories doesn't
+        # trigger N+1 over the result set. Without it, 6 rows = 6
+        # follow-up queries; with it, 1 batched query.
+        qs = qs.prefetch_related('categories')
+
+        serializer = PersonListSerializer(qs, many=True, context={'request': request})
+        return Response(serializer.data)
 
 
 class ReportFilter(filters.FilterSet):

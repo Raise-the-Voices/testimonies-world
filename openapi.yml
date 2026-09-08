@@ -1374,6 +1374,33 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/persons/{id}/related/:
+    get:
+      operationId: persons_related_retrieve
+      description: 'Top related persons for the given person ID. Heuristic: published
+        persons who share the same country OR at least one category with the target,
+        ranked by shared-category count (descending), then same-country (descending),
+        then most-recently-updated. The target person is excluded. Results are capped
+        at 6.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this person.
+        required: true
+      tags:
+      - persons
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelatedPersonsResponse'
+          description: ''
   /api/persons/countries/:
     get:
       operationId: persons_countries_list
@@ -4096,6 +4123,15 @@ components:
         * `1` - Tier 1 — Strong evidence
         * `2` - Tier 2 — Average evidence
         * `3` - Tier 3 — Weak evidence
+    RelatedPersonsResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PersonList'
+      required:
+      - results
     RelationshipTypeEnum:
       enum:
       - parent
