@@ -7,6 +7,56 @@ PROJECT_ROOT="$(pwd)"   # Used by the nohup fallbacks below to return here
 
 SITE="https://cases.raisethevoices.org"
 
+# --- Ensure Node >= 22.18.0 is available before `npm ci` ---
+# orval@7.21.0 is a devDependency, but `npm ci --omit=dev` on npm 10.x
+# still validates engine metadata for ALL lockfile entries during the
+# resolution phase, before --omit is applied. With engine-strict=true
+# in frontend/.npmrc, this means a target VM with Node 20 aborts the
+# deploy even though orval is never executed here (`npm run build` is
+# just `vite build`). The CI fix in commit 4d27f0d bumped the runner to
+# Node 22; this block brings the deploy target into the same state.
+#
+# Idempotent: if node is already >=22.18.0, do nothing. Otherwise
+# install Node 22 LTS via NodeSource (apt-based, requires sudo).
+# NodeSource is the only channel that ships Node 22 on Ubuntu 24.04 —
+# the universe `nodejs` package is still on Node 20 LTS.
+if command -v node >/dev/null 2>&1; then
+    current_node=$(node -v 2>/dev/null | sed 's/^v//' || echo "0")
+else
+    current_node="0"
+fi
+required_major=22
+required_minor=18
+node_major=$(printf '%s' "$current_node" | cut -d. -f1)
+node_minor=$(printf '%s' "$current_node" | cut -d. -f2)
+if [ "${node_major:-0}" -lt "$required_major" ] \
+   || { [ "${node_major:-0}" -eq "$required_major" ] && [ "${node_minor:-0}" -lt "$required_minor" ]; }; then
+    echo "Node ${current_node:-missing} is below ${required_major}.${required_minor}; installing Node ${required_major} LTS via NodeSource."
+    # Pin the distro so the bootstrap script picks the right repo even
+    # if $lsb_release is unavailable (e.g. inside containers). The
+    # setup_22.x script is idempotent — re-running on an already-pinned
+    # host is a no-op aside from a `Hit:` apt line.
+    sudo -E bash -c '
+        if ! command -v node >/dev/null 2>&1 || [ "$(node -v | sed "s/^v//" | cut -d. -f1)" -lt 22 ]; then
+            curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+            apt-get install -y nodejs
+        fi
+    '
+    # Refresh PATH so the just-installed nodejs is picked up by the
+    # `npm ci` later in this script. /usr/bin is already on PATH, but
+    # NodeSource also installs into /etc/profile.d and we want the new
+    # /usr/bin/node to win regardless of how the ssh-action injected
+    # the original PATH.
+    hash -r
+    if ! command -v node >/dev/null 2>&1 || [ "$(node -v | sed 's/^v//' | cut -d. -f1)" -lt 22 ]; then
+        echo "DEPLOY FAILED: NodeSource bootstrap did not yield Node >=22 on PATH ($PATH)" >&2
+        exit 1
+    fi
+    echo "Node bootstrap complete: $(node -v), npm $(npm -v)"
+else
+    echo "Node $(node -v) satisfies >=${required_major}.${required_minor}; no upgrade needed."
+fi
+
 # Tag before deploy for rollback
 git tag deploy-$(date +%Y%m%d-%H%M%S)
 
