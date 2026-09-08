@@ -1,3 +1,10 @@
+export const ActionEnum = {
+  viewed: 'viewed',
+  downloaded: 'downloaded',
+  edited: 'edited',
+  deleted: 'deleted',
+} as const;
+
 export const ActionTypeEnum = {
   outreach: 'outreach',
   legal_filing: 'legal_filing',
@@ -101,6 +108,13 @@ export const VisibilityEnum = {
   public: 'public',
   restricted: 'restricted',
   sensitive: 'sensitive',
+} as const;
+
+export const AuditLogsListAction = {
+  deleted: 'deleted',
+  downloaded: 'downloaded',
+  edited: 'edited',
+  viewed: 'viewed',
 } as const;
 
 export const CaseworkListActionType = {
@@ -287,6 +301,16 @@ export const PersonWriteRequestQualityTier = {...QualityTierEnum,...NullEnum,} a
  * OpenAPI spec version: 1.0.0
  */
 /**
+ * * `viewed` - Viewed
+* `downloaded` - Downloaded
+* `edited` - Edited
+* `deleted` - Deleted
+ */
+export type ActionEnum = typeof ActionEnum[keyof typeof ActionEnum];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+
+/**
  * * `outreach` - Outreach
 * `legal_filing` - Legal filing
 * `media` - Media engagement
@@ -297,6 +321,33 @@ export const PersonWriteRequestQualityTier = {...QualityTierEnum,...NullEnum,} a
 export type ActionTypeEnum = typeof ActionTypeEnum[keyof typeof ActionTypeEnum];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
+
+/**
+ * Read-only serializer for the AuditLog API at /api/audit-logs/.
+
+Used by staff-only via AuditLogViewSet (IsAdminUser). The `user`
+field is rendered as a primary-key integer for predictability
+across the API surface — the frontend resolves the FK to a
+username by joining against the user list it already has, rather
+than us nesting a User object on every audit row (which would
+bloat list payloads and let stale username data leak into the
+audit response after a rename).
+
+If a user was deleted (SET_NULL) the FK is null — the frontend
+renders '—' for those rows.
+ */
+export interface AuditLog {
+  readonly id: number;
+  readonly timestamp: string;
+  /** @nullable */
+  readonly user: number | null;
+  readonly action: ActionEnum;
+  readonly target_type: string;
+  readonly target_id: number;
+  readonly details: string;
+  /** @nullable */
+  readonly ip_address: string | null;
+}
 
 export type BlankEnum = typeof BlankEnum[keyof typeof BlankEnum];
 
@@ -644,6 +695,15 @@ export interface Notification {
 export type NullEnum = typeof NullEnum[keyof typeof NullEnum];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
+
+export interface PaginatedAuditLogList {
+  count: number;
+  /** @nullable */
+  next?: string | null;
+  /** @nullable */
+  previous?: string | null;
+  results: AuditLog[];
+}
 
 export interface PaginatedCaseCategoryList {
   count: number;
@@ -1395,6 +1455,36 @@ export interface UserPreferenceRequest {
 * `sensitive` - Sensitive — advocates/admin only
  */
 export type VisibilityEnum = typeof VisibilityEnum[keyof typeof VisibilityEnum];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+
+export type AuditLogsListParams = {
+/**
+ * * `viewed` - Viewed
+* `downloaded` - Downloaded
+* `edited` - Edited
+* `deleted` - Deleted
+ */
+action?: AuditLogsListAction;
+/**
+ * Which field to use when ordering the results.
+ */
+ordering?: string;
+/**
+ * A page number within the paginated result set.
+ */
+page?: number;
+/**
+ * A search term.
+ */
+search?: string;
+target_type?: string;
+timestamp_after?: string;
+timestamp_before?: string;
+user__username?: string;
+};
+
+export type AuditLogsListAction = typeof AuditLogsListAction[keyof typeof AuditLogsListAction];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
