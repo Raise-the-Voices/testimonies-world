@@ -51,6 +51,7 @@ import type {
   PersonsListParams,
   PersonsWatchdogListParams,
   PreferencesListParams,
+  RelatedPersonsResponse,
   RelationshipsListParams,
   Report,
   ReportRequest,
@@ -1543,6 +1544,42 @@ export const personsDestroy = async (id: number, options?: RequestInit): Promise
   {      
     ...options,
     method: 'DELETE'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Top related persons for the given person ID. Heuristic: published persons who share the same country OR at least one category with the target, ranked by shared-category count (descending), then same-country (descending), then most-recently-updated. The target person is excluded. Results are capped at 6.
+ */
+export type personsRelatedRetrieveResponse200 = {
+  data: RelatedPersonsResponse
+  status: 200
+}
+    
+export type personsRelatedRetrieveResponseSuccess = (personsRelatedRetrieveResponse200) & {
+  headers: Headers;
+};
+;
+
+export type personsRelatedRetrieveResponse = (personsRelatedRetrieveResponseSuccess)
+
+export const getPersonsRelatedRetrieveUrl = (id: number,) => {
+
+
+  
+
+  return `/api/persons/${id}/related/`
+}
+
+export const personsRelatedRetrieve = async (id: number, options?: RequestInit): Promise<personsRelatedRetrieveResponse> => {
+  
+  return fetcher<personsRelatedRetrieveResponse>(getPersonsRelatedRetrieveUrl(id),
+  {      
+    ...options,
+    method: 'GET'
     
     
   }
