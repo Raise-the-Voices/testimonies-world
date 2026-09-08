@@ -1,10 +1,9 @@
-from django.conf import settings
 from urllib.parse import urljoin
 
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import CaseCategory, FamilyRelationship, Media, Person, Report
+from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report
 
 # Fields that are always excluded from public API responses
 PRIVATE_PERSON_FIELDS = ['medical_notes', 'precise_location']
@@ -258,3 +257,33 @@ class FamilyRelationshipSerializer(serializers.ModelSerializer):
                     )
 
         return data
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    """Read-only serializer for the AuditLog API at /api/audit-logs/.
+
+    Used by staff-only via AuditLogViewSet (IsAdminUser). The `user`
+    field is rendered as a primary-key integer for predictability
+    across the API surface — the frontend resolves the FK to a
+    username by joining against the user list it already has, rather
+    than us nesting a User object on every audit row (which would
+    bloat list payloads and let stale username data leak into the
+    audit response after a rename).
+
+    If a user was deleted (SET_NULL) the FK is null — the frontend
+    renders '—' for those rows.
+    """
+
+    class Meta:
+        model = AuditLog
+        fields = [
+            'id',
+            'timestamp',
+            'user',
+            'action',
+            'target_type',
+            'target_id',
+            'details',
+            'ip_address',
+        ]
+        read_only_fields = fields  # audit rows are write-once, never editable

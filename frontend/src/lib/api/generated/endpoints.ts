@@ -6,6 +6,8 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
+  AuditLog,
+  AuditLogsListParams,
   CaseCategory,
   CaseworkListParams,
   CaseworkRecord,
@@ -23,6 +25,7 @@ import type {
   MediaRequest,
   Notification,
   NotificationsListParams,
+  PaginatedAuditLogList,
   PaginatedCaseCategoryList,
   PaginatedCaseworkRecordList,
   PaginatedContactList,
@@ -59,6 +62,102 @@ import type {
 } from './endpoints.schemas';
 
 import { fetcher } from '../mutator';
+
+/**
+ * Staff-only audit log. Paginated, filterable by user/action/target_type/timestamp range. Every CRUD op on a sensitive viewset writes a row here via the `_audit()` helper.
+ */
+export type auditLogsListResponse200 = {
+  data: PaginatedAuditLogList
+  status: 200
+}
+    
+export type auditLogsListResponseSuccess = (auditLogsListResponse200) & {
+  headers: Headers;
+};
+;
+
+export type auditLogsListResponse = (auditLogsListResponseSuccess)
+
+export const getAuditLogsListUrl = (params?: AuditLogsListParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/audit-logs/?${stringifiedParams}` : `/api/audit-logs/`
+}
+
+export const auditLogsList = async (params?: AuditLogsListParams, options?: RequestInit): Promise<auditLogsListResponse> => {
+  
+  return fetcher<auditLogsListResponse>(getAuditLogsListUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Read-only API for AuditLog rows.
+
+Permission: `IsAdminUser` (DRF built-in). Anonymous → 401,
+authenticated non-staff → 403, staff → 200. No write endpoints:
+audit rows are write-once by design (every row is created by an
+`_audit()` helper inside the originating viewset's perform_*
+method).
+
+Filters (via django-filter, all optional):
+  ?user__username=...        exact match
+  ?action=viewed|edited|...   exact match
+  ?target_type=person|...    exact match
+  ?timestamp_after=ISO       >= timestamp
+  ?timestamp_before=ISO      <= timestamp
+  ?search=...                text search over details, ip_address,
+                             user__username (DRF SearchFilter)
+  ?ordering=timestamp        default is -timestamp
+  ?page=N                    default page size 10
+ */
+export type auditLogsRetrieveResponse200 = {
+  data: AuditLog
+  status: 200
+}
+    
+export type auditLogsRetrieveResponseSuccess = (auditLogsRetrieveResponse200) & {
+  headers: Headers;
+};
+;
+
+export type auditLogsRetrieveResponse = (auditLogsRetrieveResponseSuccess)
+
+export const getAuditLogsRetrieveUrl = (id: number,) => {
+
+
+  
+
+  return `/api/audit-logs/${id}/`
+}
+
+export const auditLogsRetrieve = async (id: number, options?: RequestInit): Promise<auditLogsRetrieveResponse> => {
+  
+  return fetcher<auditLogsRetrieveResponse>(getAuditLogsRetrieveUrl(id),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
 
 export type caseworkListResponse200 = {
   data: PaginatedCaseworkRecordList
