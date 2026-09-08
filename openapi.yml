@@ -437,6 +437,42 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/dashboard/:
+    get:
+      operationId: dashboard_list
+      description: |-
+        Read-only aggregator for the /dashboard page. Single endpoint
+        (list, GET only) returning a curated payload.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - dashboard
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDashboardResponseList'
+          description: Role-scoped dashboard payload.
   /api/media/:
     get:
       operationId: media_list
@@ -2532,6 +2568,173 @@ components:
         * `unknown` - Unknown
         * `stateless` - Stateless
         * `rights_restricted` - Rights Restricted
+    DashboardActivityEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        user:
+          type: string
+          nullable: true
+          description: Username, or null for anonymous.
+        action:
+          type: string
+        target_type:
+          type: string
+        target_id:
+          type: integer
+        details:
+          type: string
+        ip_address:
+          type: string
+          nullable: true
+      required:
+      - action
+      - details
+      - id
+      - ip_address
+      - target_id
+      - target_type
+      - timestamp
+      - user
+    DashboardCasework:
+      type: object
+      properties:
+        id:
+          type: integer
+        action_type:
+          type: string
+        status:
+          type: string
+        date:
+          type: string
+          format: date
+        description:
+          type: string
+        performed_by_name:
+          type: string
+          nullable: true
+        person_ids:
+          type: array
+          items:
+            type: integer
+      required:
+      - action_type
+      - date
+      - description
+      - id
+      - performed_by_name
+      - person_ids
+      - status
+    DashboardPerson:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        country:
+          type: string
+        current_status:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+        profile_image_url:
+          type: string
+          nullable: true
+      required:
+      - country
+      - current_status
+      - id
+      - name
+      - profile_image_url
+      - updated_at
+    DashboardReport:
+      type: object
+      properties:
+        id:
+          type: integer
+        person:
+          type: integer
+        person_name:
+          type: string
+        date_start:
+          type: string
+          format: date
+        source_type:
+          type: string
+        is_private:
+          type: boolean
+      required:
+      - date_start
+      - id
+      - is_private
+      - person
+      - person_name
+      - source_type
+    DashboardResponse:
+      type: object
+      properties:
+        scope:
+          $ref: '#/components/schemas/ScopeEnum'
+        summary:
+          $ref: '#/components/schemas/DashboardSummary'
+        recent_persons:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardPerson'
+        recent_reports:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardReport'
+        recent_casework:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardCasework'
+        activity:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardActivityEntry'
+        by_status:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Person count grouped by current_status (detained, disappeared,
+            released, deceased, etc.). Mirrors /api/persons/statistics/ for consistency
+            with the public stats page.
+      required:
+      - activity
+      - by_status
+      - recent_casework
+      - recent_persons
+      - recent_reports
+      - scope
+      - summary
+    DashboardSummary:
+      type: object
+      properties:
+        open_cases:
+          type: integer
+          description: Published persons count.
+        my_open_casework:
+          type: integer
+          description: Casework records visible to this user with status in (open,
+            in_progress).
+        unread_notifications:
+          type: integer
+        stale_cases:
+          type: integer
+          description: 'Watchdog count: persons needing attention, capped at 50 by
+            the underlying /api/persons/watchdog/ action.'
+      required:
+      - my_open_casework
+      - open_cases
+      - stale_cases
+      - unread_notifications
     FamilyRelationship:
       type: object
       description: |-
@@ -2888,6 +3091,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CountryCountEntry'
+    PaginatedDashboardResponseList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardResponse'
     PaginatedFamilyRelationshipList:
       type: object
       required:
@@ -3822,6 +4048,16 @@ components:
         * `journalist` - Journalist
         * `reporter` - Reporter/witness
         * `other` - Other
+    ScopeEnum:
+      enum:
+      - staff
+      - advocate
+      - volunteer
+      type: string
+      description: |-
+        * `staff` - staff
+        * `advocate` - advocate
+        * `volunteer` - volunteer
     SourceTypeEnum:
       enum:
       - firsthand
