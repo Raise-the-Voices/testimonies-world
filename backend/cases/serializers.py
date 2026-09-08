@@ -1,3 +1,6 @@
+from django.conf import settings
+from urllib.parse import urljoin
+
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -6,6 +9,43 @@ from .models import CaseCategory, FamilyRelationship, Media, Person, Report
 # Fields that are always excluded from public API responses
 PRIVATE_PERSON_FIELDS = ['medical_notes', 'precise_location']
 PRIVATE_REPORT_FIELDS = ['reporter_name', 'reporter_contact', 'precise_location']
+
+
+def _absolute_media_url(relative_url: str, request=None) -> str:
+    """Resolve a Django FileField .url (which is host-relative, e.g.
+    '/media/profiles/foo.jpg') to a fully-qualified absolute URL.
+
+    Order of preference:
+      1. request.build_absolute_uri() — uses the request's Host header.
+         Correct behind a correctly-configured nginx proxy (Host and
+         X-Forwarded-Host both forwarded), and the only path that
+         produces the right scheme on the live deployment.
+      2. settings.SITE_URL — for background paths (management commands,
+         email rendering, scheduled tasks) where no request is in
+         scope. Set explicitly via the SITE_URL env var; default in
+         settings.py points at the public dev URL.
+      3. Raise. A relative URL silently rendered into a page is a
+         foot-gun: it works on the page's host but breaks the moment
+         the same JSON is consumed from a different origin (an admin
+         tool, a CDN, a third-party embed). Failing loud is safer.
+    """
+    if not relative_url:
+        return relative_url
+    if request is not None:
+        return request.build_absolute_uri(relative_url)
+    site_url = getattr(settings, 'SITE_URL', '') or ''
+    if site_url:
+        # urljoin treats the second arg as relative-to-base when the
+        # first arg lacks a scheme; with the trailing-slash guard on
+        # SITE_URL this composes '/media/...' onto 'https://host/' as
+        # expected.
+        base = site_url if site_url.endswith('/') else site_url + '/'
+        return urljoin(base, relative_url.lstrip('/'))
+    raise RuntimeError(
+        '_absolute_media_url: no request and no SITE_URL configured — '
+        'cannot produce an absolute URL for '
+        f'{relative_url!r}. Set SITE_URL in the environment.'
+    )
 
 
 class CaseCategorySerializer(serializers.ModelSerializer):
@@ -53,13 +93,10 @@ class PersonListSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.URLField(allow_null=True))
     def get_profile_image_url(self, obj):
         if obj.profile_image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.profile_image.url)
-            return obj.profile_image.url
+            return _absolute_media_url(obj.profile_image.url, self.context.get('request'))
         photo = obj.media_files.filter(media_type='photo', visibility='public').first()
         if photo and photo.url:
-            return photo.url
+            return _absolute_media_url(photo.url, self.context.get('request'))
         return None
 
 
@@ -80,13 +117,10 @@ class PersonDetailSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.URLField(allow_null=True))
     def get_profile_image_url(self, obj):
         if obj.profile_image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.profile_image.url)
-            return obj.profile_image.url
+            return _absolute_media_url(obj.profile_image.url, self.context.get('request'))
         photo = obj.media_files.filter(media_type='photo', visibility='public').first()
         if photo and photo.url:
-            return photo.url
+            return _absolute_media_url(photo.url, self.context.get('request'))
         return None
 
     @extend_schema_field(ReportSerializer(many=True))
