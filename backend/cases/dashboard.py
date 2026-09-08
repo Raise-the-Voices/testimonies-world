@@ -86,10 +86,18 @@ class DashboardViewSet(viewsets.GenericViewSet):
     (list, GET only) returning a curated payload."""
 
     permission_classes = [permissions.IsAuthenticated]
-    # No queryset / serializer_class — `list()` builds the response
-    # from scratch. GenericViewSet alone gives us the URL routing for
-    # `list` without dragging in ModelViewSet's `retrieve`/`create`/
-    # `update`/`destroy` machinery that would all 405.
+    # drf-spectacular's schema generator insists every viewset expose
+    # either a `queryset` attribute or a `get_queryset()` override —
+    # even when `list()` is overridden to return a hand-rolled dict
+    # that never touches a queryset. The introspection runs at the
+    # viewset level, before per-method @extend_schema can intervene.
+    # `AuditLog.objects.none()` is a no-op queryset that satisfies the
+    # generator without affecting the response (list() builds the
+    # payload from manual ORM calls and a Serializer call, never
+    # calling `get_queryset`).
+    queryset = AuditLog.objects.none()
+    # No serializer_class — same reason: list() builds the payload by
+    # hand, never calling `get_serializer`.
 
     @extend_schema(
         responses={
