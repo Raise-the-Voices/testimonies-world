@@ -1759,3 +1759,159 @@ class RelatedPersonsTests(TestCase):
         """Unknown person ID → 404, not an empty list."""
         res = self.client.get('/api/persons/99999/related/')
         self.assertEqual(res.status_code, 404)
+
+
+class PersonFilterTests(TestCase):
+    """Coverage for the new date-range / stale filters added to
+    PersonFilter: ?stale=N, ?updated_after=YYYY-MM-DD, ?updated_before=YYYY-MM-DD.
+
+    The existing ?ordering= is handled by OrderingFilter (no custom
+    code) and is exercised by the persons list tests in the frontend.
+    Here we focus on the new relative-window and date-window filters.
+    """
+
+    URL = '/api/persons/'
+
+    def setUp(self):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        now = timezone.now()
+        # Three rows at different "ages" — fresh, week-old, year-old.
+        # Using save(update_fields=['updated_at']) bypasses auto_now's
+        # "only fires on row creation" behaviour so we can fabricate
+        # historical timestamps.
+        self.fresh = Person.objects.create(
+            name='Fresh', country='X', is_published=True,
+        )
+        # `auto_now_add=True` on created_at, but updated_at uses
+        # auto_now which fires on every save. We force specific
+        # timestamps via update().
+        self.week_old = Person.objects.create(
+            name='WeekOld', country='X', is_published=True,
+        )
+        Person.objects.filter(pk=self.week_old.pk).update(
+            updated_at=now - timedelta(days=7),
+        )
+        self.year_old = Person.objects.create(
+            name='YearOld', country='X', is_published=True,
+        )
+        Person.objects.filter(pk=self.year_old.pk).update(
+            updated_at=now - timedelta(days=365),
+        )
+        self.six_month = Person.objects.create(
+            name='SixMonth', country='X', is_published=True,
+        )
+        Person.objects.filter(pk=self.six_month.pk).update(
+            updated_at=now - timedelta(days=180),
+        )
+        self.client = APIClient()
+
+    def _ids(self, **params):
+        res = self.client.get(self.URL, params)
+        self.assertEqual(res.status_code, 200, res.content)
+        return [p['id'] for p in res.json()['results']]
+
+    # --- stale filter ----------------------------------------------------
+
+    def test_stale_90_includes_6mo_and_year_old(self):
+        ids = self._ids(stale=90)
+        self.assertIn(self.six_month.id, ids)
+        self.assertIn(self.year_old.id, ids)
+        # Fresh and week-old are NOT stale-by-90d.
+        self.assertNotIn(self.fresh.id, ids)
+        self.assertNotIn(self.week_old.id, ids)
+
+    def test_stale_365_includes_only_year_old(self):
+        ids = self._ids(stale=365)
+        self.assertIn(self.year_old.id, ids)
+        self.assertNotIn(self.six_month.id, ids)
+        self.assertNotIn(self.week_old.id, ids)
+        self.assertNotIn(self.fresh.id, ids)
+
+    def test_stale_0_includes_everything(self):
+        """stale=0 means "older than 0 days" → technically all rows whose
+        updated_at is in the past, which is effectively all rows
+        (since `auto_now` can't be in the future)."""
+        ids = self._ids(stale=0)
+        # All 4 rows are in the past → all 4 returned.
+        self.assertEqual(len(ids), 4)
+
+    def test_stale_non_integer_is_ignored(self):
+        """Bad value → no filter applied (graceful degradation, not 400)."""
+        ids = self._ids(stale='not-a-number')
+        # Fresh + week_old + six_month + year_old all returned.
+        self.assertEqual(len(ids), 4)
+
+    def test_stale_negative_is_ignored(self):
+        """Negative days is nonsense; treat as no filter rather than 400."""
+        ids = self._ids(stale=-1)
+        self.assertEqual(len(ids), 4)
+
+    def test_no_stale_param_includes_all(self):
+        """Without stale, no recency filter applied — sanity check."""
+        ids = self._ids()
+        self.assertEqual(len(ids), 4)
+
+    # --- updated_after / updated_before ----------------------------------
+
+    def test_updated_after_window(self):
+        """updated_after=60d-ago → only the fresh + week_old qualify
+        (six_month + year_old are older)."""
+        from datetime import timedelta
+        from django.utils import timezone
+        cutoff = (timezone.now() - timedelta(days=60)).date().isoformat()
+        ids = self._ids(updated_after=cutoff)
+        self.assertIn(self.fresh.id, ids)
+        self.assertIn(self.week_old.id, ids)
+        self.assertNotIn(self.six_month.id, ids)
+        self.assertNotIn(self.year_old.id, ids)
+
+    def test_updated_before_window(self):
+        """updated_before=60d-ago → only six_month + year_old."""
+        from datetime import timedelta
+        from django.utils import timezone
+        cutoff = (timezone.now() - timedelta(days=60)).date().isoformat()
+        ids = self._ids(updated_before=cutoff)
+        self.assertIn(self.six_month.id, ids)
+        self.assertIn(self.year_old.id, ids)
+        self.assertNotIn(self.fresh.id, ids)
+        self.assertNotIn(self.week_old.id, ids)
+
+    def test_combined_stale_and_updated_before(self):
+        """AND combination: must satisfy BOTH `stale=180` AND the
+        updated_before cutoff. We compute the cutoff from year_old's
+        actual timestamp so the test stays robust against the
+        current date."""
+        from datetime import timedelta
+        from django.utils import timezone
+        # year_old is now-365d. Set cutoff to year_old.updated_at + 1
+        # day so year_old passes updated_before but six_month (which
+        # is newer than that) fails. stale=180 ensures both year_old
+        # and six_month qualify on the staleness axis; only year_old
+        # passes BOTH.
+        cutoff = (timezone.now() - timedelta(days=365) + timedelta(days=1)).date().isoformat()
+        ids = self._ids(stale=180, updated_before=cutoff)
+        self.assertIn(self.year_old.id, ids)
+        self.assertNotIn(self.six_month.id, ids)
+
+    # --- ordering ---------------------------------------------------------
+
+    def test_ordering_by_creation_desc_default(self):
+        """No ?ordering= → default -created_at."""
+        res = self.client.get(self.URL)
+        names = [p['name'] for p in res.json()['results']]
+        # Newest first: insertion order was fresh, week_old, year_old,
+        # six_month, so fresh should be first by created_at desc.
+        self.assertEqual(names[0], 'Fresh')
+
+    def test_ordering_name_ascending(self):
+        """?ordering=name → alphabetical asc. SixMonth > WeekOld > YearOld."""
+        names = [p['name'] for p in self.client.get(self.URL, {'ordering': 'name'}).json()['results']]
+        self.assertEqual(names, sorted(names))
+
+    def test_ordering_updated_desc(self):
+        """?ordering=-updated_at → fresh first, year_old last."""
+        names = [p['name'] for p in self.client.get(self.URL, {'ordering': '-updated_at'}).json()['results']]
+        self.assertEqual(names[0], 'Fresh')
+        self.assertEqual(names[-1], 'YearOld')

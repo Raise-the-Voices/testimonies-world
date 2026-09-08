@@ -1217,6 +1217,26 @@ Django 3.1+'s FileField behaviour.
 Every delete writes a single `AuditLog` row capturing the snapshot
 *before* the row vanishes, so the deletion is traceable even after
 the Person row is gone.
+
+Filtering (django-filter):
+  ?search=           text search over name, legal_name, aliases,
+                      country, summary_narrative
+  ?country=          exact match (case-insensitive)
+  ?current_status=   exact match
+  ?medical_status=   exact match
+  ?quality_tier=     exact match
+  ?gender=           exact match
+  ?is_published=     exact match (true|false)
+  ?category=         repeatable, M2M match against CaseCategory
+  ?stale=N           persons whose updated_at is older than N days
+                      (relative window — advocates use this to flag
+                      abandoned cases)
+  ?updated_after=    updated_at >= YYYY-MM-DD
+  ?updated_before=   updated_at <= YYYY-MM-DD
+  ?ordering=         any of: name, country, current_status,
+                      updated_at, created_at (prefix with '-' for
+                      descending). Default: -created_at.
+  ?page=N            paginated, PAGE_SIZE=10
  */
 export type personsListResponse200 = {
   data: PaginatedPersonListList
@@ -1288,6 +1308,26 @@ Django 3.1+'s FileField behaviour.
 Every delete writes a single `AuditLog` row capturing the snapshot
 *before* the row vanishes, so the deletion is traceable even after
 the Person row is gone.
+
+Filtering (django-filter):
+  ?search=           text search over name, legal_name, aliases,
+                      country, summary_narrative
+  ?country=          exact match (case-insensitive)
+  ?current_status=   exact match
+  ?medical_status=   exact match
+  ?quality_tier=     exact match
+  ?gender=           exact match
+  ?is_published=     exact match (true|false)
+  ?category=         repeatable, M2M match against CaseCategory
+  ?stale=N           persons whose updated_at is older than N days
+                      (relative window — advocates use this to flag
+                      abandoned cases)
+  ?updated_after=    updated_at >= YYYY-MM-DD
+  ?updated_before=   updated_at <= YYYY-MM-DD
+  ?ordering=         any of: name, country, current_status,
+                      updated_at, created_at (prefix with '-' for
+                      descending). Default: -created_at.
+  ?page=N            paginated, PAGE_SIZE=10
  */
 export type personsCreateResponse201 = {
   data: PersonWrite
@@ -1345,6 +1385,26 @@ Django 3.1+'s FileField behaviour.
 Every delete writes a single `AuditLog` row capturing the snapshot
 *before* the row vanishes, so the deletion is traceable even after
 the Person row is gone.
+
+Filtering (django-filter):
+  ?search=           text search over name, legal_name, aliases,
+                      country, summary_narrative
+  ?country=          exact match (case-insensitive)
+  ?current_status=   exact match
+  ?medical_status=   exact match
+  ?quality_tier=     exact match
+  ?gender=           exact match
+  ?is_published=     exact match (true|false)
+  ?category=         repeatable, M2M match against CaseCategory
+  ?stale=N           persons whose updated_at is older than N days
+                      (relative window — advocates use this to flag
+                      abandoned cases)
+  ?updated_after=    updated_at >= YYYY-MM-DD
+  ?updated_before=   updated_at <= YYYY-MM-DD
+  ?ordering=         any of: name, country, current_status,
+                      updated_at, created_at (prefix with '-' for
+                      descending). Default: -created_at.
+  ?page=N            paginated, PAGE_SIZE=10
  */
 export type personsRetrieveResponse200 = {
   data: PersonDetail
@@ -1401,6 +1461,26 @@ Django 3.1+'s FileField behaviour.
 Every delete writes a single `AuditLog` row capturing the snapshot
 *before* the row vanishes, so the deletion is traceable even after
 the Person row is gone.
+
+Filtering (django-filter):
+  ?search=           text search over name, legal_name, aliases,
+                      country, summary_narrative
+  ?country=          exact match (case-insensitive)
+  ?current_status=   exact match
+  ?medical_status=   exact match
+  ?quality_tier=     exact match
+  ?gender=           exact match
+  ?is_published=     exact match (true|false)
+  ?category=         repeatable, M2M match against CaseCategory
+  ?stale=N           persons whose updated_at is older than N days
+                      (relative window — advocates use this to flag
+                      abandoned cases)
+  ?updated_after=    updated_at >= YYYY-MM-DD
+  ?updated_before=   updated_at <= YYYY-MM-DD
+  ?ordering=         any of: name, country, current_status,
+                      updated_at, created_at (prefix with '-' for
+                      descending). Default: -created_at.
+  ?page=N            paginated, PAGE_SIZE=10
  */
 export type personsUpdateResponse200 = {
   data: PersonWrite
@@ -1459,6 +1539,26 @@ Django 3.1+'s FileField behaviour.
 Every delete writes a single `AuditLog` row capturing the snapshot
 *before* the row vanishes, so the deletion is traceable even after
 the Person row is gone.
+
+Filtering (django-filter):
+  ?search=           text search over name, legal_name, aliases,
+                      country, summary_narrative
+  ?country=          exact match (case-insensitive)
+  ?current_status=   exact match
+  ?medical_status=   exact match
+  ?quality_tier=     exact match
+  ?gender=           exact match
+  ?is_published=     exact match (true|false)
+  ?category=         repeatable, M2M match against CaseCategory
+  ?stale=N           persons whose updated_at is older than N days
+                      (relative window — advocates use this to flag
+                      abandoned cases)
+  ?updated_after=    updated_at >= YYYY-MM-DD
+  ?updated_before=   updated_at <= YYYY-MM-DD
+  ?ordering=         any of: name, country, current_status,
+                      updated_at, created_at (prefix with '-' for
+                      descending). Default: -created_at.
+  ?page=N            paginated, PAGE_SIZE=10
  */
 export type personsPartialUpdateResponse200 = {
   data: PersonWrite
@@ -1517,6 +1617,26 @@ Django 3.1+'s FileField behaviour.
 Every delete writes a single `AuditLog` row capturing the snapshot
 *before* the row vanishes, so the deletion is traceable even after
 the Person row is gone.
+
+Filtering (django-filter):
+  ?search=           text search over name, legal_name, aliases,
+                      country, summary_narrative
+  ?country=          exact match (case-insensitive)
+  ?current_status=   exact match
+  ?medical_status=   exact match
+  ?quality_tier=     exact match
+  ?gender=           exact match
+  ?is_published=     exact match (true|false)
+  ?category=         repeatable, M2M match against CaseCategory
+  ?stale=N           persons whose updated_at is older than N days
+                      (relative window — advocates use this to flag
+                      abandoned cases)
+  ?updated_after=    updated_at >= YYYY-MM-DD
+  ?updated_before=   updated_at <= YYYY-MM-DD
+  ?ordering=         any of: name, country, current_status,
+                      updated_at, created_at (prefix with '-' for
+                      descending). Default: -created_at.
+  ?page=N            paginated, PAGE_SIZE=10
  */
 export type personsDestroyResponse204 = {
   data: void
