@@ -4,6 +4,14 @@
 	import { onMount } from 'svelte';
 	import { user, isVolunteer, isAdmin, loadSession } from '$lib/session';
 	import { createPerson, createReport, getCategories, ApiError } from '$lib/api';
+	import {
+		loadDraft,
+		saveDraft,
+		clearDraft,
+		hasDraft,
+		formatDraftAge,
+		type SubmitDraft,
+	} from '$lib/submitDraft';
 
 	let currentUser = $derived($user);
 	let isAdminUser = $derived(isAdmin(currentUser));
@@ -15,6 +23,23 @@
 	let formErrorKind = $state<'auth' | 'server' | 'other'>('other');
 	// Per-field errors — shown inline below each field.
 	let errors = $state<Record<string, string>>({});
+
+	// `draftSavedAt` drives the "Saved Xm ago" status pill in the header.
+	// `pendingDraft` holds the draft that the user can choose to restore
+	// — auto-restore would be surprising, so we always require an explicit
+	// click. `showRestoreBanner` is the visibility flag for the banner.
+	// `draftSaveError` surfaces localStorage quota / private-mode
+	// failures in the same pill (silent failure is worse than no draft).
+	let draftSavedAt = $state<string | null>(null);
+	let pendingDraft = $state<SubmitDraft | null>(null);
+	let showRestoreBanner = $state(false);
+	let draftSaveError = $state(false);
+	// Per-call guard: the helper APIs need a non-undefined username,
+	// but TS can't narrow `currentUser.username` through the
+	// `authenticated` check alone. Empty string makes loadDraft /
+	// saveDraft / clearDraft no-op (their first guard is `if (!username)
+	// return`), so this is safe.
+	const draftKey = $derived(currentUser.username ?? '');
 
 	// Character-counter ceilings
 	const MAX_NARRATIVE = 5000;
@@ -64,12 +89,160 @@
 	let suspectedReason = $state('');
 	let officialReason = $state('');
 
+	function buildDraftPayload(): Record<string, unknown> {
+		// The image File binary is intentionally NOT included — it
+		// doesn't survive JSON.stringify and would blow past the ~5MB
+		// localStorage quota. The `profileImageCleared` flag IS saved
+		// so the user's "remove image" intent survives a refresh.
+		return {
+			name,
+			legalName,
+			aliasesRaw,
+			country,
+			currentStatus,
+			medicalStatus,
+			roughLocation,
+			preciseLocation,
+			lastKnownDate,
+			ethnicity,
+			gender,
+			dateOfBirth,
+			qualityTier,
+			profileImageCleared,
+			medicalNotes,
+			authoritativeSource,
+			authoritativeUrl,
+			isPublished,
+			selectedCategories: [...selectedCategories],
+			summaryNarrative,
+			sourceType,
+			sourceAttribution,
+			reporterName,
+			reporterContact,
+			reportDateStart,
+			reportRoughLocation,
+			narrative,
+			suspectedReason,
+			officialReason,
+		};
+	}
+
+	function restoreFromDraft(draft: SubmitDraft) {
+		const p = draft.payload as Record<string, any>;
+		// Defensive per-field assignment — keeps the form usable even
+		// if a future schemaVersion-bumped payload is partially valid
+		// (loadDraft drops unknown-schema drafts, but a same-version
+		// payload with a renamed field would otherwise throw on
+		// destructuring).
+		if (typeof p.name === 'string') name = p.name;
+		if (typeof p.legalName === 'string') legalName = p.legalName;
+		if (typeof p.aliasesRaw === 'string') aliasesRaw = p.aliasesRaw;
+		if (typeof p.country === 'string') country = p.country;
+		if (typeof p.currentStatus === 'string') currentStatus = p.currentStatus;
+		if (typeof p.medicalStatus === 'string') medicalStatus = p.medicalStatus;
+		if (typeof p.roughLocation === 'string') roughLocation = p.roughLocation;
+		if (typeof p.preciseLocation === 'string') preciseLocation = p.preciseLocation;
+		if (typeof p.lastKnownDate === 'string') lastKnownDate = p.lastKnownDate;
+		if (typeof p.ethnicity === 'string') ethnicity = p.ethnicity;
+		if (typeof p.gender === 'string') gender = p.gender;
+		if (typeof p.dateOfBirth === 'string') dateOfBirth = p.dateOfBirth;
+		if (p.qualityTier === '' || typeof p.qualityTier === 'number') qualityTier = p.qualityTier;
+		if (typeof p.profileImageCleared === 'boolean') profileImageCleared = p.profileImageCleared;
+		if (typeof p.medicalNotes === 'string') medicalNotes = p.medicalNotes;
+		if (typeof p.authoritativeSource === 'string') authoritativeSource = p.authoritativeSource;
+		if (typeof p.authoritativeUrl === 'string') authoritativeUrl = p.authoritativeUrl;
+		if (typeof p.isPublished === 'boolean') isPublished = p.isPublished;
+		if (Array.isArray(p.selectedCategories)) {
+			selectedCategories = p.selectedCategories.filter((n: unknown) => typeof n === 'number');
+		}
+		if (typeof p.summaryNarrative === 'string') summaryNarrative = p.summaryNarrative;
+		if (typeof p.sourceType === 'string') sourceType = p.sourceType;
+		if (typeof p.sourceAttribution === 'string') sourceAttribution = p.sourceAttribution;
+		if (typeof p.reporterName === 'string') reporterName = p.reporterName;
+		if (typeof p.reporterContact === 'string') reporterContact = p.reporterContact;
+		if (typeof p.reportDateStart === 'string') reportDateStart = p.reportDateStart;
+		if (typeof p.reportRoughLocation === 'string') reportRoughLocation = p.reportRoughLocation;
+		if (typeof p.narrative === 'string') narrative = p.narrative;
+		if (typeof p.suspectedReason === 'string') suspectedReason = p.suspectedReason;
+		if (typeof p.officialReason === 'string') officialReason = p.officialReason;
+	}
+
+	function discardDraft() {
+		if (!currentUser.authenticated) return;
+		clearDraft(draftKey);
+		pendingDraft = null;
+		showRestoreBanner = false;
+		draftSavedAt = null;
+	}
+
+	function acceptDraft() {
+		if (!pendingDraft) return;
+		restoreFromDraft(pendingDraft);
+		draftSavedAt = pendingDraft.savedAt;
+		pendingDraft = null;
+		showRestoreBanner = false;
+		// Re-save immediately so the saved-at timestamp reflects "now
+		// after restore", not the old draft's age. Otherwise the
+		// status pill would say "saved 3 days ago" forever.
+		if (currentUser.authenticated) {
+			saveDraft(draftKey, buildDraftPayload());
+			draftSavedAt = new Date().toISOString();
+		}
+	}
+
+	// --- Auto-save $effect ------------------------------------------------
+	// Debounced write: only after the user has paused for 1.5s, then
+	// every change restarts the timer. This keeps localStorage writes
+	// to a few per minute during heavy editing, not per keystroke.
+	// The skipIfSamePayload guard prevents re-writing identical state
+	// (e.g., a user typing and deleting back to the original text).
+	let saveTimer: ReturnType<typeof setTimeout> | null = null;
+	let lastSerialized = '';
+	$effect(() => {
+		// Track every captured field. Touching each one re-runs the
+		// effect. We don't read the values — only access them — and
+		// then serialize inside the timeout callback.
+		const payload = buildDraftPayload();
+		const serialized = JSON.stringify(payload);
+		// Don't subscribe to the user id for a save effect — we re-read
+		// draftKey fresh inside the timer. Subscribing here would
+		// cause a save immediately after logout, which we don't want.
+		void draftKey;
+		if (!currentUser.authenticated) return;
+		if (serialized === lastSerialized) return;
+		lastSerialized = serialized;
+		if (saveTimer) clearTimeout(saveTimer);
+		saveTimer = setTimeout(() => {
+			try {
+				saveDraft(draftKey, payload);
+				draftSavedAt = new Date().toISOString();
+				draftSaveError = false;
+			} catch {
+				draftSaveError = true;
+			}
+		}, 1500);
+	});
+
 	onMount(async () => {
 		try {
 			const data = await getCategories();
 			categories = Array.isArray(data) ? data : data.results ?? [];
 		} catch (e) {
 			console.error(e);
+		}
+
+		// Draft check runs once on mount. Only show the restore banner
+		// if (a) the user is authenticated, (b) a valid draft exists,
+		// and (c) the draft's payload actually differs from the current
+		// (empty) form — otherwise we'd show a useless "found a draft"
+		// banner for an empty initial visit.
+		if (currentUser.authenticated && hasDraft(draftKey)) {
+			const draft = loadDraft(draftKey);
+			if (draft) {
+				pendingDraft = draft;
+				showRestoreBanner = true;
+				draftSavedAt = draft.savedAt;
+			}
 		}
 	});
 
@@ -298,6 +471,14 @@
 				official_reason: officialReason.trim(),
 			});
 
+			// Submission succeeded — clear the draft so the next visit
+			// to /submit starts fresh. Also clears the localStorage
+			// entry so it doesn't sit around as PII on a shared
+			// browser. Belt-and-suspenders with the logout-clears-
+			// draft hook in +layout.svelte.
+			clearDraft(draftKey);
+			draftSavedAt = null;
+
 			goto(`${base}/persons/${person.id}`);
 		} catch (e: any) {
 			if (e instanceof ApiError) {
@@ -348,7 +529,37 @@
 		</p>
 	{:else}
 		<header class="form-header">
-			<h1>Submit a Case</h1>
+			<div class="form-header-row">
+				<h1>Submit a Case</h1>
+				<!-- Draft status pill. Two states:
+				     - "Saved Xm ago" (positive, with a tiny sync glyph)
+				     - "Could not save draft" (error, no glyph, alerts the
+				       user that the safety net isn't working)
+				     Hidden when there's no draft yet (initial visit, fresh
+				     submit) and no error. -->
+				{#if draftSaveError}
+					<span class="draft-pill draft-pill-error" role="status">
+						Could not save draft
+					</span>
+				{:else if draftSavedAt}
+					<span class="draft-pill" role="status" aria-live="polite">
+						<svg
+							class="draft-pill-icon"
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							aria-hidden="true"
+						>
+							<path d="M20 6L9 17l-5-5" />
+						</svg>
+						Draft saved {formatDraftAge(draftSavedAt)}
+					</span>
+				{/if}
+			</div>
 			<p class="form-intro">
 				Document someone facing oppression. Only <em>name</em>, <em>country</em>, and an
 				<em>initial narrative</em> are required — every other field can be filled in later as more is known.
@@ -392,6 +603,38 @@
 		{/if}
 
 		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} novalidate>
+			<!-- ============== Restore-from-draft banner ============== -->
+			<!-- Shown only when a draft was found on mount and the user
+			     hasn't yet accepted or discarded it. Auto-restore would
+			     surprise users; we always require an explicit click. -->
+			{#if showRestoreBanner && pendingDraft}
+				<div class="draft-restore-banner" role="status" aria-live="polite">
+					<div class="draft-restore-body">
+						<p class="draft-restore-title">We found a saved draft.</p>
+						<p class="draft-restore-desc">
+							Saved {formatDraftAge(pendingDraft.savedAt)}. Image uploads aren't
+							saved — re-upload before submitting.
+						</p>
+					</div>
+					<div class="draft-restore-actions">
+						<button
+							type="button"
+							class="btn btn-primary"
+							onclick={acceptDraft}
+						>
+							Restore
+						</button>
+						<button
+							type="button"
+							class="btn btn-secondary"
+							onclick={discardDraft}
+						>
+							Discard
+						</button>
+					</div>
+				</div>
+			{/if}
+
 			<!-- ============== Section 1: Person Information ============== -->
 			<section class="form-section" aria-labelledby="sec-person">
 				<h2 id="sec-person" class="form-section-title">
@@ -1587,5 +1830,90 @@
 		font-size: 0.92rem;
 		font-weight: 600;
 		color: var(--color-text);
+	}
+
+	/* === Auto-save + drafts ============================================
+	   - .form-header-row: header pill next to the H1
+	   - .draft-pill: small status indicator (Saved Xm ago)
+	   - .draft-pill-error: error variant when localStorage fails
+	   - .draft-restore-banner: top-of-form card offering restore/discard
+	   ================================================================ */
+
+	.form-header-row {
+		display: flex;
+		align-items: center;
+		gap: 0.85rem;
+		flex-wrap: wrap;
+	}
+	.form-header-row h1 {
+		margin: 0;
+	}
+	.draft-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.2rem 0.6rem;
+		border-radius: 999px;
+		background: var(--color-primary-tint);
+		color: var(--color-primary);
+		font-size: 0.72rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06rem;
+		white-space: nowrap;
+	}
+	.draft-pill-icon {
+		width: 12px;
+		height: 12px;
+		display: inline-block;
+	}
+	.draft-pill-error {
+		background: rgba(217, 22, 22, 0.12);
+		color: var(--color-danger);
+		font-weight: 700;
+	}
+
+	.draft-restore-banner {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 1rem;
+		flex-wrap: wrap;
+		padding: 0.9rem 1.1rem;
+		margin-bottom: 1.25rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-primary-light);
+		border-left: 3px solid var(--color-primary);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
+	}
+	.draft-restore-body {
+		min-width: 0;
+		flex: 1 1 280px;
+	}
+	.draft-restore-title {
+		margin: 0;
+		font-weight: 700;
+		color: var(--color-text);
+		font-size: 0.95rem;
+	}
+	.draft-restore-desc {
+		margin: 0.2rem 0 0 0;
+		font-size: 0.82rem;
+		color: var(--color-text-muted);
+		line-height: 1.4;
+	}
+	.draft-restore-actions {
+		display: flex;
+		gap: 0.5rem;
+		flex-shrink: 0;
+	}
+	@media (max-width: 600px) {
+		.draft-restore-actions {
+			width: 100%;
+		}
+		.draft-restore-actions .btn {
+			flex: 1;
+		}
 	}
 </style>
