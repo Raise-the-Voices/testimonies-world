@@ -2,6 +2,7 @@ import { base } from '$app/paths';
 import type {
 	CaseworkRecord,
 	Contact,
+	DashboardData,
 	FamilyRelationshipRow,
 	Media,
 	Paginated,
@@ -12,7 +13,17 @@ import type {
 	User,
 } from './types';
 
-export type { CaseworkRecord, Contact, FamilyRelationshipRow, Person, PersonCategory, Report, User, Paginated } from './types';
+export type {
+	CaseworkRecord,
+	Contact,
+	DashboardData,
+	FamilyRelationshipRow,
+	Person,
+	PersonCategory,
+	Report,
+	User,
+	Paginated,
+} from './types';
 
 const API_BASE = `${base}/api`;
 
@@ -209,6 +220,16 @@ export async function getWatchdog(): Promise<Person[]> {
 
 export async function getStatistics(): Promise<Statistics> {
 	return request<Statistics>('/persons/statistics/');
+}
+
+/**
+ * Dashboard aggregator — the SvelteKit /dashboard page consumes this
+ * as a single cohesive payload (no parallel fetches, no client-side
+ * composition). The backend scopes the response by role (see
+ * backend/cases/dashboard.py for the scoping rules).
+ */
+export async function getDashboard(): Promise<DashboardData> {
+	return request<DashboardData>('/dashboard/');
 }
 
 export async function getCountries(

@@ -1295,3 +1295,179 @@ class ProtectedMediaViewTests(TestCase):
         self.client.force_login(self.volunteer)
         res = self.client.get(f'/media/profiles/{person.profile_image.name.split("/")[-1]}')
         self.assertEqual(res.status_code, 200)
+
+
+class DashboardTests(TestCase):
+    """Coverage for the role-scoped aggregator at /api/dashboard/.
+
+    Scope matrix:
+      - anonymous           → 401 or 403
+      - volunteer           → scope='volunteer', activity=own only,
+                              my_open_casework=own only
+      - advocate            → scope='advocate', activity=own + casework-tagged,
+                              my_open_casework=ALL casework (matches
+                              CaseworkRecordViewSet.get_queryset)
+      - staff (is_staff)    → scope='staff', activity=ALL AuditLog,
+                              my_open_casework=ALL casework
+
+    Plus a snapshot test of the response keys to catch schema drift.
+    """
+
+    URL = '/api/dashboard/'
+
+    def setUp(self):
+        self.volunteer = make_user('vol', in_group='Volunteer')
+        self.advocate = make_user('aisha', in_group='Advocate')
+        self.staff = make_user('admin', is_staff=True)
+        self.outsider = make_user('random')
+        self.client = APIClient()
+
+        # Two published persons, one released, so the by_status counts
+        # are non-trivial and the "stale_cases" tile excludes the
+        # released/deceased ones by construction.
+        Person.objects.create(name='Detained', country='Pakistan', is_published=True)
+        Person.objects.create(name='Disappeared', country='Myanmar', is_published=True)
+        Person.objects.create(
+            name='Released',
+            country='Egypt',
+            is_published=True,
+            current_status='released',
+        )
+
+    # --- Auth gate --------------------------------------------------------
+
+    def test_anonymous_returns_401_or_403(self):
+        """DashboardViewSet requires IsAuthenticated. Default DRF response
+        for an unauthenticated request against a session-auth view can
+        be 401 or 403 depending on whether a session challenge is sent
+        — both are acceptable for an API endpoint."""
+        res = self.client.get(self.URL)
+        self.assertIn(res.status_code, (401, 403))
+
+    def test_authenticated_volunteer_gets_200(self):
+        self.client.force_login(self.volunteer)
+        res = self.client.get(self.URL)
+        self.assertEqual(res.status_code, 200)
+
+    # --- Scope label ------------------------------------------------------
+
+    def test_scope_label_matches_role(self):
+        for user, expected in [
+            (self.volunteer, 'volunteer'),
+            (self.advocate, 'advocate'),
+            (self.staff, 'staff'),
+        ]:
+            self.client.force_login(user)
+            res = self.client.get(self.URL)
+            self.assertEqual(res.json()['scope'], expected, f'user={user.username}')
+
+    # --- Response shape (snapshot) ---------------------------------------
+
+    def test_response_keys_are_stable(self):
+        """Frontend types depend on these exact keys. If we rename one
+        without a frontend migration, this test fails — surface early."""
+        self.client.force_login(self.staff)
+        data = self.client.get(self.URL).json()
+        self.assertEqual(
+            set(data.keys()),
+            {
+                'scope',
+                'summary',
+                'recent_persons',
+                'recent_reports',
+                'recent_casework',
+                'activity',
+                'by_status',
+            },
+        )
+        self.assertEqual(
+            set(data['summary'].keys()),
+            {
+                'open_cases',
+                'my_open_casework',
+                'unread_notifications',
+                'stale_cases',
+            },
+        )
+
+    # --- Summary tiles ---------------------------------------------------
+
+    def test_open_cases_counts_published_persons(self):
+        self.client.force_login(self.volunteer)
+        data = self.client.get(self.URL).json()
+        # All 3 published persons (Released counts as open_cases).
+        self.assertEqual(data['summary']['open_cases'], 3)
+
+    def test_stale_cases_excludes_released(self):
+        self.client.force_login(self.volunteer)
+        data = self.client.get(self.URL).json()
+        # 3 published, 1 released → 2 stale.
+        self.assertEqual(data['summary']['stale_cases'], 2)
+
+    def test_my_open_casework_is_zero_when_no_records(self):
+        """No casework seeded → all roles see 0."""
+        for user in (self.volunteer, self.advocate, self.staff):
+            self.client.force_login(user)
+            data = self.client.get(self.URL).json()
+            self.assertEqual(
+                data['summary']['my_open_casework'], 0,
+                f'user={user.username} unexpectedly has open casework',
+            )
+
+    # --- Activity scoping ------------------------------------------------
+
+    def test_volunteer_sees_only_own_activity(self):
+        """Seeded AuditLog rows: 2 by the volunteer, 1 by the advocate.
+        The volunteer should see exactly the 2 they authored."""
+        AuditLog.objects.create(
+            user=self.volunteer, action='viewed',
+            target_type='person', target_id=1, details='test',
+        )
+        AuditLog.objects.create(
+            user=self.volunteer, action='viewed',
+            target_type='person', target_id=2, details='test',
+        )
+        AuditLog.objects.create(
+            user=self.advocate, action='viewed',
+            target_type='person', target_id=1, details='test',
+        )
+        self.client.force_login(self.volunteer)
+        activity = self.client.get(self.URL).json()['activity']
+        self.assertEqual(len(activity), 2)
+        self.assertTrue(all(a['user'] == 'vol' for a in activity))
+
+    def test_staff_sees_all_activity(self):
+        AuditLog.objects.create(
+            user=self.volunteer, action='viewed',
+            target_type='person', target_id=1,
+        )
+        AuditLog.objects.create(
+            user=self.advocate, action='viewed',
+            target_type='person', target_id=1,
+        )
+        self.client.force_login(self.staff)
+        activity = self.client.get(self.URL).json()['activity']
+        self.assertEqual(len(activity), 2)
+
+    def test_advocate_sees_own_plus_casework_tagged_activity(self):
+        AuditLog.objects.create(
+            user=self.volunteer, action='viewed',
+            target_type='person', target_id=1,
+        )
+        AuditLog.objects.create(
+            user=self.advocate, action='viewed',
+            target_type='person', target_id=1,
+        )
+        AuditLog.objects.create(
+            user=self.volunteer, action='viewed',
+            target_type='casework', target_id=99,
+        )
+        self.client.force_login(self.advocate)
+        activity = self.client.get(self.URL).json()['activity']
+        users = {a['user'] for a in activity}
+        target_types = {a['target_type'] for a in activity}
+        self.assertIn('aisha', users)
+        self.assertIn('casework', target_types)
+        # The volunteer-only non-casework row should be excluded.
+        person_rows = [a for a in activity if a['target_type'] == 'person']
+        self.assertTrue(all(a['user'] != 'vol' for a in person_rows))
