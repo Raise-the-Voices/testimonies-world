@@ -15,7 +15,7 @@
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
-	import { afterNavigate, replaceState } from '$app/navigation';
+	import { afterNavigate, goto, replaceState } from '$app/navigation';
 	import { getPersons, getCountries, getCategories } from '$lib/api';
 	import { statusLabels } from '$lib/StatusBadge.svelte';
 	import { debounce } from '$lib/debounce';
@@ -65,6 +65,7 @@
 		filterStatus = sp.get('current_status') ?? '';
 		filterCategory = sp.get('category') ?? '';
 		sort = sp.get('ordering') ?? '-created_at';
+		stale = sp.get('stale') ?? '';
 	}
 
 	// Filters
@@ -73,6 +74,44 @@
 	let filterStatus = $state('');
 	let filterCategory = $state('');
 	let sort = $state('-created_at');
+	// Recency / staleness quick-filter. `''` means "All"; a positive
+	// integer is the "inactive N+ days" threshold. Empty string is
+	// the URL-default and is what makes the segmented control
+	// "All" the default selection.
+	let stale = $state('');
+
+	// Stale quick-filter options — empty string ("All") plus four
+	// commonly-used thresholds. Living as a constant (not a fetch)
+	// because these are UI-side buckets, not API enum values.
+	const staleOptions: Array<{ value: string; label: string }> = [
+		{ value: '', label: 'All' },
+		{ value: '30', label: 'Inactive 30+ d' },
+		{ value: '90', label: 'Inactive 90+ d' },
+		{ value: '180', label: 'Inactive 180+ d' },
+		{ value: '365', label: 'Inactive 1y+' },
+	];
+
+	// Sync the URL to the current filter state. replaceState keeps
+	// Back/Forward history clean (each filter change doesn't add a
+	// new entry); noScroll + keepFocus preserve scroll position and
+	// which control the user was interacting with. Called by every
+	// state change that affects applyFilters.
+	async function syncUrl() {
+		const sp = new URLSearchParams();
+		if (search) sp.set('search', search);
+		if (filterCountry) sp.set('country', filterCountry);
+		if (filterStatus) sp.set('current_status', filterStatus);
+		if (filterCategory) sp.set('category', filterCategory);
+		if (stale) sp.set('stale', stale);
+		if (sort && sort !== '-created_at') sp.set('ordering', sort);
+		const qs = sp.toString();
+		const target = qs ? `?${qs}` : page.url.pathname;
+		// Only navigate if the URL would actually change — avoids
+		// unnecessary history churn when re-renders fire.
+		if (target !== page.url.pathname + page.url.search) {
+			await goto(target, { replaceState: true, noScroll: true, keepFocus: true });
+		}
+	}
 
 	// View mode is owned by <ViewToggle>; we read it for the conditional
 	// markup but never write to localStorage directly here.
@@ -115,7 +154,7 @@
 	let canPrev = $derived(currentPage > 1);
 	let canNext = $derived(currentPage < totalPages);
 	let hasActiveFilters = $derived(
-		Boolean(search || filterCountry || filterStatus || filterCategory || sort !== '-created_at'),
+		Boolean(search || filterCountry || filterStatus || filterCategory || stale || sort !== '-created_at'),
 	);
 
 	// Memoized signature for the countries-dropdown query — refetches only
@@ -160,6 +199,7 @@
 		if (filterCountry) params.country = filterCountry;
 		if (filterStatus) params.current_status = filterStatus;
 		if (filterCategory) params.category = filterCategory;
+		if (stale) params.stale = stale;
 		if (sort) params.ordering = sort;
 		return params;
 	}
@@ -181,6 +221,10 @@
 			lastCountryParamKey = newKey;
 			loadCountries(currentCountryParams());
 		}
+		// Mirror filter state → URL so users can share/bookmark.
+		// replaceState + noScroll + keepFocus avoids scroll jumps
+		// and keeps focus on the control the user just clicked.
+		await syncUrl();
 	}
 
 	async function goToPage(page: number) {
@@ -193,11 +237,20 @@
 		filterCountry = '';
 		filterStatus = '';
 		filterCategory = '';
+		stale = '';
 		sort = '-created_at';
 		applyFilters();
 	}
 
 	const debouncedSearch = debounce(() => applyFilters(), SEARCH_DEBOUNCE_MS);
+
+	// Stale-filter change handler. Setting `stale` directly is enough
+	// to drive applyFilters via the existing change flow; we wrap it
+	// in a named function so the inline onclick stays readable.
+	function onStaleChange(value: string) {
+		stale = value;
+		void applyFilters();
+	}
 
 	// Re-sync filter state on same-route Back/Forward (e.g. /persons?country=USA
 	// → /persons?country=FR → Back). SvelteKit re-runs `+page.ts` load() but
@@ -289,6 +342,28 @@
 		onClear={clearFilters}
 		onSearchInput={debouncedSearch}
 	/>
+
+	<!-- Stale / inactivity quick filter. Inlined here (not in the
+	     shared FilterToolbar) because contacts/cases don't have an
+	     "activity" axis — this control is /persons-specific. Segmented
+	     buttons rather than a select because the buckets are short and
+	     a click-target that fits a thumb is faster to scan on mobile. -->
+	<div class="stale-filter" role="group" aria-label="Inactivity quick filter">
+		<span class="stale-filter-label">Activity</span>
+		<div class="stale-filter-buttons">
+			{#each staleOptions as opt (opt.value)}
+				<button
+					type="button"
+					class="stale-btn"
+					class:active={stale === opt.value}
+					aria-pressed={stale === opt.value}
+					onclick={() => onStaleChange(opt.value)}
+				>
+					{opt.label}
+				</button>
+			{/each}
+		</div>
+	</div>
 
 	{#if loading && persons.length === 0}
 		{#if viewMode === 'list'}
@@ -472,6 +547,75 @@
 	@media (prefers-reduced-motion: reduce) {
 		.page-btn {
 			transition: none;
+		}
+	}
+
+	/* === Stale / inactivity quick filter ============================
+	   Segmented control rendered just below the FilterToolbar so the
+	   user can scan "All / Inactive 30+ d / 90+ d / 180+ d / 1y+"
+	   as a single visual row. Keyboard-accessible via tab + space/enter
+	   (native <button>); aria-pressed reflects the toggle state.
+	   ============================================================ */
+
+	.stale-filter {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+		padding: 0.5rem 0.85rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border-light);
+		border-radius: var(--radius-card);
+	}
+	.stale-filter-label {
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06rem;
+		color: var(--color-text-muted);
+		font-weight: 700;
+	}
+	.stale-filter-buttons {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+	}
+	.stale-btn {
+		font: inherit;
+		font-size: 0.78rem;
+		font-weight: 600;
+		padding: 0.35rem 0.7rem;
+		border-radius: 999px;
+		border: 1px solid var(--color-border-light);
+		background: var(--color-bg-white);
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background var(--transition-card),
+			color var(--transition-card),
+			border-color var(--transition-card);
+	}
+	.stale-btn:hover {
+		border-color: var(--color-primary-light);
+		color: var(--color-text);
+	}
+	.stale-btn:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px var(--color-primary-tint);
+	}
+	.stale-btn.active {
+		background: var(--color-primary);
+		border-color: var(--color-primary);
+		color: var(--color-bg-white);
+	}
+	.stale-btn.active:hover {
+		background: var(--color-primary-light);
+		border-color: var(--color-primary-light);
+		color: var(--color-bg-white);
+	}
+	@media (max-width: 600px) {
+		.stale-filter {
+			flex-direction: column;
+			align-items: flex-start;
 		}
 	}
 </style>
