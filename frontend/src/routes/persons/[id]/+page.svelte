@@ -20,6 +20,7 @@
 	import Skeleton from '$lib/Skeleton.svelte';
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import MediaUploadModal from '$lib/MediaUploadModal.svelte';
+	import RelatedCases from '$lib/RelatedCases.svelte';
 	import type { FamilyRelationshipRow, Media, Person, Report } from '$lib/types';
 
 	let currentUser = $derived($user);
@@ -1108,6 +1109,11 @@
 					</div>
 				</div>
 			</div>
+
+			<!-- Related cases (last sidebar element). The component
+			     self-hides when the backend returns an empty list,
+			     so most-empty-case UX is just "no sidebar widget". -->
+			<RelatedCases personId={person.id} />
 		</div>
 	</div>
 {/if}
