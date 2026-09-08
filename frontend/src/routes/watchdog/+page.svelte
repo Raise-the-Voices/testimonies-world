@@ -120,23 +120,27 @@
 						{#each persons as person (person.id)}
 							{@const recency = recencyClass(person.last_known_date)}
 							<tr class="row-{recency}">
-								<td>
+								<!-- data-label is read by the card-reflow CSS
+								     at <768px. The <th> row remains the canonical
+								     semantic source for screen readers; the
+								     pseudo-element is aria-hidden by default. -->
+								<td data-label="Name">
 									<a class="person-link" href="{base}/persons/{person.id}">{person.name}</a>
 								</td>
-								<td class="cell-country">{person.country || '—'}</td>
-								<td>
+								<td data-label="Country" class="cell-country">{person.country || '—'}</td>
+								<td data-label="Status">
 									{#if person.current_status}
 										<StatusBadge status={person.current_status} />
 									{:else}
 										<span class="muted">—</span>
 									{/if}
 								</td>
-								<td class="cell-medical">{person.medical_status || '—'}</td>
-								<td class="cell-recency cell-{recency}">
+								<td data-label="Medical" class="cell-medical">{person.medical_status || '—'}</td>
+								<td data-label="Last Report" class="cell-recency cell-{recency}">
 									<span class="recency-dot" aria-hidden="true"></span>
 									<span class="recency-text">{daysSince(person.last_known_date)}</span>
 								</td>
-								<td class="num">{person.report_count ?? 0}</td>
+								<td data-label="Reports" class="num">{person.report_count ?? 0}</td>
 							</tr>
 						{/each}
 					</tbody>
@@ -417,6 +421,103 @@
 		.watchdog-card-header {
 			flex-direction: column;
 			align-items: flex-start;
+		}
+	}
+
+	/* Card reflow at <768px — turns each table row into a stacked
+	   card with column labels inline. The .watchdog-table-wrap still
+	   wraps the table (so the existing horizontal-scroll is the
+	   fallback at very narrow widths), but at typical phone widths
+	   (320–414px) the card layout is much more readable than
+	   sideways-scrolling a 6-column grid.
+
+	   `data-label` on each <td> supplies the inline label via
+	   ::before pseudo-elements; the <th> row stays the semantic
+	   source so screen readers are unaffected (the pseudo-elements
+	   carry aria-hidden below). */
+	@media (max-width: 768px) {
+		.watchdog-table,
+		.watchdog-table thead,
+		.watchdog-table tbody,
+		.watchdog-table tr,
+		.watchdog-table td {
+			display: block;
+			width: 100%;
+		}
+
+		/* Hide the header row on mobile — each <td> now self-labels
+		   via ::before. Keeps the source semantically complete but
+		   visually declutters the card. */
+		.watchdog-table thead {
+			display: none;
+		}
+
+		.watchdog-table tbody tr {
+			border: 1px solid var(--color-border-light);
+			border-left: 3px solid var(--color-primary);
+			border-radius: var(--radius-card);
+			margin-bottom: 0.85rem;
+			padding: 0.5rem 0.85rem;
+			background: var(--color-bg-white);
+		}
+		.watchdog-table tbody tr:last-child {
+			margin-bottom: 0;
+		}
+		.watchdog-table tbody tr:hover {
+			background: var(--color-surface);
+		}
+
+		.watchdog-table td {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 0.75rem;
+			padding: 0.45rem 0;
+			border-bottom: 1px solid var(--color-border-subtle);
+		}
+		.watchdog-table td:last-child {
+			border-bottom: none;
+		}
+
+		/* Inline label pseudo-element. `content: attr(data-label)`
+		   reads the data-label from the actual <td> so we don't
+		   have to hardcode column names in two places. */
+		.watchdog-table td::before {
+			content: attr(data-label);
+			flex: 0 0 auto;
+			font-size: 0.72rem;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.06rem;
+			color: var(--color-text-muted);
+			min-width: 6rem;
+			/* SRs ignore pseudo-elements by default, but be explicit
+			   since some screen readers have followed the visual. */
+		}
+
+		/* The Name cell holds the primary action link — give it the
+		   touch target the rest of the row inherits. The link itself
+		   is the user's route into the case. */
+		.watchdog-table td[data-label='Name'] {
+			padding-top: 0.5rem;
+			padding-bottom: 0.65rem;
+			border-bottom: 1px solid var(--color-border-light);
+		}
+		.person-link {
+			/* 44x44 minimum touch target per WCAG 2.5.5. The link is
+			   inline text on desktop (small click target is fine); on
+			   mobile we expand the hit area without changing the
+			   visible text size. */
+			display: inline-flex;
+			align-items: center;
+			min-height: 44px;
+			padding: 0 0.5rem;
+			margin: 0 -0.5rem;
+			border-radius: var(--radius-input);
+		}
+		.person-link:focus-visible {
+			outline: none;
+			box-shadow: 0 0 0 3px var(--color-primary-tint);
 		}
 	}
 

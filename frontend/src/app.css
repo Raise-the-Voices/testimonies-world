@@ -132,6 +132,14 @@ h3 { font-size: 1.15rem; }
 	font-size: 0.9rem;
 	border-radius: 2px;
 	text-decoration: none;
+	/* WCAG 2.5.5: target size minimum 44×44 CSS px. `min-height`
+	   alone covers the vertical axis (the common miss for short
+	   labels like '✕' or '←'). Padding already gives us >24px
+	   width on most labels; explicit `min-width` covers the rare
+	   icon-only button. */
+	min-height: 44px;
+	min-width: 44px;
+	box-sizing: border-box;
 }
 .btn:hover {
 	background: var(--color-primary-light);
