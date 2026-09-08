@@ -1706,7 +1706,10 @@ quality_tier?: PersonsListQualityTier;
  * A search term.
  */
 search?: string;
+stale?: string;
 status?: string;
+updated_after?: string;
+updated_before?: string;
 };
 
 export type PersonsListCurrentStatus = typeof PersonsListCurrentStatus[keyof typeof PersonsListCurrentStatus];
@@ -1776,7 +1779,10 @@ quality_tier?: PersonsCountriesListQualityTier;
  * A search term.
  */
 search?: string;
+stale?: string;
 status?: string;
+updated_after?: string;
+updated_before?: string;
 };
 
 export type PersonsCountriesListCurrentStatus = typeof PersonsCountriesListCurrentStatus[keyof typeof PersonsCountriesListCurrentStatus];
@@ -1846,7 +1852,10 @@ quality_tier?: PersonsWatchdogListQualityTier;
  * A search term.
  */
 search?: string;
+stale?: string;
 status?: string;
+updated_after?: string;
+updated_before?: string;
 };
 
 export type PersonsWatchdogListCurrentStatus = typeof PersonsWatchdogListCurrentStatus[keyof typeof PersonsWatchdogListCurrentStatus];

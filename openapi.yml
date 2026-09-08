@@ -1014,6 +1014,26 @@ paths:
         Every delete writes a single `AuditLog` row capturing the snapshot
         *before* the row vanishes, so the deletion is traceable even after
         the Person row is gone.
+
+        Filtering (django-filter):
+          ?search=           text search over name, legal_name, aliases,
+                              country, summary_narrative
+          ?country=          exact match (case-insensitive)
+          ?current_status=   exact match
+          ?medical_status=   exact match
+          ?quality_tier=     exact match
+          ?gender=           exact match
+          ?is_published=     exact match (true|false)
+          ?category=         repeatable, M2M match against CaseCategory
+          ?stale=N           persons whose updated_at is older than N days
+                              (relative window — advocates use this to flag
+                              abandoned cases)
+          ?updated_after=    updated_at >= YYYY-MM-DD
+          ?updated_before=   updated_at <= YYYY-MM-DD
+          ?ordering=         any of: name, country, current_status,
+                              updated_at, created_at (prefix with '-' for
+                              descending). Default: -created_at.
+          ?page=N            paginated, PAGE_SIZE=10
       parameters:
       - in: query
         name: category
@@ -1123,9 +1143,23 @@ paths:
         schema:
           type: string
       - in: query
+        name: stale
+        schema:
+          type: string
+      - in: query
         name: status
         schema:
           type: string
+      - in: query
+        name: updated_after
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: updated_before
+        schema:
+          type: string
+          format: date
       tags:
       - persons
       security:
@@ -1162,6 +1196,26 @@ paths:
         Every delete writes a single `AuditLog` row capturing the snapshot
         *before* the row vanishes, so the deletion is traceable even after
         the Person row is gone.
+
+        Filtering (django-filter):
+          ?search=           text search over name, legal_name, aliases,
+                              country, summary_narrative
+          ?country=          exact match (case-insensitive)
+          ?current_status=   exact match
+          ?medical_status=   exact match
+          ?quality_tier=     exact match
+          ?gender=           exact match
+          ?is_published=     exact match (true|false)
+          ?category=         repeatable, M2M match against CaseCategory
+          ?stale=N           persons whose updated_at is older than N days
+                              (relative window — advocates use this to flag
+                              abandoned cases)
+          ?updated_after=    updated_at >= YYYY-MM-DD
+          ?updated_before=   updated_at <= YYYY-MM-DD
+          ?ordering=         any of: name, country, current_status,
+                              updated_at, created_at (prefix with '-' for
+                              descending). Default: -created_at.
+          ?page=N            paginated, PAGE_SIZE=10
       tags:
       - persons
       requestBody:
@@ -1210,6 +1264,26 @@ paths:
         Every delete writes a single `AuditLog` row capturing the snapshot
         *before* the row vanishes, so the deletion is traceable even after
         the Person row is gone.
+
+        Filtering (django-filter):
+          ?search=           text search over name, legal_name, aliases,
+                              country, summary_narrative
+          ?country=          exact match (case-insensitive)
+          ?current_status=   exact match
+          ?medical_status=   exact match
+          ?quality_tier=     exact match
+          ?gender=           exact match
+          ?is_published=     exact match (true|false)
+          ?category=         repeatable, M2M match against CaseCategory
+          ?stale=N           persons whose updated_at is older than N days
+                              (relative window — advocates use this to flag
+                              abandoned cases)
+          ?updated_after=    updated_at >= YYYY-MM-DD
+          ?updated_before=   updated_at <= YYYY-MM-DD
+          ?ordering=         any of: name, country, current_status,
+                              updated_at, created_at (prefix with '-' for
+                              descending). Default: -created_at.
+          ?page=N            paginated, PAGE_SIZE=10
       parameters:
       - in: path
         name: id
@@ -1253,6 +1327,26 @@ paths:
         Every delete writes a single `AuditLog` row capturing the snapshot
         *before* the row vanishes, so the deletion is traceable even after
         the Person row is gone.
+
+        Filtering (django-filter):
+          ?search=           text search over name, legal_name, aliases,
+                              country, summary_narrative
+          ?country=          exact match (case-insensitive)
+          ?current_status=   exact match
+          ?medical_status=   exact match
+          ?quality_tier=     exact match
+          ?gender=           exact match
+          ?is_published=     exact match (true|false)
+          ?category=         repeatable, M2M match against CaseCategory
+          ?stale=N           persons whose updated_at is older than N days
+                              (relative window — advocates use this to flag
+                              abandoned cases)
+          ?updated_after=    updated_at >= YYYY-MM-DD
+          ?updated_before=   updated_at <= YYYY-MM-DD
+          ?ordering=         any of: name, country, current_status,
+                              updated_at, created_at (prefix with '-' for
+                              descending). Default: -created_at.
+          ?page=N            paginated, PAGE_SIZE=10
       parameters:
       - in: path
         name: id
@@ -1307,6 +1401,26 @@ paths:
         Every delete writes a single `AuditLog` row capturing the snapshot
         *before* the row vanishes, so the deletion is traceable even after
         the Person row is gone.
+
+        Filtering (django-filter):
+          ?search=           text search over name, legal_name, aliases,
+                              country, summary_narrative
+          ?country=          exact match (case-insensitive)
+          ?current_status=   exact match
+          ?medical_status=   exact match
+          ?quality_tier=     exact match
+          ?gender=           exact match
+          ?is_published=     exact match (true|false)
+          ?category=         repeatable, M2M match against CaseCategory
+          ?stale=N           persons whose updated_at is older than N days
+                              (relative window — advocates use this to flag
+                              abandoned cases)
+          ?updated_after=    updated_at >= YYYY-MM-DD
+          ?updated_before=   updated_at <= YYYY-MM-DD
+          ?ordering=         any of: name, country, current_status,
+                              updated_at, created_at (prefix with '-' for
+                              descending). Default: -created_at.
+          ?page=N            paginated, PAGE_SIZE=10
       parameters:
       - in: path
         name: id
@@ -1360,6 +1474,26 @@ paths:
         Every delete writes a single `AuditLog` row capturing the snapshot
         *before* the row vanishes, so the deletion is traceable even after
         the Person row is gone.
+
+        Filtering (django-filter):
+          ?search=           text search over name, legal_name, aliases,
+                              country, summary_narrative
+          ?country=          exact match (case-insensitive)
+          ?current_status=   exact match
+          ?medical_status=   exact match
+          ?quality_tier=     exact match
+          ?gender=           exact match
+          ?is_published=     exact match (true|false)
+          ?category=         repeatable, M2M match against CaseCategory
+          ?stale=N           persons whose updated_at is older than N days
+                              (relative window — advocates use this to flag
+                              abandoned cases)
+          ?updated_after=    updated_at >= YYYY-MM-DD
+          ?updated_before=   updated_at <= YYYY-MM-DD
+          ?ordering=         any of: name, country, current_status,
+                              updated_at, created_at (prefix with '-' for
+                              descending). Default: -created_at.
+          ?page=N            paginated, PAGE_SIZE=10
       parameters:
       - in: path
         name: id
@@ -1517,9 +1651,23 @@ paths:
         schema:
           type: string
       - in: query
+        name: stale
+        schema:
+          type: string
+      - in: query
         name: status
         schema:
           type: string
+      - in: query
+        name: updated_after
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: updated_before
+        schema:
+          type: string
+          format: date
       tags:
       - persons
       security:
@@ -1663,9 +1811,23 @@ paths:
         schema:
           type: string
       - in: query
+        name: stale
+        schema:
+          type: string
+      - in: query
         name: status
         schema:
           type: string
+      - in: query
+        name: updated_after
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: updated_before
+        schema:
+          type: string
+          format: date
       tags:
       - persons
       security:

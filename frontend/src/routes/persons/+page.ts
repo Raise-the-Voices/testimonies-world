@@ -11,7 +11,17 @@ export async function load({ url, fetch }) {
     const params: Record<string, string> = {};
     // Mirror the filter keys consumed by persons/+page.svelte so the
     // server-side fetch matches what the client would request.
-    for (const key of ['search', 'country', 'current_status', 'category', 'ordering', 'page']) {
+    for (const key of [
+        'search',
+        'country',
+        'current_status',
+        'category',
+        'stale',
+        'updated_after',
+        'updated_before',
+        'ordering',
+        'page',
+    ]) {
         const value = searchParams.get(key);
         if (value) params[key] = value;
     }
