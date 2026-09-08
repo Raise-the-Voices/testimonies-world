@@ -5,6 +5,114 @@ info:
   description: Casework platform for documenting human rights cases. Sensitive endpoints
     (contacts, sensitive media) require authentication.
 paths:
+  /api/audit-logs/:
+    get:
+      operationId: audit_logs_list
+      description: Staff-only audit log. Paginated, filterable by user/action/target_type/timestamp
+        range. Every CRUD op on a sensitive viewset writes a row here via the `_audit()`
+        helper.
+      parameters:
+      - in: query
+        name: action
+        schema:
+          type: string
+          enum:
+          - deleted
+          - downloaded
+          - edited
+          - viewed
+        description: |-
+          * `viewed` - Viewed
+          * `downloaded` - Downloaded
+          * `edited` - Edited
+          * `deleted` - Deleted
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: target_type
+        schema:
+          type: string
+      - in: query
+        name: timestamp_after
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: timestamp_before
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: user__username
+        schema:
+          type: string
+      tags:
+      - audit-logs
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAuditLogList'
+          description: ''
+  /api/audit-logs/{id}/:
+    get:
+      operationId: audit_logs_retrieve
+      description: |-
+        Read-only API for AuditLog rows.
+
+        Permission: `IsAdminUser` (DRF built-in). Anonymous → 401,
+        authenticated non-staff → 403, staff → 200. No write endpoints:
+        audit rows are write-once by design (every row is created by an
+        `_audit()` helper inside the originating viewset's perform_*
+        method).
+
+        Filters (via django-filter, all optional):
+          ?user__username=...        exact match
+          ?action=viewed|edited|...   exact match
+          ?target_type=person|...    exact match
+          ?timestamp_after=ISO       >= timestamp
+          ?timestamp_before=ISO      <= timestamp
+          ?search=...                text search over details, ip_address,
+                                     user__username (DRF SearchFilter)
+          ?ordering=timestamp        default is -timestamp
+          ?page=N                    default page size 10
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this audit log.
+        required: true
+      tags:
+      - audit-logs
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLog'
+          description: ''
   /api/casework/:
     get:
       operationId: casework_list
@@ -2343,6 +2451,18 @@ paths:
           description: No response body
 components:
   schemas:
+    ActionEnum:
+      enum:
+      - viewed
+      - downloaded
+      - edited
+      - deleted
+      type: string
+      description: |-
+        * `viewed` - Viewed
+        * `downloaded` - Downloaded
+        * `edited` - Edited
+        * `deleted` - Deleted
     ActionTypeEnum:
       enum:
       - outreach
@@ -2359,6 +2479,59 @@ components:
         * `advocacy` - Advocacy
         * `investigation` - Investigation
         * `other` - Other
+    AuditLog:
+      type: object
+      description: |-
+        Read-only serializer for the AuditLog API at /api/audit-logs/.
+
+        Used by staff-only via AuditLogViewSet (IsAdminUser). The `user`
+        field is rendered as a primary-key integer for predictability
+        across the API surface — the frontend resolves the FK to a
+        username by joining against the user list it already has, rather
+        than us nesting a User object on every audit row (which would
+        bloat list payloads and let stale username data leak into the
+        audit response after a rename).
+
+        If a user was deleted (SET_NULL) the FK is null — the frontend
+        renders '—' for those rows.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        timestamp:
+          type: string
+          format: date-time
+          readOnly: true
+        user:
+          type: integer
+          readOnly: true
+          nullable: true
+        action:
+          allOf:
+          - $ref: '#/components/schemas/ActionEnum'
+          readOnly: true
+        target_type:
+          type: string
+          readOnly: true
+        target_id:
+          type: integer
+          readOnly: true
+        details:
+          type: string
+          readOnly: true
+        ip_address:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - action
+      - details
+      - id
+      - ip_address
+      - target_id
+      - target_type
+      - timestamp
+      - user
     BlankEnum:
       enum:
       - ''
@@ -2999,6 +3172,29 @@ components:
     NullEnum:
       enum:
       - null
+    PaginatedAuditLogList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLog'
     PaginatedCaseCategoryList:
       type: object
       required:
