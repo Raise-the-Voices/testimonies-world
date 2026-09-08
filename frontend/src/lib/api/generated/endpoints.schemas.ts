@@ -78,6 +78,12 @@ export const RoleEnum = {
   other: 'other',
 } as const;
 
+export const ScopeEnum = {
+  staff: 'staff',
+  advocate: 'advocate',
+  volunteer: 'volunteer',
+} as const;
+
 export const SourceTypeEnum = {
   firsthand: 'firsthand',
   secondhand: 'secondhand',
@@ -396,6 +402,78 @@ export type CurrentStatusEnum = typeof CurrentStatusEnum[keyof typeof CurrentSta
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
+export interface DashboardActivityEntry {
+  id: number;
+  timestamp: string;
+  /**
+   * Username, or null for anonymous.
+   * @nullable
+   */
+  user: string | null;
+  action: string;
+  target_type: string;
+  target_id: number;
+  details: string;
+  /** @nullable */
+  ip_address: string | null;
+}
+
+export interface DashboardCasework {
+  id: number;
+  action_type: string;
+  status: string;
+  date: string;
+  description: string;
+  /** @nullable */
+  performed_by_name: string | null;
+  person_ids: number[];
+}
+
+export interface DashboardPerson {
+  id: number;
+  name: string;
+  country: string;
+  current_status: string;
+  updated_at: string;
+  /** @nullable */
+  profile_image_url: string | null;
+}
+
+export interface DashboardReport {
+  id: number;
+  person: number;
+  person_name: string;
+  date_start: string;
+  source_type: string;
+  is_private: boolean;
+}
+
+/**
+ * Person count grouped by current_status (detained, disappeared, released, deceased, etc.). Mirrors /api/persons/statistics/ for consistency with the public stats page.
+ */
+export type DashboardResponseByStatus = {[key: string]: number};
+
+export interface DashboardResponse {
+  scope: ScopeEnum;
+  summary: DashboardSummary;
+  recent_persons: DashboardPerson[];
+  recent_reports: DashboardReport[];
+  recent_casework: DashboardCasework[];
+  activity: DashboardActivityEntry[];
+  /** Person count grouped by current_status (detained, disappeared, released, deceased, etc.). Mirrors /api/persons/statistics/ for consistency with the public stats page. */
+  by_status: DashboardResponseByStatus;
+}
+
+export interface DashboardSummary {
+  /** Published persons count. */
+  open_cases: number;
+  /** Casework records visible to this user with status in (open, in_progress). */
+  my_open_casework: number;
+  unread_notifications: number;
+  /** Watchdog count: persons needing attention, capped at 50 by the underlying /api/persons/watchdog/ action. */
+  stale_cases: number;
+}
+
 /**
  * Family-relationship CRUD payload.
 
@@ -601,6 +679,15 @@ export interface PaginatedCountryCountEntryList {
   /** @nullable */
   previous?: string | null;
   results: CountryCountEntry[];
+}
+
+export interface PaginatedDashboardResponseList {
+  count: number;
+  /** @nullable */
+  next?: string | null;
+  /** @nullable */
+  previous?: string | null;
+  results: DashboardResponse[];
 }
 
 export interface PaginatedFamilyRelationshipList {
@@ -1240,6 +1327,15 @@ export type RoleEnum = typeof RoleEnum[keyof typeof RoleEnum];
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
 /**
+ * * `staff` - staff
+* `advocate` - advocate
+* `volunteer` - volunteer
+ */
+export type ScopeEnum = typeof ScopeEnum[keyof typeof ScopeEnum];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+
+/**
  * * `firsthand` - Firsthand
 * `secondhand` - Secondhand
 * `news` - News report
@@ -1384,6 +1480,21 @@ search?: string;
 export type ContactsListRole = typeof ContactsListRole[keyof typeof ContactsListRole];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
+
+export type DashboardListParams = {
+/**
+ * Which field to use when ordering the results.
+ */
+ordering?: string;
+/**
+ * A page number within the paginated result set.
+ */
+page?: number;
+/**
+ * A search term.
+ */
+search?: string;
+};
 
 export type MediaListParams = {
 /**

@@ -14,6 +14,7 @@ import type {
   Contact,
   ContactRequest,
   ContactsListParams,
+  DashboardListParams,
   FamilyRelationship,
   FamilyRelationshipRequest,
   MarkAllReadResponse,
@@ -26,6 +27,7 @@ import type {
   PaginatedCaseworkRecordList,
   PaginatedContactList,
   PaginatedCountryCountEntryList,
+  PaginatedDashboardResponseList,
   PaginatedFamilyRelationshipList,
   PaginatedMediaList,
   PaginatedNotificationList,
@@ -551,6 +553,50 @@ export const contactsDestroy = async (id: number, options?: RequestInit): Promis
   {      
     ...options,
     method: 'DELETE'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Read-only aggregator for the /dashboard page. Single endpoint
+(list, GET only) returning a curated payload.
+ */
+export type dashboardListResponse200 = {
+  data: PaginatedDashboardResponseList
+  status: 200
+}
+    
+export type dashboardListResponseSuccess = (dashboardListResponse200) & {
+  headers: Headers;
+};
+;
+
+export type dashboardListResponse = (dashboardListResponseSuccess)
+
+export const getDashboardListUrl = (params?: DashboardListParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/?${stringifiedParams}` : `/api/dashboard/`
+}
+
+export const dashboardList = async (params?: DashboardListParams, options?: RequestInit): Promise<dashboardListResponse> => {
+  
+  return fetcher<dashboardListResponse>(getDashboardListUrl(params),
+  {      
+    ...options,
+    method: 'GET'
     
     
   }
