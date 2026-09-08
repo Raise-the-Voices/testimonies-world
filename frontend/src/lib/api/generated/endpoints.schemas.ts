@@ -1293,6 +1293,10 @@ export type QualityTierEnum = typeof QualityTierEnum[keyof typeof QualityTierEnu
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
+export interface RelatedPersonsResponse {
+  results: PersonList[];
+}
+
 /**
  * * `parent` - Parent
 * `child` - Child

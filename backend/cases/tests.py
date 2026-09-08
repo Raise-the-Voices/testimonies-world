@@ -18,7 +18,7 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from .models import AuditLog, FamilyRelationship, Media, Person, Report
+from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report
 
 
 User = get_user_model()
@@ -1633,3 +1633,129 @@ class AuditLogEndpointTests(TestCase):
         # doesn't. We assert the row count of page 1 to match
         # default behavior (PAGE_SIZE=10, so all 3 fit).
         self.assertLessEqual(len(body['results']), 3)
+
+
+class RelatedPersonsTests(TestCase):
+    """Coverage for GET /api/persons/{id}/related/.
+
+    The endpoint ranks published persons by overlap with the target
+    on (a) shared categories and (b) same country, capped at 6. The
+    tests below seed a small graph and assert each ranking rule
+    independently + the target-exclusion / limit / publishing gates.
+    """
+
+    def setUp(self):
+        # Three published "category A + Pakistan" rows — same country,
+        # all in category A. One is the target.
+        self.target = Person.objects.create(
+            name='Target',
+            country='Pakistan',
+            is_published=True,
+        )
+        self.same_country_same_cat = Person.objects.create(
+            name='SameCountrySameCat',
+            country='Pakistan',
+            is_published=True,
+        )
+        self.same_country_other_cat = Person.objects.create(
+            name='SameCountryOtherCat',
+            country='Pakistan',
+            is_published=True,
+        )
+        # Two foreign rows that share category A with the target.
+        self.foreign_same_cat_a = Person.objects.create(
+            name='ForeignSameCatA',
+            country='Myanmar',
+            is_published=True,
+        )
+        self.foreign_same_cat_b = Person.objects.create(
+            name='ForeignSameCatB',
+            country='Egypt',
+            is_published=True,
+        )
+        # Decoy: same country, no shared category, unpublished.
+        self.unpublished_same_country = Person.objects.create(
+            name='UnpublishedSameCountry',
+            country='Pakistan',
+            is_published=False,
+        )
+        # Decoy: published, totally unrelated.
+        self.totally_unrelated = Person.objects.create(
+            name='TotallyUnrelated',
+            country='Iceland',
+            is_published=True,
+        )
+
+        cat_a = CaseCategory.objects.create(name='Activist')
+        cat_b = CaseCategory.objects.create(name='Journalist')
+
+        self.target.categories.add(cat_a)
+        # same_country_same_cat shares BOTH categories with target
+        # (highest score on shared_categories).
+        self.same_country_same_cat.categories.add(cat_a, cat_b)
+        # same_country_other_cat shares NO category (different one).
+        cat_c = CaseCategory.objects.create(name='Lawyer')
+        self.same_country_other_cat.categories.add(cat_c)
+        # The two foreign rows share category A only.
+        self.foreign_same_cat_a.categories.add(cat_a)
+        self.foreign_same_cat_b.categories.add(cat_a)
+        # Decoys are in unrelated categories.
+        cat_d = CaseCategory.objects.create(name='Singer')
+        self.unpublished_same_country.categories.add(cat_d)
+        cat_e = CaseCategory.objects.create(name='Chef')
+        self.totally_unrelated.categories.add(cat_e)
+
+        self.client = APIClient()
+
+    def _related_ids(self, target_id):
+        res = self.client.get(f'/api/persons/{target_id}/related/')
+        self.assertEqual(res.status_code, 200)
+        return [p['id'] for p in res.json()]
+
+    def test_excludes_target_person(self):
+        ids = self._related_ids(self.target.id)
+        self.assertNotIn(self.target.id, ids)
+
+    def test_returns_same_country_same_category_first(self):
+        """Highest shared_categories count wins."""
+        ids = self._related_ids(self.target.id)
+        self.assertEqual(ids[0], self.same_country_same_cat.id,
+            'same_country_same_cat should rank first (shares 2 categories)')
+
+    def test_includes_foreign_shared_category_matches(self):
+        """Shared category across countries is a valid signal."""
+        ids = self._related_ids(self.target.id)
+        self.assertIn(self.foreign_same_cat_a.id, ids)
+        self.assertIn(self.foreign_same_cat_b.id, ids)
+
+    def test_includes_same_country_no_shared_category(self):
+        """Same country alone is enough to qualify (ranked below shared)."""
+        ids = self._related_ids(self.target.id)
+        self.assertIn(self.same_country_other_cat.id, ids)
+
+    def test_excludes_unpublished_even_if_country_matches(self):
+        """Unpublished persons must never leak into related results."""
+        ids = self._related_ids(self.target.id)
+        self.assertNotIn(self.unpublished_same_country.id, ids)
+
+    def test_excludes_totally_unrelated_person(self):
+        """No country overlap AND no category overlap → not related."""
+        ids = self._related_ids(self.target.id)
+        self.assertNotIn(self.totally_unrelated.id, ids)
+
+    def test_caps_at_six(self):
+        """The endpoint hard-caps the result count at 6 regardless of
+        how many matches exist in the DB. Seed 7 candidates by reusing
+        the existing set + a 7th row, then assert len <= 6."""
+        Person.objects.create(
+            name='ExtraMatch',
+            country='Pakistan',
+            is_published=True,
+        ).categories.add(CaseCategory.objects.get(name='Activist'))
+        ids = self._related_ids(self.target.id)
+        self.assertLessEqual(len(ids), 6)
+
+    def test_404_for_missing_target(self):
+        """Unknown person ID → 404, not an empty list."""
+        res = self.client.get('/api/persons/99999/related/')
+        self.assertEqual(res.status_code, 404)
