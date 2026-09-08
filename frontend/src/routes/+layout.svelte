@@ -2,16 +2,53 @@
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { user, loadSession, isVolunteer, isAdvocate } from '$lib/session';
+	import { clearDraft } from '$lib/submitDraft';
 	import Bell from '$lib/Bell.svelte';
 	import '../app.css';
 	import { page } from '$app/stores';
 
 	let { children } = $props();
 	let currentUser = $derived($user);
+	let prevAuthenticated = $state<boolean | null>(null);
 
 	onMount(() => {
 		loadSession();
 	});
+
+	// --- Logout cleanup -------------------------------------------------
+	// When the user transitions from authenticated → unauthenticated
+	// (e.g. clicks Logout, session expires, or another tab logs them
+	// out), wipe any submit-form drafts they had on this browser.
+	// This protects sensitive human-rights data on shared/public
+	// browsers — the same reason the rest of the platform
+	// audit-logs sensitive access. Drafts are keyed by userId, so
+	// account A logging out doesn't touch account B's draft.
+	$effect(() => {
+		const authed = currentUser.authenticated;
+		if (prevAuthenticated === null) {
+			prevAuthenticated = authed;
+			return;
+		}
+		if (prevAuthenticated && !authed && currentUser.username) {
+			clearDraft(currentUser.username);
+		}
+		prevAuthenticated = authed;
+	});
+
+	// Cross-tab logout: when another tab logs the user out, the
+	// 'storage' event fires here. LocalStorage keys are scoped per
+	// origin and per user, but the session cookie is shared — a
+	// logout in tab A invalidates the session in tab B too. The
+	// loadSession() call below re-reads /api/session/ which will now
+	// return { authenticated: false }, which the $effect above then
+	// turns into a draft clear.
+	if (typeof window !== 'undefined') {
+		window.addEventListener('storage', (e) => {
+			if (e.key === null || e.key === 'sessionid') {
+				loadSession();
+			}
+		});
+	}
 </script>
 
 <header class="header-container">
