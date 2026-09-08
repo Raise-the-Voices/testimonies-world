@@ -11,6 +11,7 @@ from drf_spectacular.views import (
 from rest_framework.routers import DefaultRouter
 
 from cases.views import (
+    AuditLogViewSet,
     CaseCategoryViewSet,
     FamilyRelationshipViewSet,
     MediaViewSet,
@@ -36,6 +37,10 @@ router.register(r'casework', CaseworkRecordViewSet, basename='casework')
 router.register(r'notifications', NotificationViewSet, basename='notification')
 router.register(r'preferences', UserPreferenceViewSet, basename='preference')
 router.register(r'contacts', ContactViewSet, basename='contact')
+# /api/audit-logs/ — staff-only read-only audit log powering the
+# SvelteKit /dashboard/audit-logs page. See AuditLogViewSet in
+# cases/views.py for filter/permission details.
+router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
 # /api/dashboard/ — role-scoped aggregator for the SvelteKit
 # /dashboard page. See cases/dashboard.py for the role scoping rules.
 router.register(r'dashboard', DashboardViewSet, basename='dashboard')

@@ -228,7 +228,7 @@
 			>
 				{#snippet trailing()}
 					{#if isAdmin($user)}
-						<a href="{base}/admin/cases/auditlog/" class="view-all-link">
+						<a href="{base}/dashboard/audit-logs" class="view-all-link">
 							View all <Icon name="arrow-right" size={14} />
 						</a>
 					{/if}

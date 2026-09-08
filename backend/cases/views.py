@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report
 from .permissions import IsVolunteer
 from .serializers import (
+    AuditLogSerializer,
     CaseCategorySerializer,
     FamilyRelationshipSerializer,
     MediaSerializer,
@@ -812,3 +813,71 @@ def serve_protected_media(request, path):
 
     # ---- Anything else: default-deny -----------------------------------
     return HttpResponseNotFound('Not found.')
+
+
+# ---------------------------------------------------------------------------
+# AuditLog — staff-only read-only API powering the SvelteKit
+# /dashboard/audit-logs page. Replaces the prior pattern of accessing
+# audit history through Django admin only.
+# ---------------------------------------------------------------------------
+
+
+class AuditLogFilter(filters.FilterSet):
+    """Custom filter set for AuditLog.
+
+    django-filter's default exact-match filters cover `user__username`,
+    `action`, and `target_type`. We add range filters on `timestamp`
+    so the frontend can show "last 24h / last week / custom range"
+    without dropping down to raw datetime strings.
+    """
+
+    timestamp_after = filters.IsoDateTimeFilter(
+        field_name='timestamp', lookup_expr='gte',
+    )
+    timestamp_before = filters.IsoDateTimeFilter(
+        field_name='timestamp', lookup_expr='lte',
+    )
+
+    class Meta:
+        model = AuditLog
+        fields = ['user__username', 'action', 'target_type']
+
+
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """Read-only API for AuditLog rows.
+
+    Permission: `IsAdminUser` (DRF built-in). Anonymous → 401,
+    authenticated non-staff → 403, staff → 200. No write endpoints:
+    audit rows are write-once by design (every row is created by an
+    `_audit()` helper inside the originating viewset's perform_*
+    method).
+
+    Filters (via django-filter, all optional):
+      ?user__username=...        exact match
+      ?action=viewed|edited|...   exact match
+      ?target_type=person|...    exact match
+      ?timestamp_after=ISO       >= timestamp
+      ?timestamp_before=ISO      <= timestamp
+      ?search=...                text search over details, ip_address,
+                                 user__username (DRF SearchFilter)
+      ?ordering=timestamp        default is -timestamp
+      ?page=N                    default page size 10
+    """
+
+    queryset = AuditLog.objects.select_related('user').order_by('-timestamp')
+    serializer_class = AuditLogSerializer
+    permission_classes = [permissions.IsAdminUser]
+    filterset_class = AuditLogFilter
+    search_fields = ['details', 'ip_address', 'user__username']
+    ordering_fields = ['timestamp']
+    ordering = ['-timestamp']  # default
+
+    @extend_schema(
+        description=(
+            'Staff-only audit log. Paginated, filterable by user/action/'
+            'target_type/timestamp range. Every CRUD op on a sensitive '
+            'viewset writes a row here via the `_audit()` helper.'
+        ),
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
