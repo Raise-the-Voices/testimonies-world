@@ -810,6 +810,10 @@
 									src={media.file}
 									alt={media.description || 'Photo'}
 									class="media-item-thumb"
+									loading="lazy"
+									decoding="async"
+									width="120"
+									height="120"
 								/>
 							{/if}
 							<div class="media-item-body">
@@ -906,6 +910,11 @@
 							src={person.profile_image_url}
 							alt={person.name}
 							class="profile-photo"
+							loading="eager"
+							fetchpriority="high"
+							decoding="sync"
+							width="180"
+							height="180"
 						/>
 					{:else}
 						<div class="profile-photo-placeholder"></div>

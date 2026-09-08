@@ -309,7 +309,14 @@
 						accept="image/*,video/*,application/pdf"
 					/>
 					{#if previewUrl}
-						<img src={previewUrl} alt="" class="dropzone-preview" />
+						<img
+							src={previewUrl}
+							alt=""
+							class="dropzone-preview"
+							decoding="async"
+							width="200"
+							height="200"
+						/>
 					{:else if fileValue}
 						<div class="dropzone-filename">
 							<span class="dropzone-fileicon" aria-hidden="true">📄</span>
