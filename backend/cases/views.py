@@ -78,10 +78,52 @@ class PersonFilter(filters.FilterSet):
     quality = filters.NumberFilter(field_name='quality_tier')
     name = filters.CharFilter(field_name='name', lookup_expr='icontains')
 
+    # --- Recency / staleness filters -----------------------------------
+    # `stale` is a relative-day window ("show me cases not touched in
+    # 90+ days") rather than an absolute date — that's what HR
+    # advocates actually use. Internally we resolve it to
+    # updated_at < now() - N days in `filter_stale` below. The
+    # absolute `updated_after` / `updated_before` filters are kept
+    # for power users who want exact date windows (e.g., "everything
+    # between 2024-01-01 and 2024-03-31"); both can be combined
+    # with `stale` — the AND is intentional.
+    # `CharFilter` rather than `NumberFilter` because we want the
+    # `filter_stale` method to receive the raw value and decide
+    # what's valid (negative, non-numeric → ignore gracefully). Using
+    # `NumberFilter` runs DRF's int validator before the method fires
+    # and returns 400 for "abc", which we don't want — the filter
+    # should be opt-in, never error out the whole list call.
+    stale = filters.CharFilter(method='filter_stale')
+    updated_after = filters.DateFilter(field_name='updated_at', lookup_expr='gte')
+    updated_before = filters.DateFilter(field_name='updated_at', lookup_expr='lte')
+
     class Meta:
         model = Person
         fields = ['country', 'current_status', 'medical_status',
                   'quality_tier', 'gender', 'is_published']
+
+    def filter_stale(self, queryset, name, value):
+        """`?stale=N` → persons with updated_at older than N days.
+
+        Stale is computed against updated_at (last edit), not
+        last_known_date (the date the case actually occurred) — the
+        former tells you whether the record has been touched recently,
+        which is what "abandoned case" means in advocate workflows.
+        `last_known_date` is a property of the situation, not of our
+        record-keeping.
+        """
+        if value is None or value == '':
+            return queryset
+        try:
+            days = int(value)
+        except (TypeError, ValueError):
+            return queryset
+        if days < 0:
+            return queryset
+        from datetime import timedelta
+        from django.utils import timezone
+        cutoff = timezone.now() - timedelta(days=days)
+        return queryset.filter(updated_at__lt=cutoff)
 
 
 class PersonViewSet(viewsets.ModelViewSet):
@@ -106,6 +148,26 @@ class PersonViewSet(viewsets.ModelViewSet):
     Every delete writes a single `AuditLog` row capturing the snapshot
     *before* the row vanishes, so the deletion is traceable even after
     the Person row is gone.
+
+    Filtering (django-filter):
+      ?search=           text search over name, legal_name, aliases,
+                          country, summary_narrative
+      ?country=          exact match (case-insensitive)
+      ?current_status=   exact match
+      ?medical_status=   exact match
+      ?quality_tier=     exact match
+      ?gender=           exact match
+      ?is_published=     exact match (true|false)
+      ?category=         repeatable, M2M match against CaseCategory
+      ?stale=N           persons whose updated_at is older than N days
+                          (relative window — advocates use this to flag
+                          abandoned cases)
+      ?updated_after=    updated_at >= YYYY-MM-DD
+      ?updated_before=   updated_at <= YYYY-MM-DD
+      ?ordering=         any of: name, country, current_status,
+                          updated_at, created_at (prefix with '-' for
+                          descending). Default: -created_at.
+      ?page=N            paginated, PAGE_SIZE=10
     """
 
     filterset_class = PersonFilter
