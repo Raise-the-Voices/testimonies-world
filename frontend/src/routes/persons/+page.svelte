@@ -479,7 +479,16 @@
 		background: var(--color-bg-white);
 		border: 1px solid var(--color-border-light);
 		border-radius: var(--radius-card-lg);
-		overflow: hidden;
+		/* overflow-x: auto lets wide tables scroll horizontally on
+		   phones instead of clipping. The previous `overflow: hidden`
+		   silently dropped columns off the right edge — a real
+		   accessibility bug for mobile advocates. vertical overflow
+		   stays clipped (round corners + sticky shadows still work).
+		   -webkit-overflow-scrolling: touch enables momentum
+		   scrolling on iOS Safari where it's otherwise janky. */
+		overflow-x: auto;
+		overflow-y: hidden;
+		-webkit-overflow-scrolling: touch;
 		box-shadow: var(--shadow-card);
 	}
 	.cases-table-skeleton {
