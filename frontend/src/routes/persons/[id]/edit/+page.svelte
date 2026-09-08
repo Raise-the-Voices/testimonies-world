@@ -613,9 +613,23 @@
 						</label>
 						<div class="profile-image-row">
 							{#if profileImagePreview}
-								<img src={profileImagePreview} alt="Preview of new image" class="profile-image-preview" />
+								<img
+									src={profileImagePreview}
+									alt="Preview of new image"
+									class="profile-image-preview"
+									decoding="async"
+									width="96"
+									height="96"
+								/>
 							{:else if existingProfileImageUrl}
-								<img src={existingProfileImageUrl} alt="Current profile image" class="profile-image-preview" />
+								<img
+									src={existingProfileImageUrl}
+									alt="Current profile image"
+									class="profile-image-preview"
+									decoding="async"
+									width="96"
+									height="96"
+								/>
 							{:else}
 								<div class="profile-image-placeholder" aria-hidden="true">
 									<span>No image</span>

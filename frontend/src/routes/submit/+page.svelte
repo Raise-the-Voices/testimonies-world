@@ -623,7 +623,14 @@
 						</label>
 						<div class="profile-image-row">
 							{#if profileImagePreview}
-								<img src={profileImagePreview} alt="" class="profile-image-preview" />
+								<img
+									src={profileImagePreview}
+									alt=""
+									class="profile-image-preview"
+									decoding="async"
+									width="96"
+									height="96"
+								/>
 							{/if}
 							<div class="profile-image-controls">
 								<input

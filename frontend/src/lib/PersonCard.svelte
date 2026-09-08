@@ -65,7 +65,14 @@
 <article class="person-card" style="animation-delay: {delayMs}ms">
 	<a class="card-media" {href} aria-label="View details for {person.name}">
 		{#if person.profile_image_url}
-			<img src={person.profile_image_url} alt={person.name} loading="lazy" />
+			<img
+				src={person.profile_image_url}
+				alt={person.name}
+				loading="lazy"
+				decoding="async"
+				width="400"
+				height="300"
+			/>
 		{:else}
 			<div class="card-media-placeholder" aria-hidden="true">
 				<Icon name="cases" size={36} />
