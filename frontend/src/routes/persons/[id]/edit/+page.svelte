@@ -615,7 +615,7 @@
 							{#if profileImagePreview}
 								<img
 									src={profileImagePreview}
-									alt="Preview of new image"
+									alt="Preview of new"
 									class="profile-image-preview"
 									decoding="async"
 									width="96"
@@ -624,7 +624,7 @@
 							{:else if existingProfileImageUrl}
 								<img
 									src={existingProfileImageUrl}
-									alt="Current profile image"
+									alt="Current profile"
 									class="profile-image-preview"
 									decoding="async"
 									width="96"
