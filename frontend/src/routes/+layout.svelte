@@ -22,6 +22,9 @@
 		</a>
 		<nav class="main-navigation">
 			<ul>
+				{#if currentUser.authenticated}
+					<li><a href="{base}/dashboard" class:active={$page.url.pathname.startsWith(`${base}/dashboard`)}>Dashboard</a></li>
+				{/if}
 				<li><a href="{base}/persons" class:active={$page.url.pathname.startsWith(`${base}/persons`)}>Cases</a></li>
 				<li><a href="{base}/statistics" class:active={$page.url.pathname.startsWith(`${base}/statistics`)}>Statistics</a></li>
 				{#if isVolunteer(currentUser)}
