@@ -30,9 +30,10 @@ record tomorrow.
 11. [Design system](#design-system)
 12. [Development workflow](#development-workflow)
 13. [Deployment](#deployment)
-14. [Repository conventions](#repository-conventions)
-15. [Further reading](#further-reading)
-16. [Contributing](#contributing)
+14. [Containerized deploy (Docker)](#containerized-deploy-docker)
+15. [Repository conventions](#repository-conventions)
+16. [Further reading](#further-reading)
+17. [Contributing](#contributing)
 
 ---
 
@@ -524,6 +525,103 @@ The backend unit is capped at 10 restarts in any 5-minute window
 (`StartLimitIntervalSec=300` + `StartLimitBurst=10`) — if you see a
 `Start request repeated too quickly` in the journal, the service is
 crash-looping and needs manual intervention, not another restart.
+
+---
+
+## Containerized deploy (Docker)
+
+A parallel, containerized build ships alongside the native
+systemd + nginx deploy. **The live production deploy is unchanged**
+— the containerized path is for fresh VMs, a future cutover, or
+local dev parity. `docker compose` orchestrates five services
+(`db`, `redis`, `backend`, `frontend`, `nginx`) with three profiles
+so the operator picks the right DB source at `up` time:
+
+| Profile       | DB source                       | When to use                          |
+|---------------|----------------------------------|--------------------------------------|
+| `dev`         | in-compose postgres + sqlite override (`USE_SQLITE=1`) | Local work on a dev machine |
+| `prod-pg`     | in-compose postgres              | Fresh VM with no external PG          |
+| `prod-remote` | external PG at `PG_HOST=10.0.0.100` (compose-managed redis only) | Same topology as the live prod (VM-managed PG, containerized app + redis) |
+
+### Bring up the dev profile
+
+```bash
+# One-time: copy + edit env
+cp .env.example .env
+$EDITOR .env  # fill in PG_PASSWORD (or leave blank + USE_SQLITE=1)
+
+# Build + run
+docker compose --profile dev up -d --build
+
+# Wait for healthy (db + redis + backend + frontend + nginx)
+docker compose ps
+
+# Smoke test
+curl -fsS http://localhost/healthz         # → {"ok":true,...}
+curl -fsS http://localhost/api/session/      # → {"authenticated":false}
+```
+
+### Bring up the prod-remote profile (mirrors current production)
+
+```bash
+# .env already populated with the production VM's PG creds
+docker compose --profile prod-remote up -d --build
+# No `db` service — backend connects to PG_HOST=10.0.0.100
+```
+
+### Image architecture
+
+| Image                     | Base                            | Notes |
+|---------------------------|---------------------------------|-------|
+| `backend`                 | `python:3.12-slim-bookworm` (multi-stage) | venv at `/app/.venv`, gunicorn via `gunicorn.conf.py` |
+| `frontend`                | `node:22-alpine` (multi-stage)   | `npm run build` then `node build/index.js`; preserves the adapter-node 5.5.x symlink trick from `deploy.sh:115-117` |
+| `nginx`                   | `nginx:1.27-alpine`             | mounted config; routes mirror `scripts/nginx/rtv-cases` |
+| `db` (dev / prod-pg only) | `postgres:16-alpine`            | healthcheck via `pg_isready` |
+| `redis`                   | `redis:7-alpine`                | healthcheck via `redis-cli ping` |
+
+### Healthcheck
+
+The backend image exposes `GET /healthz` (a 25-line view in
+`backend/testimonies/healthz.py`) that pings the DB and cache. The
+Docker `HEALTHCHECK` directive curls it every 30s; `docker compose ps`
+shows the result. `docker/nginx.conf` proxies `/healthz` only from
+the internal upstream — not exposed publicly.
+
+### Logging + Sentry
+
+The backend image logs JSON to stdout/stderr (12-factor) — capture
+with `docker compose logs -f backend` or any log scraper. Sentry is
+wired but inactive unless `SENTRY_DSN` is set; PII is opt-in
+(`send_default_pii=False`) per the project's data policy on a
+sensitive human-rights PII surface.
+
+### Files added by this build
+
+| File | Purpose |
+|---|---|
+| `docker-compose.yml`                | Multi-service orchestration with three profiles |
+| `docker/nginx.conf`                 | Reverse proxy + static serving (mirrors `scripts/nginx/rtv-cases`) |
+| `.env.example`                      | Single source of truth for container env (secrets gitignored) |
+| `.dockerignore`                     | Excludes `.venv`, `node_modules`, secrets, host-only scripts |
+| `backend/Dockerfile`                | Multi-stage Python build |
+| `backend/.dockerignore`             | Backend-context excludes |
+| `backend/gunicorn.conf.py`          | Env-driven workers / threads / timeout / keepalive / max-requests |
+| `scripts/docker/entrypoint-backend.sh` | Waits for PG + Redis, runs migrations + collectstatic, execs gunicorn |
+| `scripts/docker/entrypoint-frontend.sh` | Applies the symlink trick, validates env, execs node |
+| `scripts/docker/wait-for-it.sh`     | Bash-builtin TCP probe with timeout |
+| `docker-compose.override.yml.example` | Local-dev override template (gitignored copy is per-developer) |
+
+### What's NOT in this build (out of scope)
+
+- **k8s manifests / Helm chart** — the deploy surface is
+  `docker compose`, not a cluster. Add a separate chart when a
+  k8s target exists.
+- **CI image build + push to a registry** — needs a registry
+  decision (GHCR vs ECR vs self-hosted). The current CI
+  (`.github/workflows/ci.yml`) builds and tests; it doesn't
+  produce an image. Image push is a follow-up.
+- **Migrating the live VM off systemd + nginx** — the live
+  deploy is intentionally unchanged. A cutover is operator-driven.
 
 ---
 

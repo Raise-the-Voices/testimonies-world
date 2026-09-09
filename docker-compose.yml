@@ -1,0 +1,105 @@
+# docker-compose.yml — testimonies.world
+#
+# Three profiles so the operator can pick the right DB source
+# at `up` time. Default is `dev`.
+#
+#   dev           — `db` + `redis` in compose, sqlite via USE_SQLITE=1
+#                   (set in .env). For local work.
+#   prod-pg       — `db` + `redis` in compose, full Postgres-backed
+#                   stack. Use case: a fresh VM with no external PG.
+#   prod-remote   — `db` is omitted; PG_HOST=10.0.0.100 in .env.
+#                   `redis` still in compose (we need it for the
+#                   cache backend). Use case: same as current
+#                   production — VM-managed PG, containerized app+redis.
+#
+# To bring up: `docker compose --profile <profile> up -d`
+
+services:
+  db:
+    image: postgres:16-alpine
+    profiles: ["dev", "prod-pg"]
+    environment:
+      POSTGRES_DB: ${PG_DB:-testimonies_world}
+      POSTGRES_USER: ${PG_USER:-testimonies}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?PG_PASSWORD required}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-testimonies}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["dev", "prod-pg", "prod-remote"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: ghcr.io/raise-the-voices/testimonies-world-backend:dev
+    profiles: ["dev", "prod-pg", "prod-remote"]
+    env_file: .env
+    environment:
+      # Compose-managed Redis. The .env can override for a
+      # split-network deployment (e.g. a managed ElastiCache).
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      RUN_MIGRATIONS: "1"
+      RUN_COLLECTSTATIC: "1"
+    volumes:
+      - media-data:/app/media
+      - sensitive-data:/app/sensitive_media
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+        required: false  # only present in dev + prod-pg profiles
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8040/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        PUBLIC_BASE_PATH: ${PUBLIC_BASE_PATH:-/testimonies}
+    image: ghcr.io/raise-the-voices/testimonies-world-frontend:dev
+    profiles: ["dev", "prod-pg", "prod-remote"]
+    environment:
+      PORT: "3000"
+      HOST: "0.0.0.0"
+      ORIGIN: ${ORIGIN:-https://cases.raisethevoices.org}
+      PUBLIC_BASE_PATH: ${PUBLIC_BASE_PATH:-/testimonies}
+      ORIGIN_CHECK: "true"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:1.27-alpine
+    profiles: ["dev", "prod-pg", "prod-remote"]
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  pgdata: {}
+  media-data: {}
+  sensitive-data: {}
