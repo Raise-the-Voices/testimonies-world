@@ -4,6 +4,16 @@ import type { User } from './types';
 
 export const user = writable<User>({ authenticated: false });
 
+// `ready` flips true the first time loadSession() resolves (success OR
+// failure). Used by the root layout to gate child route render so we
+// don't flash "you must be logged in" or "couldn't load (HTTP 0)"
+// during the brief window between mount and /api/session/ returning —
+// most visible on hard refresh.
+//
+// Default true on subsequent navigations: the root +layout.ts seeds the
+// store on first render, and stays true for the rest of the session.
+export const ready = writable<boolean>(false);
+
 export async function loadSession(): Promise<void> {
 	try {
 		const data = await getSession();
@@ -11,6 +21,10 @@ export async function loadSession(): Promise<void> {
 	} catch (e) {
 		console.error('[session] failed:', e);
 		user.set({ authenticated: false });
+	} finally {
+		// Always mark ready — failing to load the session is itself an
+		// answer the UI must be able to render against.
+		ready.set(true);
 	}
 }
 

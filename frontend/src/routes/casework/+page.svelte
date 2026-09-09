@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { replaceState } from '$app/navigation';
-	import { user, isAdvocate } from '$lib/session';
+	import { user, isAdvocate, ready } from '$lib/session';
 	import { getCasework, deleteCasework } from '$lib/api';
 	import Banner from '$lib/Banner.svelte';
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
@@ -190,7 +190,16 @@
 </svelte:head>
 
 <div class="container">
-	{#if !isAdvocate(currentUser)}
+	{#if !$ready}
+		<!-- Auth hydrating: same defense-in-depth as the dashboard —
+		     don't render the "you must be logged in" prompt until
+		     we actually know the user isn't authenticated. -->
+		<div class="casework-hydrating" aria-busy="true" aria-live="polite">
+			<Skeleton variant="text" width="30%" height="1.5rem" />
+			<Skeleton variant="rect" width="100%" height="6rem" />
+			<Skeleton variant="rect" width="100%" height="6rem" />
+		</div>
+	{:else if !isAdvocate(currentUser)}
 		<p class="muted">
 			You must be logged in as an advocate to view casework.
 			<a href="{base}/api/auth/login/?next={base}/casework">Login</a>

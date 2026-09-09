@@ -125,7 +125,10 @@ function getCsrfToken(): string {
 	return match ? decodeURIComponent(match[1]) : '';
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(
+	path: string,
+	options: RequestInit & { fetch?: typeof globalThis.fetch } = {},
+): Promise<T> {
 	const url = `${API_BASE}${path}`;
 
 	const method = (options.method ?? 'GET').toUpperCase();
@@ -148,9 +151,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 		if (csrf) headers['X-CSRFToken'] = csrf;
 	}
 
+	// SvelteKit's load functions pass a wrapped `fetch` that forwards
+	// cookies during SSR — the global fetch does NOT. Use the injected
+	// fetch when present (root +layout.ts is the only caller today);
+	// fall back to the global fetch for client-side calls where
+	// `credentials: 'include'` already handles cookies.
+	const doFetch = options.fetch ?? globalThis.fetch.bind(globalThis);
+
 	let res: Response;
 	try {
-		res = await fetch(url, {
+		res = await doFetch(url, {
 			credentials: 'include',
 			headers,
 			...options,
@@ -186,8 +196,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 	throw new ApiError(message, res.status, res.statusText, fieldErrors, body);
 }
 
-export async function getSession(): Promise<User> {
-	return request<User>('/session/');
+export async function getSession(
+	injectedFetch?: typeof globalThis.fetch,
+): Promise<User> {
+	return request<User>('/session/', { fetch: injectedFetch });
 }
 
 export async function getPersons(

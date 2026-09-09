@@ -1,19 +1,30 @@
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { onMount } from 'svelte';
-	import { user, loadSession, isVolunteer, isAdvocate } from '$lib/session';
+	import { user, ready, loadSession, isVolunteer, isAdvocate } from '$lib/session';
 	import { clearDraft } from '$lib/submitDraft';
 	import Bell from '$lib/Bell.svelte';
+	import Skeleton from '$lib/Skeleton.svelte';
 	import '../app.css';
 	import { page } from '$app/stores';
+	import type { LayoutData } from './$types';
 
-	let { children } = $props();
+	let { children, data }: { children: any; data: LayoutData } = $props();
+
+	// Seed the session store from the universal load BEFORE any child
+	// effect runs. `$effect.pre` is Svelte 5's "before DOM update"
+	// effect — it runs ahead of `$effect` and `$derived` re-evaluation,
+	// so children that read `$user` in their own `$effect` see the
+	// hydrated value. The previous `onMount(loadSession)` ran AFTER
+	// children mounted, causing protected pages to flash their
+	// "must be logged in" or "couldn't load" error state on hard
+	// refresh.
+	$effect.pre(() => {
+		if (data.user) user.set(data.user);
+		ready.set(true);
+	});
+
 	let currentUser = $derived($user);
 	let prevAuthenticated = $state<boolean | null>(null);
-
-	onMount(() => {
-		loadSession();
-	});
 
 	// --- Logout cleanup -------------------------------------------------
 	// When the user transitions from authenticated → unauthenticated
@@ -36,12 +47,11 @@
 	});
 
 	// Cross-tab logout: when another tab logs the user out, the
-	// 'storage' event fires here. LocalStorage keys are scoped per
-	// origin and per user, but the session cookie is shared — a
-	// logout in tab A invalidates the session in tab B too. The
-	// loadSession() call below re-reads /api/session/ which will now
-	// return { authenticated: false }, which the $effect above then
-	// turns into a draft clear.
+	// 'storage' event fires here. The session cookie is shared — a
+	// logout in tab A invalidates the session in tab B too. We
+	// re-read /api/session/ via the client-side path, which doesn't
+	// need cookie forwarding (cookies travel with every fetch via
+	// `credentials: 'include'`).
 	if (typeof window !== 'undefined') {
 		window.addEventListener('storage', (e) => {
 			if (e.key === null || e.key === 'sessionid') {
@@ -86,7 +96,21 @@
 
 <main class="page">
 	<div class="wrapper">
-		{@render children()}
+		{#if $ready}
+			{@render children()}
+		{:else}
+			<!-- Auth-hydration skeleton: renders while the universal
+			     load is in flight (server-side first paint during SSR
+			     hydration; client-side when re-fetching after a
+			     cross-tab logout). Without this gate, protected pages
+			     see `$user` as the default `{ authenticated: false }`
+			     and flash their "must be logged in" or "couldn't
+			     load (HTTP 0)" state on hard refresh. -->
+			<div class="auth-hydrating" aria-busy="true" aria-live="polite">
+				<Skeleton variant="rect" width="100%" height="12rem" />
+				<Skeleton variant="text-block" lines={4} />
+			</div>
+		{/if}
 	</div>
 </main>
 
@@ -206,6 +230,15 @@
 		border-top: 1px solid var(--color-border-light);
 		padding: 1rem 0;
 		margin-top: 2rem;
+	}
+
+	/* Auth-hydration skeleton: matches the visual weight of a real
+	   page so the swap from skeleton to content doesn't reflow. */
+	.auth-hydrating {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		min-height: 18rem;
 	}
 
 	@media (max-width: 800px) {
