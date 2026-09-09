@@ -8,6 +8,7 @@
 	import Banner from '$lib/Banner.svelte';
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
+	import ErrorCard from '$lib/ErrorCard.svelte';
 	import type { PageData } from './$types';
 	import type { Contact, ContactRole } from '$lib/types';
 
@@ -96,6 +97,11 @@
 
 	async function performDelete() {
 		if (!deleteToast) return;
+		// D.8 — re-entrancy guard. A fast double-click on the
+		// confirm button or on Retry while already in `pending`
+		// would race two DELETE calls. casework has this guard
+		// explicitly (cases 156-158 there); contacts didn't.
+		if (deleteToast.stage === 'pending') return;
 		// Allow Retry from `error` and the initial Confirm from `confirming`.
 		const target = deleteToast;
 		deleteToast = { ...target, stage: 'pending' };
@@ -238,14 +244,12 @@
 					{/each}
 				</div>
 			{:else if error}
-				<div class="contacts-error" role="alert">
-					<header class="error-header">
-						<span class="error-icon" aria-hidden="true">⚠</span>
-						<h2>Could not load contacts</h2>
-					</header>
-					<p class="error-message">{error}</p>
-					<button type="button" class="btn btn-secondary" onclick={loadContacts}>Retry</button>
-				</div>
+				<ErrorCard
+					title="Could not load contacts"
+					message={error}
+					kind="network"
+					retry={loadContacts}
+				/>
 			{:else if contacts.length === 0}
 				<div class="contacts-empty">
 					<header class="empty-header">

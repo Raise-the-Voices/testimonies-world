@@ -8,6 +8,7 @@
 	import Banner from '$lib/Banner.svelte';
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
+	import ErrorCard from '$lib/ErrorCard.svelte';
 	import type { PageData } from './$types';
 	import type { CaseworkRecord } from '$lib/types';
 
@@ -273,12 +274,12 @@
 				<Skeleton variant="rect" height="6rem" />
 			</div>
 		{:else if loadError}
-			<div class="state-card state-error" role="alert">
-				<div class="state-icon state-icon-error" aria-hidden="true">!</div>
-				<h2 class="state-title">Couldn't load casework</h2>
-				<p class="state-body">{loadError}</p>
-				<button type="button" class="btn btn-primary" onclick={loadRecords}>Try again</button>
-			</div>
+			<ErrorCard
+				title="Couldn't load casework"
+				message={loadError}
+				kind="network"
+				retry={loadRecords}
+			/>
 		{:else if records.length === 0}
 			<div class="state-card state-empty">
 				<div class="state-icon state-icon-empty" aria-hidden="true">✓</div>

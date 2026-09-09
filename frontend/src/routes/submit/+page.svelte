@@ -392,6 +392,10 @@
 	}
 
 	async function handleSubmit() {
+		// Re-entrancy guard — a fast double-click can beat the
+		// disabled={saving} DOM attribute while a request is in
+		// flight. Bail before any state changes.
+		if (saving) return;
 		errors = {};
 		formError = '';
 
