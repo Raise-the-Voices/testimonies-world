@@ -3,7 +3,6 @@
 	import { user, ready, loadSession, isVolunteer, isAdvocate } from '$lib/session';
 	import { clearDraft } from '$lib/submitDraft';
 	import Bell from '$lib/Bell.svelte';
-	import Skeleton from '$lib/Skeleton.svelte';
 	import '../app.css';
 	import { page } from '$app/stores';
 	import type { LayoutData } from './$types';
@@ -96,21 +95,7 @@
 
 <main class="page">
 	<div class="wrapper">
-		{#if $ready}
-			{@render children()}
-		{:else}
-			<!-- Auth-hydration skeleton: renders while the universal
-			     load is in flight (server-side first paint during SSR
-			     hydration; client-side when re-fetching after a
-			     cross-tab logout). Without this gate, protected pages
-			     see `$user` as the default `{ authenticated: false }`
-			     and flash their "must be logged in" or "couldn't
-			     load (HTTP 0)" state on hard refresh. -->
-			<div class="auth-hydrating" aria-busy="true" aria-live="polite">
-				<Skeleton variant="rect" width="100%" height="12rem" />
-				<Skeleton variant="text-block" lines={4} />
-			</div>
-		{/if}
+		{@render children()}
 	</div>
 </main>
 
@@ -230,15 +215,6 @@
 		border-top: 1px solid var(--color-border-light);
 		padding: 1rem 0;
 		margin-top: 2rem;
-	}
-
-	/* Auth-hydration skeleton: matches the visual weight of a real
-	   page so the swap from skeleton to content doesn't reflow. */
-	.auth-hydrating {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-		min-height: 18rem;
 	}
 
 	@media (max-width: 800px) {
