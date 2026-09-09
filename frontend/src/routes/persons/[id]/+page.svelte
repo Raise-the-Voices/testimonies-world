@@ -57,6 +57,7 @@
 	let relationshipError = $state('');
 	let relationshipPickerList = $state<Array<{ id: number; name: string; country: string }>>([]);
 	let pickerLoaded = $state(false);
+	let pickerError = $state('');
 
 	// Create/edit form state.
 	let relationshipFormOpen = $state(false);
@@ -269,6 +270,7 @@
 	// still opens with an empty picker and a visible error.
 	async function loadPicker() {
 		if (pickerLoaded) return;
+		pickerError = '';
 		try {
 			const data = await getPersons({
 				is_published: 'true',
@@ -282,7 +284,16 @@
 			}));
 			pickerLoaded = true;
 		} catch (e: unknown) {
+			// D.5 — surface the failure to the user instead of
+			// silently presenting an empty dropdown. The user
+			// would otherwise see 'no results' and assume the
+			// platform has no other people to relate this one
+			// to — a confusing dead-end.
 			relationshipPickerList = [];
+			pickerError =
+				e instanceof Error
+					? e.message
+					: "Couldn't load the people list — try again.";
 		}
 	}
 
@@ -1259,19 +1270,30 @@
 			{#if !editingRel}
 				<label class="form-field" for="rel-other">
 					<span class="form-label">Person</span>
-					<select
-						id="rel-other"
-						class="form-select"
-						bind:value={relationshipFormOtherId}
-						disabled={relationshipSaving}
-					>
-						<option value="" disabled>Pick a person…</option>
-						{#each relationshipPickerList as p (p.id)}
-							{#if p.id !== person.id}
-								<option value={p.id}>{p.name} — {p.country}</option>
-							{/if}
-						{/each}
-					</select>
+					{#if pickerError}
+						<p class="picker-error" role="status">
+							{pickerError}
+							<button
+								type="button"
+								class="picker-retry"
+								onclick={() => { pickerLoaded = false; loadPicker(); }}
+							>Reload</button>
+						</p>
+					{:else}
+						<select
+							id="rel-other"
+							class="form-select"
+							bind:value={relationshipFormOtherId}
+							disabled={relationshipSaving}
+						>
+							<option value="" disabled>Pick a person…</option>
+							{#each relationshipPickerList as p (p.id)}
+								{#if p.id !== person.id}
+									<option value={p.id}>{p.name} — {p.country}</option>
+								{/if}
+							{/each}
+						</select>
+					{/if}
 				</label>
 			{/if}
 			<label class="form-field" for="rel-type">
@@ -2140,6 +2162,35 @@
 		border: 1px solid #feb2b2;
 		border-radius: var(--radius-card);
 		font-size: 0.88rem;
+	}
+	/* D.5 — picker-error is an inline note (not a banner) that
+	   replaces the person <select> in the relationship modal
+	   when the picker list couldn't be loaded. */
+	.picker-error {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem 0.6rem;
+		flex-wrap: wrap;
+		padding: 0.6rem 0.85rem;
+		background: #fffaf0;
+		color: #5a3b00;
+		border: 1px solid #fbd38d;
+		border-radius: var(--radius-control);
+		font-size: 0.88rem;
+		margin: 0.25rem 0 0 0;
+	}
+	.picker-retry {
+		font-size: 0.82rem;
+		font-weight: 500;
+		padding: 0.25rem 0.6rem;
+		border-radius: var(--radius-control);
+		border: 1px solid currentColor;
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
+	}
+	.picker-retry:hover {
+		background: rgba(0, 0, 0, 0.06);
 	}
 	.form-error-icon {
 		display: inline-flex;

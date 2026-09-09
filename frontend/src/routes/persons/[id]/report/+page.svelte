@@ -6,12 +6,14 @@
 	import { user, isVolunteer } from '$lib/session';
 	import { getPerson, createReport, getReport, updateReport, ApiError } from '$lib/api';
 	import type { Report } from '$lib/types';
+import Skeleton from '$lib/Skeleton.svelte';
 
 	let currentUser = $derived($user);
 	let person: any = $state(null);
 	let loading = $state(true);
 	let saving = $state(false);
 	let errorMsg = $state('');
+	let errorKind = $state<'generic' | 'network' | 'auth' | 'server' | 'validation'>('generic');
 	let fieldErrors = $state<Record<string, string>>({});
 
 	// `?id=` in the URL → edit mode. Without it → create mode.
@@ -129,9 +131,12 @@
 	}
 
 	async function handleSubmit() {
+		// Re-entrancy guard — see contacts/new for the rationale.
+		if (saving) return;
 		if (!validate()) return;
 		saving = true;
 		errorMsg = '';
+		errorKind = 'generic';
 		fieldErrors = {};
 		const payload = {
 			person: person.id,
@@ -158,15 +163,30 @@
 			await goto(`${base}/persons/${person.id}`, { replaceState: true });
 		} catch (err: unknown) {
 			// DRF returns per-field errors on 400 — surface them inline.
-			if (err instanceof ApiError && err.isValidation) {
-				fieldErrors = Object.fromEntries(
-					Object.entries(err.fieldErrors).map(([k, v]) => [k, v[0] ?? '']),
-				);
-				errorMsg = err.message;
+			if (err instanceof ApiError) {
+				if (err.isValidation && err.fieldErrors && Object.keys(err.fieldErrors).length) {
+					fieldErrors = Object.fromEntries(
+						Object.entries(err.fieldErrors).map(([k, v]) => [k, v[0] ?? '']),
+					);
+					errorMsg = err.message;
+					errorKind = 'validation';
+				} else if (err.isUnauthorized) {
+					errorMsg = 'Your session has expired. Please log in again to continue.';
+					errorKind = 'auth';
+				} else if (err.isServer || err.status === 0) {
+					errorMsg = err.status === 0
+						? err.message
+						: "The server hit a snag. Please try again in a moment.";
+					errorKind = err.status === 0 ? 'network' : 'server';
+				} else {
+					errorMsg = err.message;
+					errorKind = 'generic';
+				}
 			} else {
 				errorMsg =
 					err instanceof Error ? err.message : 'Failed to save the report.';
 			}
+		} finally {
 			saving = false;
 		}
 	}
@@ -177,11 +197,18 @@
 </script>
 
 <svelte:head>
-	<title>Add Report — {person?.name || 'Loading...'} — Testimonies.world</title>
+	<title>Add Report — {person?.name ?? 'Testimonies.world'} — Testimonies.world</title>
 </svelte:head>
 
 {#if loading}
-	<p class="muted">Loading…</p>
+	<div class="report-skeleton" aria-label="Loading report form">
+		<Skeleton variant="rect" width="100%" height="2.5rem" />
+		<Skeleton variant="rect" width="100%" height="2.5rem" />
+		<Skeleton variant="rect" width="100%" height="2.5rem" />
+		<Skeleton variant="rect" width="100%" height="2.5rem" />
+		<Skeleton variant="badge" />
+		<Skeleton variant="rect" width="100%" height="8rem" />
+	</div>
 {:else if !isVolunteer(currentUser)}
 	<p class="muted">
 		You must be logged in as a volunteer to add reports.
@@ -206,9 +233,17 @@
 	</header>
 
 	{#if errorMsg}
-		<div class="form-error" role="alert" transition:fly={{ y: -8, duration: 200 }}>
+		<div class="form-error form-error-{errorKind}" role="alert" transition:fly={{ y: -8, duration: 200 }}>
 			<span class="form-error-icon" aria-hidden="true">!</span>
 			<span>{errorMsg}</span>
+			{#if errorKind === 'auth'}
+				<div class="form-error-actions">
+					<button type="button" onclick={() => location.reload()}>
+						Refresh session
+					</button>
+					<a href="{base}/api/auth/login/?next={base}/persons/{person.id}/report">Log in again</a>
+				</div>
+			{/if}
 		</div>
 	{/if}
 
@@ -554,14 +589,57 @@
 	/* === Form-level error banner === */
 	.form-error {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.5rem 0.85rem;
 		padding: 0.7rem 0.95rem;
 		background: #fed7d7;
 		color: #c53030;
 		border: 1px solid #feb2b2;
 		border-radius: var(--radius-card);
 		font-size: 0.9rem;
+	}
+	.form-error-network {
+		background: #fffaf0;
+		color: #5a3b00;
+		border-color: #fbd38d;
+	}
+	.form-error-server {
+		background: #fed7d7;
+		color: #c53030;
+		border-color: #feb2b2;
+	}
+	.form-error-validation {
+		background: #fef5e7;
+		color: #744210;
+		border-color: #f6ad55;
+	}
+	.form-error-auth {
+		background: var(--color-surface);
+		color: var(--color-text);
+		border-color: var(--color-border-light);
+	}
+	.form-error-actions {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+		margin-left: auto;
+	}
+	.form-error-actions a,
+	.form-error-actions button {
+		font-size: 0.85rem;
+		font-weight: 500;
+		text-decoration: none;
+		padding: 0.3rem 0.7rem;
+		border-radius: var(--radius-control);
+		border: 1px solid currentColor;
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
+	}
+	.form-error-actions a:hover,
+	.form-error-actions button:hover {
+		background: rgba(0, 0, 0, 0.06);
 	}
 	.form-error-icon {
 		display: inline-flex;
@@ -807,5 +885,13 @@
 	@media (prefers-reduced-motion: reduce) {
 		.spinner { animation: none; }
 		.form-error { transition: none; }
+	}
+
+	.report-skeleton {
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+		max-width: 640px;
+		margin: 2rem auto;
 	}
 </style>

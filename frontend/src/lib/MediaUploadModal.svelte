@@ -222,6 +222,11 @@
 			} else {
 				formError = e instanceof Error ? e.message : 'Something went wrong.';
 			}
+		} finally {
+			// Reset regardless of success/failure. The success path
+			// unmounts the modal so the assignment is harmless; the
+			// failure path needs it so a partial save doesn't leave
+			// the submit button stuck disabled.
 			saving = false;
 		}
 	}
