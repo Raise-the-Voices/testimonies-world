@@ -35,6 +35,14 @@ class SanitizingModelSerializerMixin:
     direct-DB writes aren't a known gap.
     """
 
+    # Silence drf-spectacular: it would otherwise pick up the
+    # class docstring and inject it as the description for every
+    # serializer that uses this mixin (since the mixin appears
+    # in the serializer's MRO). The description is more useful
+    # per-serializer (set in each Meta), so we hide the mixin's
+    # own doc from the schema generator.
+    __doc__ = None
+
     text_fields: list = []
     url_fields: list = []
 
@@ -209,15 +217,14 @@ class PersonDetailSerializer(serializers.ModelSerializer):
 
 
 class PersonWriteSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
-    """Serializer for creating/updating persons.
-
-    Sanitizes every free-text identity + narrative + location field
-    plus `authoritative_url` (URL validator, http(s) only). The
-    identity fields (`name`, `aliases`, `legal_name`) are first-class
-    PII and the most likely XSS pivot if a future template renders
-    them with `|safe` or `mark_safe` — sanitizing at the input
-    boundary keeps the DB clean regardless of the render path.
-    """
+    """Serializer for creating/updating persons."""
+    # Defense in depth: sanitizes every free-text identity +
+    # narrative + location field plus `authoritative_url` (URL
+    # validator, http(s) only). The identity fields (`name`,
+    # `aliases`, `legal_name`) are first-class PII and the most
+    # likely XSS pivot if a future template renders them with
+    # `|safe` or `mark_safe` — sanitizing at the input boundary
+    # keeps the DB clean regardless of the render path.
     text_fields = [
         'name', 'legal_name', 'aliases', 'country', 'ethnicity',
         'rough_location', 'precise_location', 'medical_notes',
@@ -258,7 +265,12 @@ class FamilyRelationshipSerializer(SanitizingModelSerializerMixin, serializers.M
           reverse-ordered pair is also rejected. `parent` / `child`
           allow either direction (direction carries meaning).
     """
-
+    # NOTE: long docstring above is intentional — describes the
+    # validation rules for the volunteer / advocate audience.
+    # Sanitizing notes via SanitizingModelSerializerMixin (text_fields
+    # below) is defense-in-depth; the field is rarely user-supplied
+    # with markup, but we sanitize anyway for parity with other
+    # text fields.
     text_fields = ['notes']
 
     person_a_name = serializers.CharField(source='person_a.name', read_only=True)
