@@ -12,6 +12,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 	let loading = $state(true);
 	let loadError = $state('');
 	let formError = $state('');
+	let formErrorKind = $state<'generic' | 'network' | 'auth' | 'server' | 'validation'>('generic');
 	let errors = $state<Record<string, string>>({});
 
 	// Edit mode: when ?id=X is present, we PATCH instead of POST.
@@ -118,8 +119,13 @@ import Skeleton from '$lib/Skeleton.svelte';
 	}
 
 	async function save() {
+		// Re-entrancy guard: a fast double-click can beat the
+		// disabled={saving} DOM attribute while a request is in
+		// flight. Bail before any state changes.
+		if (saving) return;
 		if (!validate()) return;
 		formError = '';
+		formErrorKind = 'generic';
 		saving = true;
 		try {
 			const payload: Partial<Contact> = {
@@ -140,7 +146,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 			}
 		} catch (e: unknown) {
 			if (e instanceof ApiError) {
-				if (e.fieldErrors && Object.keys(e.fieldErrors).length) {
+				if (e.isValidation && e.fieldErrors && Object.keys(e.fieldErrors).length) {
 					// fieldErrors is Record<string, string[]> from Django.
 					// Flatten to the first message per field for display.
 					const flat: Record<string, string> = {};
@@ -149,12 +155,27 @@ import Skeleton from '$lib/Skeleton.svelte';
 					}
 					errors = { ...flat, ...errors };
 					formError = 'Please correct the highlighted fields.';
+					formErrorKind = 'validation';
+				} else if (e.isUnauthorized) {
+					formError = 'Your session has expired. Please log in again to continue.';
+					formErrorKind = 'auth';
+				} else if (e.isServer || e.status === 0) {
+					// status === 0 is the network-drop sentinel from api.ts
+					formError = e.status === 0
+						? e.message  // api.ts already wrote user-friendly copy
+						: "The server hit a snag. Please try again in a moment.";
+					formErrorKind = e.status === 0 ? 'network' : 'server';
 				} else {
 					formError = e.message;
+					formErrorKind = 'generic';
 				}
 			} else {
 				formError = e instanceof Error ? e.message : 'Something went wrong.';
 			}
+		} finally {
+			// Reset regardless of success/failure so any unhandled
+			// path (e.g. a navigation race during goto) doesn't
+			// leave the button stuck disabled.
 			saving = false;
 		}
 	}
@@ -202,9 +223,19 @@ import Skeleton from '$lib/Skeleton.svelte';
 
 		<form class="form-card" onsubmit={(e) => { e.preventDefault(); save(); }} novalidate>
 			{#if formError}
-				<div class="form-error" role="alert">
+				<div class="form-error form-error-{formErrorKind}" role="alert">
 					<span class="form-error-icon" aria-hidden="true">!</span>
 					<span>{formError}</span>
+					{#if formErrorKind === 'auth'}
+						<div class="form-error-actions">
+							<button type="button" class="form-error-refresh" onclick={() => location.reload()}>
+								Refresh session
+							</button>
+							<a href="{base}/api/auth/login/?next={base}/contacts/new">
+								Log in again
+							</a>
+						</div>
+					{/if}
 				</div>
 			{/if}
 
@@ -385,14 +416,35 @@ import Skeleton from '$lib/Skeleton.svelte';
 	/* === Form-level error banner === */
 	.form-error {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.5rem 0.85rem;
 		padding: 0.65rem 0.9rem;
 		background: #fed7d7;
 		color: #c53030;
 		border: 1px solid #feb2b2;
 		border-radius: var(--radius-card);
 		font-size: 0.9rem;
+	}
+	.form-error-network {
+		background: #fffaf0;
+		color: #5a3b00;
+		border-color: #fbd38d;
+	}
+	.form-error-server {
+		background: #fed7d7;
+		color: #c53030;
+		border-color: #feb2b2;
+	}
+	.form-error-validation {
+		background: #fef5e7;
+		color: #744210;
+		border-color: #f6ad55;
+	}
+	.form-error-auth {
+		background: var(--color-surface);
+		color: var(--color-text);
+		border-color: var(--color-border-light);
 	}
 	.form-error-icon {
 		display: inline-flex;
@@ -404,6 +456,28 @@ import Skeleton from '$lib/Skeleton.svelte';
 		background: rgba(197, 48, 48, 0.2);
 		font-weight: 700;
 		font-size: 0.85rem;
+	}
+	.form-error-actions {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+		margin-left: auto;
+	}
+	.form-error-actions a,
+	.form-error-refresh {
+		font-size: 0.85rem;
+		font-weight: 500;
+		text-decoration: none;
+		padding: 0.3rem 0.7rem;
+		border-radius: var(--radius-control);
+		border: 1px solid currentColor;
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
+	}
+	.form-error-actions a:hover,
+	.form-error-refresh:hover {
+		background: rgba(0, 0, 0, 0.06);
 	}
 
 	/* === Grid layout — name + notes span full width === */
