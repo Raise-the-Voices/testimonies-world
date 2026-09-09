@@ -1,9 +1,17 @@
 from rest_framework import serializers
 
+from cases.serializers import SanitizingModelSerializerMixin
+
 from .models import Contact
 
 
-class ContactSerializer(serializers.ModelSerializer):
+class ContactSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
+    # Contacts are advocate-only and always-private. `name` and
+    # `notes` are the canonical PII columns; sanitizing at the
+    # input boundary keeps the audit trail (which echoes these
+    # values) and any future export path XSS-safe.
+    text_fields = ['name', 'notes']
+
     class Meta:
         model = Contact
         fields = '__all__'
