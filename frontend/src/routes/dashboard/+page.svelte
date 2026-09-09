@@ -207,82 +207,83 @@
 			/>
 		</section>
 
-		<div class="grid-2col">
-			<!-- Quick actions -->
-			<DashboardCard title="Quick actions" subtitle="One click to the right place.">
-				{#if visibleActions.length === 0}
-					<p class="empty-state">No actions available for your role.</p>
-				{:else}
-					<QuickActions actions={visibleActions} />
-				{/if}
-			</DashboardCard>
+		<!-- All cards stack single-column. Previously this section was
+		     a 2-col grid (Quick actions | Recent activity and Status
+		     breakdown | Recently updated cases) which made the page
+		     feel busy and hard to scan. Single column reads top-to-bottom. -->
+		<DashboardCard title="Quick actions" subtitle="One click to the right place.">
+			{#if visibleActions.length === 0}
+				<p class="empty-state">No actions available for your role.</p>
+			{:else}
+				<QuickActions actions={visibleActions} />
+			{/if}
+		</DashboardCard>
 
-			<!-- Recent activity -->
-			<DashboardCard
-				title="Recent activity"
-				subtitle={scopeLabel === 'staff'
-					? 'System-wide audit log.'
-					: scopeLabel === 'advocate'
-						? 'Your activity plus casework events.'
-						: 'Your activity across the platform.'}
-			>
-				{#snippet trailing()}
-					{#if isAdmin($user)}
-						<a href="{base}/dashboard/audit-logs" class="view-all-link">
-							View all <Icon name="arrow-right" size={14} />
-						</a>
-					{/if}
-				{/snippet}
-				{#if data.data.activity.length === 0}
-					<p class="empty-state">No recent activity.</p>
-				{:else}
-					<ul class="activity-feed">
-						{#each data.data.activity as a (a.id)}
-							<li class="activity-item">
-								<span class="activity-meta">
-									<span class="activity-user">{a.user ?? '—'}</span>
-									<span class="activity-action activity-action-{a.action}">{a.action}</span>
-									<span class="activity-target">{a.target_type} #{a.target_id}</span>
-								</span>
-								<span class="activity-when">{formatRelative(a.timestamp)}</span>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-			</DashboardCard>
-
-			<!-- Status breakdown -->
-			<DashboardCard title="Status breakdown" subtitle="Open cases by current status.">
-				<StatusBreakdownChart counts={data.data.by_status} />
-			</DashboardCard>
-
-			<!-- Recent published cases -->
-			<DashboardCard title="Recently updated cases" subtitle="Latest five published cases.">
-				{#snippet trailing()}
-					<a href="{base}/persons" class="view-all-link">
-						Browse all <Icon name="arrow-right" size={14} />
+		<DashboardCard
+			title="Recent activity"
+			subtitle={scopeLabel === 'staff'
+				? 'System-wide audit log.'
+				: scopeLabel === 'advocate'
+					? 'Your activity plus casework events.'
+					: 'Your activity across the platform.'}
+		>
+			{#snippet trailing()}
+				{#if isAdmin($user)}
+					<a href="{base}/dashboard/audit-logs" class="view-all-link">
+						View all <Icon name="arrow-right" size={14} />
 					</a>
-				{/snippet}
-				{#if data.data.recent_persons.length === 0}
-					<p class="empty-state">No published cases yet.</p>
-				{:else}
-					<ul class="person-list">
-						{#each data.data.recent_persons as p (p.id)}
-							<li class="person-row">
-								<a href={personHref(p.id)}>
-									<span class="person-name">{p.name}</span>
-									<span class="person-country">{p.country}</span>
-									<span class="person-status status-{p.current_status}">{p.current_status.replace(/_/g, ' ')}</span>
-									<span class="person-when">{formatRelative(p.updated_at)}</span>
-								</a>
-							</li>
-						{/each}
-					</ul>
 				{/if}
-			</DashboardCard>
-		</div>
+			{/snippet}
+			{#if data.data.activity.length === 0}
+				<p class="empty-state">No recent activity.</p>
+			{:else}
+				<ul class="activity-feed">
+					{#each data.data.activity as a (a.id)}
+						<li class="activity-item">
+							<span class="activity-meta">
+								<span class="activity-user">{a.user ?? '—'}</span>
+								<span class="activity-action activity-action-{a.action}">{a.action}</span>
+								<span class="activity-target">{a.target_type} #{a.target_id}</span>
+							</span>
+							<span class="activity-when">{formatRelative(a.timestamp)}</span>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</DashboardCard>
 
-		<!-- Recent casework — full width, only relevant for Advocate / Admin -->
+		<DashboardCard title="Status breakdown" subtitle="Open cases by current status.">
+			<StatusBreakdownChart counts={data.data.by_status} />
+		</DashboardCard>
+
+		<DashboardCard title="Recently updated cases" subtitle="Latest five published cases.">
+			{#snippet trailing()}
+				<a href="{base}/persons" class="view-all-link">
+					Browse all <Icon name="arrow-right" size={14} />
+				</a>
+			{/snippet}
+			{#if data.data.recent_persons.length === 0}
+				<p class="empty-state">No published cases yet.</p>
+			{:else}
+				<ul class="person-list">
+					{#each data.data.recent_persons as p (p.id)}
+						<li class="person-row">
+							<a href={personHref(p.id)}>
+								<span class="person-name">{p.name}</span>
+								<span class="person-country">{p.country}</span>
+								<span class="person-status status-{p.current_status}">{p.current_status.replace(/_/g, ' ')}</span>
+								<span class="person-when">{formatRelative(p.updated_at)}</span>
+							</a>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</DashboardCard>
+
+		<!-- Recent casework — only for Advocate / Admin. The row
+		     column order is description → action → status → meta
+		     (LTR English reading order: what's happening, then
+		     the type + state, then when/who). -->
 		{#if isAdvocate($user) || isAdmin($user)}
 			<DashboardCard
 				title={isAdmin($user) ? 'Recent casework' : 'My recent casework'}
@@ -300,9 +301,11 @@
 						{#each data.data.recent_casework as cw (cw.id)}
 							<li class="casework-row">
 								<a href={caseworkHref(cw.id)}>
-									<span class="cw-action">{cw.action_type.replace(/_/g, ' ')}</span>
-									<span class="cw-status cw-status-{cw.status}">{cw.status.replace(/_/g, ' ')}</span>
 									<span class="cw-desc">{cw.description}</span>
+									<span class="cw-pills">
+										<span class="cw-action">{cw.action_type.replace(/_/g, ' ')}</span>
+										<span class="cw-status cw-status-{cw.status}">{cw.status.replace(/_/g, ' ')}</span>
+									</span>
 									<span class="cw-meta">
 										<span>{cw.date}</span>
 										{#if cw.performed_by_name}
@@ -401,17 +404,9 @@
 		}
 	}
 
-	/* Two-column section grid */
-	.grid-2col {
-		display: grid;
-		grid-template-columns: 1fr;
-		gap: var(--gap-card);
-	}
-	@media (min-width: 720px) {
-		.grid-2col {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-		}
-	}
+	/* Section grid — single column on all viewports. The dashboard
+	   reads top-to-bottom so the user can track which card they're
+	   on without their eyes jumping between columns. */
 
 	.view-all-link {
 		display: inline-flex;
@@ -506,8 +501,7 @@
 		flex-direction: column;
 		gap: 0.4rem;
 	}
-	.person-row a,
-	.casework-row a {
+	.person-row a {
 		display: grid;
 		grid-template-columns: 1fr auto auto auto;
 		align-items: center;
@@ -521,22 +515,18 @@
 		transition: background 0.15s ease;
 	}
 	@media (max-width: 600px) {
-		.person-row a,
-		.casework-row a {
+		.person-row a {
 			grid-template-columns: 1fr auto;
 		}
-		.person-row .person-status,
-		.casework-row .cw-status {
+		.person-row .person-status {
 			grid-column: 2;
 		}
-		.person-row .person-when,
-		.casework-row .cw-meta {
+		.person-row .person-when {
 			grid-column: 1 / -1;
 			justify-self: end;
 		}
 	}
-	.person-row a:hover,
-	.casework-row a:hover {
+	.person-row a:hover {
 		background: var(--color-bg);
 	}
 	.person-name {
@@ -567,12 +557,38 @@
 		white-space: nowrap;
 	}
 
-	/* Casework */
-	.casework-list .cw-action {
-		text-transform: capitalize;
-		color: var(--color-text-muted);
-		font-size: 0.78rem;
-		white-space: nowrap;
+	/* Casework — LTR English reading order. The main content
+	   (the description) is on the LEFT so the row reads as a
+	   sentence. Action + status pills are grouped next; date
+	   and the author are at the far right. */
+	.casework-row a {
+		display: grid;
+		grid-template-columns: 1fr auto auto;
+		align-items: center;
+		gap: 0.6rem 0.85rem;
+		padding: 0.55rem 0.75rem;
+		background: var(--color-surface);
+		border-radius: var(--radius-input);
+		text-decoration: none;
+		color: var(--color-text);
+		font-size: 0.88rem;
+		transition: background 0.15s ease;
+	}
+	@media (max-width: 600px) {
+		.casework-row a {
+			grid-template-columns: 1fr auto;
+		}
+		.casework-row .cw-pills {
+			grid-column: 2;
+			justify-self: end;
+		}
+		.casework-row .cw-meta {
+			grid-column: 1 / -1;
+			justify-self: end;
+		}
+	}
+	.casework-row a:hover {
+		background: var(--color-bg);
 	}
 	.cw-desc {
 		overflow: hidden;
@@ -580,12 +596,24 @@
 		white-space: nowrap;
 		min-width: 0;
 	}
+	.cw-pills {
+		display: inline-flex;
+		gap: 0.4rem;
+		align-items: center;
+		flex-shrink: 0;
+	}
+	.cw-action {
+		font-size: 0.78rem;
+		color: var(--color-text-muted);
+		white-space: nowrap;
+	}
 	.cw-meta {
 		display: inline-flex;
 		gap: 0.35rem;
 		color: var(--color-text-muted);
 		font-size: 0.78rem;
 		white-space: nowrap;
+		flex-shrink: 0;
 	}
 
 	@media (prefers-reduced-motion: reduce) {

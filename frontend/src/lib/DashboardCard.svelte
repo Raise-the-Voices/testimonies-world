@@ -64,7 +64,6 @@
 		border-radius: var(--radius-card);
 		box-shadow: var(--shadow-card);
 		padding: 1.25rem 1.5rem;
-		animation: fadeSlideUp 0.4s ease both;
 	}
 	.card-error {
 		border-left-color: var(--color-danger);
@@ -76,7 +75,7 @@
 	.card-header {
 		display: flex;
 		justify-content: space-between;
-		align-items: flex-end;
+		align-items: baseline;
 		gap: 1rem;
 		flex-wrap: wrap;
 		margin-bottom: 1rem;
@@ -86,15 +85,13 @@
 	}
 	.card-title {
 		margin: 0;
-		font-size: 1rem;
-		font-weight: 700;
+		font-size: 1.05rem;
+		font-weight: 600;
 		color: var(--color-text);
-		text-transform: uppercase;
-		letter-spacing: 0.06rem;
 	}
 	.card-subtitle {
-		margin: 0.15rem 0 0 0;
-		font-size: 0.85rem;
+		margin: 0.2rem 0 0 0;
+		font-size: 0.88rem;
 		color: var(--color-text-muted);
 		max-width: var(--max-w-prose);
 	}
@@ -104,11 +101,5 @@
 
 	.card-body {
 		/* Children get to define their own grid / spacing. */
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.dashboard-card {
-			animation: none;
-		}
 	}
 </style>
