@@ -1,9 +1,9 @@
 <!--
-  StatusBreakdownChart — horizontal stacked-bar visualization of the
+  StatusBreakdownChart - horizontal stacked-bar visualization of the
   platform's case status counts.
 
   Pure SVG, no animation beyond the parent card entrance (per the
-  "human-first & practical" brief — the data is the story, not the
+  "human-first & practical" brief - the data is the story, not the
   motion). Each segment is a <rect> with a <title> for screen-reader
   text; the whole chart has role="img" + aria-label so AT users get
   a single label describing what's shown.
@@ -12,7 +12,7 @@
 	import { STATUS_VALUES, type StatusValue } from './StatusBadge.svelte';
 
 	interface Props {
-		/** Map of status → count. Missing keys are treated as 0. */
+		/** Map of status -> count. Missing keys are treated as 0. */
 		counts: Partial<Record<StatusValue, number>>;
 	}
 
@@ -21,12 +21,12 @@
 	// Order + labels + colors. Locked order so the bar reads
 	// consistently across reloads. The palette is brand-aligned:
 	// the active-concern statuses (detained, disappeared) lean into
-	// the brand teal so the chart doesn't shout — we trust the
+	// the brand teal so the chart doesn't shout - we trust the
 	// bar length to communicate urgency, not hue. The amber
 	// family (restricted movement, rights restricted) is reserved
 	// for the "soft" concern cases. Released = muted green,
 	// deceased/unknown = neutral grays. `unknown` is intentionally
-	// last — it's the catch-all bucket and not the story an
+	// last - it's the catch-all bucket and not the story an
 	// advocate wants told first.
 	const SEGMENTS: Array<{
 		key: StatusValue;
@@ -42,7 +42,7 @@
 		{ key: 'deceased',           label: 'Deceased',           color: '#7a8089' },  // neutral gray
 		{ key: 'unknown',            label: 'Unknown',            color: '#b6bcc4' },  // light gray
 	];
-	// Silence the "unused import" lint for STATUS_VALUES — we use it as
+	// Silence the "unused import" lint for STATUS_VALUES - we use it as
 	// a type-source via StatusValue, but the explicit reference keeps
 	// the dependency honest if anyone reorders the segments list.
 	void STATUS_VALUES;
