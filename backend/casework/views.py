@@ -1,4 +1,4 @@
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
@@ -43,7 +43,24 @@ class CaseworkRecordViewSet(viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
-        return CaseworkRecord.objects.prefetch_related('persons').select_related('performed_by')
+        # `CaseworkRecordSerializer.get_seen_by` walks the reverse FK
+        # `instance.notifications` filtered to kind=RECORD_SEEN. Without
+        # a prefetch that's one query per row. The `Prefetch` also
+        # narrows the loaded set to the kind the serializer actually
+        # needs — we don't want to load every notification row for
+        # every casework record.
+        seen_prefetch = Prefetch(
+            'notifications',
+            queryset=Notification.objects.filter(
+                kind=Notification.Kind.RECORD_SEEN,
+                read_at__isnull=False,
+            ).select_related('actor'),
+        )
+        return (
+            CaseworkRecord.objects
+            .prefetch_related('persons', seen_prefetch)
+            .select_related('performed_by')
+        )
 
     # --- Audit log helpers (mirror PersonViewSet / ReportViewSet) --------
 
