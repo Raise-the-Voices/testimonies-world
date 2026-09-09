@@ -81,15 +81,39 @@ git reset --hard origin/main
 # the worst-case failure mode (a successful-looking deploy that's
 # silently inconsistent).
 #
-# Failure-recovery path: `git checkout --theirs backend/.env` is the
-# only known-good resolution — `.env` is per-host (see commit 58da23a)
-# and never wants upstream's copy. Operators who hit a real conflict
-# should resolve it manually and re-run deploy.
+# Auto-recovery for settings.py only: when the hotfix (commit
+# bff87fd) lifted LOGGING/CACHES/Sentry out of settings.py into
+# testimonies/ops.py, the VM's locally-tweaked settings.py could
+# no longer auto-merge with the new minimal settings.py. Take
+# main's version (theirs) and warn the operator — any
+# per-host setting the operator wants must be in .env (which is
+# gitignored), not settings.py. The .env recovery (manual)
+# stays as the fallback.
 if ! git stash pop; then
-    echo "DEPLOY FAILED: 'git stash pop' had conflicts — refusing to deploy half-merged code." >&2
-    echo "Inspect with: git status" >&2
-    echo "Clean up with: git checkout --theirs backend/.env && git stash drop && bash scripts/deploy.sh" >&2
-    exit 1
+    # Detect whether the conflict is the known-safe kind:
+    # settings.py only (the post-hotfix-bff87fd path).
+    conflicted=$(git diff --name-only --diff-filter=U 2>/dev/null || true)
+    if [ "$(echo "$conflicted" | wc -l)" = "1" ] && [ "$conflicted" = "backend/testimonies/settings.py" ]; then
+        echo "deploy.sh: auto-resolving settings.py conflict by taking main's version." >&2
+        echo "  (per-host tweaks should be in backend/.env, which is gitignored.)" >&2
+        # In `git stash pop`, --ours = HEAD/main (the new minimal
+        # settings.py that uses ops.py), --theirs = the stash (the
+        # old inline-LOGGING version). We want main's version.
+        git checkout --ours backend/testimonies/settings.py
+        # Mark the file resolved and finish the merge. The
+        # remaining bits of the stash (if any) drop silently —
+        # we only care about .env and the deploy proceeds with
+        # main's settings.py.
+        git add backend/testimonies/settings.py
+        git stash drop || true
+    else
+        echo "DEPLOY FAILED: 'git stash pop' had conflicts — refusing to deploy half-merged code." >&2
+        echo "Conflicted paths:" >&2
+        echo "$conflicted" | sed 's/^/  /' >&2
+        echo "Inspect with: git status" >&2
+        echo "Recovery:  git checkout --theirs backend/.env && git stash drop && bash scripts/deploy.sh" >&2
+        exit 1
+    fi
 fi
 
 # Backend
