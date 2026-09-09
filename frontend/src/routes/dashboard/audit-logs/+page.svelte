@@ -32,6 +32,7 @@
 	import DashboardCard from '$lib/DashboardCard.svelte';
 	import AuditLogsTable from '$lib/AuditLogsTable.svelte';
 	import AuditLogsFilters from '$lib/AuditLogsFilters.svelte';
+import ErrorCard from '$lib/ErrorCard.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -113,9 +114,11 @@
 	</header>
 
 	{#if data.error}
-		<DashboardCard variant="error" title="Couldn't load the audit log">
-			<p>{data.error}</p>
-		</DashboardCard>
+		<ErrorCard
+			title="Couldn't load the audit log"
+			message={data.error}
+			kind="network"
+		/>
 	{:else if data.logs}
 		<DashboardCard
 			title="Filters"
