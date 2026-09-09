@@ -5,6 +5,7 @@
 	import { user, isAdvocate } from '$lib/session';
 	import { createContact, getContact, updateContact, ApiError } from '$lib/api';
 	import type { Contact, ContactRole } from '$lib/types';
+import Skeleton from '$lib/Skeleton.svelte';
 
 	let currentUser = $derived($user);
 	let saving = $state(false);
@@ -174,7 +175,9 @@
 			<a href="{base}/api/auth/login/?next={base}/contacts">Login</a>
 		</p>
 	{:else if loading}
-		<p class="muted">Loading…</p>
+		<div class="contact-skeleton" aria-label="Loading contact">
+			<Skeleton variant="text-block" lines={5} />
+		</div>
 	{:else if loadError}
 		<section class="form-card form-card-error">
 			<header class="error-header">

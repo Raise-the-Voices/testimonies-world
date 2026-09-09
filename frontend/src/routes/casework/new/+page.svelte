@@ -10,6 +10,7 @@
 		getPersons,
 		ApiError,
 	} from '$lib/api';
+	import Skeleton from '$lib/Skeleton.svelte';
 
 	let currentUser = $derived($user);
 	let saving = $state(false);
@@ -278,7 +279,9 @@
 	{:else if loading}
 		<header class="form-header">
 			<h1>{isEdit ? 'Edit' : 'New'} Casework Record</h1>
-			<p class="form-intro">Loading…</p>
+			<p class="form-intro">
+				<Skeleton variant="text" width="60%" height="1rem" />
+			</p>
 		</header>
 	{:else if loadError}
 		<div class="state-card state-error" role="alert">
