@@ -7,6 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from cases.models import AuditLog
+from cases.throttles import ActionScopedThrottle
 from contacts.permissions import IsAdvocate
 
 from . import notifications
@@ -30,6 +31,16 @@ class CaseworkRecordViewSet(viewsets.ModelViewSet):
     # contain PII about family contacts and un-redacted sources.
     permission_classes = [permissions.IsAuthenticated, IsAdvocate]
     permission_classes = [permissions.IsAuthenticated]
+    # Casework records are advocate-only and rarely created
+    # (1-3 per case). Mutation cap is generous for real workflows,
+    # tight enough to block a runaway script.
+    throttle_classes = [ActionScopedThrottle]
+    throttle_scopes = {
+        'create': 'mutation',
+        'update': 'mutation',
+        'partial_update': 'mutation',
+        'destroy': 'mutation',
+    }
 
     def get_queryset(self):
         return CaseworkRecord.objects.prefetch_related('persons').select_related('performed_by')

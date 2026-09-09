@@ -10,6 +10,7 @@ from rest_framework.response import Response
 
 from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report
 from .permissions import IsVolunteer
+from .throttles import ActionScopedThrottle
 from .serializers import (
     AuditLogSerializer,
     CaseCategorySerializer,
@@ -176,6 +177,19 @@ class PersonViewSet(viewsets.ModelViewSet):
     ordering_fields = ['name', 'country', 'current_status',
                        'updated_at', 'created_at']
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
+    # Per-action throttles. `create` is the /submit Person POST — the
+    # highest-friction, highest-spam-risk surface; cap at 10/hour.
+    # Updates/destroys are mutations under the same per-user cap.
+    # The default anon/user throttles from settings still apply on top
+    # of these (ActionScopedThrottle only narrows the scope, doesn't
+    # replace the anon/user rates).
+    throttle_classes = [ActionScopedThrottle]
+    throttle_scopes = {
+        'create': 'submit',
+        'update': 'mutation',
+        'partial_update': 'mutation',
+        'destroy': 'mutation',
+    }
 
     def get_queryset(self):
         # Prefetch reverse-FK chains that PersonDetailSerializer walks on
@@ -541,6 +555,17 @@ class ReportViewSet(viewsets.ModelViewSet):
     filterset_class = ReportFilter
     search_fields = ['narrative', 'source_attribution']
     ordering_fields = ['date_start', 'created_at']
+    # Reports are submitted in the second leg of /submit (after the
+    # Person POST). 20/hour is generous — a single submission is one
+    # POST, and a volunteer editing their own reports won't approach
+    # this. The cap is the spam / abuse ceiling.
+    throttle_classes = [ActionScopedThrottle]
+    throttle_scopes = {
+        'create': 'submit_report',
+        'update': 'mutation',
+        'partial_update': 'mutation',
+        'destroy': 'mutation',
+    }
 
     def get_queryset(self):
         # media_files reverse-FK is iterated by ReportSerializer.media_files
@@ -657,6 +682,16 @@ class MediaViewSet(viewsets.ModelViewSet):
     # no group) upload/edit/delete media. The sensitive-tier gate inside
     # perform_create / perform_update still applies on top of this.
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
+    # Uploads are heavier (multipart, 50 MB cap) and a common spam
+    # surface. 30/hour is a real-user ceiling — a case has maybe 1-5
+    # attached media files.
+    throttle_classes = [ActionScopedThrottle]
+    throttle_scopes = {
+        'create': 'media_upload',
+        'update': 'mutation',
+        'partial_update': 'mutation',
+        'destroy': 'mutation',
+    }
 
     def get_queryset(self):
         # select_related the three FKs that MediaSerializer renders as
@@ -778,6 +813,15 @@ class FamilyRelationshipViewSet(viewsets.ModelViewSet):
     serializer_class = FamilyRelationshipSerializer
     filterset_class = FamilyRelationshipFilter
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
+    # Family-relationship writes are uncommon (1-2 per case); keep
+    # them under the generic mutation cap.
+    throttle_classes = [ActionScopedThrottle]
+    throttle_scopes = {
+        'create': 'mutation',
+        'update': 'mutation',
+        'partial_update': 'mutation',
+        'destroy': 'mutation',
+    }
 
     # --- Audit log helpers (mirror ContactViewSet / PersonViewSet) -------
 
@@ -1024,6 +1068,15 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['details', 'ip_address', 'user__username']
     ordering_fields = ['timestamp']
     ordering = ['-timestamp']  # default
+    # Audit-log list/retrieve is staff-only but still PII-adjacent
+    # (the `details` column echoes case narratives, IPs, and user
+    # activity). 120/min is 2/sec — well above a human reviewer's
+    # pace; blocks scrapers that sweep the entire log.
+    throttle_classes = [ActionScopedThrottle]
+    throttle_scopes = {
+        'list': 'audit_log',
+        'retrieve': 'audit_log',
+    }
 
     @extend_schema(
         description=(
