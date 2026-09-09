@@ -205,21 +205,55 @@ class PersonViewSet(viewsets.ModelViewSet):
         # `select_related('created_by')` collapses the FK to User
         # (rendered as `created_by` in both PersonListSerializer and
         # PersonDetailSerializer) into the same JOIN — without it,
-        # every list/detail row triggers a User fetch. See
-        # tests_perf.py for the regression guard.
+        # every list/detail row triggers a User fetch.
+        #
+        # Heavy prefetches (`reports`, `reports__media_files`, the
+        # two relationship sides) are gated on `self.action` because
+        # the list-shape endpoints (`watchdog`, `related`,
+        # `statistics`, `countries`) return PersonListSerializer
+        # which only walks `categories` + `media_files`. Prefetching
+        # reports/relationships on those endpoints was a per-page
+        # tax with no consumer.
+        #
+        # For anonymous viewers we also use a Prefetch with a
+        # filtered queryset so the `is_private=False` filter in
+        # PersonDetailSerializer.get_reports hits the cache instead
+        # of issuing a per-row query.
+        from django.db.models import Prefetch
         qs = (
             Person.objects
             .select_related('created_by')
             .annotate(report_count=Count('reports'))
-            .prefetch_related(
-                'categories',
-                'reports',
-                'reports__media_files',
-                'media_files',
-                'relationships_as_a__person_b',
-                'relationships_as_b__person_a',
-            )
         )
+        if self.action in ('watchdog', 'related', 'statistics', 'countries'):
+            # List-shape: PersonListSerializer walks categories + media
+            # only. Skip the heavy prefetches.
+            qs = qs.prefetch_related('categories', 'media_files')
+        else:
+            # list / retrieve / create / update / partial_update /
+            # destroy — PersonDetailSerializer walks everything.
+            if not self.request.user.is_authenticated:
+                public_reports = Prefetch(
+                    'reports',
+                    queryset=Report.objects.filter(is_private=False),
+                )
+                qs = qs.prefetch_related(
+                    'categories',
+                    public_reports,
+                    'reports__media_files',
+                    'media_files',
+                    'relationships_as_a__person_b',
+                    'relationships_as_b__person_a',
+                )
+            else:
+                qs = qs.prefetch_related(
+                    'categories',
+                    'reports',
+                    'reports__media_files',
+                    'media_files',
+                    'relationships_as_a__person_b',
+                    'relationships_as_b__person_a',
+                )
         if not self.request.user.is_authenticated:
             qs = qs.filter(is_published=True)
         return qs
