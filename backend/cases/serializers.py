@@ -175,13 +175,23 @@ class PersonDetailSerializer(serializers.ModelSerializer):
     def get_profile_image_url(self, obj):
         if obj.profile_image:
             return _absolute_media_url(obj.profile_image.url, self.context.get('request'))
-        photo = obj.media_files.filter(media_type='photo', visibility='public').first()
-        if photo and photo.url:
-            return _absolute_media_url(photo.url, self.context.get('request'))
+        # See PersonListSerializer.get_profile_image_url — iterate
+        # the prefetched cache instead of issuing a new query.
+        for media in obj.media_files.all():
+            if (media.media_type == 'photo'
+                    and media.visibility == 'public'
+                    and media.url):
+                return _absolute_media_url(media.url, self.context.get('request'))
         return None
 
     @extend_schema_field(ReportSerializer(many=True))
     def get_reports(self, obj):
+        # For authenticated users, `obj.reports.all()` reuses the
+        # 'reports' prefetched cache. For anonymous users, the
+        # viewset prefetches a `Prefetch('reports',
+        # queryset=Report.objects.filter(is_private=False))` so the
+        # `filter(is_private=False)` here is a no-op (the prefetch
+        # already excluded them) — the prefetched cache is reused.
         request = self.context.get('request')
         reports = obj.reports.all()
         if not request or not request.user.is_authenticated:
@@ -190,16 +200,20 @@ class PersonDetailSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.ListField(child=serializers.DictField()))
     def get_family(self, obj):
-        rels_a = obj.relationships_as_a.select_related('person_b')
-        rels_b = obj.relationships_as_b.select_related('person_a')
+        # The viewset prefetches `relationships_as_a__person_b` and
+        # `relationships_as_b__person_a` — the related Persons are
+        # already JOINed in. Chaining `.select_related('person_b')`
+        # onto `obj.relationships_as_a` builds a new queryset that
+        # bypasses the prefetched cache and re-queries per row. Just
+        # iterate the prefetched managers directly.
         result = []
-        for rel in rels_a:
+        for rel in obj.relationships_as_a.all():
             result.append({
                 'person_id': rel.person_b.id,
                 'person_name': rel.person_b.name,
                 'relationship': rel.get_relationship_type_display(),
             })
-        for rel in rels_b:
+        for rel in obj.relationships_as_b.all():
             result.append({
                 'person_id': rel.person_a.id,
                 'person_name': rel.person_a.name,
