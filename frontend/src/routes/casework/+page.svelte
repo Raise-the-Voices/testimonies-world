@@ -191,13 +191,23 @@
 
 <div class="container">
 	{#if !$ready}
-		<!-- Auth hydrating: same defense-in-depth as the dashboard —
-		     don't render the "you must be logged in" prompt until
-		     we actually know the user isn't authenticated. -->
-		<div class="casework-hydrating" aria-busy="true" aria-live="polite">
-			<Skeleton variant="text" width="30%" height="1.5rem" />
-			<Skeleton variant="rect" width="100%" height="6rem" />
-			<Skeleton variant="rect" width="100%" height="6rem" />
+		<!-- Page-shaped skeleton: mirrors the real casework layout
+		     (title + filters + record rows) so swapping in real
+		     content does not reflow. Shown only during real data
+		     loading — never on hard refresh, because +page.ts uses
+		     SvelteKit's wrapped fetch so SSR returns real data. -->
+		<div class="casework-skeleton" aria-busy="true" aria-live="polite">
+			<div class="skel-title-row">
+				<Skeleton variant="text" width="25%" height="1.5rem" />
+				<Skeleton variant="button" width="8rem" />
+			</div>
+			<div class="skel-filters">
+				<Skeleton variant="rect" height="2.5rem" width="12rem" />
+				<Skeleton variant="rect" height="2.5rem" width="14rem" />
+			</div>
+			<Skeleton variant="rect" height="5rem" />
+			<Skeleton variant="rect" height="5rem" />
+			<Skeleton variant="rect" height="5rem" />
 		</div>
 	{:else if !isAdvocate(currentUser)}
 		<p class="muted">
@@ -658,6 +668,18 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+	}
+	.skel-title-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding-bottom: 0.5rem;
+		border-bottom: 1px solid var(--color-border-light);
+	}
+	.skel-filters {
+		display: flex;
+		gap: 0.75rem;
 	}
 	.state-card {
 		background: var(--color-bg-white);
