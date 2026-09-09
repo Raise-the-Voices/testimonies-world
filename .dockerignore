@@ -1,0 +1,42 @@
+# Excludes for the root-level docker build context (when
+# `docker compose build` is run from the repo root).
+.git
+.gitignore
+.github
+.venv
+backend/.venv
+backend/.env
+backend/*.sqlite3
+backend/logs
+backend/media
+backend/sensitive_media
+backend/staticfiles
+backend/test_db.sqlite3
+backend/cases/migrations/__pycache__
+backend/casework/migrations/__pycache__
+backend/contacts/migrations/__pycache__
+backend/testimonies/__pycache__
+backend/testimonies/migrations/__pycache__
+frontend/node_modules
+frontend/build
+frontend/.svelte-kit
+frontend/src/lib/api/generated
+node_modules
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+*.swp
+.idea
+.vscode
+docker-compose.override.yml
+.env
+.env.local
+openapi.yml  # not needed at build time
+scripts/backup_db.sh  # host-only
+scripts/systemd  # host-only
+scripts/nginx  # host-only
+scripts/deploy.sh  # host-only
+CI_CD_TROUBLESHOOTING.md
+SYSTEM_RULES.md

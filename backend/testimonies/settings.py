@@ -455,26 +455,94 @@ if SCRIPT_NAME:
     SESSION_COOKIE_PATH = SCRIPT_NAME + '/'
     CSRF_COOKIE_PATH = SCRIPT_NAME + '/'
 
-# Logging
+# Logging — 12-factor in prod (JSON to stdout), human-friendly
+# in dev. The single 'console' handler is the new sink: in
+# production the Docker / k8s runtime captures stdout/stderr; in
+# dev the developer sees it in their terminal. The old
+# FileHandler wrote to BASE_DIR/logs/django.log with no rotation,
+# which grew unbounded — gone.
+import logging.config
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
-    'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
+    'formatters': {
+        # JSON for production. Container log scrapers (Loki,
+        # Splunk, CloudWatch, etc.) parse this directly.
+        'json': {
+            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+            'format': '%(asctime)s %(levelname)s %(name)s %(message)s',
+            'rename_fields': {'asctime': 'timestamp', 'levelname': 'level'},
         },
+        # Human-readable for dev / DEBUG.
+        'plain': {
+            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        },
+    },
+    'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
+            'formatter': 'plain' if DEBUG else 'json',
+            'level': 'INFO',
         },
     },
-    'root': {
-        'handlers': ['console'],
-        'level': 'INFO',
+    'loggers': {
+        # Don't spam the console with SQL statements under
+        # DEBUG. Production never sets this logger anyway
+        # (DEBUG=False → postgres logs are at WARNING+).
+        'django.db.backends': {'level': 'WARNING'},
     },
+    'root': {'handlers': ['console'], 'level': 'INFO'},
 }
 
-# Create log directory
+# Keep the logs/ dir creation so any external scripts that
+# write to BASE_DIR/logs/ don't break. (No app code writes
+# here anymore — the file handler is gone.)
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
 os.makedirs(SENSITIVE_MEDIA_ROOT, exist_ok=True)
+
+# Caches — Redis when REDIS_URL is set, LocMem otherwise.
+# LocMem is per-process, which means with gunicorn -w 2 the
+# DRF throttle counters (AnonRateThrottle / UserRateThrottle /
+# ScopedRateThrottle) don't share state — the effective per-user
+# rate is 2x the configured cap. Redis gives one shared counter
+# and matches the production deployment. The fall-through to
+# LocMem keeps `manage.py test` working without a Redis running.
+REDIS_URL = config('REDIS_URL', default='')
+CACHES = {
+    'default': (
+        {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            },
+        }
+        if REDIS_URL
+        else {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'testimonies-cache',
+        }
+    ),
+}
+
+# Sentry — init if SENTRY_DSN is set. No-op in dev. PII is
+# opt-in (send_default_pii=False) per the project's data
+# policy on testimonies-world: this app handles sensitive
+# human-rights PII and we don't ship that to a third-party
+# service unless an operator explicitly opts in via env.
+SENTRY_DSN = config('SENTRY_DSN', default='')
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[DjangoIntegration()],
+        environment=config('SENTRY_ENV', default='production'),
+        release=config('SENTRY_RELEASE', default=''),
+        traces_sample_rate=float(
+            config('SENTRY_TRACES_SAMPLE_RATE', default='0.0'),
+        ),
+        send_default_pii=False,
+    )

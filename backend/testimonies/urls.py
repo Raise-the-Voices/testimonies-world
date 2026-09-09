@@ -26,6 +26,7 @@ from casework.views import (
     UserPreferenceViewSet,
 )
 from contacts.views import ContactViewSet
+from .healthz import healthz
 
 router = DefaultRouter()
 router.register(r'persons', PersonViewSet, basename='person')
@@ -100,6 +101,13 @@ urlpatterns = [
     # 2026-08-27). 401 = the auth gate fired; 404 = nginx/Django are
     # mis-wired and we'd be back to leaking filenames.
     re_path(r'^media/(?P<path>.*)$', serve_protected_media, name='protected-media'),
+    # /healthz — liveness probe. Used by Docker HEALTHCHECK, k8s
+    # liveness probes, and load balancers. Returns 200 with
+    # `{ok, db, cache}` or 503 on failure. The nginx config
+    # (/docker/nginx.conf) does NOT proxy this path publicly;
+    # only the container-to-container `backend` upstream is
+    # allowed to hit it.
+    path('healthz', healthz, name='healthz'),
 ]
 
 if settings.DEBUG:

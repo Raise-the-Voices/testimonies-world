@@ -1,0 +1,26 @@
+.venv
+.env
+.env.*
+*.sqlite3
+*.pyc
+__pycache__
+.pytest_cache
+media
+sensitive_media
+logs
+staticfiles
+test_db.sqlite3
+db.sqlite3
+cases/migrations/__pycache__
+casework/migrations/__pycache__
+contacts/migrations/__pycache__
+testimonies/__pycache__
+testimonies/migrations/__pycache__
+tests.py
+tests_security.py
+tests_perf.py
+test_base.py  # in backend/testimonies/
+.DS_Store
+.git
+.gitignore
+README.md
