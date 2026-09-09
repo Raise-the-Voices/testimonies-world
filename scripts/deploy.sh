@@ -90,10 +90,25 @@ git reset --hard origin/main
 # gitignored), not settings.py. The .env recovery (manual)
 # stays as the fallback.
 if ! git stash pop; then
-    # Detect whether the conflict is the known-safe kind:
-    # settings.py only (the post-hotfix-bff87fd path).
+    # `git stash pop` returns non-zero in two cases:
+    #   1. There's no stash to pop ("No stash entries found.")
+    #      The VM had nothing to autostash, so this is a no-op —
+    #      the deploy can continue with main's tree.
+    #   2. The pop hit a real conflict. Auto-recover if it's the
+    #      known-safe settings.py-only kind, otherwise bail.
     conflicted=$(git diff --name-only --diff-filter=U 2>/dev/null || true)
-    if [ "$(echo "$conflicted" | wc -l)" = "1" ] && [ "$conflicted" = "backend/testimonies/settings.py" ]; then
+    if [ -z "$conflicted" ]; then
+        # No unmerged paths = no real conflict. The non-zero exit
+        # was "no stash to pop", which is fine — the VM had no
+        # local customizations to preserve.
+        echo "deploy.sh: no stash to pop — continuing." >&2
+    elif [ "$(echo "$conflicted" | wc -l)" = "1" ] && [ "$conflicted" = "backend/testimonies/settings.py" ]; then
+        # AUTO-RECOVERY for the known settings.py-only path. The
+        # hotfix (commit bff87fd) lifted LOGGING/CACHES/Sentry
+        # out of settings.py into testimonies/ops.py, so the VM's
+        # locally-tweaked settings.py can't auto-merge with the
+        # new minimal settings.py. Take main's version and warn the
+        # operator — per-host tweaks should be in .env anyway.
         echo "deploy.sh: auto-resolving settings.py conflict by taking main's version." >&2
         echo "  (per-host tweaks should be in backend/.env, which is gitignored.)" >&2
         # In `git stash pop`, --ours = HEAD/main (the new minimal
@@ -107,7 +122,7 @@ if ! git stash pop; then
         git add backend/testimonies/settings.py
         git stash drop || true
     else
-        echo "DEPLOY FAILED: 'git stash pop' had conflicts — refusing to deploy half-merged code." >&2
+        echo "DEPLOY FAILED: 'git stash pop' had conflicts - refusing to deploy half-merged code." >&2
         echo "Conflicted paths:" >&2
         echo "$conflicted" | sed 's/^/  /' >&2
         echo "Inspect with: git status" >&2
