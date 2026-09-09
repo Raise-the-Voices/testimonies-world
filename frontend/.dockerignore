@@ -1,0 +1,11 @@
+node_modules
+build
+.svelte-kit
+.env
+.env.*
+src/lib/api/generated/  # committed but re-generated at CI; see gen:api
+.DS_Store
+.git
+.gitignore
+*.log
+.vite
