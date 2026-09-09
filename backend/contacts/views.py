@@ -19,6 +19,7 @@ from rest_framework import viewsets
 from rest_framework.exceptions import PermissionDenied
 
 from cases.models import AuditLog
+from cases.throttles import ActionScopedThrottle
 from .models import Contact
 from .permissions import IsAdvocate
 from .serializers import ContactSerializer
@@ -30,6 +31,16 @@ class ContactViewSet(viewsets.ModelViewSet):
     filterset_fields = ['role']
     search_fields = ['name', 'email', 'notes']
     permission_classes = [IsAdvocate]
+    # Contacts are always-private and advocate-only. Same mutation
+    # cap as other write viewsets — defense in depth on top of the
+    # IsAdvocate role gate.
+    throttle_classes = [ActionScopedThrottle]
+    throttle_scopes = {
+        'create': 'mutation',
+        'update': 'mutation',
+        'partial_update': 'mutation',
+        'destroy': 'mutation',
+    }
 
     def get_queryset(self):
         # Soft-delete: deleted contacts are excluded from the default
