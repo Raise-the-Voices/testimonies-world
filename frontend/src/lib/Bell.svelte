@@ -4,6 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { user, isAdvocate } from '$lib/session';
 	import Icon from '$lib/Icon.svelte';
+import Skeleton from '$lib/Skeleton.svelte';
 	import {
 		getUnreadCount,
 		getNotifications,
@@ -154,7 +155,10 @@
 				</header>
 				<div class="bell-body">
 					{#if loading}
-						<p class="bell-empty">Loading…</p>
+						<div class="bell-skeleton" aria-label="Loading notifications">
+							<Skeleton variant="rect" width="100%" height="3.2rem" />
+							<Skeleton variant="rect" width="100%" height="3.2rem" />
+						</div>
 					{:else if items.length === 0}
 						<p class="bell-empty">No notifications yet.</p>
 					{:else}

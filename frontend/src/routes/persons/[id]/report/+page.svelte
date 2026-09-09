@@ -6,6 +6,7 @@
 	import { user, isVolunteer } from '$lib/session';
 	import { getPerson, createReport, getReport, updateReport, ApiError } from '$lib/api';
 	import type { Report } from '$lib/types';
+import Skeleton from '$lib/Skeleton.svelte';
 
 	let currentUser = $derived($user);
 	let person: any = $state(null);
@@ -177,11 +178,18 @@
 </script>
 
 <svelte:head>
-	<title>Add Report — {person?.name || 'Loading...'} — Testimonies.world</title>
+	<title>Add Report — {person?.name ?? 'Testimonies.world'} — Testimonies.world</title>
 </svelte:head>
 
 {#if loading}
-	<p class="muted">Loading…</p>
+	<div class="report-skeleton" aria-label="Loading report form">
+		<Skeleton variant="rect" width="100%" height="2.5rem" />
+		<Skeleton variant="rect" width="100%" height="2.5rem" />
+		<Skeleton variant="rect" width="100%" height="2.5rem" />
+		<Skeleton variant="rect" width="100%" height="2.5rem" />
+		<Skeleton variant="badge" />
+		<Skeleton variant="rect" width="100%" height="8rem" />
+	</div>
 {:else if !isVolunteer(currentUser)}
 	<p class="muted">
 		You must be logged in as a volunteer to add reports.
@@ -807,5 +815,13 @@
 	@media (prefers-reduced-motion: reduce) {
 		.spinner { animation: none; }
 		.form-error { transition: none; }
+	}
+
+	.report-skeleton {
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+		max-width: 640px;
+		margin: 2rem auto;
 	}
 </style>

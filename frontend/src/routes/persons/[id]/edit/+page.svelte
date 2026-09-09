@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { user, isVolunteer, isAdmin, loadSession } from '$lib/session';
 	import { getPerson, updatePerson, getCategories, ApiError } from '$lib/api';
+import Skeleton from '$lib/Skeleton.svelte';
 	import type { Person } from '$lib/types';
 
 	let currentUser = $derived($user);
@@ -336,7 +337,11 @@
 
 <div class="container">
 	{#if loading}
-		<p class="muted">Loading…</p>
+		<div class="edit-skeleton" aria-label="Loading case">
+			<Skeleton variant="circle" width="180px" height="180px" />
+			<Skeleton variant="text-block" lines={6} />
+			<Skeleton variant="rect" width="100%" height="8rem" />
+		</div>
 	{:else if !isVolunteer(currentUser)}
 		<p class="muted">
 			You must be logged in as a volunteer to edit cases.
@@ -1290,5 +1295,13 @@
 			transition: none;
 			animation: none;
 		}
+	}
+
+	.edit-skeleton {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		max-width: 640px;
+		margin: 2rem auto;
 	}
 </style>
