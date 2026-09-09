@@ -28,13 +28,20 @@ import Skeleton from '$lib/Skeleton.svelte';
 		try {
 			const c = await getUnreadCount();
 			unread = c.count;
-		} catch {
+		} catch (e) {
+			// D.4 partial — silent failure here means the bell
+			// shows the wrong unread count, but a 5xx is not a
+			// user-blocking problem. Log so silent failures show
+			// up in dev tools; the API will retry on the next
+			// poll.
+			console.error('Bell: getUnreadCount failed', e);
 			unread = 0;
 		}
 		try {
 			const r = await getNotifications({});
 			items = Array.isArray(r) ? (r as Notification[]) : (r.results ?? []);
-		} catch {
+		} catch (e) {
+			console.error('Bell: getNotifications failed', e);
 			items = [];
 		}
 	}
@@ -76,8 +83,14 @@ import Skeleton from '$lib/Skeleton.svelte';
 				await markOneRead(n.id);
 				n.is_read = true;
 				unread = Math.max(0, unread - 1);
-			} catch {
-				/* silent — they can mark from the page */
+			} catch (e) {
+				// Optimistic update is intentional, but a real
+				// 5xx should be visible. Revert the optimistic
+				// state so the bell doesn't lie about the unread
+				// count.
+				console.error('Bell: markOneRead failed', e);
+				n.is_read = false;
+				unread = unread + 1;
 			}
 		}
 		open = false;
@@ -92,8 +105,8 @@ import Skeleton from '$lib/Skeleton.svelte';
 			await markAllRead();
 			unread = 0;
 			items = items.map((n) => ({ ...n, is_read: true }));
-		} catch {
-			/* ignore */
+		} catch (e) {
+			console.error('Bell: markAllRead failed', e);
 		}
 	}
 

@@ -96,6 +96,11 @@
 
 	async function performDelete() {
 		if (!deleteToast) return;
+		// D.8 — re-entrancy guard. A fast double-click on the
+		// confirm button or on Retry while already in `pending`
+		// would race two DELETE calls. casework has this guard
+		// explicitly (cases 156-158 there); contacts didn't.
+		if (deleteToast.stage === 'pending') return;
 		// Allow Retry from `error` and the initial Confirm from `confirming`.
 		const target = deleteToast;
 		deleteToast = { ...target, stage: 'pending' };
