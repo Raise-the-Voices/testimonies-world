@@ -1,0 +1,43 @@
+# docker-compose.override.yml.example — copy to docker-compose.override.yml
+# (which is gitignored) for local-dev convenience. Compose's
+# merge rules: the override file is layered on top of
+# docker-compose.yml, with override keys winning.
+#
+# This file is intentionally NOT committed as a working file —
+# only the example. The committed docker-compose.yml is the
+# canonical production config; the override is per-developer.
+
+services:
+  backend:
+    # Mount the source so code edits land in the container
+    # without rebuilding. The image's ENTRYPOINT + CMD still
+    # apply; gunicorn has --reload in dev only (see comment
+    # below).
+    volumes:
+      - ./backend:/app
+    environment:
+      DEBUG: "True"
+      USE_SQLITE: "1"
+      RUN_MIGRATIONS: "1"
+      RUN_COLLECTSTATIC: "1"
+      WEB_CONCURRENCY: "1"  # single worker in dev — hot reload is per-worker
+    # Override the CMD to use the dev server with auto-reload.
+    # The image's ENTRYPOINT still handles wait-for-db+redis,
+    # migrate, collectstatic, then execs the dev command.
+    command: >
+      sh -c "python manage.py runserver 0.0.0.0:8040"
+
+  frontend:
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # anonymous volume so the host node_modules doesn't shadow the image's
+      - /app/build        # ditto for the SvelteKit build output
+      - /app/.svelte-kit  # ditto for the kit cache
+    environment:
+      PUBLIC_BASE_PATH: ""  # serve at / in dev (no subpath)
+      ORIGIN: "http://localhost"
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+
+  # No override for nginx — keep the prod config so the
+  # docker-compose.yml's nginx:8040 path is the single source of
+  # truth for routing.
