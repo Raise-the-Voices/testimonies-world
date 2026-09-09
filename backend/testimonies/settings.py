@@ -65,6 +65,17 @@ SECURE_HSTS_PRELOAD = True
 # (the test client can't follow TLS redirects on a plain-HTTP loopback).
 SECURE_SSL_REDIRECT = _PROD_HARDEN
 
+# --- Other security headers (HSTS is set above) ------------------------
+# These all default-on in modern Django but we pin them so a
+# refactor of SecurityMiddleware, a future Django upgrade, or an
+# explicit `del settings.SECURE_HSTS_SECONDS` line can't silently
+# regress the security posture. All three are response headers —
+# the test client doesn't follow them, so they apply uniformly
+# under DEBUG=True and DEBUG=False.
+SECURE_CONTENT_TYPE_NOSNIFF = True   # X-Content-Type-Options: nosniff
+SECURE_REFERRER_POLICY = 'same-origin'  # Referrer-Policy: same-origin
+X_FRAME_OPTIONS = 'DENY'              # X-Frame-Options: DENY (clickjacking)
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -272,16 +283,40 @@ REST_FRAMEWORK = {
     #   - anon: 60 reads/min — covers a normal anon browser session
     #     (catalog + a few detail views) without false positives
     #   - user: 600 reads/min — 10/sec, well above any human pace
-    # Per-view overrides via `throttle_scope` on a per-action basis if
-    # a future endpoint needs a different rate.
+    # Per-action overrides via the ActionScopedThrottle class (see
+    # cases/throttles.py) which reads `throttle_scopes` from each
+    # viewset. Scoped rates are stacked ON TOP of the anon/user base
+    # rates — they narrow the cap for the named action but the base
+    # caps still apply.
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',
-        'rest_framework.throttling.ScopedRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '60/minute',
         'user': '600/minute',
+        # Per-action caps (applied by ActionScopedThrottle):
+        #   - submit:        /submit Person create — high-friction,
+        #                    high-spam-risk surface; 10/hour is a
+        #                    real-user ceiling, blocks automation
+        #   - submit_report: /submit Report create (second POST);
+        #                    slightly higher cap since one submission
+        #                    is 1 POST (not 2 — Person is the bigger gate)
+        #   - media_upload:  multipart POSTs are heavier; 30/hour
+        #                    is 1 every 2 minutes — a real case
+        #                    upload pattern
+        #   - mutation:      catch-all for non-create writes (PATCH,
+        #                    PUT, DELETE) on any viewset; 60/min is
+        #                    1/sec, well above human pace
+        #   - audit_log:     audit-log list/retrieve is staff-only
+        #                    but still PII-adjacent (echoes case
+        #                    narratives, IPs, user activity). 120/min
+        #                    is 2/sec — blocks scrapers
+        'submit': '10/hour',
+        'submit_report': '20/hour',
+        'media_upload': '30/hour',
+        'mutation': '60/minute',
+        'audit_log': '120/minute',
     },
 }
 
