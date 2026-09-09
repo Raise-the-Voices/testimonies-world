@@ -20,6 +20,7 @@
 	import { user, isVolunteer } from '$lib/session';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import StatusBadge from '$lib/StatusBadge.svelte';
+	import ErrorCard from '$lib/ErrorCard.svelte';
 	import type { PageData } from './$types';
 	import type { Paginated, Report } from '$lib/types';
 
@@ -249,14 +250,12 @@
 					{/each}
 				</div>
 			{:else if error}
-				<div class="reports-error" role="alert">
-					<header class="error-header">
-						<span class="error-icon" aria-hidden="true">⚠</span>
-						<h2>Could not load reports</h2>
-					</header>
-					<p class="error-message">{error}</p>
-					<button type="button" class="btn btn-secondary" onclick={loadReports}>Retry</button>
-				</div>
+				<ErrorCard
+					title="Could not load reports"
+					message={error}
+					kind="network"
+					retry={loadReports}
+				/>
 			{:else if reports.length === 0}
 				<div class="reports-empty">
 					<header class="empty-header">
