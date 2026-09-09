@@ -19,23 +19,28 @@
 	let { counts }: Props = $props();
 
 	// Order + labels + colors. Locked order so the bar reads
-	// consistently across reloads. Colors are token-aligned; if a
-	// status isn't covered by a token, fall back to muted.
-	// `unknown` is intentionally last — it's the catch-all bucket and
-	// not the story an advocate wants told first.
+	// consistently across reloads. The palette is brand-aligned:
+	// the active-concern statuses (detained, disappeared) lean into
+	// the brand teal so the chart doesn't shout — we trust the
+	// bar length to communicate urgency, not hue. The amber
+	// family (restricted movement, rights restricted) is reserved
+	// for the "soft" concern cases. Released = muted green,
+	// deceased/unknown = neutral grays. `unknown` is intentionally
+	// last — it's the catch-all bucket and not the story an
+	// advocate wants told first.
 	const SEGMENTS: Array<{
 		key: StatusValue;
 		label: string;
 		color: string;
 	}> = [
-		{ key: 'detained', label: 'Detained', color: 'var(--color-primary)' },
-		{ key: 'disappeared', label: 'Disappeared', color: 'var(--color-danger)' },
-		{ key: 'restricted_movement', label: 'Restricted movement', color: '#d97706' },
-		{ key: 'rights_restricted', label: 'Rights restricted', color: '#b45309' },
-		{ key: 'stateless', label: 'Stateless', color: 'var(--color-primary-light)' },
-		{ key: 'released', label: 'Released', color: 'var(--color-success)' },
-		{ key: 'deceased', label: 'Deceased', color: 'var(--color-text-muted)' },
-		{ key: 'unknown', label: 'Unknown', color: 'var(--color-border)' },
+		{ key: 'detained',           label: 'Detained',           color: '#25646a' },  // brand teal
+		{ key: 'disappeared',        label: 'Disappeared',        color: '#1d4d52' },  // darker teal
+		{ key: 'restricted_movement', label: 'Restricted movement', color: '#a8763e' },  // muted amber
+		{ key: 'rights_restricted',   label: 'Rights restricted',   color: '#7a5430' },  // deeper amber
+		{ key: 'stateless',          label: 'Stateless',          color: '#5a8388' },  // pale teal
+		{ key: 'released',           label: 'Released',           color: '#3a7d5a' },  // muted green
+		{ key: 'deceased',           label: 'Deceased',           color: '#7a8089' },  // neutral gray
+		{ key: 'unknown',            label: 'Unknown',            color: '#b6bcc4' },  // light gray
 	];
 	// Silence the "unused import" lint for STATUS_VALUES — we use it as
 	// a type-source via StatusValue, but the explicit reference keeps
