@@ -475,6 +475,7 @@
 	}
 	.catalog-header h1 {
 		margin: 0;
+		color: var(--color-primary);
 	}
 
 	.cases-table-wrap {

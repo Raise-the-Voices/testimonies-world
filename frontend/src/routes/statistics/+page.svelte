@@ -220,7 +220,7 @@
 	}
 	.page-header h1 {
 		margin: 0 0 0.25rem 0;
-		color: var(--color-text);
+		color: var(--color-primary);
 	}
 	.page-subtitle {
 		margin: 0;
