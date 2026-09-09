@@ -29,7 +29,8 @@
 	import StatTile from '$lib/StatTile.svelte';
 	import QuickActions from '$lib/QuickActions.svelte';
 	import StatusBreakdownChart from '$lib/StatusBreakdownChart.svelte';
-	import { isAdvocate, isAdmin, isVolunteer, user } from '$lib/session';
+	import { isAdvocate, isAdmin, isVolunteer, user, ready } from '$lib/session';
+	import Skeleton from '$lib/Skeleton.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -155,7 +156,20 @@
 		</div>
 	</header>
 
-	{#if data.error}
+	{#if !$ready}
+		<!-- Auth hydrating: the universal +layout.ts load hasn't
+		     resolved yet, so we don't yet know if the user is allowed
+		     here. Show a skeleton instead of an error to avoid the
+		     "Couldn't load the dashboard (HTTP 0)" flash on hard
+		     refresh. The layout's children gate would normally catch
+		     this, but defense-in-depth: a future refactor of the
+		     layout that loosens the gate won't reintroduce the bug. -->
+		<div class="dashboard-hydrating" aria-busy="true" aria-live="polite">
+			<Skeleton variant="text" width="40%" height="1.5rem" />
+			<Skeleton variant="text-block" lines={3} />
+			<Skeleton variant="rect" width="100%" height="10rem" />
+		</div>
+	{:else if data.error}
 		<DashboardCard variant="error" title="Couldn't load the dashboard">
 			<p>{data.error}</p>
 			<button type="button" class="btn btn-secondary" onclick={refresh}>
@@ -322,6 +336,14 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1.5rem;
+	}
+
+	/* Auth-hydration skeleton: matches the visual weight of the
+	   summary row so the swap to real content doesn't reflow. */
+	.dashboard-hydrating {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
 	}
 
 	.page-header {
