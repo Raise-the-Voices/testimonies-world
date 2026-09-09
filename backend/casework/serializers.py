@@ -1,10 +1,17 @@
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from cases.serializers import SanitizingModelSerializerMixin
+
 from .models import CaseworkRecord, Notification, UserPreference
 
 
-class CaseworkRecordSerializer(serializers.ModelSerializer):
+class CaseworkRecordSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
+    # Casework records are advocate-only; sanitizing is defense in
+    # depth (notes often contain unredacted PII about family contacts
+    # and sources, and are rendered in the /casework list page).
+    text_fields = ['description', 'notes', 'next_steps']
+
     performed_by_name = serializers.CharField(
         source='performed_by.get_full_name', read_only=True
     )

@@ -16,6 +16,8 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from testimonies.test_base import BaseTestCase
+
 from cases.models import AuditLog
 from .models import Contact
 
@@ -36,7 +38,7 @@ def make_user(username, *, in_group=None, is_staff=False, email=None):
     return user
 
 
-class PermissionTests(TestCase):
+class PermissionTests(BaseTestCase):
     def setUp(self):
         self.advocate = make_user('aisha', in_group='Advocate')
         self.staff = make_user('admin', is_staff=True)
@@ -80,7 +82,7 @@ class PermissionTests(TestCase):
         self.assertEqual(res.status_code, 201)
 
 
-class SoftDeleteTests(TestCase):
+class SoftDeleteTests(BaseTestCase):
     def setUp(self):
         self.advocate = make_user('aisha', in_group='Advocate')
         self.client = APIClient()
@@ -119,7 +121,7 @@ class SoftDeleteTests(TestCase):
         self.assertEqual(res.status_code, 403)
 
 
-class AuditLogTests(TestCase):
+class AuditLogTests(BaseTestCase):
     def setUp(self):
         self.advocate = make_user('aisha', in_group='Advocate')
         self.client = APIClient()

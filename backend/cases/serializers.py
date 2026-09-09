@@ -4,10 +4,57 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report
+from .sanitizers import sanitize_text, sanitize_url
 
 # Fields that are always excluded from public API responses
 PRIVATE_PERSON_FIELDS = ['medical_notes', 'precise_location']
 PRIVATE_REPORT_FIELDS = ['reporter_name', 'reporter_contact', 'precise_location']
+
+
+class SanitizingModelSerializerMixin:
+    """Strips all HTML from declared text fields and validates URL
+    fields on input. Use alongside `serializers.ModelSerializer`.
+
+    Class attributes:
+      text_fields — list of field names whose values are plain text.
+      url_fields  — list of field names whose values are URLs.
+
+    Both lists apply on every `validate()` call. The sanitization
+    runs BEFORE `serializer.save()` so the database never sees raw
+    HTML — the only XSS-safe path is "value was sanitized before
+    write". On PATCH, only the fields present in `attrs` are
+    sanitized, so omitted fields keep their existing value.
+
+    Why not bleach on output too: a defense-in-depth re-strip on
+    `to_representation` would be cheaper to add later than to bolt
+    on now, and the in-place sanitization at the input boundary
+    is sufficient as long as every write path goes through a
+    serializer (i.e. no raw `Model.objects.create(...)` calls in
+    the viewsets). The audit log on Person/Report/Media/Casework/
+    Contact is written via the originating serializer's path, so
+    direct-DB writes aren't a known gap.
+    """
+
+    # Silence drf-spectacular: it would otherwise pick up the
+    # class docstring and inject it as the description for every
+    # serializer that uses this mixin (since the mixin appears
+    # in the serializer's MRO). The description is more useful
+    # per-serializer (set in each Meta), so we hide the mixin's
+    # own doc from the schema generator.
+    __doc__ = None
+
+    text_fields: list = []
+    url_fields: list = []
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        for f in self.text_fields:
+            if f in attrs and isinstance(attrs[f], str):
+                attrs[f] = sanitize_text(attrs[f])
+        for f in self.url_fields:
+            if f in attrs and attrs[f]:
+                attrs[f] = sanitize_url(attrs[f])
+        return attrs
 
 
 def _absolute_media_url(relative_url: str, request=None) -> str:
@@ -53,14 +100,25 @@ class CaseCategorySerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class MediaSerializer(serializers.ModelSerializer):
+class MediaSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
+    # Defense in depth: media descriptions can be rendered in case
+    # galleries and search result rows.
+    text_fields = ['description']
+
     class Meta:
         model = Media
         fields = '__all__'
         read_only_fields = ['uploaded_by', 'created_at']
 
 
-class ReportSerializer(serializers.ModelSerializer):
+class ReportSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
+    # `narrative` is the canonical human-rights testimony; `reporter_*`
+    # and `precise_location` are private. All are free-text and could
+    # be rendered in a future HTML view, so all are sanitized.
+    text_fields = [
+        'narrative', 'suspected_reason', 'official_reason',
+        'reporter_contact', 'source_attribution', 'reporter_name',
+    ]
     media_files = MediaSerializer(many=True, read_only=True)
 
     class Meta:
@@ -158,8 +216,22 @@ class PersonDetailSerializer(serializers.ModelSerializer):
         return data
 
 
-class PersonWriteSerializer(serializers.ModelSerializer):
+class PersonWriteSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
     """Serializer for creating/updating persons."""
+    # Defense in depth: sanitizes every free-text identity +
+    # narrative + location field plus `authoritative_url` (URL
+    # validator, http(s) only). The identity fields (`name`,
+    # `aliases`, `legal_name`) are first-class PII and the most
+    # likely XSS pivot if a future template renders them with
+    # `|safe` or `mark_safe` — sanitizing at the input boundary
+    # keeps the DB clean regardless of the render path.
+    text_fields = [
+        'name', 'legal_name', 'aliases', 'country', 'ethnicity',
+        'rough_location', 'precise_location', 'medical_notes',
+        'summary_narrative', 'authoritative_source',
+    ]
+    url_fields = ['authoritative_url']
+
     category_ids = serializers.PrimaryKeyRelatedField(
         queryset=CaseCategory.objects.all(),
         many=True, required=False, source='categories'
@@ -171,7 +243,7 @@ class PersonWriteSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_by', 'created_at', 'updated_at']
 
 
-class FamilyRelationshipSerializer(serializers.ModelSerializer):
+class FamilyRelationshipSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
     """Family-relationship CRUD payload.
 
     Read shape: full row plus denormalised `person_a_name` /
@@ -193,6 +265,13 @@ class FamilyRelationshipSerializer(serializers.ModelSerializer):
           reverse-ordered pair is also rejected. `parent` / `child`
           allow either direction (direction carries meaning).
     """
+    # NOTE: long docstring above is intentional — describes the
+    # validation rules for the volunteer / advocate audience.
+    # Sanitizing notes via SanitizingModelSerializerMixin (text_fields
+    # below) is defense-in-depth; the field is rarely user-supplied
+    # with markup, but we sanitize anyway for parity with other
+    # text fields.
+    text_fields = ['notes']
 
     person_a_name = serializers.CharField(source='person_a.name', read_only=True)
     person_b_name = serializers.CharField(source='person_b.name', read_only=True)
