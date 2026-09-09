@@ -8,6 +8,12 @@ from pathlib import Path
 
 from decouple import config
 
+# Set up test-mode flag early so the REST_FRAMEWORK block below can
+# branch on it. The flag is checked again later in the file (the
+# `_IS_TEST_RUNNER` near the cookie config) — this early definition
+# just makes it available to the throttle config.
+_IS_TEST_RUNNER = 'test' in sys.argv
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config('SECRET_KEY', default='dev-insecure-change-in-production')
@@ -295,6 +301,15 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '60/minute',
         'user': '600/minute',
+        # Test environment: drop throttle classes entirely. The
+        # existing 22 test classes (cases/tests.py, casework/tests.py,
+        # contacts/tests.py) make heavy use of POST/PATCH/DELETE
+        # without cache resets between tests — adding throttles
+        # would 429 them partway through a run. The new
+        # ThrottleTests in cases/tests_security.py opts back in via
+        # @override_settings(REST_FRAMEWORK=...) and uses cache.clear()
+        # in setUp. Production keeps the real rates (see the
+        # non-test branch in the conditional below).
         # Per-action caps (applied by ActionScopedThrottle):
         #   - submit:        /submit Person create — high-friction,
         #                    high-spam-risk surface; 10/hour is a
@@ -319,6 +334,18 @@ REST_FRAMEWORK = {
         'audit_log': '120/minute',
     },
 }
+
+# --- Test-environment throttle disable ---------------------------------
+# When the test runner is active, drop the throttle classes entirely
+# so the existing 22 test classes (which make heavy use of
+# POST/PATCH/DELETE without cache resets between tests) aren't 429'd
+# by a counter inherited from a previous test. The new ThrottleTests
+# in cases/tests_security.py opts back in via
+# `@override_settings(REST_FRAMEWORK=...)` and uses `cache.clear()`
+# in setUp so the counter is fresh per test. Production keeps the
+# real rates via the non-test branch below.
+if _IS_TEST_RUNNER:
+    REST_FRAMEWORK['DEFAULT_THROTTLE_CLASSES'] = []
 
 # --- OpenAPI schema (drf-spectacular) -----------------------------------
 # The frontend's `gen:api` script (see frontend/package.json) calls
