@@ -169,6 +169,9 @@ class Person(models.Model):
                 fields=['is_published', 'current_status'],
                 name='person_pub_status_idx',
             ),
+            # Standalone -created_at for the documented ?ordering=-created_at
+            # sort on /api/persons/ and the "newest cases" landing page.
+            models.Index(fields=['-created_at'], name='person_created_at_desc_idx'),
         ]
 
     def __str__(self):
@@ -251,6 +254,12 @@ class Report(models.Model):
                 fields=['person', 'is_private'],
                 name='report_person_private_idx',
             ),
+            # Standalone indexes for the default Meta.ordering path
+            # ('-date_start', '-created_at') and the
+            # ?date_from/?date_to filter lookups. The composite above
+            # doesn't cover the global sort.
+            models.Index(fields=['-date_start'], name='report_date_start_desc_idx'),
+            models.Index(fields=['-created_at'], name='report_created_at_desc_idx'),
         ]
 
     def __str__(self):
@@ -392,6 +401,10 @@ class AuditLog(models.Model):
                 fields=['user', '-timestamp'],
                 name='audit_user_time_idx',
             ),
+            # Standalone -timestamp for the default /api/audit-logs/
+            # list page, which sorts by -timestamp without a user
+            # filter (so audit_user_time_idx doesn't apply).
+            models.Index(fields=['-timestamp'], name='audit_timestamp_desc_idx'),
         ]
 
     def __str__(self):
