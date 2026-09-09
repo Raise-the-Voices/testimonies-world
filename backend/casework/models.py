@@ -76,6 +76,13 @@ class CaseworkRecord(models.Model):
 
     class Meta:
         ordering = ['-date', '-created_at']
+        indexes = [
+            # Default ordering path (['-date', '-created_at']) on
+            # /api/casework/ list. -date is the primary key, the
+            # -created_at index covers the tiebreaker.
+            models.Index(fields=['-date'], name='casework_date_desc_idx'),
+            models.Index(fields=['-created_at'], name='casework_created_at_desc_idx'),
+        ]
 
     def __str__(self):
         return f'{self.get_action_type_display()} — {self.date}'
@@ -136,6 +143,12 @@ class Notification(models.Model):
             models.Index(fields=['recipient', 'is_read', '-created_at']),
             models.Index(fields=['recipient', 'emailed_at']),
             models.Index(fields=['casework', '-created_at']),
+            # Standalone -created_at — the email-dedupe query in
+            # casework/notifications.py filters by (casework,
+            # created_at) which doesn't match any existing composite.
+            # The standalone index also helps any per-casework
+            # notification listing.
+            models.Index(fields=['-created_at'], name='notif_created_at_desc_idx'),
         ]
 
     def __str__(self):

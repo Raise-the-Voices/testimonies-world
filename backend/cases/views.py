@@ -201,18 +201,74 @@ class PersonViewSet(viewsets.ModelViewSet):
         # PersonDetailSerializer.get_reports. For low-cardinality case
         # records this over-fetch is cheaper than per-row queries; if
         # profiling shows otherwise, gate the prefetch on auth.
-        qs = (
-            Person.objects
-            .annotate(report_count=Count('reports'))
-            .prefetch_related(
-                'categories',
-                'reports',
-                'reports__media_files',
-                'media_files',
-                'relationships_as_a__person_b',
-                'relationships_as_b__person_a',
-            )
-        )
+        #
+        # `select_related('created_by')` collapses the FK to User
+        # (rendered as `created_by` in both PersonListSerializer and
+        # PersonDetailSerializer) into the same JOIN — without it,
+        # every list/detail row triggers a User fetch.
+        #
+        # Heavy prefetches (`reports`, `reports__media_files`, the
+        # two relationship sides) are gated on `self.action` because
+        # the list-shape endpoints (`watchdog`, `related`,
+        # `statistics`, `countries`) return PersonListSerializer
+        # which only walks `categories` + `media_files`. Prefetching
+        # reports/relationships on those endpoints was a per-page
+        # tax with no consumer.
+        #
+        # For anonymous viewers we also use a Prefetch with a
+        # filtered queryset so the `is_private=False` filter in
+        # PersonDetailSerializer.get_reports hits the cache instead
+        # of issuing a per-row query.
+        from django.db.models import Prefetch
+        qs = Person.objects.select_related('created_by')
+        # The `list` action renders `report_count` on
+        # PersonListSerializer. We compute it in Python from the
+        # `reports` prefetch in the serializer (see
+        # PersonListSerializer.get_report_count) rather than
+        # annotating here — `annotate(report_count=Count('reports'))`
+        # adds a GROUP BY to the main SELECT that breaks
+        # prefetch_related's batching for the other prefetches
+        # (Django can't fold a per-row report JOIN into the same
+        # query plan that the 'reports' / 'reports__media_files' /
+        # 'media_files' / 'relationships_*' prefetches need to
+        # traverse, so they degrade to per-row queries).
+        if self.action in ('watchdog', 'related', 'statistics', 'countries'):
+            # List-shape endpoints return PersonListSerializer which
+            # walks categories + media_files + (for related) reports
+            # (for get_report_count + get_days_since_last_report). The
+            # watchdog annotation (`annotate(last_report_date=Max(...))`)
+            # also reads the reports table, so we prefetch reports
+            # there too. Skip reports__media_files and the two
+            # relationship sides — those are detail-only.
+            if self.action in ('watchdog', 'related'):
+                qs = qs.prefetch_related('categories', 'media_files', 'reports')
+            else:
+                qs = qs.prefetch_related('categories', 'media_files')
+        else:
+            # list / retrieve / create / update / partial_update /
+            # destroy — PersonDetailSerializer walks everything.
+            if not self.request.user.is_authenticated:
+                public_reports = Prefetch(
+                    'reports',
+                    queryset=Report.objects.filter(is_private=False),
+                )
+                qs = qs.prefetch_related(
+                    'categories',
+                    public_reports,
+                    'reports__media_files',
+                    'media_files',
+                    'relationships_as_a__person_b',
+                    'relationships_as_b__person_a',
+                )
+            else:
+                qs = qs.prefetch_related(
+                    'categories',
+                    'reports',
+                    'reports__media_files',
+                    'media_files',
+                    'relationships_as_a__person_b',
+                    'relationships_as_b__person_a',
+                )
         if not self.request.user.is_authenticated:
             qs = qs.filter(is_published=True)
         return qs
@@ -571,8 +627,10 @@ class ReportViewSet(viewsets.ModelViewSet):
         # media_files reverse-FK is iterated by ReportSerializer.media_files
         # (nested serializer) — without prefetch_related this is N+1 over
         # every report in the list. select_related('person') covers the FK
-        # lookup in ReportSerializer's Person field.
-        qs = Report.objects.select_related('person').prefetch_related('media_files')
+        # lookup in ReportSerializer's Person field; `created_by` is
+        # rendered by the same serializer (read-only but still in the
+        # response) so we add it to the same JOIN.
+        qs = Report.objects.select_related('person', 'created_by').prefetch_related('media_files')
         if not self.request.user.is_authenticated:
             qs = qs.filter(is_private=False, person__is_published=True)
         return qs
