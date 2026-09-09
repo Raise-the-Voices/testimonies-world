@@ -138,8 +138,19 @@ class ReportSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializ
 class PersonListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for list views."""
     categories = CaseCategorySerializer(many=True, read_only=True)
-    report_count = serializers.IntegerField(read_only=True)
-    days_since_last_report = serializers.IntegerField(read_only=True)
+    # report_count is computed from the `reports` prefetch rather
+    # than via .annotate() in the viewset. The annotate pattern
+    # (annotate(report_count=Count('reports'))) adds a GROUP BY to
+    # the main SELECT that breaks prefetch_related's batching for
+    # the other prefetches — they degrade to per-row queries. With
+    # this SerializerMethodField + the existing `reports` prefetch,
+    # the count is O(1) per row using prefetched data.
+    report_count = serializers.SerializerMethodField()
+    # days_since_last_report: the model @property calls
+    # `self.reports.order_by('-date_start').first()` per access —
+    # one query per row. Compute it here from the prefetched
+    # `reports` cache instead.
+    days_since_last_report = serializers.SerializerMethodField()
     profile_image_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -151,10 +162,38 @@ class PersonListSerializer(serializers.ModelSerializer):
     def get_profile_image_url(self, obj):
         if obj.profile_image:
             return _absolute_media_url(obj.profile_image.url, self.context.get('request'))
-        photo = obj.media_files.filter(media_type='photo', visibility='public').first()
-        if photo and photo.url:
-            return _absolute_media_url(photo.url, self.context.get('request'))
+        # Iterate the prefetched `media_files` cache; a queryset
+        # .filter() on a related manager would invalidate the cache
+        # and trigger a per-row query.
+        for media in obj.media_files.all():
+            if (media.media_type == 'photo'
+                    and media.visibility == 'public'
+                    and media.url):
+                return _absolute_media_url(media.url, self.context.get('request'))
         return None
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_report_count(self, obj):
+        # Computed from the prefetched `reports` cache; no query.
+        # len() on a prefetched related manager is O(1) in Python
+        # over the already-loaded rows.
+        return len(obj.reports.all())
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_days_since_last_report(self, obj):
+        # Find the latest report in the prefetched cache. The
+        # model @property of the same name does
+        # `self.reports.order_by('-date_start').first()` — that's a
+        # per-row query. Iterating the prefetched manager is
+        # O(reports-per-person) in Python over already-loaded rows.
+        from django.utils import timezone
+        latest_date = None
+        for r in obj.reports.all():
+            if r.date_start and (latest_date is None or r.date_start > latest_date):
+                latest_date = r.date_start
+        if latest_date is None:
+            return None
+        return (timezone.now().date() - latest_date).days
 
 
 class PersonDetailSerializer(serializers.ModelSerializer):
@@ -197,6 +236,20 @@ class PersonDetailSerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             reports = reports.filter(is_private=False)
         return ReportSerializer(reports, many=True, context=self.context).data
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_days_since_last_report(self, obj):
+        # Same logic as PersonListSerializer.get_days_since_last_report
+        # — derive from the prefetched `reports` cache rather than
+        # the model @property (which would issue a per-row query).
+        from django.utils import timezone
+        latest_date = None
+        for r in obj.reports.all():
+            if r.date_start and (latest_date is None or r.date_start > latest_date):
+                latest_date = r.date_start
+        if latest_date is None:
+            return None
+        return (timezone.now().date() - latest_date).days
 
     @extend_schema_field(serializers.ListField(child=serializers.DictField()))
     def get_family(self, obj):
