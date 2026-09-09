@@ -220,15 +220,30 @@ class PersonViewSet(viewsets.ModelViewSet):
         # PersonDetailSerializer.get_reports hits the cache instead
         # of issuing a per-row query.
         from django.db.models import Prefetch
-        qs = (
-            Person.objects
-            .select_related('created_by')
-            .annotate(report_count=Count('reports'))
-        )
+        qs = Person.objects.select_related('created_by')
+        # The `list` action renders `report_count` on
+        # PersonListSerializer. We compute it in Python from the
+        # `reports` prefetch in the serializer (see
+        # PersonListSerializer.get_report_count) rather than
+        # annotating here — `annotate(report_count=Count('reports'))`
+        # adds a GROUP BY to the main SELECT that breaks
+        # prefetch_related's batching for the other prefetches
+        # (Django can't fold a per-row report JOIN into the same
+        # query plan that the 'reports' / 'reports__media_files' /
+        # 'media_files' / 'relationships_*' prefetches need to
+        # traverse, so they degrade to per-row queries).
         if self.action in ('watchdog', 'related', 'statistics', 'countries'):
-            # List-shape: PersonListSerializer walks categories + media
-            # only. Skip the heavy prefetches.
-            qs = qs.prefetch_related('categories', 'media_files')
+            # List-shape endpoints return PersonListSerializer which
+            # walks categories + media_files + (for related) reports
+            # (for get_report_count + get_days_since_last_report). The
+            # watchdog annotation (`annotate(last_report_date=Max(...))`)
+            # also reads the reports table, so we prefetch reports
+            # there too. Skip reports__media_files and the two
+            # relationship sides — those are detail-only.
+            if self.action in ('watchdog', 'related'):
+                qs = qs.prefetch_related('categories', 'media_files', 'reports')
+            else:
+                qs = qs.prefetch_related('categories', 'media_files')
         else:
             # list / retrieve / create / update / partial_update /
             # destroy — PersonDetailSerializer walks everything.
