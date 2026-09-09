@@ -24,7 +24,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { invalidateAll } from '$app/navigation';
-	import Icon, { type IconName } from '$lib/Icon.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import DashboardCard from '$lib/DashboardCard.svelte';
 	import StatTile from '$lib/StatTile.svelte';
 	import QuickActions from '$lib/QuickActions.svelte';
@@ -52,7 +52,6 @@
 		label: string;
 		description: string;
 		href: string;
-		icon: IconName;
 		visible: boolean;
 	};
 	const allActions: QuickAction[] = $derived([
@@ -60,49 +59,42 @@
 			label: 'Submit a case',
 			description: 'Document someone new facing oppression.',
 			href: '/submit',
-			icon: 'plus',
 			visible: isVolunteer($user),
 		},
 		{
 			label: 'Browse cases',
 			description: 'Search and filter the full case catalog.',
 			href: '/persons',
-			icon: 'cases',
 			visible: true,
 		},
 		{
 			label: 'Open watchdog',
 			description: 'Cases needing fresh reporting.',
 			href: '/watchdog',
-			icon: 'eye',
 			visible: isVolunteer($user),
 		},
 		{
 			label: 'Review reports',
 			description: 'Latest report submissions across cases.',
 			href: '/reports',
-			icon: 'book',
 			visible: isVolunteer($user),
 		},
 		{
 			label: 'Open casework',
 			description: 'Track advocacy actions and follow-ups.',
 			href: '/casework',
-			icon: 'megaphone',
 			visible: isAdvocate($user),
 		},
 		{
 			label: 'Open contacts',
 			description: 'Always-private contacts registry.',
 			href: '/contacts',
-			icon: 'people',
 			visible: isAdvocate($user),
 		},
 		{
 			label: 'Audit log',
 			description: 'Full system activity (admin).',
 			href: '/admin/cases/auditlog/',
-			icon: 'eye',
 			visible: isAdmin($user),
 		},
 	]);

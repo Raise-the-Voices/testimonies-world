@@ -11,13 +11,11 @@
 -->
 <script lang="ts">
 	import { base } from '$app/paths';
-	import Icon, { type IconName } from './Icon.svelte';
 
 	interface Action {
 		label: string;
 		description: string;
 		href: string;
-		icon: IconName;
 	}
 
 	interface Props {
@@ -30,9 +28,6 @@
 <div class="quick-actions">
 	{#each actions as action (action.href)}
 		<a class="quick-action" href="{base}{action.href}">
-			<span class="qa-icon" aria-hidden="true">
-				<Icon name={action.icon} size={20} />
-			</span>
 			<span class="qa-text">
 				<span class="qa-label">{action.label}</span>
 				<span class="qa-desc">{action.description}</span>
@@ -53,9 +48,7 @@
 		}
 	}
 	.quick-action {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
+		display: block;
 		padding: 0.9rem 1rem;
 		border: 1px solid var(--color-border-light);
 		border-radius: var(--radius-card);
@@ -74,17 +67,6 @@
 	.quick-action:focus-visible {
 		outline: none;
 		box-shadow: 0 0 0 3px var(--color-primary-tint);
-	}
-	.qa-icon {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		flex-shrink: 0;
-		width: 36px;
-		height: 36px;
-		border-radius: 8px;
-		background: var(--color-primary-tint);
-		color: var(--color-primary);
 	}
 	.qa-text {
 		display: flex;
