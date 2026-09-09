@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { user } from '$lib/session';
 	import { getPreferences, updatePreferences, type UserPreferences } from '$lib/notification';
+import Skeleton from '$lib/Skeleton.svelte';
 
 	let prefs = $state<UserPreferences>({ notify_email: true, notify_inapp: true });
 	let original = $state<UserPreferences>({ notify_email: true, notify_inapp: true });
@@ -56,7 +57,10 @@
 	{#if !$user.authenticated}
 		<p class="muted">Please <a href="/accounts/google/login/?next=/settings">log in</a> to manage settings.</p>
 	{:else if loading}
-		<p class="muted">Loading…</p>
+		<div class="settings-skeleton" aria-label="Loading preferences">
+			<Skeleton variant="rect" width="100%" height="4rem" />
+			<Skeleton variant="rect" width="100%" height="4rem" />
+		</div>
 	{:else}
 		<section class="card" aria-label="Notification preferences">
 			<div class="row">
