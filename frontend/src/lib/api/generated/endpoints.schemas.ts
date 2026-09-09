@@ -1090,7 +1090,8 @@ export interface PersonList {
   readonly id: number;
   readonly categories: readonly CaseCategory[];
   readonly report_count: number;
-  readonly days_since_last_report: number;
+  /** @nullable */
+  readonly days_since_last_report: number | null;
   /** @nullable */
   readonly profile_image_url: string | null;
   /** @maxLength 255 */

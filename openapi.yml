@@ -4014,6 +4014,7 @@ components:
           readOnly: true
         days_since_last_report:
           type: integer
+          nullable: true
           readOnly: true
         profile_image_url:
           type: string
