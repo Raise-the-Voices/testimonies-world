@@ -239,9 +239,16 @@ export async function getStatistics(): Promise<Statistics> {
  * as a single cohesive payload (no parallel fetches, no client-side
  * composition). The backend scopes the response by role (see
  * backend/cases/dashboard.py for the scoping rules).
+ *
+ * Accepts an optional `injectedFetch` so the SvelteKit universal load
+ * can pass its wrapped `fetch` — the global fetch does NOT forward
+ * cookies during SSR, so without this, /dashboard SSR fails on hard
+ * refresh with an anonymous call to a 401-protected endpoint.
  */
-export async function getDashboard(): Promise<DashboardData> {
-	return request<DashboardData>('/dashboard/');
+export async function getDashboard(
+	injectedFetch?: typeof globalThis.fetch,
+): Promise<DashboardData> {
+	return request<DashboardData>('/dashboard/', { fetch: injectedFetch });
 }
 
 export async function getCountries(
