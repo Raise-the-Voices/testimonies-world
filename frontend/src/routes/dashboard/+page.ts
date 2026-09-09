@@ -9,13 +9,18 @@
  * header nav doesn't expose /dashboard to anonymous users (see
  * +layout.svelte), and SvelteKit's load returning an error lets the
  * page render the same error card it would for a server outage.
+ *
+ * SSR fetch: uses SvelteKit's wrapped `fetch` so cookies are forwarded
+ * during SSR. The global fetch (used by api.ts's request() helper)
+ * does NOT forward cookies during SSR — without this, the dashboard
+ * would fail to load on hard refresh and the page would flicker
+ * between the SSR error state and the client-side retry success.
  */
-import type { DashboardData } from '$lib/types';
 import { getDashboard, ApiError } from '$lib/api';
 
-export async function load() {
+export async function load({ fetch: skFetch }) {
 	try {
-		const data = await getDashboard();
+		const data = await getDashboard(skFetch);
 		return { data, error: null as string | null };
 	} catch (e) {
 		const msg =
@@ -26,6 +31,6 @@ export async function load() {
 				: e instanceof Error
 					? e.message
 					: 'Could not load dashboard.';
-		return { data: null as DashboardData | null, error: msg };
+		return { data: null, error: msg };
 	}
 }

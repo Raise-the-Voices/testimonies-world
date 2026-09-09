@@ -156,18 +156,26 @@
 		</div>
 	</header>
 
-	{#if !$ready}
-		<!-- Auth hydrating: the universal +layout.ts load hasn't
-		     resolved yet, so we don't yet know if the user is allowed
-		     here. Show a skeleton instead of an error to avoid the
-		     "Couldn't load the dashboard (HTTP 0)" flash on hard
-		     refresh. The layout's children gate would normally catch
-		     this, but defense-in-depth: a future refactor of the
-		     layout that loosens the gate won't reintroduce the bug. -->
-		<div class="dashboard-hydrating" aria-busy="true" aria-live="polite">
-			<Skeleton variant="text" width="40%" height="1.5rem" />
-			<Skeleton variant="text-block" lines={3} />
-			<Skeleton variant="rect" width="100%" height="10rem" />
+	{#if !$ready || refreshing}
+		<!-- Page-shaped skeleton: mirrors the real dashboard layout
+		     (header + 4 summary tiles + content cards) so swapping
+		     in real content does not reflow. Shown only during real
+		     data loading (soft navigation, manual refresh) — never
+		     on hard refresh, because +page.ts now uses SvelteKit's
+		     wrapped fetch so SSR returns real data. -->
+		<div class="dashboard-skeleton" aria-busy="true" aria-live="polite">
+			<div class="skel-header">
+				<Skeleton variant="text" width="35%" height="1.6rem" />
+				<Skeleton variant="text-block" lines={1} width="60%" />
+			</div>
+			<div class="skel-summary">
+				{#each Array(4) as _}
+					<Skeleton variant="rect" height="6rem" />
+				{/each}
+			</div>
+			<Skeleton variant="rect" height="14rem" />
+			<Skeleton variant="rect" height="10rem" />
+			<Skeleton variant="rect" height="10rem" />
 		</div>
 	{:else if data.error}
 		<DashboardCard variant="error" title="Couldn't load the dashboard">
@@ -338,12 +346,30 @@
 		gap: 1.5rem;
 	}
 
-	/* Auth-hydration skeleton: matches the visual weight of the
-	   summary row so the swap to real content doesn't reflow. */
-	.dashboard-hydrating {
+	/* Page-shaped skeleton: mirrors the real dashboard layout
+	   (header row + 4-tile summary + content cards) so swapping
+	   in real content does not reflow. */
+	.dashboard-skeleton {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: 1.5rem;
+	}
+	.skel-header {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid var(--color-border-light);
+	}
+	.skel-summary {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--gap-card);
+	}
+	@media (min-width: 720px) {
+		.skel-summary {
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+		}
 	}
 
 	.page-header {
