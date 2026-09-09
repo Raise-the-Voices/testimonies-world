@@ -24,6 +24,7 @@
 	import PersonCard from '$lib/PersonCard.svelte';
 	import Icon from '$lib/Icon.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
+	import ErrorCard from '$lib/ErrorCard.svelte';
 	import type { PageData } from './$types';
 	import type { Paginated, Person, PersonCategory } from '$lib/types';
 
@@ -320,11 +321,12 @@
 	{/if}
 
 	{#if error}
-		<div class="error-banner-inline" role="alert">
-			<Icon name="help" size={18} />
-			<span>{error}</span>
-			<button type="button" class="toolbar-clear" onclick={applyFilters}>Retry</button>
-		</div>
+		<ErrorCard
+			title="Couldn't load the case list"
+			message={error}
+			kind="network"
+			retry={applyFilters}
+		/>
 	{/if}
 
 	<FilterToolbar
