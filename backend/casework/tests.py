@@ -16,6 +16,8 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from testimonies.test_base import BaseTestCase
+
 from .models import CaseworkRecord, Notification, UserPreference
 from . import notifications
 
@@ -38,7 +40,7 @@ def make_user(username, *, in_group=None, email=None, is_staff=False):
     return user
 
 
-class RecipientRulesTests(TestCase):
+class RecipientRulesTests(BaseTestCase):
     def setUp(self):
         self.adv1 = make_user('aisha', in_group='Advocate', email='aisha@example.org')
         self.adv2 = make_user('maya', in_group='Advocate', email='maya@example.org')
@@ -136,7 +138,7 @@ class RecipientRulesTests(TestCase):
             self.assertEqual(send.call_count, 1)
 
 
-class SeenByTests(TestCase):
+class SeenByTests(BaseTestCase):
     def setUp(self):
         self.author = make_user('aisha', in_group='Advocate')
         self.viewer = make_user('maya', in_group='Advocate')
@@ -182,7 +184,7 @@ class SeenByTests(TestCase):
         )
 
 
-class MarkReadOwnershipTests(TestCase):
+class MarkReadOwnershipTests(BaseTestCase):
     def setUp(self):
         self.alice = make_user('alice', in_group='Advocate')
         self.bob = make_user('bob', in_group='Advocate')
@@ -220,7 +222,7 @@ class MarkReadOwnershipTests(TestCase):
         self.assertTrue(notif.is_read)
 
 
-class APIEndpointTests(TestCase):
+class APIEndpointTests(BaseTestCase):
     def setUp(self):
         self.alice = make_user('alice', in_group='Advocate')
         self.bob = make_user('bob', in_group='Advocate')
@@ -382,7 +384,7 @@ class SmtpConfigTests(SimpleTestCase):
         self.assertFalse(settings.EMAIL_USE_SSL)
 
 
-class CaseworkPerformedByGuardTests(TestCase):
+class CaseworkPerformedByGuardTests(BaseTestCase):
     """Mass-assignment guard: `performed_by` must be server-controlled.
 
     Without `read_only_fields = ['performed_by', ...]` on
@@ -423,7 +425,7 @@ class CaseworkPerformedByGuardTests(TestCase):
             'silent takeover',
         )
 
-class CaseworkAuditLogTests(TestCase):
+class CaseworkAuditLogTests(BaseTestCase):
     """Coverage for AuditLog wiring on CaseworkRecordViewSet.
 
     The other viewsets (Person / Report / Media / Contact) had partial

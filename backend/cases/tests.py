@@ -18,6 +18,8 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from testimonies.test_base import BaseTestCase
+
 from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report
 
 
@@ -37,7 +39,7 @@ def make_user(username, *, in_group=None, is_staff=False, email=None):
     return user
 
 
-class MediaPermissionTests(TestCase):
+class MediaPermissionTests(BaseTestCase):
     def setUp(self):
         self.advocate = make_user('aisha', in_group='Advocate')
         self.staff = make_user('admin', is_staff=True)
@@ -183,7 +185,7 @@ class MediaPermissionTests(TestCase):
         self.assertEqual(res.status_code, 403)
 
 
-class MediaUploadValidationTests(TestCase):
+class MediaUploadValidationTests(BaseTestCase):
     """Coverage for the file-extension + size validators on Media.file.
 
     Backend validation closes a gap where a direct API POST could
@@ -258,7 +260,7 @@ def _make_published_person() -> Person:
     )
 
 
-class ReportPermissionTests(TestCase):
+class ReportPermissionTests(BaseTestCase):
     def setUp(self):
         self.advocate = make_user('aisha', in_group='Advocate')
         self.staff = make_user('admin', is_staff=True)
@@ -470,7 +472,7 @@ class ReportPermissionTests(TestCase):
         self.assertEqual(res.json()['results'], [])
 
 
-class PersonDeletePermissionTests(TestCase):
+class PersonDeletePermissionTests(BaseTestCase):
     """Permission + cascade coverage for `PersonViewSet.perform_destroy`.
 
     Mirrors `ReportPermissionTests` but for Person. There is no
@@ -626,7 +628,7 @@ class PersonDeletePermissionTests(TestCase):
         )
 
 
-class FamilyRelationshipPermissionTests(TestCase):
+class FamilyRelationshipPermissionTests(BaseTestCase):
     """Permission + audit + validation coverage for FamilyRelationshipViewSet.
 
     Mirrors `PersonDeletePermissionTests`. Coverage areas:
@@ -935,7 +937,7 @@ class FamilyRelationshipPermissionTests(TestCase):
         self.assertEqual(len(ids), 1)
 
 
-class MassAssignmentGuardTests(TestCase):
+class MassAssignmentGuardTests(BaseTestCase):
     """Coverage for the `is_published` mass-assignment guard on
     PersonViewSet — staff/advocate can change it, volunteer/outsider
     silently drop it (rather than 403, so the /submit flow doesn't
@@ -1027,7 +1029,7 @@ class MassAssignmentGuardTests(TestCase):
         self.assertEqual(res.status_code, 201)
         self.assertTrue(Person.objects.get(pk=res.json()['id']).is_published)
 
-class ViewedAuditLogTests(TestCase):
+class ViewedAuditLogTests(BaseTestCase):
     """Coverage for the AuditLog.Action.VIEWED wiring.
 
     CLAUDE.md promises the audit log "tracks access to sensitive data",
@@ -1143,7 +1145,7 @@ class ViewedAuditLogTests(TestCase):
 
 
 
-class ProtectedMediaViewTests(TestCase):
+class ProtectedMediaViewTests(BaseTestCase):
     """Coverage for serve_protected_media() — the auth gate that replaces
     nginx's old direct-from-disk alias. The view handles three buckets:
 
@@ -1297,7 +1299,7 @@ class ProtectedMediaViewTests(TestCase):
         self.assertEqual(res.status_code, 200)
 
 
-class DashboardTests(TestCase):
+class DashboardTests(BaseTestCase):
     """Coverage for the role-scoped aggregator at /api/dashboard/.
 
     Scope matrix:
@@ -1473,7 +1475,7 @@ class DashboardTests(TestCase):
         self.assertTrue(all(a['user'] != 'vol' for a in person_rows))
 
 
-class AuditLogEndpointTests(TestCase):
+class AuditLogEndpointTests(BaseTestCase):
     """Coverage for GET /api/audit-logs/ (staff-only).
 
     Permission matrix:
@@ -1635,7 +1637,7 @@ class AuditLogEndpointTests(TestCase):
         self.assertLessEqual(len(body['results']), 3)
 
 
-class RelatedPersonsTests(TestCase):
+class RelatedPersonsTests(BaseTestCase):
     """Coverage for GET /api/persons/{id}/related/.
 
     The endpoint ranks published persons by overlap with the target
@@ -1761,7 +1763,7 @@ class RelatedPersonsTests(TestCase):
         self.assertEqual(res.status_code, 404)
 
 
-class PersonFilterTests(TestCase):
+class PersonFilterTests(BaseTestCase):
     """Coverage for the new date-range / stale filters added to
     PersonFilter: ?stale=N, ?updated_after=YYYY-MM-DD, ?updated_before=YYYY-MM-DD.
 
