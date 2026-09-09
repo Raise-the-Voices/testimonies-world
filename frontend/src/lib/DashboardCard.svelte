@@ -1,5 +1,5 @@
 <!--
-  DashboardCard — chrome wrapper for each dashboard section.
+  DashboardCard - chrome wrapper for each dashboard section.
 
   Reused by:
     - Stat tiles (one card per tile)
@@ -16,10 +16,10 @@
 	interface Props {
 		title?: string;
 		subtitle?: string;
-		/** Visual variant — overrides the left-border accent. */
+		/** Visual variant - overrides the left-border accent. */
 		variant?: 'default' | 'error' | 'empty';
 		/** Optional trailing slot rendered in the header right side
-		 *  (typically a Refresh button or a "View all →" link). */
+		 *  (typically a Refresh button or a "View all ->" link). */
 		trailing?: import('svelte').Snippet;
 		children: import('svelte').Snippet;
 	}

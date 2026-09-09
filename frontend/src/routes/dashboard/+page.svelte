@@ -1,20 +1,20 @@
 <!--
-  /dashboard — the operator command center.
+  /dashboard - the operator command center.
 
   Layout (desktop):
-    ┌─────────────────────────────────────────────────┐
-    │ Header: title + scope badge + Refresh btn       │
-    ├─────────────────────────────────────────────────┤
-    │ 4-tile summary row (open / my work / notifs / stale)
-    ├──────────────────────┬──────────────────────────┤
-    │ Quick actions        │ Recent activity          │
-    ├──────────────────────┼──────────────────────────┤
-    │ Status breakdown     │ Recent published cases   │
-    ├──────────────────────┴──────────────────────────┤
-    │ My open casework (Advocate/Staff only)          │
-    └─────────────────────────────────────────────────┘
+    +-------------------------------------------------+
+    | Header: title + scope badge + Refresh btn       |
+    +-------------------------------------------------+
+    | 4-tile summary row (open / my work / notifs / stale)
+    +----------------------+--------------------------+
+    | Quick actions        | Recent activity          |
+    +----------------------+--------------------------+
+    | Status breakdown     | Recent published cases   |
+    +----------------------+--------------------------+
+    | My open casework (Advocate/Staff only)          |
+    +-------------------------------------------------+
 
-  Mobile (≤700px): single column.
+  Mobile (<= 700px): single column.
 
   Sections are conditionally rendered based on role via the helpers
   in $lib/session. The data itself is already role-scoped on the
@@ -133,7 +133,7 @@
 </script>
 
 <svelte:head>
-	<title>Dashboard — Testimonies.world</title>
+	<title>Dashboard - Testimonies.world</title>
 </svelte:head>
 
 <div class="dashboard-page">
@@ -158,7 +158,7 @@
 				aria-label="Refresh dashboard"
 			>
 				<Icon name="refresh" size={16} />
-				<span>{refreshing ? 'Refreshing…' : 'Refresh'}</span>
+				<span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
 			</button>
 		</div>
 	</header>
@@ -241,7 +241,7 @@
 					{#each data.data.activity as a (a.id)}
 						<li class="activity-item">
 							<span class="activity-meta">
-								<span class="activity-user">{a.user ?? '—'}</span>
+								<span class="activity-user">{a.user ?? '-'}</span>
 								<span class="activity-action activity-action-{a.action}">{a.action}</span>
 								<span class="activity-target">{a.target_type} #{a.target_id}</span>
 							</span>
@@ -280,8 +280,8 @@
 			{/if}
 		</DashboardCard>
 
-		<!-- Recent casework — only for Advocate / Admin. The row
-		     column order is description → action → status → meta
+		<!-- Recent casework - only for Advocate / Admin. The row
+		     column order is description -> action -> status -> meta
 		     (LTR English reading order: what's happening, then
 		     the type + state, then when/who). -->
 		{#if isAdvocate($user) || isAdmin($user)}
@@ -309,7 +309,7 @@
 									<span class="cw-meta">
 										<span>{cw.date}</span>
 										{#if cw.performed_by_name}
-											<span>· {cw.performed_by_name}</span>
+											<span>* {cw.performed_by_name}</span>
 										{/if}
 									</span>
 								</a>
@@ -404,7 +404,7 @@
 		}
 	}
 
-	/* Section grid — single column on all viewports. The dashboard
+	/* Section grid - single column on all viewports. The dashboard
 	   reads top-to-bottom so the user can track which card they're
 	   on without their eyes jumping between columns. */
 
@@ -557,7 +557,7 @@
 		white-space: nowrap;
 	}
 
-	/* Casework — LTR English reading order. The main content
+	/* Casework - LTR English reading order. The main content
 	   (the description) is on the LEFT so the row reads as a
 	   sentence. Action + status pills are grouped next; date
 	   and the author are at the far right. */

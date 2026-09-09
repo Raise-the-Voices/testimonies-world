@@ -1,5 +1,5 @@
 <!--
-  QuickActions — 2x3 (or smaller, on narrow screens) grid of shortcut
+  QuickActions - 2x3 (or smaller, on narrow screens) grid of shortcut
   tiles that jump straight into the right CRUD workflow.
 
   Each tile is a real <a> so it's keyboard-focusable, middle-clickable,

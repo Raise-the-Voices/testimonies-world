@@ -1,5 +1,5 @@
 <!--
-  StatTile — one number + label tile for the dashboard summary row.
+  StatTile - one number + label tile for the dashboard summary row.
 
   Optional `href` makes the whole tile a link. If `href` is set, the
   tile is keyboard-focusable as a single unit; if not, the tile renders
@@ -13,14 +13,14 @@
 		/** Optional muted sub-label rendered below the number. */
 		hint?: string;
 		/** When true, renders a small SkeletonStatItem placeholder
-		 *  instead of the number — used during initial paint. */
+		 *  instead of the number - used during initial paint. */
 		loading?: boolean;
 	}
 
 	let { label, value, href, hint, loading = false }: Props = $props();
 
 	const displayValue = $derived(
-		value === null || value === undefined ? '—' : value.toLocaleString('en-US'),
+		value === null || value === undefined ? '-' : value.toLocaleString('en-US'),
 	);
 </script>
 
