@@ -86,8 +86,13 @@ class NotificationSerializer(serializers.ModelSerializer):
     def get_casework_persons(self, obj):
         if not obj.casework:
             return []
-        names = list(obj.casework.persons.values_list('name', flat=True)[:3])
-        return names
+        # NotificationViewSet.get_queryset prefetches
+        # 'casework__persons' — iterating the prefetched manager
+        # reuses the cache. .values_list() on a prefetched related
+        # manager issues a new query (Django doesn't reuse the
+        # prefetched rows for that call). We take just the names
+        # into a list and slice in Python.
+        return [p.name for p in obj.casework.persons.all()[:3]]
 
 
 class UserPreferenceSerializer(serializers.ModelSerializer):

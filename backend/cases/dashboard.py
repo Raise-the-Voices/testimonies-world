@@ -240,9 +240,16 @@ class DashboardViewSet(viewsets.GenericViewSet):
         # `recent_persons`: last 5 published persons the user can see.
         # Anyone authenticated can read published persons, so no role
         # scoping needed. `profile_image` is an ImageField on the same
-        # row, not a relation — no select_needed.
+        # row, not a relation — no select_needed, but the rest of
+        # PersonListSerializer walks `created_by` (FK), `categories`
+        # (M2M) and `media_files` (reverse FK via get_profile_image_url).
+        # Prefetch all three so the 5-row render is one batched
+        # query per relation instead of 5 × 3 = 15 follow-up queries.
         recent_persons_qs = (
-            Person.objects.filter(is_published=True)
+            Person.objects
+            .filter(is_published=True)
+            .select_related('created_by')
+            .prefetch_related('categories', 'media_files')
             .order_by('-updated_at')[:5]
         )
         recent_persons_data = PersonListSerializer(
@@ -275,6 +282,9 @@ class DashboardViewSet(viewsets.GenericViewSet):
         ]
 
         # `recent_casework`: scoped to the user by the helper above.
+        # Prefetch `persons` (M2M) and select_related `performed_by` (FK)
+        # so the loop body is one batched query per relation instead
+        # of 5 × 2 = 10 follow-up queries.
         recent_casework_qs = (
             _casework_qs(user)
             .select_related('performed_by')
@@ -292,7 +302,10 @@ class DashboardViewSet(viewsets.GenericViewSet):
                     cw.performed_by.get_full_name() or cw.performed_by.username
                     if cw.performed_by else None
                 ),
-                'person_ids': list(cw.persons.values_list('id', flat=True)),
+                # Iterate the prefetched manager — .values_list() on
+                # a prefetched related manager would bypass the
+                # cache and issue a per-row query.
+                'person_ids': [p.id for p in cw.persons.all()],
             }
             for cw in recent_casework_qs
         ]
