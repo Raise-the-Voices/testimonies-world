@@ -201,8 +201,15 @@ class PersonViewSet(viewsets.ModelViewSet):
         # PersonDetailSerializer.get_reports. For low-cardinality case
         # records this over-fetch is cheaper than per-row queries; if
         # profiling shows otherwise, gate the prefetch on auth.
+        #
+        # `select_related('created_by')` collapses the FK to User
+        # (rendered as `created_by` in both PersonListSerializer and
+        # PersonDetailSerializer) into the same JOIN — without it,
+        # every list/detail row triggers a User fetch. See
+        # tests_perf.py for the regression guard.
         qs = (
             Person.objects
+            .select_related('created_by')
             .annotate(report_count=Count('reports'))
             .prefetch_related(
                 'categories',
@@ -571,8 +578,10 @@ class ReportViewSet(viewsets.ModelViewSet):
         # media_files reverse-FK is iterated by ReportSerializer.media_files
         # (nested serializer) — without prefetch_related this is N+1 over
         # every report in the list. select_related('person') covers the FK
-        # lookup in ReportSerializer's Person field.
-        qs = Report.objects.select_related('person').prefetch_related('media_files')
+        # lookup in ReportSerializer's Person field; `created_by` is
+        # rendered by the same serializer (read-only but still in the
+        # response) so we add it to the same JOIN.
+        qs = Report.objects.select_related('person', 'created_by').prefetch_related('media_files')
         if not self.request.user.is_authenticated:
             qs = qs.filter(is_private=False, person__is_published=True)
         return qs
