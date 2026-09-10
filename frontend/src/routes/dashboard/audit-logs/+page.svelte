@@ -3,19 +3,28 @@
 
   Layout (desktop):
     ┌─────────────────────────────────────────────────┐
-    │ Header: title + scope note                       │
+    │ Header: title + subtitle                         │
     ├─────────────────────────────────────────────────┤
-    │ Filters bar (DashboardCard)                      │
+    │ Filters card (DashboardCard)                     │
     ├─────────────────────────────────────────────────┤
-    │ Results table (DashboardCard)                    │
-    │   - "Showing N entries" + pagination controls    │
-    │   - <table> via AuditLogsTable                   │
+    │ Results card (DashboardCard)                     │
+    │   - "Showing N entries"                          │
+    │   - <ul.activity-feed> via ActivityItem          │
+    │   - pagination controls                          │
     └─────────────────────────────────────────────────┘
+
+  Visual alignment with the dashboard
+  -----------------------------------
+  The activity list reuses ActivityItem — the same component the
+  dashboard's "Recent activity" widget uses — so the two surfaces
+  read as one product. The audit log adds two fields the widget
+  doesn't have room for (target link, secondary details/IP line)
+  via ActivityItem's optional props.
 
   Filter syncs to the URL via SvelteKit `goto(...)`. Each input's
   oncommit (blur / change / Enter) rebuilds the URLSearchParams,
   strips empty values, and navigates — +page.ts re-runs and the
-  table re-renders. Pagination preserves the current filter params
+  list re-renders. Pagination preserves the current filter params
   (otherwise going to page 2 would clear filters).
 
   PAGE_SIZE matches the backend default (settings.py REST_FRAMEWORK).
@@ -28,13 +37,18 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { base } from '$app/paths';
+	import { user as userStore } from '$lib/session';
 	import type { PageData } from './$types';
 	import DashboardCard from '$lib/DashboardCard.svelte';
-	import AuditLogsTable from '$lib/AuditLogsTable.svelte';
+	import ActivityItem from '$lib/ActivityItem.svelte';
 	import AuditLogsFilters from '$lib/AuditLogsFilters.svelte';
-import ErrorCard from '$lib/ErrorCard.svelte';
+	import ErrorCard from '$lib/ErrorCard.svelte';
 
 	let { data }: { data: PageData } = $props();
+
+	// SSR-hydrated auth (see +layout.svelte for the full rationale).
+	const currentUser = $derived(data.user ?? $userStore);
 
 	function convertIsoToLocal(iso: string): string {
 		// Backend returns ISO 8601 (often with Z or +00:00).
@@ -96,6 +110,47 @@ import ErrorCard from '$lib/ErrorCard.svelte';
 		timestampBefore = '';
 		goto($page.url.pathname, { replaceState: true, noScroll: true });
 	}
+
+	function formatWhen(iso: string): string {
+		const then = new Date(iso).getTime();
+		if (Number.isNaN(then)) return iso;
+		const diffMs = Date.now() - then;
+		const mins = Math.floor(diffMs / 60000);
+		if (mins < 1) return 'just now';
+		if (mins < 60) return `${mins}m ago`;
+		const hours = Math.floor(mins / 60);
+		if (hours < 24) return `${hours}h ago`;
+		const days = Math.floor(hours / 24);
+		if (days < 30) return `${days}d ago`;
+		return new Date(iso).toLocaleString('en-US', {
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+		});
+	}
+
+	/** Only `person` has a known URL pattern today. Other target_types
+	 *  (report, media, contact, casework, ...) don't have a dedicated
+	 *  detail page yet, so the cell stays a static span instead of a
+	 *  dead link. */
+	function targetHref(targetType: string, targetId: number): string | null {
+		if (targetType === 'person') return `${base}/persons/${targetId}`;
+		return null;
+	}
+
+	/** Build the secondary line that ActivityItem renders under the
+	 *  primary meta. Combines details + IP, with a `—` fallback for
+	 *  empty fields so the line collapses cleanly when both are blank. */
+	function buildSecondary(details: string, ip: string | null | undefined): string {
+		const d = details?.trim() ?? '';
+		const i = ip?.trim() ?? '';
+		if (d && i) return `${d}  ·  IP ${i}`;
+		if (d) return d;
+		if (i) return `IP ${i}`;
+		return '';
+	}
 </script>
 
 <svelte:head>
@@ -143,7 +198,22 @@ import ErrorCard from '$lib/ErrorCard.svelte';
 			{#if data.logs.results.length === 0}
 				<p class="empty">No audit log entries match your filters.</p>
 			{:else}
-				<AuditLogsTable rows={data.logs.results} />
+				<!-- activity-feed + ActivityItem — same shape as the
+				     dashboard's Recent activity widget, so this page
+				     reads as part of the same product. -->
+				<ul class="activity-feed" aria-label="Audit log entries">
+					{#each data.logs.results as row (row.id)}
+						<ActivityItem
+							user={row.user}
+							action={row.action}
+							targetType={row.target_type}
+							targetId={row.target_id}
+							targetHref={targetHref(row.target_type, row.target_id)}
+							when={formatWhen(row.timestamp)}
+							secondary={buildSecondary(row.details, row.ip_address)}
+						/>
+					{/each}
+				</ul>
 
 				{#if data.logs.next || data.logs.previous}
 					{@const totalPages = Math.ceil(data.logs.count / PAGE_SIZE)}
@@ -201,13 +271,25 @@ import ErrorCard from '$lib/ErrorCard.svelte';
 	.page-header h1 {
 		margin: 0 0 0.25rem 0;
 		font-size: 1.5rem;
-		color: var(--color-text);
+		color: var(--color-primary);
 	}
 	.page-subtitle {
 		margin: 0;
 		font-size: 0.95rem;
 		color: var(--color-text-muted);
 		max-width: var(--max-w-prose);
+	}
+
+	/* activity-feed owns the list layout; .activity-item owns each row.
+	   Both are re-extracted from ActivityItem to keep the same render
+	   shape on this page even if a future refactor moves the component. */
+	.activity-feed {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
 	}
 
 	.empty {
@@ -243,5 +325,13 @@ import ErrorCard from '$lib/ErrorCard.svelte';
 	.btn[disabled] {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.activity-feed *,
+		.activity-feed *::before,
+		.activity-feed *::after {
+			transition: none;
+		}
 	}
 </style>
