@@ -644,3 +644,17 @@ label {
 	padding: 0.75rem;
 	border-radius: 4px;
 }
+
+/* Activity feed list wrapper — used by the dashboard's "Recent
+   activity" widget AND the full audit log page (via ActivityItem).
+   The <li> rows and their inner styles live in the ActivityItem
+   component; this is just the <ul> layout so both surfaces render
+   with the same spacing. */
+.activity-feed {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
