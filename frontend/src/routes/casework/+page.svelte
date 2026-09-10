@@ -1,9 +1,36 @@
+<!--
+  /casework - the advocacy action log for advocates.
+
+  Anti-flicker design
+  -------------------
+  - Auth derives from `data.user` (SSR-hydrated) instead of the
+    global `$user` store. Without this, the SSR HTML would render
+    the "must be logged in" prompt and the client hydration would
+    snap to the records list.
+  - The page-level `!$ready` skeleton gate is gone — it was causing
+    a one-frame skeleton flash on hard refresh. Each section now
+    owns its own skeleton with a fixed `min-height`.
+  - `transition:fade` on every skeleton → content swap so the
+    handoff is a soft crossfade, not a hard cut.
+
+  Section layout:
+    +-------------------------------------------------+
+    | Header (title + new-record CTA)                 |
+    +-------------------------------------------------+
+    | Banner / delete modal (transient, no skeleton)  |
+    +-------------------------------------------------+
+    | Filters section                                 |
+    +-------------------------------------------------+
+    | Records section (records, empty, error, skel)   |
+    +-------------------------------------------------+
+-->
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { replaceState } from '$app/navigation';
-	import { user, isAdvocate, ready } from '$lib/session';
+	import { fade } from 'svelte/transition';
+	import { isAdvocate, user } from '$lib/session';
 	import { getCasework, deleteCasework } from '$lib/api';
 	import Banner from '$lib/Banner.svelte';
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
@@ -14,12 +41,19 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let currentUser = $derived($user);
-	// Seeded from the +page.ts universal load. SSR has populated this
-	// before first paint, so `loading` defaults to false (no skeleton
-	// flash). If the SSR load returned an error (e.g. anonymous user
-	// hitting the endpoint before the layout's session is hydrated),
-	// `onMount` retries once via loadRecords().
+	// SSR-hydrated auth. See +layout.svelte for the full rationale.
+	// Reading from `data.user ?? $user` keeps SSR HTML identical to
+	// post-hydration HTML — the layout-level `currentUser` is the
+	// same expression, so the nav chrome and this gate agree.
+	const currentUser = $derived(data.user ?? $user);
+
+	// Records are seeded from the +page.ts SSR load. SSR uses the
+	// wrapped `fetch`, so on hard refresh the records are already
+	// in the SSR HTML — no skeleton, no flicker.
+	//
+	// `loading` only flips to true during CLIENT-side loads (filter
+	// change, retry after SSR error). It's distinct from SSR-load
+	// errors, which surface via `loadError` and the ErrorCard path.
 	let records = $state<CaseworkRecord[]>(data.records ?? []);
 	let loading = $state(false);
 	let loadError = $state<string>(data.error ?? '');
@@ -96,9 +130,9 @@
 
 	onMount(() => {
 		void consumeUrlBanner();
-		// Recovery: if SSR returned an error (e.g. anonymous SSR
-		// returned 401 before the layout's session hydrated), retry
-		// once now that the session cookie is in scope.
+		// Recovery: if SSR returned an error (anonymous SSR returned 401
+		// before the layout's session is hydrated), retry once now that
+		// the session cookie is in scope on the client.
 		if (data.error) void loadRecords();
 	});
 
@@ -183,6 +217,14 @@
 	}
 
 	const hasActiveFilters = $derived(!!filterStatus || !!filterAction);
+
+	// Per-section loading state for the records section.
+	// `records.length === 0 && !loading && !loadError` means SSR
+	// returned an empty result set (legitimately empty, not loading).
+	// We only want the skeleton when data is genuinely loading.
+	const recordsLoading = $derived(
+		loading || (records.length === 0 && !!loadError === false && !data.records?.length && !data.error),
+	);
 </script>
 
 <svelte:head>
@@ -190,26 +232,7 @@
 </svelte:head>
 
 <div class="container">
-	{#if !$ready}
-		<!-- Page-shaped skeleton: mirrors the real casework layout
-		     (title + filters + record rows) so swapping in real
-		     content does not reflow. Shown only during real data
-		     loading — never on hard refresh, because +page.ts uses
-		     SvelteKit's wrapped fetch so SSR returns real data. -->
-		<div class="casework-skeleton" aria-busy="true" aria-live="polite">
-			<div class="skel-title-row">
-				<Skeleton variant="text" width="25%" height="1.5rem" />
-				<Skeleton variant="button" width="8rem" />
-			</div>
-			<div class="skel-filters">
-				<Skeleton variant="rect" height="2.5rem" width="12rem" />
-				<Skeleton variant="rect" height="2.5rem" width="14rem" />
-			</div>
-			<Skeleton variant="rect" height="5rem" />
-			<Skeleton variant="rect" height="5rem" />
-			<Skeleton variant="rect" height="5rem" />
-		</div>
-	{:else if !isAdvocate(currentUser)}
+	{#if !isAdvocate(currentUser)}
 		<p class="muted">
 			You must be logged in as an advocate to view casework.
 			<a href="{base}/api/auth/login/?next={base}/casework">Login</a>
@@ -260,124 +283,153 @@
 			/>
 		{/if}
 
-		<div class="filters">
-			<div class="filter-group">
-				<label for="filter-status">Status</label>
-				<select id="filter-status" bind:value={filterStatus} onchange={loadRecords}>
-					<option value="">All</option>
-					<option value="open">Open</option>
-					<option value="in_progress">In progress</option>
-					<option value="done">Done</option>
-				</select>
-			</div>
-			<div class="filter-group">
-				<label for="filter-action">Action type</label>
-				<select id="filter-action" bind:value={filterAction} onchange={loadRecords}>
-					<option value="">All</option>
-					{#each Object.entries(actionLabels) as [value, label]}
-						<option {value}>{label}</option>
-					{/each}
-				</select>
-			</div>
-			{#if hasActiveFilters}
-				<button type="button" class="filter-clear" onclick={clearFilters}>
-					Clear filters
-				</button>
-			{/if}
-		</div>
-
-		{#if loading}
-			<div class="casework-skeleton" aria-busy="true" aria-label="Loading casework records">
-				<Skeleton variant="rect" height="6rem" />
-				<Skeleton variant="rect" height="6rem" />
-				<Skeleton variant="rect" height="6rem" />
-			</div>
-		{:else if loadError}
-			<ErrorCard
-				title="Couldn't load casework"
-				message={loadError}
-				kind="network"
-				retry={loadRecords}
-			/>
-		{:else if records.length === 0}
-			<div class="state-card state-empty">
-				<div class="state-icon state-icon-empty" aria-hidden="true">✓</div>
+		<!-- === SECTION: Filters ===
+		     Filters are part of the persistent chrome — they stay
+		     rendered across data-load transitions so the user never
+		     loses their selection. min-height matches the filter row. -->
+		<div class="casework-section filters-section">
+			<div class="filters" in:fade={{ duration: 180 }}>
+				<div class="filter-group">
+					<label for="filter-status">Status</label>
+					<select id="filter-status" bind:value={filterStatus} onchange={loadRecords}>
+						<option value="">All</option>
+						<option value="open">Open</option>
+						<option value="in_progress">In progress</option>
+						<option value="done">Done</option>
+					</select>
+				</div>
+				<div class="filter-group">
+					<label for="filter-action">Action type</label>
+					<select id="filter-action" bind:value={filterAction} onchange={loadRecords}>
+						<option value="">All</option>
+						{#each Object.entries(actionLabels) as [value, label]}
+							<option {value}>{label}</option>
+						{/each}
+					</select>
+				</div>
 				{#if hasActiveFilters}
-					<h2 class="state-title">No records match these filters</h2>
-					<p class="state-body">Try clearing the filters, or log a new advocacy action.</p>
-					<div class="state-actions">
-						<button type="button" class="btn btn-secondary" onclick={clearFilters}>Clear filters</button>
-						<a href="{base}/casework/new" class="btn btn-primary">+ New Record</a>
-					</div>
-				{:else}
-					<h2 class="state-title">No casework yet</h2>
-					<p class="state-body">
-						Nothing logged yet. When you take an advocacy action — a call, a filing,
-						a meeting — log it here so the next advocate can pick up where you left off.
-					</p>
-					<div class="state-actions">
-						<a href="{base}/casework/new" class="btn btn-primary">+ Log first record</a>
-					</div>
+					<button type="button" class="filter-clear" onclick={clearFilters}>
+						Clear filters
+					</button>
 				{/if}
 			</div>
-		{:else}
-			<section class="records-list" aria-label="Casework records">
-				{#each records as record (record.id)}
-					<article class="record-card">
-						<div class="record-main">
-							<div class="record-head">
-								<div class="record-badges">
-									<span class="badge badge-action">
-										{actionLabels[record.action_type] || record.action_type}
-									</span>
-									<span class="badge badge-status badge-{statusKind[record.status] || 'unknown'}">
-										{statusLabels[record.status] || record.status}
-									</span>
-									<span class="record-date">— {formatDate(record.date)}</span>
+		</div>
+
+		<!-- === SECTION: Records / Empty / Error / Skeleton ===
+		     min-height accommodates 3 typical record cards so the
+		     skeleton → content swap doesn't reflow. The list grows
+		     naturally once real records load; the min-height is just
+		     the floor. -->
+		<div class="casework-section records-section">
+			{#if loading}
+				<div class="section-inner" transition:fade={{ duration: 200 }} aria-busy="true" aria-label="Loading casework records">
+					<div class="records-skel" aria-hidden="true">
+						{#each Array(3) as _, i (i)}
+							<div class="record-card-skel">
+								<div class="record-skel-row">
+									<Skeleton variant="badge" width="6rem" />
+									<Skeleton variant="badge" width="5rem" />
+									<Skeleton variant="text" width="6rem" />
 								</div>
-								<div class="record-actions">
-									<a href="{base}/casework/new?id={record.id}" class="btn btn-secondary btn-sm">
-										Edit
-									</a>
-									<button
-										type="button"
-										class="btn btn-danger-soft btn-sm"
-										onclick={() => startDelete(record.id, record.action_type, record.date)}
-										aria-label="Delete this record"
-									>Delete</button>
-								</div>
+								<Skeleton variant="text" width="90%" />
+								<Skeleton variant="text" width="60%" />
 							</div>
+						{/each}
+					</div>
+				</div>
+			{:else if loadError}
+				<div class="section-inner" transition:fade={{ duration: 200 }}>
+					<ErrorCard
+						title="Couldn't load casework"
+						message={loadError}
+						kind="network"
+						retry={loadRecords}
+					/>
+				</div>
+			{:else if records.length === 0}
+				<div class="section-inner" transition:fade={{ duration: 200 }}>
+					<div class="state-card state-empty">
+						<div class="state-icon state-icon-empty" aria-hidden="true">✓</div>
+						{#if hasActiveFilters}
+							<h2 class="state-title">No records match these filters</h2>
+							<p class="state-body">Try clearing the filters, or log a new advocacy action.</p>
+							<div class="state-actions">
+								<button type="button" class="btn btn-secondary" onclick={clearFilters}>Clear filters</button>
+								<a href="{base}/casework/new" class="btn btn-primary">+ New Record</a>
+							</div>
+						{:else}
+							<h2 class="state-title">No casework yet</h2>
+							<p class="state-body">
+								Nothing logged yet. When you take an advocacy action — a call, a filing,
+								a meeting — log it here so the next advocate can pick up where you left off.
+							</p>
+							<div class="state-actions">
+								<a href="{base}/casework/new" class="btn btn-primary">+ Log first record</a>
+							</div>
+						{/if}
+					</div>
+				</div>
+			{:else}
+				<div class="section-inner" transition:fade={{ duration: 200 }}>
+					<section class="records-list" aria-label="Casework records">
+						{#each records as record (record.id)}
+							<article class="record-card">
+								<div class="record-main">
+									<div class="record-head">
+										<div class="record-badges">
+											<span class="badge badge-action">
+												{actionLabels[record.action_type] || record.action_type}
+											</span>
+											<span class="badge badge-status badge-{statusKind[record.status] || 'unknown'}">
+												{statusLabels[record.status] || record.status}
+											</span>
+											<span class="record-date">— {formatDate(record.date)}</span>
+										</div>
+										<div class="record-actions">
+											<a href="{base}/casework/new?id={record.id}" class="btn btn-secondary btn-sm">
+												Edit
+											</a>
+											<button
+												type="button"
+												class="btn btn-danger-soft btn-sm"
+												onclick={() => startDelete(record.id, record.action_type, record.date)}
+												aria-label="Delete this record"
+											>Delete</button>
+										</div>
+									</div>
 
-							<p class="record-description">{record.description}</p>
+									<p class="record-description">{record.description}</p>
 
-							{#if record.next_steps}
-								<p class="record-meta">
-									<strong>Next steps:</strong> {record.next_steps}
-								</p>
-							{/if}
-
-							{#if record.notes}
-								<details class="record-notes">
-									<summary>Internal notes</summary>
-									<p>{record.notes}</p>
-								</details>
-							{/if}
-
-							{#if record.performed_by_name}
-								<footer class="record-footer">
-									<span class="record-author"><span class="record-author-mark" aria-hidden="true">·</span> By {record.performed_by_name}</span>
-									{#if record.seen_by && record.seen_by.length > 0}
-										<span class="record-seen" aria-label="Seen by {record.seen_by.length} advocate{record.seen_by.length === 1 ? '' : 's'}">
-											· Seen by {record.seen_by.slice(0, 3).map((s: { name: string }) => s.name).join(', ')}{record.seen_by.length > 3 ? ` +${record.seen_by.length - 3}` : ''}
-										</span>
+									{#if record.next_steps}
+										<p class="record-meta">
+											<strong>Next steps:</strong> {record.next_steps}
+										</p>
 									{/if}
-								</footer>
-							{/if}
-						</div>
-					</article>
-				{/each}
-			</section>
-		{/if}
+
+									{#if record.notes}
+										<details class="record-notes">
+											<summary>Internal notes</summary>
+											<p>{record.notes}</p>
+										</details>
+									{/if}
+
+									{#if record.performed_by_name}
+										<footer class="record-footer">
+											<span class="record-author"><span class="record-author-mark" aria-hidden="true">·</span> By {record.performed_by_name}</span>
+											{#if record.seen_by && record.seen_by.length > 0}
+												<span class="record-seen" aria-label="Seen by {record.seen_by.length} advocate{record.seen_by.length === 1 ? '' : 's'}">
+													· Seen by {record.seen_by.slice(0, 3).map((s: { name: string }) => s.name).join(', ')}{record.seen_by.length > 3 ? ` +${record.seen_by.length - 3}` : ''}
+												</span>
+											{/if}
+										</footer>
+									{/if}
+								</div>
+							</article>
+						{/each}
+					</section>
+				</div>
+			{/if}
+		</div>
 	{/if}
 </div>
 
@@ -409,6 +461,23 @@
 		flex: 0 0 auto;
 		white-space: nowrap;
 		align-self: center;
+	}
+
+	/* Each section gets a fixed min-height matching its real content
+	   so the swap never reflows. */
+	.casework-section {
+		display: block;
+	}
+	.filters-section {
+		min-height: 5.5rem;
+	}
+	.records-section {
+		/* Floor for ~3 record cards; grows naturally with more records. */
+		min-height: 18rem;
+	}
+	.section-inner {
+		display: block;
+		width: 100%;
 	}
 
 	.filters {
@@ -664,23 +733,30 @@
 		letter-spacing: 0.01em;
 	}
 
-	.casework-skeleton {
+	/* Records skeleton: same outer shape as a real record-card so the
+	   swap doesn't reflow. */
+	.records-skel {
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
 	}
-	.skel-title-row {
+	.record-card-skel {
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-subtle);
+		border-radius: var(--radius-card-lg);
+		box-shadow: var(--shadow-card);
+		padding: 1rem 1.25rem 1.1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+	}
+	.record-skel-row {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		padding-bottom: 0.5rem;
-		border-bottom: 1px solid var(--color-border-light);
+		gap: 0.5rem;
+		flex-wrap: wrap;
 	}
-	.skel-filters {
-		display: flex;
-		gap: 0.75rem;
-	}
+
 	.state-card {
 		background: var(--color-bg-white);
 		border: 1px solid var(--color-border-subtle);
