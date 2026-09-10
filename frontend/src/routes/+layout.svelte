@@ -347,7 +347,14 @@
 	   header without forcing an artificial gap between logo and
 	   first link; `flex: 0 1 auto` lets the nav shrink on narrow
 	   desktop widths so items wrap inside the <ul> instead of
-	   overflowing the header. */
+	   overflowing the header.
+
+	   At an advocate's max item count (~10 links + bell + avatar),
+	   the nav needs to fit on a single row from 1024px upward. The
+	   padding/font/gap below are sized for that — smaller than the
+	   previous 0.7rem / 0.85rem / 0.5rem values, which pushed items
+	   onto a second row at typical desktop widths and gave the
+	   "scattered" appearance. */
 	.main-navigation {
 		margin-left: auto;
 		flex: 0 1 auto;
@@ -357,7 +364,8 @@
 		display: flex;
 		align-items: center;
 		flex-wrap: wrap;
-		gap: 0.5rem;
+		justify-content: flex-end;
+		gap: 0.25rem;
 		list-style: none;
 		margin: 0;
 		padding: 0;
@@ -365,16 +373,18 @@
 	.main-navigation li {
 		display: flex;
 		align-items: center;
-		font-size: 0.95em;
+		font-size: 0.88em;
 	}
 	/* All nav items (text link, bell, avatar) sit on the same
-	   baseline via inline-flex + align-items: center. The link's
-	   padding keeps the tap target generous (44px+). */
+	   baseline via inline-flex + align-items: center. Compact
+	   padding keeps 10+ items on a single row at 1024px+, but the
+	   vertical padding is still generous enough for a 44px+ tap
+	   target. */
 	.main-navigation a {
 		display: inline-flex;
 		align-items: center;
-		padding: 0.7rem 0.85rem;
-		font-weight: bold;
+		padding: 0.55rem 0.65rem;
+		font-weight: 700;
 		text-decoration: none;
 		text-transform: uppercase;
 		color: var(--color-text-light);
@@ -495,13 +505,16 @@
 		font-size: 0.85em;
 	}
 	/* Bell: lift the inline margin Bell.svelte puts on its wrap so
-	   the parent <ul> gap controls spacing consistently. */
+	   the parent <ul> gap controls spacing consistently. The
+	   selector puts .main-navigation and .nav-bell in the scoped
+	   part (they live in this layout component) and :global(.bell-wrap)
+	   / :global(.bell-btn) on the Bell component's classes. */
 	.nav-bell {
 		display: inline-flex;
 		align-items: center;
 	}
-	:global(.main-navigation .nav-bell .bell-wrap),
-	:global(.main-navigation .nav-bell .bell-btn) {
+	.main-navigation .nav-bell :global(.bell-wrap),
+	.main-navigation .nav-bell :global(.bell-btn) {
 		margin: 0;
 	}
 	/* Avatar: same diameter as the bell (38px), no horizontal margin
