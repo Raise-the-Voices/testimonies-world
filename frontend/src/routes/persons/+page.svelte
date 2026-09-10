@@ -410,19 +410,19 @@
 				<tbody>
 					{#each persons as person (person.id)}
 						<tr>
-							<td><strong><a href="{base}/persons/{person.id}">{person.name}</a></strong></td>
-							<td>{person.country || '—'}</td>
-							<td>{person.rough_location || '—'}</td>
-							<td>
+							<td data-label="Name"><strong><a href="{base}/persons/{person.id}">{person.name}</a></strong></td>
+							<td data-label="Country">{person.country || '—'}</td>
+							<td data-label="Location">{person.rough_location || '—'}</td>
+							<td data-label="Status">
 								{#if person.current_status}
 									<span class="badge badge-{person.current_status}">
 										{statusLabels[person.current_status] ?? person.current_status}
 									</span>
 								{/if}
 							</td>
-							<td>{person.last_known_date || '—'}</td>
-							<td>{person.report_count ?? 0}</td>
-							<td><a href="{base}/persons/{person.id}">View »</a></td>
+							<td data-label="Last known">{person.last_known_date || '—'}</td>
+							<td data-label="Reports">{person.report_count ?? 0}</td>
+							<td data-label="" class="cell-actions"><a href="{base}/persons/{person.id}" class="view-link">View »</a></td>
 						</tr>
 					{/each}
 				</tbody>
@@ -520,6 +520,82 @@
 	}
 	.cases-table tbody tr:last-child td {
 		border-bottom: none;
+	}
+
+	/* Mobile card reflow — same pattern as /watchdog + /contacts +
+	   /reports. At <768px the table re-flows into stacked cards
+	   using data-label pseudo-elements; horizontal scroll remains
+	   the fallback at very narrow widths. */
+	@media (max-width: 768px) {
+		.cases-table,
+		.cases-table thead,
+		.cases-table tbody,
+		.cases-table tr,
+		.cases-table td {
+			display: block;
+			width: 100%;
+		}
+		.cases-table thead {
+			display: none;
+		}
+		.cases-table tbody tr {
+			background: var(--color-bg-white);
+			border: 1px solid var(--color-border-light);
+			border-left: 3px solid var(--color-primary-light);
+			border-radius: var(--radius-card);
+			margin-bottom: 0.75rem;
+			padding: 0.65rem 0.85rem;
+			box-shadow: var(--shadow-card);
+		}
+		.cases-table tbody tr:hover {
+			background: var(--color-bg-white);
+		}
+		.cases-table td {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 0.75rem;
+			padding: 0.4rem 0;
+			border-bottom: 1px solid var(--color-border-subtle);
+		}
+		.cases-table td:last-child {
+			border-bottom: none;
+		}
+		.cases-table td::before {
+			content: attr(data-label);
+			flex: 0 0 auto;
+			font-size: 0.72rem;
+			text-transform: uppercase;
+			letter-spacing: 0.06rem;
+			color: var(--color-text-muted);
+			font-weight: 700;
+		}
+		/* Name is the card "title" — full width, larger, no label. */
+		.cases-table td[data-label='Name'] {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.15rem;
+			padding-bottom: 0.55rem;
+			margin-bottom: 0.25rem;
+			border-bottom: 1px solid var(--color-border-light);
+		}
+		.cases-table td[data-label='Name']::before {
+			content: none;
+		}
+		.cases-table td.cell-actions {
+			justify-content: flex-end;
+			padding-top: 0.55rem;
+		}
+		.cases-table td.cell-actions::before {
+			content: none;
+		}
+		.view-link {
+			min-width: 44px;
+			min-height: 44px;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+		}
 	}
 
 	.pagination {

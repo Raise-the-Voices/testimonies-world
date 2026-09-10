@@ -285,16 +285,16 @@
 						<tbody>
 							{#each contacts as contact (contact.id)}
 								<tr>
-									<td class="cell-name">{contact.name}</td>
-									<td>
+									<td data-label="Name" class="cell-name">{contact.name}</td>
+									<td data-label="Role">
 										<span class="role-pill role-pill-{contact.role}">
 											{roleLabels[contact.role] || contact.role}
 										</span>
 									</td>
-									<td class="cell-contact" class:is-empty={!contact.email}>{contact.email || '—'}</td>
-									<td class="cell-contact" class:is-empty={!contact.phone}>{contact.phone || '—'}</td>
-									<td class="cell-contact" class:is-empty={!contact.signal}>{contact.signal || '—'}</td>
-									<td class="cell-actions">
+									<td data-label="Email" class="cell-contact" class:is-empty={!contact.email}>{contact.email || '—'}</td>
+									<td data-label="Phone" class="cell-contact" class:is-empty={!contact.phone}>{contact.phone || '—'}</td>
+									<td data-label="Signal" class="cell-contact" class:is-empty={!contact.signal}>{contact.signal || '—'}</td>
+									<td data-label="Actions" class="cell-actions">
 										<a
 											class="row-action"
 											href="{base}/contacts/new?id={contact.id}"
@@ -650,6 +650,84 @@
 		}
 		.toolbar-field {
 			min-width: 0;
+		}
+	}
+
+	/* Mobile card reflow — same pattern as /watchdog. At <768px the
+	   table re-flows into stacked cards using data-label pseudo-elements;
+	   horizontal scroll remains the fallback at very narrow widths. */
+	@media (max-width: 768px) {
+		.contacts-table,
+		.contacts-table thead,
+		.contacts-table tbody,
+		.contacts-table tr,
+		.contacts-table td {
+			display: block;
+			width: 100%;
+		}
+		.contacts-table thead {
+			display: none;
+		}
+		.contacts-table tbody tr {
+			background: var(--color-bg-white);
+			border: 1px solid var(--color-border-light);
+			border-left: 3px solid var(--color-primary-light);
+			border-radius: var(--radius-card);
+			margin-bottom: 0.75rem;
+			padding: 0.65rem 0.85rem;
+		}
+		.contacts-table tbody tr:hover {
+			background: var(--color-bg-white);
+		}
+		.contacts-table td {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 0.75rem;
+			padding: 0.4rem 0;
+			border-bottom: 1px solid var(--color-border-subtle);
+		}
+		.contacts-table td:last-child {
+			border-bottom: none;
+		}
+		.contacts-table td::before {
+			content: attr(data-label);
+			flex: 0 0 auto;
+			font-size: 0.72rem;
+			text-transform: uppercase;
+			letter-spacing: 0.06rem;
+			color: var(--color-text-muted);
+			font-weight: 700;
+		}
+		/* Cell-name and cell-actions are exceptions: name is the
+		   card "title" (full row, larger), and actions sit at the
+		   bottom right with their own layout. */
+		.contacts-table td.cell-name {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.15rem;
+			padding-bottom: 0.55rem;
+			margin-bottom: 0.25rem;
+			border-bottom: 1px solid var(--color-border-light);
+		}
+		.contacts-table td.cell-name::before {
+			content: none;
+		}
+		.contacts-table td.cell-name {
+			font-weight: 700;
+			font-size: 1rem;
+			color: var(--color-text);
+		}
+		.contacts-table td.cell-actions {
+			justify-content: flex-end;
+			padding-top: 0.55rem;
+		}
+		.contacts-table td.cell-actions::before {
+			content: none;
+		}
+		.row-action {
+			min-width: 44px;
+			min-height: 44px;
 		}
 	}
 

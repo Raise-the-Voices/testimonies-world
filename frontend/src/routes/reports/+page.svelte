@@ -298,7 +298,7 @@
 							{#each reports as r (r.id)}
 								{@const title = titleFor(r)}
 								<tr>
-									<td class="cell-date">
+									<td data-label="Date" class="cell-date">
 										{#if r.date_start}
 											{formatDate(r.date_start)}
 											{#if r.date_end && r.date_end !== r.date_start}
@@ -308,22 +308,22 @@
 											<span class="muted small">{new Date(r.created_at).toLocaleDateString()}</span>
 										{/if}
 									</td>
-									<td class="cell-case">
+									<td data-label="Case" class="cell-case">
 										<a href="{base}/persons/{r.person}" class="case-link">
 											{r.person}
 										</a>
 									</td>
-									<td>
+									<td data-label="Source">
 										<span class="source-pill source-pill-{r.source_type}">
 											{sourceTypeLabels[r.source_type] ?? r.source_type}
 										</span>
 									</td>
-									<td class="cell-title">
+									<td data-label="Title" class="cell-title">
 										<a href="{base}/persons/{r.person}" class="title-link" title={title}>
 											{title}
 										</a>
 									</td>
-									<td>
+									<td data-label="Status">
 										{#if r.person}
 											<!-- Person current_status isn't included in the
 											     reports serializer — keep the status cell muted
@@ -332,7 +332,7 @@
 											<span class="muted small">—</span>
 										{/if}
 									</td>
-									<td class="cell-private">
+									<td data-label="Visibility" class="cell-private">
 										{#if r.is_private}
 											<span class="visibility-pill visibility-private" title="Private — only volunteers+">
 												🔒 Private
@@ -725,6 +725,64 @@
 		.toolbar-select {
 			min-width: 0;
 			width: 100%;
+		}
+	}
+
+	/* Mobile card reflow — same pattern as /watchdog + /contacts.
+	   At <768px the table re-flows into stacked cards using
+	   data-label pseudo-elements; horizontal scroll remains the
+	   fallback at very narrow widths. */
+	@media (max-width: 768px) {
+		.reports-table,
+		.reports-table thead,
+		.reports-table tbody,
+		.reports-table tr,
+		.reports-table td {
+			display: block;
+			width: 100%;
+		}
+		.reports-table thead {
+			display: none;
+		}
+		.reports-table tbody tr {
+			background: var(--color-bg-white);
+			border: 1px solid var(--color-border-light);
+			border-left: 3px solid var(--color-primary-light);
+			border-radius: var(--radius-card);
+			margin-bottom: 0.75rem;
+			padding: 0.65rem 0.85rem;
+		}
+		.reports-table td {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 0.75rem;
+			padding: 0.4rem 0;
+			border-bottom: 1px solid var(--color-border-subtle);
+		}
+		.reports-table td:last-child {
+			border-bottom: none;
+		}
+		.reports-table td::before {
+			content: attr(data-label);
+			flex: 0 0 auto;
+			font-size: 0.72rem;
+			text-transform: uppercase;
+			letter-spacing: 0.06rem;
+			color: var(--color-text-muted);
+			font-weight: 700;
+		}
+		/* Title is the card "headline" — full width, larger, no label. */
+		.reports-table td.cell-title {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.15rem;
+			padding-bottom: 0.55rem;
+			margin-bottom: 0.25rem;
+			border-bottom: 1px solid var(--color-border-light);
+		}
+		.reports-table td.cell-title::before {
+			content: none;
 		}
 	}
 </style>
