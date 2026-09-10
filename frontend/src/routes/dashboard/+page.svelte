@@ -47,6 +47,7 @@
 	import StatusBreakdownChart from '$lib/StatusBreakdownChart.svelte';
 	import { isAdvocate, isAdmin, isVolunteer } from '$lib/session';
 	import Skeleton from '$lib/Skeleton.svelte';
+	import ActivityItem from '$lib/ActivityItem.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -303,16 +304,18 @@
 						{#if data.data.activity.length === 0}
 							<p class="empty-state">No recent activity.</p>
 						{:else}
+							<!-- activity-feed + ActivityItem — the same
+							     pattern the full audit-log page uses, so
+							     the two surfaces read as one product. -->
 							<ul class="activity-feed">
 								{#each data.data.activity as a (a.id)}
-									<li class="activity-item">
-										<span class="activity-meta">
-											<span class="activity-user">{a.user ?? '-'}</span>
-											<span class="activity-action activity-action-{a.action}">{a.action}</span>
-											<span class="activity-target">{a.target_type} #{a.target_id}</span>
-										</span>
-										<span class="activity-when">{formatRelative(a.timestamp)}</span>
-									</li>
+									<ActivityItem
+										user={a.user}
+										action={a.action}
+										targetType={a.target_type}
+										targetId={a.target_id}
+										when={formatRelative(a.timestamp)}
+									/>
 								{/each}
 							</ul>
 						{/if}
@@ -606,67 +609,10 @@
 		font-size: 0.9rem;
 	}
 
-	/* === Activity feed === */
-	.activity-feed {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-	.activity-item {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.55rem 0.75rem;
-		background: var(--color-surface);
-		border-radius: var(--radius-input);
-		font-size: 0.85rem;
-	}
-	.activity-meta {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		min-width: 0;
-		flex-wrap: wrap;
-	}
-	.activity-user {
-		font-weight: 700;
-		color: var(--color-text);
-	}
-	.activity-action {
-		font-size: 0.7rem;
-		text-transform: uppercase;
-		letter-spacing: 0.06rem;
-		padding: 0.1rem 0.45rem;
-		border-radius: 4px;
-		background: var(--color-bg);
-		color: var(--color-text-muted);
-	}
-	.activity-action-viewed {
-		background: var(--color-primary-tint);
-		color: var(--color-primary);
-	}
-	.activity-action-edited {
-		background: rgba(217, 119, 6, 0.15);
-		color: #b45309;
-	}
-	.activity-action-deleted {
-		background: rgba(217, 22, 22, 0.15);
-		color: var(--color-danger);
-	}
-	.activity-target {
-		color: var(--color-text-muted);
-		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-		font-size: 0.8rem;
-	}
-	.activity-when {
-		color: var(--color-text-muted);
-		font-size: 0.78rem;
-		white-space: nowrap;
-	}
+	/* === Activity feed ===
+	   The list wrapper (.activity-feed) is now a global utility in
+	   app.css; row geometry + action-chip colors live in the
+	   shared ActivityItem component. */
 
 	/* === Person list === */
 	.person-list,
