@@ -9,20 +9,35 @@
 
 	let { children, data }: { children: any; data: LayoutData } = $props();
 
-	// Seed the session store from the universal load BEFORE any child
-	// effect runs. `$effect.pre` is Svelte 5's "before DOM update"
-	// effect — it runs ahead of `$effect` and `$derived` re-evaluation,
-	// so children that read `$user` in their own `$effect` see the
-	// hydrated value. The previous `onMount(loadSession)` ran AFTER
-	// children mounted, causing protected pages to flash their
-	// "must be logged in" or "couldn't load" error state on hard
-	// refresh.
+	// SSR-hydrated auth state. `data.user` is populated by the root
+	// +layout.ts on every navigation (server and client), so the
+	// SSR HTML and post-hydration HTML render against the SAME auth
+	// state — no flicker on hard refresh of /dashboard, /casework,
+	// /submit, etc.
+	//
+	// Why not just `$user`? Because `$user` is a module-level writable
+	// that defaults to `{ authenticated: false }` during SSR. Reading
+	// from it on the server would render the unauthenticated chrome
+	// ("you must be logged in", no Dashboard nav link, ...) and the
+	// client hydration would then snap to the authenticated state —
+	// the exact flicker we're trying to eliminate.
+	//
+	// `?? $user` is the fallback for client-side reactivity (logout,
+	// cross-tab session expiry, etc.) where the store changes without
+	// a fresh +layout.ts run.
+	let currentUser = $derived(data.user ?? $user);
+
+	// Seed the global session store from the SSR data on the client.
+	// `$effect.pre` is client-only — it runs before child `$effect`s
+	// fire on hydration, so any child that subscribes to `$user`
+	// (e.g. the Bell's reactive isAdvocate check) sees the hydrated
+	// value on first render. The store itself is not the SSR source
+	// of truth — `data.user` is — this just keeps the global store
+	// in sync for client-side mutations.
 	$effect.pre(() => {
 		if (data.user) user.set(data.user);
 		ready.set(true);
 	});
-
-	let currentUser = $derived($user);
 	let prevAuthenticated = $state<boolean | null>(null);
 
 	// --- Logout cleanup -------------------------------------------------

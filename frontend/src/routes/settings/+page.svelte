@@ -3,6 +3,9 @@
 	import { user } from '$lib/session';
 	import { getPreferences, updatePreferences, type UserPreferences } from '$lib/notification';
 import Skeleton from '$lib/Skeleton.svelte';
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
 
 	let prefs = $state<UserPreferences>({ notify_email: true, notify_inapp: true });
 	let original = $state<UserPreferences>({ notify_email: true, notify_inapp: true });
@@ -54,7 +57,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 		<h1 class="page-title">Notification settings</h1>
 	</header>
 
-	{#if !$user.authenticated}
+	{#if !(data.user?.authenticated ?? $user.authenticated)}
 		<p class="muted">Please <a href="/accounts/google/login/?next=/settings">log in</a> to manage settings.</p>
 	{:else if loading}
 		<div class="settings-skeleton" aria-label="Loading preferences">

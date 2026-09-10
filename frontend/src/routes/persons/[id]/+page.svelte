@@ -22,8 +22,12 @@
 	import MediaUploadModal from '$lib/MediaUploadModal.svelte';
 	import RelatedCases from '$lib/RelatedCases.svelte';
 	import type { FamilyRelationshipRow, Media, Person, Report } from '$lib/types';
+	import type { PageData } from './$types';
 
-	let currentUser = $derived($user);
+	let { data }: { data: PageData } = $props();
+
+	// SSR-hydrated auth (see +layout.svelte for the full rationale).
+	let currentUser = $derived(data.user ?? $user);
 	let mediaList = $state<Media[]>([]);
 	let loadingMedia = $state(true);
 	let mediaError = $state('');
