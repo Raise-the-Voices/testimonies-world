@@ -1,35 +1,51 @@
 <!--
   /dashboard - the operator command center.
 
-  Layout (desktop):
+  Layout (desktop, single column at all breakpoints - the dashboard
+  reads top-to-bottom so the user can track which card they're on
+  without their eyes jumping between columns):
+
     +-------------------------------------------------+
     | Header: title + scope badge + Refresh btn       |
     +-------------------------------------------------+
     | 4-tile summary row (open / my work / notifs / stale)
-    +----------------------+--------------------------+
-    | Quick actions        | Recent activity          |
-    +----------------------+--------------------------+
-    | Status breakdown     | Recent published cases   |
-    +----------------------+--------------------------+
-    | My open casework (Advocate/Staff only)          |
+    +-------------------------------------------------+
+    | Quick actions                                   |
+    +-------------------------------------------------+
+    | Recent activity                                 |
+    +-------------------------------------------------+
+    | Status breakdown                                |
+    +-------------------------------------------------+
+    | Recently updated cases                          |
+    +-------------------------------------------------+
+    | My recent casework (Advocate/Admin only)        |
     +-------------------------------------------------+
 
-  Mobile (<= 700px): single column.
-
-  Sections are conditionally rendered based on role via the helpers
-  in $lib/session. The data itself is already role-scoped on the
-  server (see backend/cases/dashboard.py); the UI gating here just
-  hides widgets that wouldn't be useful for the role.
+  Anti-flicker design
+  -------------------
+  - Each section is independently wrapped with a fixed `min-height`
+    so swapping skeleton → content never reflows the page.
+  - Skeleton → content transitions use `transition:fade` (220 ms) so
+    the swap is a soft crossfade, not a hard cut.
+  - Auth state derives from `data.user` (SSR-hydrated by +layout.ts)
+    instead of the global `$user` store. Without this, the SSR HTML
+    would render the unauthenticated chrome and the client hydration
+    would snap to the authenticated state — the classic "you must be
+    logged in" flash on hard refresh.
+  - Skeletons render only when data is genuinely loading (initial
+    soft-nav load, manual refresh). Hard refresh with SSR success
+    renders real content directly — no skeleton at all.
 -->
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { invalidateAll } from '$app/navigation';
+	import { fade } from 'svelte/transition';
 	import Icon from '$lib/Icon.svelte';
 	import DashboardCard from '$lib/DashboardCard.svelte';
 	import StatTile from '$lib/StatTile.svelte';
 	import QuickActions from '$lib/QuickActions.svelte';
 	import StatusBreakdownChart from '$lib/StatusBreakdownChart.svelte';
-	import { isAdvocate, isAdmin, isVolunteer, user, ready } from '$lib/session';
+	import { isAdvocate, isAdmin, isVolunteer } from '$lib/session';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import type { PageData } from './$types';
 
@@ -45,7 +61,18 @@
 		}
 	}
 
+	// Per-section loading state. Hard refresh with successful SSR
+	// renders real content directly (data.data is hydrated). Skeletons
+	// only show on initial soft-nav load OR while `refreshing` is true.
+	const loading = $derived(!data.data || refreshing);
+
+	// SSR-hydrated auth. See +layout.svelte for the full rationale —
+	// in short, reading from `data.user` instead of `$user` keeps the
+	// SSR HTML and post-hydration HTML identical, killing the flicker.
+	const currentUser = $derived(data.user);
+
 	const scopeLabel = $derived(data.data?.scope ?? null);
+	const showCaseworkSection = $derived(isAdvocate(currentUser) || isAdmin(currentUser));
 
 	// Role-aware quick action list. Each entry uses the role gate from
 	// $lib/session at render time so the set adapts to the user.
@@ -60,7 +87,7 @@
 			label: 'Submit a case',
 			description: 'Document someone new facing oppression.',
 			href: '/submit',
-			visible: isVolunteer($user),
+			visible: isVolunteer(currentUser),
 		},
 		{
 			label: 'Browse cases',
@@ -72,31 +99,31 @@
 			label: 'Open watchdog',
 			description: 'Cases needing fresh reporting.',
 			href: '/watchdog',
-			visible: isVolunteer($user),
+			visible: isVolunteer(currentUser),
 		},
 		{
 			label: 'Review reports',
 			description: 'Latest report submissions across cases.',
 			href: '/reports',
-			visible: isVolunteer($user),
+			visible: isVolunteer(currentUser),
 		},
 		{
 			label: 'Open casework',
 			description: 'Track advocacy actions and follow-ups.',
 			href: '/casework',
-			visible: isAdvocate($user),
+			visible: isAdvocate(currentUser),
 		},
 		{
 			label: 'Open contacts',
 			description: 'Always-private contacts registry.',
 			href: '/contacts',
-			visible: isAdvocate($user),
+			visible: isAdvocate(currentUser),
 		},
 		{
 			label: 'Audit log',
 			description: 'Full system activity (admin).',
 			href: '/admin/cases/auditlog/',
-			visible: isAdmin($user),
+			visible: isAdmin(currentUser),
 		},
 	]);
 	const visibleActions = $derived(allActions.filter((a) => a.visible));
@@ -156,182 +183,265 @@
 		</div>
 	</header>
 
-	{#if !$ready || refreshing}
-		<!-- Page-shaped skeleton: mirrors the real dashboard layout
-		     (header + 4 summary tiles + content cards) so swapping
-		     in real content does not reflow. Shown only during real
-		     data loading (soft navigation, manual refresh) — never
-		     on hard refresh, because +page.ts now uses SvelteKit's
-		     wrapped fetch so SSR returns real data. -->
-		<div class="dashboard-skeleton" aria-busy="true" aria-live="polite">
-			<div class="skel-header">
-				<Skeleton variant="text" width="35%" height="1.6rem" />
-				<Skeleton variant="text-block" lines={1} width="60%" />
-			</div>
-			<div class="skel-summary">
-				{#each Array(4) as _}
-					<Skeleton variant="rect" height="6rem" />
-				{/each}
-			</div>
-			<Skeleton variant="rect" height="14rem" />
-			<Skeleton variant="rect" height="10rem" />
-			<Skeleton variant="rect" height="10rem" />
-		</div>
-	{:else if data.error}
+	{#if data.error}
 		<DashboardCard variant="error" title="Couldn't load the dashboard">
 			<p>{data.error}</p>
 			<button type="button" class="btn btn-secondary" onclick={refresh}>
 				Try again
 			</button>
 		</DashboardCard>
-	{:else if data.data}
-		<!-- Summary row (4 tiles) -->
-		<section class="summary-row" aria-label="Platform summary">
-			<StatTile
-				label="Open cases"
-				value={data.data.summary.open_cases}
-				hint="Published persons, any status."
-				href="{base}/persons"
-			/>
-			<StatTile
-				label="Stale cases"
-				value={data.data.summary.stale_cases}
-				hint="Not released, not deceased."
-				href="{base}/watchdog"
-			/>
-			{#if isAdvocate($user) || isAdmin($user)}
-				<StatTile
-					label="My open casework"
-					value={data.data.summary.my_open_casework}
-					hint="Open + in-progress."
-					href="{base}/casework"
-				/>
-			{:else}
-				<StatTile
-					label="My reports"
-					value={data.data.recent_reports.length}
-					hint="Most recent across all cases."
-					href="{base}/reports"
-				/>
-			{/if}
-			<StatTile
-				label="Unread notifications"
-				value={data.data.summary.unread_notifications}
-				hint={isAdvocate($user) ? 'Advocate in-app alerts.' : 'Account-level alerts.'}
-			/>
-		</section>
-
-		<!-- All cards stack single-column. Previously this section was
-		     a 2-col grid (Quick actions | Recent activity and Status
-		     breakdown | Recently updated cases) which made the page
-		     feel busy and hard to scan. Single column reads top-to-bottom. -->
-		<DashboardCard title="Quick actions" subtitle="One click to the right place.">
-			{#if visibleActions.length === 0}
-				<p class="empty-state">No actions available for your role.</p>
-			{:else}
-				<QuickActions actions={visibleActions} />
-			{/if}
-		</DashboardCard>
-
-		<DashboardCard
-			title="Recent activity"
-			subtitle={scopeLabel === 'staff'
-				? 'System-wide audit log.'
-				: scopeLabel === 'advocate'
-					? 'Your activity plus casework events.'
-					: 'Your activity across the platform.'}
-		>
-			{#snippet trailing()}
-				{#if isAdmin($user)}
-					<a href="{base}/dashboard/audit-logs" class="view-all-link">
-						View all <Icon name="arrow-right" size={14} />
-					</a>
-				{/if}
-			{/snippet}
-			{#if data.data.activity.length === 0}
-				<p class="empty-state">No recent activity.</p>
-			{:else}
-				<ul class="activity-feed">
-					{#each data.data.activity as a (a.id)}
-						<li class="activity-item">
-							<span class="activity-meta">
-								<span class="activity-user">{a.user ?? '-'}</span>
-								<span class="activity-action activity-action-{a.action}">{a.action}</span>
-								<span class="activity-target">{a.target_type} #{a.target_id}</span>
-							</span>
-							<span class="activity-when">{formatRelative(a.timestamp)}</span>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-		</DashboardCard>
-
-		<DashboardCard title="Status breakdown" subtitle="Open cases by current status.">
-			<StatusBreakdownChart counts={data.data.by_status} />
-		</DashboardCard>
-
-		<DashboardCard title="Recently updated cases" subtitle="Latest five published cases.">
-			{#snippet trailing()}
-				<a href="{base}/persons" class="view-all-link">
-					Browse all <Icon name="arrow-right" size={14} />
-				</a>
-			{/snippet}
-			{#if data.data.recent_persons.length === 0}
-				<p class="empty-state">No published cases yet.</p>
-			{:else}
-				<ul class="person-list">
-					{#each data.data.recent_persons as p (p.id)}
-						<li class="person-row">
-							<a href={personHref(p.id)}>
-								<span class="person-name">{p.name}</span>
-								<span class="person-country">{p.country}</span>
-								<span class="person-status status-{p.current_status}">{p.current_status.replace(/_/g, ' ')}</span>
-								<span class="person-when">{formatRelative(p.updated_at)}</span>
-							</a>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-		</DashboardCard>
-
-		<!-- Recent casework - only for Advocate / Admin. The row
-		     column order is description -> action -> status -> meta
-		     (LTR English reading order: what's happening, then
-		     the type + state, then when/who). -->
-		{#if isAdvocate($user) || isAdmin($user)}
-			<DashboardCard
-				title={isAdmin($user) ? 'Recent casework' : 'My recent casework'}
-				subtitle="Latest five advocacy actions."
-			>
-				{#snippet trailing()}
-					<a href="{base}/casework" class="view-all-link">
-						View all <Icon name="arrow-right" size={14} />
-					</a>
-				{/snippet}
-				{#if data.data.recent_casework.length === 0}
-					<p class="empty-state">No recent casework records.</p>
-				{:else}
-					<ul class="casework-list">
-						{#each data.data.recent_casework as cw (cw.id)}
-							<li class="casework-row">
-								<a href={caseworkHref(cw.id)}>
-									<span class="cw-desc">{cw.description}</span>
-									<span class="cw-pills">
-										<span class="cw-action">{cw.action_type.replace(/_/g, ' ')}</span>
-										<span class="cw-status cw-status-{cw.status}">{cw.status.replace(/_/g, ' ')}</span>
-									</span>
-									<span class="cw-meta">
-										<span>{cw.date}</span>
-										{#if cw.performed_by_name}
-											<span>* {cw.performed_by_name}</span>
-										{/if}
-									</span>
-								</a>
-							</li>
+	{:else}
+		<!-- === SECTION: Summary row (4 tiles) ===
+		     min-height matches the real StatTile geometry so the swap
+		     doesn't reflow. -->
+		<div class="dashboard-section summary-section">
+			{#if loading}
+				<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<div class="summary-row" aria-hidden="true">
+						{#each Array(4) as _, i (i)}
+							<Skeleton variant="rect" height="6rem" />
 						{/each}
-					</ul>
+					</div>
+				</div>
+			{:else if data.data}
+				<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<section class="summary-row" aria-label="Platform summary">
+						<StatTile
+							label="Open cases"
+							value={data.data.summary.open_cases}
+							hint="Published persons, any status."
+							href="{base}/persons"
+						/>
+						<StatTile
+							label="Stale cases"
+							value={data.data.summary.stale_cases}
+							hint="Not released, not deceased."
+							href="{base}/watchdog"
+						/>
+						{#if isAdvocate(currentUser) || isAdmin(currentUser)}
+							<StatTile
+								label="My open casework"
+								value={data.data.summary.my_open_casework}
+								hint="Open + in-progress."
+								href="{base}/casework"
+							/>
+						{:else}
+							<StatTile
+								label="My reports"
+								value={data.data.recent_reports.length}
+								hint="Most recent across all cases."
+								href="{base}/reports"
+							/>
+						{/if}
+						<StatTile
+							label="Unread notifications"
+							value={data.data.summary.unread_notifications}
+							hint={isAdvocate(currentUser) ? 'Advocate in-app alerts.' : 'Account-level alerts.'}
+						/>
+					</section>
+				</div>
+			{/if}
+		</div>
+
+		<!-- === SECTION: Quick actions ===
+		     min-height matches the QuickActions grid (2 rows × ~3.5rem
+		     action tiles + card chrome). -->
+		<div class="dashboard-section quick-actions-section">
+			{#if loading}
+				<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<DashboardCard title="Quick actions" subtitle="One click to the right place.">
+						<div class="quick-actions" aria-hidden="true">
+							{#each Array(6) as _, i (i)}
+								<Skeleton variant="rect" height="3.5rem" />
+							{/each}
+						</div>
+					</DashboardCard>
+				</div>
+			{:else if data.data}
+				<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<DashboardCard title="Quick actions" subtitle="One click to the right place.">
+						{#if visibleActions.length === 0}
+							<p class="empty-state">No actions available for your role.</p>
+						{:else}
+							<QuickActions actions={visibleActions} />
+						{/if}
+					</DashboardCard>
+				</div>
+			{/if}
+		</div>
+
+		<!-- === SECTION: Recent activity ===
+		     min-height matches ~5 activity rows + card chrome. -->
+		<div class="dashboard-section activity-section">
+			{#if loading}
+				<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<DashboardCard title="Recent activity" subtitle="Your activity across the platform.">
+						<div class="feed-skel" aria-hidden="true">
+							{#each Array(5) as _, i (i)}
+								<Skeleton variant="rect" height="2.6rem" />
+							{/each}
+						</div>
+					</DashboardCard>
+				</div>
+			{:else if data.data}
+				<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<DashboardCard
+						title="Recent activity"
+						subtitle={scopeLabel === 'staff'
+							? 'System-wide audit log.'
+							: scopeLabel === 'advocate'
+								? 'Your activity plus casework events.'
+								: 'Your activity across the platform.'}
+					>
+						{#snippet trailing()}
+							{#if isAdmin(currentUser)}
+								<a href="{base}/dashboard/audit-logs" class="view-all-link">
+									View all <Icon name="arrow-right" size={14} />
+								</a>
+							{/if}
+						{/snippet}
+						{#if data.data.activity.length === 0}
+							<p class="empty-state">No recent activity.</p>
+						{:else}
+							<ul class="activity-feed">
+								{#each data.data.activity as a (a.id)}
+									<li class="activity-item">
+										<span class="activity-meta">
+											<span class="activity-user">{a.user ?? '-'}</span>
+											<span class="activity-action activity-action-{a.action}">{a.action}</span>
+											<span class="activity-target">{a.target_type} #{a.target_id}</span>
+										</span>
+										<span class="activity-when">{formatRelative(a.timestamp)}</span>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					</DashboardCard>
+				</div>
+			{/if}
+		</div>
+
+		<!-- === SECTION: Status breakdown ===
+		     min-height matches the chart bar + legend grid. -->
+		<div class="dashboard-section status-section">
+			{#if loading}
+				<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<DashboardCard title="Status breakdown" subtitle="Open cases by current status.">
+						<div class="status-skel" aria-hidden="true">
+							<Skeleton variant="rect" height="0.75rem" width="100%" />
+							<div class="status-legend-skel">
+								{#each Array(6) as _, i (i)}
+									<Skeleton variant="rect" height="1rem" width="60%" />
+								{/each}
+							</div>
+						</div>
+					</DashboardCard>
+				</div>
+			{:else if data.data}
+				<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<DashboardCard title="Status breakdown" subtitle="Open cases by current status.">
+						<StatusBreakdownChart counts={data.data.by_status} />
+					</DashboardCard>
+				</div>
+			{/if}
+		</div>
+
+		<!-- === SECTION: Recently updated cases ===
+		     min-height matches ~5 person rows + card chrome. -->
+		<div class="dashboard-section recent-persons-section">
+			{#if loading}
+				<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<DashboardCard title="Recently updated cases" subtitle="Latest five published cases.">
+						<div class="feed-skel" aria-hidden="true">
+							{#each Array(5) as _, i (i)}
+								<Skeleton variant="rect" height="3rem" />
+							{/each}
+						</div>
+					</DashboardCard>
+				</div>
+			{:else if data.data}
+				<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<DashboardCard title="Recently updated cases" subtitle="Latest five published cases.">
+						{#snippet trailing()}
+							<a href="{base}/persons" class="view-all-link">
+								Browse all <Icon name="arrow-right" size={14} />
+							</a>
+						{/snippet}
+						{#if data.data.recent_persons.length === 0}
+							<p class="empty-state">No published cases yet.</p>
+						{:else}
+							<ul class="person-list">
+								{#each data.data.recent_persons as p (p.id)}
+									<li class="person-row">
+										<a href={personHref(p.id)}>
+											<span class="person-name">{p.name}</span>
+											<span class="person-country">{p.country}</span>
+											<span class="person-status status-{p.current_status}">{p.current_status.replace(/_/g, ' ')}</span>
+											<span class="person-when">{formatRelative(p.updated_at)}</span>
+										</a>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					</DashboardCard>
+				</div>
+			{/if}
+		</div>
+
+		<!-- === SECTION: Recent casework (Advocate / Admin only) ===
+		     Role gate reads from `currentUser` which is SSR-hydrated
+		     (data.user), so this section is server-rendered with the
+		     correct visibility — no flash on hard refresh. -->
+		{#if showCaseworkSection}
+			<div class="dashboard-section recent-casework-section">
+				{#if loading}
+					<div class="section-inner" transition:fade={{ duration: 220 }}>
+						<DashboardCard title="My recent casework" subtitle="Latest five advocacy actions.">
+							<div class="feed-skel" aria-hidden="true">
+								{#each Array(5) as _, i (i)}
+									<Skeleton variant="rect" height="3rem" />
+								{/each}
+							</div>
+						</DashboardCard>
+					</div>
+				{:else if data.data}
+					<div class="section-inner" transition:fade={{ duration: 220 }}>
+						<DashboardCard
+							title={isAdmin(currentUser) ? 'Recent casework' : 'My recent casework'}
+							subtitle="Latest five advocacy actions."
+						>
+							{#snippet trailing()}
+								<a href="{base}/casework" class="view-all-link">
+									View all <Icon name="arrow-right" size={14} />
+								</a>
+							{/snippet}
+							{#if data.data.recent_casework.length === 0}
+								<p class="empty-state">No recent casework records.</p>
+							{:else}
+								<ul class="casework-list">
+									{#each data.data.recent_casework as cw (cw.id)}
+										<li class="casework-row">
+											<a href={caseworkHref(cw.id)}>
+												<span class="cw-desc">{cw.description}</span>
+												<span class="cw-pills">
+													<span class="cw-action">{cw.action_type.replace(/_/g, ' ')}</span>
+													<span class="cw-status cw-status-{cw.status}">{cw.status.replace(/_/g, ' ')}</span>
+												</span>
+												<span class="cw-meta">
+													<span>{cw.date}</span>
+													{#if cw.performed_by_name}
+														<span>* {cw.performed_by_name}</span>
+													{/if}
+												</span>
+											</a>
+										</li>
+									{/each}
+								</ul>
+							{/if}
+						</DashboardCard>
+					</div>
 				{/if}
-			</DashboardCard>
+			</div>
 		{/if}
 	{/if}
 </div>
@@ -346,32 +456,75 @@
 		gap: 1.5rem;
 	}
 
-	/* Page-shaped skeleton: mirrors the real dashboard layout
-	   (header row + 4-tile summary + content cards) so swapping
-	   in real content does not reflow. */
-	.dashboard-skeleton {
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
+	/* Each section gets a fixed min-height matching its real content.
+	   This is the load-bearing piece of the no-shift design: when
+	   skeleton → content swaps, the section's box doesn't move. */
+	.dashboard-section {
+		display: block;
 	}
-	.skel-header {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		padding-bottom: 0.75rem;
-		border-bottom: 1px solid var(--color-border-light);
+	.summary-section { min-height: 6rem; }
+	.quick-actions-section { min-height: 11rem; }
+	.activity-section { min-height: 17rem; }
+	.status-section { min-height: 16rem; }
+	.recent-persons-section { min-height: 17rem; }
+	.recent-casework-section { min-height: 18rem; }
+
+	/* Inner wrapper holds the transitioning content. Its own height is
+	   driven by the children; the outer .dashboard-section's min-height
+	   keeps the slot the right size. */
+	.section-inner {
+		display: block;
+		width: 100%;
 	}
-	.skel-summary {
+
+	/* === Summary row === */
+	.summary-row {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--gap-card);
 	}
 	@media (min-width: 720px) {
-		.skel-summary {
+		.summary-row {
 			grid-template-columns: repeat(4, minmax(0, 1fr));
 		}
 	}
 
+	/* === Feed skeletons (activity, recent persons, recent casework) ===
+	   All three share the same vertical list geometry; reuse the same
+	   skeleton so the swap pattern stays consistent across sections. */
+	.feed-skel {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	/* === Status breakdown skeleton ===
+	   Mirrors the chart bar + auto-fill legend grid. */
+	.status-skel {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+	.status-legend-skel {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+		gap: 0.4rem 1rem;
+	}
+
+	/* === Quick actions skeleton ===
+	   Same grid geometry as QuickActions so the layout matches. */
+	.quick-actions {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.75rem;
+	}
+	@media (min-width: 720px) {
+		.quick-actions {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+
+	/* === Page header === */
 	.page-header {
 		display: flex;
 		justify-content: space-between;
@@ -432,22 +585,6 @@
 		gap: 0.4rem;
 	}
 
-	/* Summary row */
-	.summary-row {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: var(--gap-card);
-	}
-	@media (min-width: 720px) {
-		.summary-row {
-			grid-template-columns: repeat(4, minmax(0, 1fr));
-		}
-	}
-
-	/* Section grid - single column on all viewports. The dashboard
-	   reads top-to-bottom so the user can track which card they're
-	   on without their eyes jumping between columns. */
-
 	.view-all-link {
 		display: inline-flex;
 		align-items: center;
@@ -469,7 +606,7 @@
 		font-size: 0.9rem;
 	}
 
-	/* Activity feed */
+	/* === Activity feed === */
 	.activity-feed {
 		list-style: none;
 		margin: 0;
@@ -531,7 +668,7 @@
 		white-space: nowrap;
 	}
 
-	/* Person list */
+	/* === Person list === */
 	.person-list,
 	.casework-list {
 		list-style: none;
@@ -597,10 +734,7 @@
 		white-space: nowrap;
 	}
 
-	/* Casework - LTR English reading order. The main content
-	   (the description) is on the LEFT so the row reads as a
-	   sentence. Action + status pills are grouped next; date
-	   and the author are at the far right. */
+	/* === Casework list - LTR English reading order === */
 	.casework-row a {
 		display: grid;
 		grid-template-columns: 1fr auto auto;

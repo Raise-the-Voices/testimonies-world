@@ -6,8 +6,12 @@
 	import { getPerson, updatePerson, getCategories, ApiError } from '$lib/api';
 import Skeleton from '$lib/Skeleton.svelte';
 	import type { Person } from '$lib/types';
+	import type { PageData } from './$types';
 
-	let currentUser = $derived($user);
+	let { data }: { data: PageData } = $props();
+
+	// SSR-hydrated auth (see +layout.svelte for the full rationale).
+	let currentUser = $derived(data.user ?? $user);
 	let isAdminUser = $derived(isAdmin(currentUser));
 	let categories: any[] = $state([]);
 	let saving = $state(false);

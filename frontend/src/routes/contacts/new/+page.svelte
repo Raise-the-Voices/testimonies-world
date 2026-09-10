@@ -6,8 +6,12 @@
 	import { createContact, getContact, updateContact, ApiError } from '$lib/api';
 	import type { Contact, ContactRole } from '$lib/types';
 import Skeleton from '$lib/Skeleton.svelte';
+	import type { PageData } from './$types';
 
-	let currentUser = $derived($user);
+	let { data }: { data: PageData } = $props();
+
+	// SSR-hydrated auth (see +layout.svelte for the full rationale).
+	let currentUser = $derived(data.user ?? $user);
 	let saving = $state(false);
 	let loading = $state(true);
 	let loadError = $state('');

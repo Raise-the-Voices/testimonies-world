@@ -14,7 +14,8 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let currentUser = $derived($user);
+	// SSR-hydrated auth (see +layout.svelte for the full rationale).
+	let currentUser = $derived(data.user ?? $user);
 	// Seeded from the +page.ts universal load. SSR has populated this
 	// before first paint, so `loading` defaults to false (no skeleton
 	// flash). If the SSR load returned an error (e.g. anonymous user

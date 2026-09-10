@@ -29,7 +29,8 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let currentUser = $derived($user);
+	// SSR-hydrated auth (see +layout.svelte for the full rationale).
+	let currentUser = $derived(data.user ?? $user);
 
 	// Filter state — all local, never written to the URL.
 	let searchText = $state('');
