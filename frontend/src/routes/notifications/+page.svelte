@@ -117,6 +117,10 @@
 
 <svelte:head>
 	<title>Notifications — Testimonies.world</title>
+	<meta name="description" content="Your notification feed — casework events from teammates, mentions, and platform updates." />
+	<meta property="og:description" content="Your notification feed — casework events from teammates, mentions, and platform updates." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="Your notification feed — casework events from teammates, mentions, and platform updates." />
 </svelte:head>
 
 <div class="container">

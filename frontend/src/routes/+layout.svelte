@@ -117,6 +117,21 @@
 	});
 </script>
 
+<!-- Site-wide SEO defaults. Per-page <svelte:head> blocks emit
+     <title>, og:description, og:type — those override or extend
+     these. canonical + og:title are derived from the current URL
+     so each page gets a unique shareable link. -->
+<svelte:head>
+	<link rel="canonical" href="{$page.url.origin}{$page.url.pathname}" />
+	<meta property="og:title" content={`${$page.url.pathname === '/' ? 'Testimonies.world' : $page.url.pathname.replace(/^\//, '').replace(/\/$/, '').replace(/^./, (c) => c.toUpperCase())} — Testimonies.world`} />
+	<meta property="og:url" content="{$page.url.origin}{$page.url.pathname}" />
+</svelte:head>
+
+<!-- Skip-to-content link (WCAG 2.4.1). Visually hidden until the user
+     tabs to it; jumps focus past the header / nav drawer to the
+     main content. -->
+<a href="#main-content" class="skip-link">Skip to main content</a>
+
 <header class="header-container">
 	<div class="main-header container-app">
 		<a href="{base}/" class="logo">
@@ -143,18 +158,18 @@
 		<nav class="main-navigation" aria-label="Primary">
 			<ul>
 				{#if currentUser.authenticated}
-					<li><a href="{base}/dashboard" class:active={$page.url.pathname.startsWith(`${base}/dashboard`)}>Dashboard</a></li>
+					<li><a href="{base}/dashboard" class:active={$page.url.pathname.startsWith(`${base}/dashboard`)} aria-current={$page.url.pathname.startsWith(`${base}/dashboard`) ? "page" : undefined}>Dashboard</a></li>
 				{/if}
-				<li><a href="{base}/persons" class:active={$page.url.pathname.startsWith(`${base}/persons`)}>Cases</a></li>
-				<li><a href="{base}/statistics" class:active={$page.url.pathname.startsWith(`${base}/statistics`)}>Statistics</a></li>
+				<li><a href="{base}/persons" class:active={$page.url.pathname.startsWith(`${base}/persons`)} aria-current={$page.url.pathname.startsWith(`${base}/persons`) ? "page" : undefined}>Cases</a></li>
+				<li><a href="{base}/statistics" class:active={$page.url.pathname.startsWith(`${base}/statistics`)} aria-current={$page.url.pathname.startsWith(`${base}/statistics`) ? "page" : undefined}>Statistics</a></li>
 				{#if isVolunteer(currentUser)}
-					<li><a href="{base}/submit" class:active={$page.url.pathname.startsWith(`${base}/submit`)}>Submit</a></li>
-					<li><a href="{base}/reports" class:active={$page.url.pathname.startsWith(`${base}/reports`)}>Reports</a></li>
-					<li><a href="{base}/watchdog" class:active={$page.url.pathname.startsWith(`${base}/watchdog`)}>Watchdog</a></li>
+					<li><a href="{base}/submit" class:active={$page.url.pathname.startsWith(`${base}/submit`)} aria-current={$page.url.pathname.startsWith(`${base}/submit`) ? "page" : undefined}>Submit</a></li>
+					<li><a href="{base}/reports" class:active={$page.url.pathname.startsWith(`${base}/reports`)} aria-current={$page.url.pathname.startsWith(`${base}/reports`) ? "page" : undefined}>Reports</a></li>
+					<li><a href="{base}/watchdog" class:active={$page.url.pathname.startsWith(`${base}/watchdog`)} aria-current={$page.url.pathname.startsWith(`${base}/watchdog`) ? "page" : undefined}>Watchdog</a></li>
 				{/if}
 				{#if isAdvocate(currentUser)}
-					<li><a href="{base}/casework" class:active={$page.url.pathname.startsWith(`${base}/casework`)}>Casework</a></li>
-					<li><a href="{base}/contacts" class:active={$page.url.pathname.startsWith(`${base}/contacts`)}>Contacts</a></li>
+					<li><a href="{base}/casework" class:active={$page.url.pathname.startsWith(`${base}/casework`)} aria-current={$page.url.pathname.startsWith(`${base}/casework`) ? "page" : undefined}>Casework</a></li>
+					<li><a href="{base}/contacts" class:active={$page.url.pathname.startsWith(`${base}/contacts`)} aria-current={$page.url.pathname.startsWith(`${base}/contacts`) ? "page" : undefined}>Contacts</a></li>
 				{/if}
 				{#if currentUser.authenticated}
 					<li class="nav-bell"><Bell /></li>
@@ -185,21 +200,22 @@
 	class:nav-drawer-open={drawerOpen}
 	aria-label="Primary"
 	aria-hidden={!drawerOpen}
+	inert={!drawerOpen}
 >
 	<ul>
 		{#if currentUser.authenticated}
-			<li><a href="{base}/dashboard" class:active={$page.url.pathname.startsWith(`${base}/dashboard`)} onclick={closeDrawer}>Dashboard</a></li>
+			<li><a href="{base}/dashboard" class:active={$page.url.pathname.startsWith(`${base}/dashboard`)} aria-current={$page.url.pathname.startsWith(`${base}/dashboard`) ? "page" : undefined} onclick={closeDrawer}>Dashboard</a></li>
 		{/if}
-		<li><a href="{base}/persons" class:active={$page.url.pathname.startsWith(`${base}/persons`)} onclick={closeDrawer}>Cases</a></li>
-		<li><a href="{base}/statistics" class:active={$page.url.pathname.startsWith(`${base}/statistics`)} onclick={closeDrawer}>Statistics</a></li>
+		<li><a href="{base}/persons" class:active={$page.url.pathname.startsWith(`${base}/persons`)} aria-current={$page.url.pathname.startsWith(`${base}/persons`) ? "page" : undefined} onclick={closeDrawer}>Cases</a></li>
+		<li><a href="{base}/statistics" class:active={$page.url.pathname.startsWith(`${base}/statistics`)} aria-current={$page.url.pathname.startsWith(`${base}/statistics`) ? "page" : undefined} onclick={closeDrawer}>Statistics</a></li>
 		{#if isVolunteer(currentUser)}
-			<li><a href="{base}/submit" class:active={$page.url.pathname.startsWith(`${base}/submit`)} onclick={closeDrawer}>Submit</a></li>
-			<li><a href="{base}/reports" class:active={$page.url.pathname.startsWith(`${base}/reports`)} onclick={closeDrawer}>Reports</a></li>
-			<li><a href="{base}/watchdog" class:active={$page.url.pathname.startsWith(`${base}/watchdog`)} onclick={closeDrawer}>Watchdog</a></li>
+			<li><a href="{base}/submit" class:active={$page.url.pathname.startsWith(`${base}/submit`)} aria-current={$page.url.pathname.startsWith(`${base}/submit`) ? "page" : undefined} onclick={closeDrawer}>Submit</a></li>
+			<li><a href="{base}/reports" class:active={$page.url.pathname.startsWith(`${base}/reports`)} aria-current={$page.url.pathname.startsWith(`${base}/reports`) ? "page" : undefined} onclick={closeDrawer}>Reports</a></li>
+			<li><a href="{base}/watchdog" class:active={$page.url.pathname.startsWith(`${base}/watchdog`)} aria-current={$page.url.pathname.startsWith(`${base}/watchdog`) ? "page" : undefined} onclick={closeDrawer}>Watchdog</a></li>
 		{/if}
 		{#if isAdvocate(currentUser)}
-			<li><a href="{base}/casework" class:active={$page.url.pathname.startsWith(`${base}/casework`)} onclick={closeDrawer}>Casework</a></li>
-			<li><a href="{base}/contacts" class:active={$page.url.pathname.startsWith(`${base}/contacts`)} onclick={closeDrawer}>Contacts</a></li>
+			<li><a href="{base}/casework" class:active={$page.url.pathname.startsWith(`${base}/casework`)} aria-current={$page.url.pathname.startsWith(`${base}/casework`) ? "page" : undefined} onclick={closeDrawer}>Casework</a></li>
+			<li><a href="{base}/contacts" class:active={$page.url.pathname.startsWith(`${base}/contacts`)} aria-current={$page.url.pathname.startsWith(`${base}/contacts`) ? "page" : undefined} onclick={closeDrawer}>Contacts</a></li>
 		{/if}
 		{#if currentUser.authenticated}
 			<li class="nav-bell"><Bell /></li>
@@ -210,7 +226,7 @@
 	</ul>
 </nav>
 
-<main class="page">
+<main id="main-content" class="page" tabindex="-1">
 	<div class="container-app">
 		{@render children()}
 	</div>
