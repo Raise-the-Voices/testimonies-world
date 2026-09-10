@@ -5,6 +5,8 @@
 	import Bell from '$lib/Bell.svelte';
 	import '../app.css';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import type { LayoutData } from './$types';
 
 	let { children, data }: { children: any; data: LayoutData } = $props();
@@ -73,15 +75,72 @@
 			}
 		});
 	}
+
+	// --- Mobile nav drawer ---------------------------------------------
+	// Hamburger button is visible <768px; tapping it opens a slide-in
+	// drawer with the same nav items as the desktop nav. The drawer
+	// auto-closes on route change (any nav click inside the drawer
+	// triggers $page.url update → reactive `closeDrawer()`).
+	let drawerOpen = $state(false);
+
+	function closeDrawer() {
+		drawerOpen = false;
+	}
+
+	// Auto-close on route change — clicking a nav link should land
+	// the user on the new page with the drawer collapsed, not still
+	// hanging open over the destination.
+	$effect(() => {
+		// Touch $page.url so this effect re-runs on every navigation.
+		void $page.url;
+		closeDrawer();
+	});
+
+	// Lock body scroll while the drawer is open (mobile only — desktop
+	// never opens the drawer, so this is a no-op there).
+	$effect(() => {
+		if (typeof document === 'undefined') return;
+		if (drawerOpen) {
+			document.body.style.overflow = 'hidden';
+		} else {
+			document.body.style.overflow = '';
+		}
+	});
+
+	// Close drawer on Escape.
+	onMount(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape' && drawerOpen) closeDrawer();
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	});
 </script>
 
 <header class="header-container">
-	<div class="main-header">
+	<div class="main-header container-app">
 		<a href="{base}/" class="logo">
 			<p>Raise the Voices</p>
 			<p>Cases</p>
 		</a>
-		<nav class="main-navigation">
+
+		<!-- Hamburger — visible <768px only. Toggles the drawer. -->
+		<button
+			type="button"
+			class="nav-toggle"
+			aria-label={drawerOpen ? 'Close navigation' : 'Open navigation'}
+			aria-expanded={drawerOpen}
+			aria-controls="primary-nav-drawer"
+			onclick={() => (drawerOpen = !drawerOpen)}
+		>
+			<span class="nav-toggle-bar" aria-hidden="true"></span>
+			<span class="nav-toggle-bar" aria-hidden="true"></span>
+			<span class="nav-toggle-bar" aria-hidden="true"></span>
+		</button>
+
+		<!-- Desktop nav — visible >=768px only. Same items as the
+		     drawer; the drawer is the mobile mirror. -->
+		<nav class="main-navigation" aria-label="Primary">
 			<ul>
 				{#if currentUser.authenticated}
 					<li><a href="{base}/dashboard" class:active={$page.url.pathname.startsWith(`${base}/dashboard`)}>Dashboard</a></li>
@@ -108,14 +167,57 @@
 	</div>
 </header>
 
+<!-- Mobile drawer — same nav items as the desktop nav, but in a
+     slide-in panel. Hidden by default, slides in from the right
+     when the hamburger is tapped. A scrim covers the rest of the
+     viewport so tapping outside closes it. -->
+{#if drawerOpen}
+	<button
+		type="button"
+		class="nav-scrim"
+		aria-label="Close navigation"
+		onclick={closeDrawer}
+	></button>
+{/if}
+<nav
+	id="primary-nav-drawer"
+	class="nav-drawer"
+	class:nav-drawer-open={drawerOpen}
+	aria-label="Primary"
+	aria-hidden={!drawerOpen}
+>
+	<ul>
+		{#if currentUser.authenticated}
+			<li><a href="{base}/dashboard" class:active={$page.url.pathname.startsWith(`${base}/dashboard`)} onclick={closeDrawer}>Dashboard</a></li>
+		{/if}
+		<li><a href="{base}/persons" class:active={$page.url.pathname.startsWith(`${base}/persons`)} onclick={closeDrawer}>Cases</a></li>
+		<li><a href="{base}/statistics" class:active={$page.url.pathname.startsWith(`${base}/statistics`)} onclick={closeDrawer}>Statistics</a></li>
+		{#if isVolunteer(currentUser)}
+			<li><a href="{base}/submit" class:active={$page.url.pathname.startsWith(`${base}/submit`)} onclick={closeDrawer}>Submit</a></li>
+			<li><a href="{base}/reports" class:active={$page.url.pathname.startsWith(`${base}/reports`)} onclick={closeDrawer}>Reports</a></li>
+			<li><a href="{base}/watchdog" class:active={$page.url.pathname.startsWith(`${base}/watchdog`)} onclick={closeDrawer}>Watchdog</a></li>
+		{/if}
+		{#if isAdvocate(currentUser)}
+			<li><a href="{base}/casework" class:active={$page.url.pathname.startsWith(`${base}/casework`)} onclick={closeDrawer}>Casework</a></li>
+			<li><a href="{base}/contacts" class:active={$page.url.pathname.startsWith(`${base}/contacts`)} onclick={closeDrawer}>Contacts</a></li>
+		{/if}
+		{#if currentUser.authenticated}
+			<li class="nav-bell"><Bell /></li>
+			<li><span class="nav-avatar" title={currentUser.username}>{currentUser.username?.charAt(0).toUpperCase()}</span></li>
+		{:else}
+			<li><a href="{base}/accounts/google/login/?next={base}/" onclick={closeDrawer}>Login</a></li>
+		{/if}
+	</ul>
+</nav>
+
 <main class="page">
-	<div class="wrapper">
+	<div class="container-app">
 		{@render children()}
 	</div>
 </main>
 
 <footer>
-	<div class="container">
+	<div class="container-app">
 		<p class="muted small"><a href="https://raisethevoices.org">RaisetheVoices.org</a> — Every person matters.</p>
 	</div>
 </footer>
@@ -124,26 +226,36 @@
 	.header-container {
 		background: var(--color-primary);
 	}
+	/* Header grid: logo left, hamburger right (mobile), inline nav
+	   takes the rest of the row (desktop). */
 	.main-header {
-		height: 100px;
+		min-height: 80px;
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		width: 90%;
-		max-width: 1140px;
-		margin: 0 auto;
+		justify-content: space-between;
+		gap: 1rem;
+		padding-block: 0.75rem;
 		letter-spacing: 0.08rem;
 	}
+	/* Tighten the header height on phones — saves vertical real estate. */
+	@media (max-width: 767px) {
+		.main-header {
+			min-height: 60px;
+		}
+	}
+
 	.logo {
-		flex: 1 0 200px;
+		flex: 0 0 auto;
+		min-width: 140px;
 		max-width: 200px;
 		color: var(--color-text-light);
-		font-size: 1.2em;
-		line-height: 1.4;
+		font-size: 1.05em;
+		line-height: 1.2;
 		background: rgba(0, 0, 0, 0.55);
 		text-align: center;
 		text-transform: uppercase;
-		align-self: stretch;
+		padding: 0.6rem 1rem;
+		border-radius: 4px;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -158,41 +270,190 @@
 		margin: 0;
 		padding: 0;
 	}
+	/* Make the logo block a touch smaller on phones — the full-width
+	   black band ate too much of the header at narrow widths. */
+	@media (max-width: 767px) {
+		.logo {
+			min-width: 0;
+			font-size: 0.95em;
+			padding: 0.45rem 0.75rem;
+		}
+	}
+
+	/* === Hamburger button ===
+	   Hidden on desktop (>=768px); the inline nav handles desktop.
+	   Visible on mobile; toggles the slide-in drawer. */
+	.nav-toggle {
+		display: none;
+		flex-direction: column;
+		justify-content: space-between;
+		width: 38px;
+		height: 32px;
+		padding: 6px 4px;
+		background: rgba(0, 0, 0, 0.18);
+		border: 0;
+		border-radius: 6px;
+		cursor: pointer;
+		flex: 0 0 auto;
+	}
+	.nav-toggle:hover {
+		background: rgba(0, 0, 0, 0.32);
+	}
+	.nav-toggle-bar {
+		display: block;
+		width: 100%;
+		height: 3px;
+		background: var(--color-text-light);
+		border-radius: 2px;
+		transition: transform 0.2s ease, opacity 0.2s ease;
+	}
+	.nav-toggle[aria-expanded='true'] .nav-toggle-bar:nth-child(1) {
+		transform: translateY(7px) rotate(45deg);
+	}
+	.nav-toggle[aria-expanded='true'] .nav-toggle-bar:nth-child(2) {
+		opacity: 0;
+	}
+	.nav-toggle[aria-expanded='true'] .nav-toggle-bar:nth-child(3) {
+		transform: translateY(-7px) rotate(-45deg);
+	}
+	@media (max-width: 767px) {
+		.nav-toggle {
+			display: flex;
+		}
+	}
+
+	/* === Desktop nav ===
+	   Visible >=768px. Hidden on mobile — the drawer takes over. */
 	.main-navigation {
-		flex: 4;
+		flex: 1 1 auto;
+		min-width: 0;
 	}
 	.main-navigation ul {
 		display: flex;
 		align-items: center;
 		justify-content: flex-end;
+		flex-wrap: wrap;
+		gap: 0.25rem;
 	}
 	.main-navigation li {
 		font-size: 0.95em;
 	}
 	.main-navigation a {
 		display: block;
-		padding: 20px;
+		padding: 0.7rem 0.85rem;
 		font-weight: bold;
 		text-decoration: none;
 		text-transform: uppercase;
 		color: var(--color-text-light);
 		border-radius: 4px;
+		transition: background 0.15s ease;
 	}
 	.main-navigation a:hover {
 		background: rgba(0, 0, 0, 0.16);
 		color: var(--color-text-light);
 	}
 
-    .main-navigation a:hover,
-    .main-navigation a.active {
-        background: rgba(0, 0, 0, 0.25);
-        color: var(--color-bg-white);
-        border-bottom: 3px solid var(--color-bg-white);
-    }
+	.main-navigation a:hover,
+	.main-navigation a.active {
+		background: rgba(0, 0, 0, 0.25);
+		color: var(--color-bg-white);
+		border-bottom: 3px solid var(--color-bg-white);
+	}
 
-    .main-navigation a.active {
-        cursor: default;
-    }
+	.main-navigation a.active {
+		cursor: default;
+	}
+
+	@media (max-width: 767px) {
+		.main-navigation {
+			display: none;
+		}
+	}
+
+	/* === Mobile drawer ===
+	   Off-canvas panel that slides in from the right when the
+	   hamburger is tapped. Same nav items as the desktop nav;
+	   the drawer is the mobile mirror. */
+	.nav-drawer {
+		position: fixed;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		width: min(82vw, 320px);
+		background: var(--color-primary);
+		color: var(--color-text-light);
+		padding: 1.25rem 0;
+		transform: translateX(100%);
+		transition: transform 0.25s ease;
+		z-index: 60;
+		box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
+	}
+	.nav-drawer-open {
+		transform: translateX(0);
+	}
+	.nav-drawer ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+	}
+	.nav-drawer li {
+		margin: 0;
+	}
+	.nav-drawer a {
+		display: block;
+		padding: 0.9rem 1.25rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		text-decoration: none;
+		color: var(--color-text-light);
+		font-size: 0.95rem;
+	}
+	.nav-drawer a:hover {
+		background: rgba(0, 0, 0, 0.25);
+	}
+	.nav-drawer a.active {
+		background: rgba(0, 0, 0, 0.32);
+		border-left: 3px solid var(--color-bg-white);
+	}
+	.nav-drawer .nav-bell {
+		padding: 0.5rem 1.25rem;
+	}
+	.nav-drawer .nav-avatar {
+		margin: 0.5rem 1.25rem;
+	}
+
+	/* Drawer is mobile-only; on desktop it's hidden outright. */
+	@media (min-width: 768px) {
+		.nav-drawer {
+			display: none;
+		}
+	}
+
+	/* Scrim — covers the rest of the viewport while the drawer is
+	   open. Tapping the scrim closes the drawer (it's a button). */
+	.nav-scrim {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.4);
+		z-index: 55;
+		border: 0;
+		padding: 0;
+		cursor: pointer;
+		animation: scrim-fade-in 0.2s ease;
+	}
+	@keyframes scrim-fade-in {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+	@media (min-width: 768px) {
+		.nav-scrim {
+			display: none;
+		}
+	}
 
 	.nav-user {
 		padding: 20px;
@@ -217,14 +478,10 @@
 		margin: 0 20px;
 		cursor: default;
 	}
+
 	main.page {
-		padding: 40px 0;
-		min-height: calc(100vh - 160px);
-	}
-	.wrapper {
-		width: 85%;
-		max-width: 1140px;
-		margin: 0 auto;
+		padding: clamp(1.25rem, 4vw, 2.5rem) 0;
+		min-height: calc(100vh - 200px);
 	}
 	footer {
 		border-top: 1px solid var(--color-border-light);
@@ -232,24 +489,12 @@
 		margin-top: 2rem;
 	}
 
-	@media (max-width: 800px) {
-		.main-header {
-			flex-direction: column;
-			height: auto;
-			padding: 10px 0;
-		}
-		.logo {
-			max-width: none;
-			width: 100%;
-			padding: 10px;
-		}
-		.main-navigation ul {
-			flex-wrap: wrap;
-			justify-content: center;
-		}
-		.main-navigation a {
-			padding: 10px 12px;
-			font-size: 0.85em;
+	@media (prefers-reduced-motion: reduce) {
+		.nav-drawer,
+		.nav-toggle-bar,
+		.nav-scrim {
+			transition: none !important;
+			animation: none !important;
 		}
 	}
 </style>
