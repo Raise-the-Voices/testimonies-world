@@ -12,8 +12,15 @@
 		formatDraftAge,
 		type SubmitDraft,
 	} from '$lib/submitDraft';
+	import type { PageData } from './$types';
 
-	let currentUser = $derived($user);
+	let { data }: { data: PageData } = $props();
+
+	// SSR-hydrated auth: read `data.user` first (populated by +layout.ts
+	// on every navigation) so SSR HTML matches post-hydration HTML on
+	// hard refresh. Falls back to `$user` for client-side reactivity
+	// (logout, cross-tab session expiry).
+	let currentUser = $derived(data.user ?? $user);
 	let isAdminUser = $derived(isAdmin(currentUser));
 	let categories: any[] = $state([]);
 	let saving = $state(false);
