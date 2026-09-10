@@ -191,6 +191,10 @@ import Skeleton from '$lib/Skeleton.svelte';
 
 <svelte:head>
 	<title>{isEdit ? 'Edit contact' : 'New contact'} — Testimonies.world</title>
+	<meta name="description" content="Add or edit a contact — advocate, lawyer, family member, official — to the private contacts registry." />
+	<meta property="og:description" content="Add or edit a contact — advocate, lawyer, family member, official — to the private contacts registry." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="Add or edit a contact — advocate, lawyer, family member, official — to the private contacts registry." />
 </svelte:head>
 
 <div class="contacts-page">

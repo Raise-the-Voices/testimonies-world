@@ -155,6 +155,10 @@
 
 <svelte:head>
 	<title>Dashboard - Testimonies.world</title>
+	<meta name="description" content="Operator command center — open cases, your work, recent activity, and quick actions across the platform." />
+	<meta property="og:description" content="Operator command center — open cases, your work, recent activity, and quick actions across the platform." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="Operator command center — open cases, your work, recent activity, and quick actions across the platform." />
 </svelte:head>
 
 <div class="dashboard-page">

@@ -3,8 +3,29 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="theme-color" content="#25646a" />
 		<meta name="description" content="Testimonies.world — person-centered casework platform for people facing oppression" />
 		<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F56F;</text></svg>" />
+
+		<!-- Open Graph (site-wide defaults; per-page <svelte:head>
+		     overrides title/description/url). -->
+		<meta property="og:site_name" content="Testimonies.world" />
+		<meta property="og:type" content="website" />
+		<meta property="og:locale" content="en_US" />
+
+		<!-- Twitter Card -->
+		<meta name="twitter:card" content="summary" />
+		<meta name="twitter:site" content="@raisethevoices" />
+
+		<!-- Font loading — preconnect warms up DNS/TLS so PT Sans
+		     doesn't block first paint. -->
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap"
+		/>
+
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

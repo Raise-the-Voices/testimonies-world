@@ -54,6 +54,10 @@ import ErrorCard from '$lib/ErrorCard.svelte';
 
 <svelte:head>
 	<title>Watchdog — Testimonies.world</title>
+	<meta name="description" content="Cases needing fresh reporting. Sorted by recency — the most stale cases surface first." />
+	<meta property="og:description" content="Cases needing fresh reporting. Sorted by recency — the most stale cases surface first." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="Cases needing fresh reporting. Sorted by recency — the most stale cases surface first." />
 </svelte:head>
 
 <div class="watchdog-page">

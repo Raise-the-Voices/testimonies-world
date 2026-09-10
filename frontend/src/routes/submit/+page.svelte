@@ -530,6 +530,10 @@
 
 <svelte:head>
 	<title>Submit Case — Testimonies.world</title>
+	<meta name="description" content="Document someone new facing oppression. Capture the essentials so future volunteers have a starting point." />
+	<meta property="og:description" content="Document someone new facing oppression. Capture the essentials so future volunteers have a starting point." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="Document someone new facing oppression. Capture the essentials so future volunteers have a starting point." />
 </svelte:head>
 
 <div class="container">

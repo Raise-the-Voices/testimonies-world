@@ -155,6 +155,10 @@
 
 <svelte:head>
 	<title>Audit log — Testimonies.world</title>
+	<meta name="description" content="Staff-only record of every CRUD action on sensitive viewsets. Filter by user, action, target type, or time range." />
+	<meta property="og:description" content="Staff-only record of every CRUD action on sensitive viewsets. Filter by user, action, target type, or time range." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="Staff-only record of every CRUD action on sensitive viewsets. Filter by user, action, target type, or time range." />
 </svelte:head>
 
 <div class="audit-page">

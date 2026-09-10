@@ -47,9 +47,13 @@
 </script>
 
 {#if message}
+	<!-- role="alert" for errors so screen readers interrupt current
+	     speech to announce them; role="status" for success/info —
+	     polite, announces after current speech finishes. -->
 	<div
 		class="banner banner-{kind}"
-		role="status"
+		role={kind === 'error' ? 'alert' : 'status'}
+		aria-live={kind === 'error' ? 'assertive' : 'polite'}
 		transition:fly={{ y: -8, duration: 220, opacity: 0 }}
 	>
 		<span class="banner-icon" aria-hidden="true">{icon}</span>
