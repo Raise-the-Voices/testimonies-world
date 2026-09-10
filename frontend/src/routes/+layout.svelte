@@ -242,14 +242,16 @@
 	.header-container {
 		background: var(--color-primary);
 	}
-	/* Header grid: logo left, hamburger right (mobile), inline nav
-	   takes the rest of the row (desktop). */
+	/* Header grid: logo (left) + hamburger (right) on mobile; logo
+	   (left) + nav (right) on desktop. The nav uses `margin-left: auto`
+	   so it sits at the right end without forcing an artificial gap
+	   between logo and first link — the gap is owned by the parent
+	   flex container and the inner <ul>'s gap property. */
 	.main-header {
 		min-height: 80px;
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
+		gap: 1.5rem;
 		padding-block: 0.75rem;
 		letter-spacing: 0.08rem;
 	}
@@ -257,6 +259,7 @@
 	@media (max-width: 767px) {
 		.main-header {
 			min-height: 60px;
+			gap: 0.75rem;
 		}
 	}
 
@@ -339,29 +342,54 @@
 	}
 
 	/* === Desktop nav ===
-	   Visible >=768px. Hidden on mobile — the drawer takes over. */
+	   Visible >=768px. Hidden on mobile — the drawer takes over.
+	   `margin-left: auto` pushes the nav to the right end of the
+	   header without forcing an artificial gap between logo and
+	   first link; `flex: 0 1 auto` lets the nav shrink on narrow
+	   desktop widths so items wrap inside the <ul> instead of
+	   overflowing the header.
+
+	   At an advocate's max item count (~10 links + bell + avatar),
+	   the nav needs to fit on a single row from 1024px upward. The
+	   padding/font/gap below are sized for that — smaller than the
+	   previous 0.7rem / 0.85rem / 0.5rem values, which pushed items
+	   onto a second row at typical desktop widths and gave the
+	   "scattered" appearance. */
 	.main-navigation {
-		flex: 1 1 auto;
+		margin-left: auto;
+		flex: 0 1 auto;
 		min-width: 0;
 	}
 	.main-navigation ul {
 		display: flex;
 		align-items: center;
-		justify-content: flex-end;
 		flex-wrap: wrap;
+		justify-content: flex-end;
 		gap: 0.25rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
 	}
 	.main-navigation li {
-		font-size: 0.95em;
+		display: flex;
+		align-items: center;
+		font-size: 0.88em;
 	}
+	/* All nav items (text link, bell, avatar) sit on the same
+	   baseline via inline-flex + align-items: center. Compact
+	   padding keeps 10+ items on a single row at 1024px+, but the
+	   vertical padding is still generous enough for a 44px+ tap
+	   target. */
 	.main-navigation a {
-		display: block;
-		padding: 0.7rem 0.85rem;
-		font-weight: bold;
+		display: inline-flex;
+		align-items: center;
+		padding: 0.55rem 0.65rem;
+		font-weight: 700;
 		text-decoration: none;
 		text-transform: uppercase;
 		color: var(--color-text-light);
 		border-radius: 4px;
+		white-space: nowrap;
 		transition: background 0.15s ease;
 	}
 	.main-navigation a:hover {
@@ -476,22 +504,32 @@
 		color: rgba(250, 250, 250, 0.7);
 		font-size: 0.85em;
 	}
+	/* Bell: lift the inline margin Bell.svelte puts on its wrap so
+	   the parent <ul> gap controls spacing consistently. The
+	   selector puts .main-navigation and .nav-bell in the scoped
+	   part (they live in this layout component) and :global(.bell-wrap)
+	   / :global(.bell-btn) on the Bell component's classes. */
 	.nav-bell {
 		display: inline-flex;
 		align-items: center;
 	}
+	.main-navigation .nav-bell :global(.bell-wrap),
+	.main-navigation .nav-bell :global(.bell-btn) {
+		margin: 0;
+	}
+	/* Avatar: same diameter as the bell (38px), no horizontal margin
+	   so the parent <ul> gap controls spacing. */
 	.nav-avatar {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 36px;
-		height: 36px;
+		width: 38px;
+		height: 38px;
 		border-radius: 50%;
 		background: rgba(0, 0, 0, 0.35);
 		color: var(--color-text-light);
-		font-weight: bold;
+		font-weight: 700;
 		font-size: 1rem;
-		margin: 0 20px;
 		cursor: default;
 	}
 
