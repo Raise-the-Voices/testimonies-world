@@ -337,6 +337,10 @@ import Skeleton from '$lib/Skeleton.svelte';
 
 <svelte:head>
 	<title>Edit Case — Testimonies.world</title>
+	<meta name="description" content="Edit this person — name, status, location, dates. Edits are recorded in the audit log." />
+	<meta property="og:description" content="Edit this person — name, status, location, dates. Edits are recorded in the audit log." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="Edit this person — name, status, location, dates. Edits are recorded in the audit log." />
 </svelte:head>
 
 <div class="container">

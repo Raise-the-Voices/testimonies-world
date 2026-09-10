@@ -82,9 +82,20 @@
 
 <svelte:head>
 	<title>Cases — RaisetheVoices.org</title>
+	<meta
+		name="description"
+		content="Document and amplify the stories of people facing enforced disappearances, arbitrary detention, and statelessness. Person-centered casework for human rights volunteers."
+	/>
+	<meta property="og:title" content="Cases — Testimonies.world" />
+	<meta
+		property="og:description"
+		content="Document and amplify the stories of people facing enforced disappearances, arbitrary detention, and statelessness."
+	/>
+	<meta property="og:type" content="website" />
 </svelte:head>
 
 <div class="home">
+	<h1 class="sr-only">Testimonies.world — person-centered casework for people facing oppression</h1>
 	{#if statsLoading}
 		<section class="stats-bar" aria-busy="true" aria-label="Loading platform statistics">
 			{#each counters as c (c.label)}

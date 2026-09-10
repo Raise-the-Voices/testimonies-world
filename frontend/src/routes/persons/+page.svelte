@@ -298,6 +298,10 @@
 
 <svelte:head>
 	<title>Cases — Testimonies.world</title>
+	<meta name="description" content="Browse and search the full catalog of persons documented by volunteers. Filter by country, status, category." />
+	<meta property="og:description" content="Browse and search the full catalog of persons documented by volunteers. Filter by country, status, category." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="Browse and search the full catalog of persons documented by volunteers. Filter by country, status, category." />
 </svelte:head>
 
 <div class="page-surface">

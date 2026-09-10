@@ -272,6 +272,10 @@
 
 <svelte:head>
 	<title>{isEdit ? 'Edit' : 'New'} Casework Record — Testimonies.world</title>
+	<meta name="description" content="Log a new advocacy action — call, filing, meeting — so the next advocate can pick up where you left off." />
+	<meta property="og:description" content="Log a new advocacy action — call, filing, meeting — so the next advocate can pick up where you left off." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="Log a new advocacy action — call, filing, meeting — so the next advocate can pick up where you left off." />
 </svelte:head>
 
 <div class="container">

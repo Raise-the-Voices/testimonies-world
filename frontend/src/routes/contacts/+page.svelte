@@ -171,6 +171,10 @@
 
 <svelte:head>
 	<title>Contacts — Testimonies.world</title>
+	<meta name="description" content="People involved in cases — advocates, lawyers, journalists, family members, and officials. Always private; visible only to advocates." />
+	<meta property="og:description" content="People involved in cases — advocates, lawyers, journalists, family members, and officials. Always private; visible only to advocates." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="People involved in cases — advocates, lawyers, journalists, family members, and officials. Always private; visible only to advocates." />
 </svelte:head>
 
 <div class="contacts-page">
