@@ -50,6 +50,10 @@ import Skeleton from '$lib/Skeleton.svelte';
 
 <svelte:head>
 	<title>Settings — Testimonies.world</title>
+	<meta name="description" content="Notification settings — choose whether to receive email and in-app alerts." />
+	<meta property="og:description" content="Notification settings — choose whether to receive email and in-app alerts." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="Notification settings — choose whether to receive email and in-app alerts." />
 </svelte:head>
 
 <div class="container">

@@ -202,6 +202,10 @@ import Skeleton from '$lib/Skeleton.svelte';
 
 <svelte:head>
 	<title>Add Report — {person?.name ?? 'Testimonies.world'} — Testimonies.world</title>
+	<meta name="description" content="Add a new report to this person — incident, observation, or update." />
+	<meta property="og:description" content="Add a new report to this person — incident, observation, or update." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="Add a new report to this person — incident, observation, or update." />
 </svelte:head>
 
 {#if loading}

@@ -545,6 +545,10 @@
 
 <svelte:head>
 	<title>{person ? person.name : 'Loading...'} — Testimonies.world</title>
+	<meta name="description" content="Person detail — status, reports, media, family relationships, and casework history." />
+	<meta property="og:description" content="Person detail — status, reports, media, family relationships, and casework history." />
+	<meta property="og:type" content="profile" />
+	<meta name="twitter:description" content="Person detail — status, reports, media, family relationships, and casework history." />
 </svelte:head>
 
 {#if loading}

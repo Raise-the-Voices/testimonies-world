@@ -92,6 +92,10 @@
 
 <svelte:head>
 	<title>Statistics — Testimonies.world</title>
+	<meta name="description" content="Platform-wide statistics — total cases, country distribution, status breakdown. A snapshot of the work." />
+	<meta property="og:description" content="Platform-wide statistics — total cases, country distribution, status breakdown. A snapshot of the work." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="Platform-wide statistics — total cases, country distribution, status breakdown. A snapshot of the work." />
 </svelte:head>
 
 <div class="statistics-page">

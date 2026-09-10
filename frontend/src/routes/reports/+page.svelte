@@ -167,6 +167,10 @@
 
 <svelte:head>
 	<title>Reports — Testimonies.world</title>
+	<meta name="description" content="Every report across every case, newest first. Use the filters to narrow by source, date, or free-text search." />
+	<meta property="og:description" content="Every report across every case, newest first. Use the filters to narrow by source, date, or free-text search." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="Every report across every case, newest first. Use the filters to narrow by source, date, or free-text search." />
 </svelte:head>
 
 <div class="reports-page">

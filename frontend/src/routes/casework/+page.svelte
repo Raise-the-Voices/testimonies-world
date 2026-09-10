@@ -229,6 +229,10 @@
 
 <svelte:head>
 	<title>Casework — Testimonies.world</title>
+	<meta name="description" content="Track advocacy actions and follow-ups across cases — calls, filings, meetings. Log every action so the next advocate can pick up where you left off." />
+	<meta property="og:description" content="Track advocacy actions and follow-ups across cases — calls, filings, meetings. Log every action so the next advocate can pick up where you left off." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:description" content="Track advocacy actions and follow-ups across cases — calls, filings, meetings. Log every action so the next advocate can pick up where you left off." />
 </svelte:head>
 
 <div class="container">
