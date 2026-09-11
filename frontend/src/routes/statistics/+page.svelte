@@ -301,28 +301,67 @@
 		}
 		.page-header {
 			flex-direction: column;
+			/* justify-content default (flex-start) is the right
+			   behavior on mobile. The desktop value above is
+			   `space-between` which would push children apart in
+			   the main axis — fine on a row, harmful on a column
+			   because it inserts vertical air between the headline
+			   and the metric. Override explicitly so the desktop
+			   value never crosses over accidentally. */
+			justify-content: flex-start;
 			align-items: stretch;
-			/* Tighten the gap between the subtitle and the
-			   `.total-badge` (the "129 TOTAL CASES" card). Desktop
-			   gets a comfortable 1rem; on a narrow viewport the
-			   cumulative page-level gap (1.5rem) + this 1rem pushed
-			   the badge visibly far from the description, breaking
-			   the visual flow. 0.5rem lands it compactly below the
-			   paragraph and the `padding-bottom: 0` keeps the
-			   header's border-bottom hugging the metric card. */
-			gap: 0.5rem;
+			gap: 0.25rem;
 			padding-bottom: 0;
+			border-bottom: none;
 		}
+		/* ROOT CAUSE OF THE BREAKING BUG (find #3 from the user's
+		   report, retried three times before this fix).
+
+		   The desktop rule has `.page-header-text { flex: 1 1 300px }`
+		   — a sensible desktop-row pattern where the basis (300px)
+		   is the meaningful horizontal axis. On mobile the parent
+		   flips to `flex-direction: column` so the *same* `300px`
+		   basis now applies to the *vertical* axis. Net effect:
+		   `.page-header-text` gets a 300px min-height even when its
+		   content is one short subtitle paragraph — and the
+		   `.total-badge` then sits 300px below the subtitle no
+		   matter what gap / padding / border values we tried.
+
+		   No margin tweak ever fixed it. Even removing the badge
+		   chrome (which is what v2 did) couldn't shrink the
+		   implicit 300px vertical hole.
+
+		   The fix is to reset flex on mobile so the basis drops
+		   out of the layout entirely. `flex: none` is shorthand
+		   for `flex: 0 0 auto` — no growth, no shrink, basis from
+		   content. `.page-header-text` then sizes by its content
+		   height (a single h1 + p), and the badge sits immediately
+		   under it with just the parent's 0.25rem gap between. */
+		.page-header-text {
+			flex: none;
+		}
+		/* On mobile the badge is not a separate card — it's the
+		   next-line continuation of the headline. Inline-flex
+		   keeps the number-and-label on the same baseline; the
+		   bigger number (`--color-primary`) anchors the metric
+		   visually without a chrome frame. The card view is
+		   reserved for desktop where there's horizontal space to
+		   separate the metric from the description. */
 		.total-badge {
-			align-self: flex-start;
+			align-self: stretch;
+			background: transparent;
+			border: 0;
+			border-radius: 0;
+			box-shadow: none;
+			padding: 0;
+			font-size: 1.2rem;
+			color: var(--color-text);
 		}
-		/* Same idea on the page level: 1.5rem between the header
-		   and the cards-grid is fine on a spacious viewport, but
-		   combined with the per-child gap above it doubled the
-		   perceived whitespace on mobile. 1rem is closer to the
-		   spacing tokens elsewhere on the app. */
+		/* Same idea on the page level — 0.5rem between the header
+		   and the cards-grid keeps the visual rhythm tight on
+		   narrow screens. */
 		.statistics-page {
-			gap: 1rem;
+			gap: 0.5rem;
 		}
 	}
 </style>
