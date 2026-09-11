@@ -32,6 +32,7 @@ from .permissions import (
     CanPublishTestimonial,
     CanReviewTestimonial,
     CanSubmitTestimonial,
+    CanViewEncryptedSource,
 )
 from .serializers import (
     TestimonialInternalSerializer,
@@ -239,6 +240,63 @@ class TestimonialViewSet(viewsets.ModelViewSet):
             TestimonialInternalSerializer(instance).data,
             status=status.HTTP_200_OK,
         )
+
+    # -- Encrypted-source endpoints (CanViewEncryptedSource only) ---------
+    # These are deliberately routed separately (not exposed via the
+    # public serializer) so the URL itself is the security boundary —
+    # a volunteer pulling /api/testimonials/42/ never even sees the
+    # encrypted columns exist. Only Advocate / Admin requesters can
+    # hit these endpoints, and each hit writes an AuditLog row.
+
+    @action(
+        detail=True, methods=['get'],
+        permission_classes=[CanViewEncryptedSource],
+    )
+    def source(self, request, pk=None):
+        """Decrypt and return the real source identity.
+
+        Audit-logged on read — even Advocate+ accesses leave a trace
+        because the real source identity is the most sensitive datum
+        on this row.
+        """
+        instance = self.get_object()
+        # Plaintext could be None if the row was created without a
+        # source (source_encrypted is nullable); distinguish that
+        # from ciphertext unavailability by always reporting the
+        # visibility label too.
+        plaintext = instance.get_source()
+        self._audit(
+            AuditLog.Action.VIEWED, instance,
+            f'decrypted source (visibility={instance.source_visibility})',
+        )
+        return Response({
+            'id': instance.id,
+            'source_visibility': instance.source_visibility,
+            'public_source_label': instance.public_source_label,
+            'source': plaintext,
+        })
+
+    @action(
+        detail=True, methods=['get'],
+        permission_classes=[CanViewEncryptedSource],
+    )
+    def precise_location(self, request, pk=None):
+        """Decrypt and return the precise-location ciphertext.
+
+        Same audit-on-read posture as the source endpoint.
+        """
+        instance = self.get_object()
+        plaintext = instance.get_precise_location()
+        self._audit(
+            AuditLog.Action.VIEWED, instance,
+            f'decrypted precise location (visibility={instance.location_visibility})',
+        )
+        return Response({
+            'id': instance.id,
+            'location_visibility': instance.location_visibility,
+            'public_location_display': instance.public_location_display,
+            'precise_location': plaintext,
+        })
 
 
 class TestimonialTagViewSet(viewsets.ModelViewSet):
