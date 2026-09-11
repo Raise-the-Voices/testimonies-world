@@ -20,6 +20,7 @@ The encrypted-source endpoints are routed via dedicated routes
 sensitive data — the encryption boundary is the URL itself.
 """
 
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -75,7 +76,21 @@ class TestimonialViewSet(viewsets.ModelViewSet):
         # source_visibility here.
         if not self.request.user.is_authenticated:
             return qs.filter(status=Testimonial.Status.PUBLISHED)
-        return qs
+        # Authenticated non-staff viewers (volunteers) see only the
+        # rows they themselves authored, PLUS every published row.
+        # Without this filter, a fresh volunteer's "My drafts" tab
+        # on /testimonials/ would hand back every other user's
+        # in-flight drafts — a real privacy leak we caught when
+        # vol2 (a brand-new volunteer) received user 5's draft rows
+        # in their list payload. Staff (admin / advocate) see the
+        # full queue so the review workflow is unblocked.
+        user = self.request.user
+        if user.is_staff or user.groups.filter(name='Advocate').exists():
+            return qs
+        return qs.filter(
+            Q(created_by=user)
+            | Q(status=Testimonial.Status.PUBLISHED)
+        )
 
     def get_serializer_class(self):
         user = self.request.user
