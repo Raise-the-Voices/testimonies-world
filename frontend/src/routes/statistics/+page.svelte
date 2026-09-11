@@ -303,26 +303,40 @@
 			flex-direction: column;
 			align-items: stretch;
 			/* Tighten the gap between the subtitle and the
-			   `.total-badge` (the "129 TOTAL CASES" card). Desktop
-			   gets a comfortable 1rem; on a narrow viewport the
-			   cumulative page-level gap (1.5rem) + this 1rem pushed
-			   the badge visibly far from the description, breaking
-			   the visual flow. 0.5rem lands it compactly below the
-			   paragraph and the `padding-bottom: 0` keeps the
-			   header's border-bottom hugging the metric card. */
-			gap: 0.5rem;
+			   `.total-badge`. The earlier 0.5rem fix tightened
+			   this but the badge's card-style chrome (white
+			   background, border, shadow) was still visually heavy
+			   at narrow widths and read as disconnected from the
+			   paragraph above it — the gap was small but the
+			   perceived disconnect was large. 0.25rem makes the
+			   pair feel like one block; .total-badge below drops
+			   its card chrome for mobile so it reads inline. */
+			gap: 0.25rem;
 			padding-bottom: 0;
+			border-bottom: none;
 		}
+		/* On mobile the badge is not a separate card — it's the
+		   next-line continuation of the headline. Inline-flex
+		   keeps the number-and-label on the same baseline; the
+		   bigger number (`--color-primary`) anchors the metric
+		   visually without a chrome frame. The card view is
+		   reserved for desktop where there's horizontal space to
+		   separate the metric from the description. */
 		.total-badge {
-			align-self: flex-start;
+			align-self: stretch;
+			background: transparent;
+			border: 0;
+			border-radius: 0;
+			box-shadow: none;
+			padding: 0;
+			font-size: 1.2rem;
+			color: var(--color-text);
 		}
-		/* Same idea on the page level: 1.5rem between the header
-		   and the cards-grid is fine on a spacious viewport, but
-		   combined with the per-child gap above it doubled the
-		   perceived whitespace on mobile. 1rem is closer to the
-		   spacing tokens elsewhere on the app. */
+		/* Same idea on the page level — 0.5rem between the header
+		   and the cards-grid keeps the visual rhythm tight on
+		   narrow screens. */
 		.statistics-page {
-			gap: 1rem;
+			gap: 0.5rem;
 		}
 	}
 </style>
