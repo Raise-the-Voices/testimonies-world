@@ -1374,22 +1374,38 @@
 {/if}
 
 <style>
-	/* Responsive grid: 1 column on mobile (sidebar first so the profile card is
-	   immediately scannable), 2-column 2:1 split at >=50em. minmax(0, …) tracks
-	   are the canonical fix for grid/flex overflow — without them, a long URL,
-	   country name, or fixed-width child can push the column past the viewport
-	   and produce a horizontal scrollbar. */
+	/* Responsive grid: profile card first on mobile (immediate scannability —
+	   photo + name + status + meta before the long-form narrative), 2-column
+	   2:1 split (Summary main / Profile sidebar) at >=50em.
+
+	   `grid-template-areas` is what makes the mobile-first ordering actually
+	   work — the previous implementation relied on DOM order alone, which
+	   meant the comment "sidebar first" was aspirational and the DOM (Summary
+	   container, then Profile container) leaked through. With named areas the
+	   order is owned by CSS regardless of where the children appear in markup.
+
+	   minmax(0, …) tracks are the canonical fix for grid/flex overflow —
+	   without them, a long URL, country name, or fixed-width child can push
+	   the column past the viewport and produce a horizontal scrollbar. */
 	.view-container {
 		margin-top: 15px;
 		margin-bottom: 15px;
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
+		grid-template-areas: 'sidebar' 'main';
 		gap: 1.5rem;
 		overflow-x: clip;
+	}
+	.sidebar-container {
+		grid-area: sidebar;
+	}
+	.victim-item-container {
+		grid-area: main;
 	}
 	@media (min-width: 50em) {
 		.view-container {
 			grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+			grid-template-areas: 'main sidebar';
 		}
 	}
 	.victim-item-container,
