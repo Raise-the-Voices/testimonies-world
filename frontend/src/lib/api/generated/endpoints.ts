@@ -36,6 +36,8 @@ import type {
   PaginatedNotificationList,
   PaginatedPersonListList,
   PaginatedReportList,
+  PaginatedTestimonialPublicList,
+  PaginatedTestimonialTagList,
   PaginatedUserPreferenceList,
   PatchedCaseworkRecordRequest,
   PatchedContactRequest,
@@ -43,6 +45,8 @@ import type {
   PatchedMediaRequest,
   PatchedPersonWriteRequest,
   PatchedReportRequest,
+  PatchedTestimonialTagRequest,
+  PatchedTestimonialWriteRequest,
   PatchedUserPreferenceRequest,
   PersonDetail,
   PersonWrite,
@@ -57,6 +61,13 @@ import type {
   ReportRequest,
   ReportsListParams,
   StatisticsResponse,
+  TestimonialPublic,
+  TestimonialTag,
+  TestimonialTagRequest,
+  TestimonialTagsListParams,
+  TestimonialWrite,
+  TestimonialWriteRequest,
+  TestimonialsListParams,
   UnreadCountResponse,
   UserPreference,
   UserPreferenceRequest
@@ -2756,6 +2767,846 @@ export const reportsDestroy = async (id: number, options?: RequestInit): Promise
   {      
     ...options,
     method: 'DELETE'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Lookup-table CRUD for testimonial tags.
+
+Read-open to anyone (tags are public taxonomy); writes require
+Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
+`is_published`-style gates don't apply here but the principle of
+"server controls metadata" does, and creating a tag shouldn't be
+free for any random authenticated user).
+ */
+export type testimonialTagsListResponse200 = {
+  data: PaginatedTestimonialTagList
+  status: 200
+}
+    
+export type testimonialTagsListResponseSuccess = (testimonialTagsListResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialTagsListResponse = (testimonialTagsListResponseSuccess)
+
+export const getTestimonialTagsListUrl = (params?: TestimonialTagsListParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/testimonial-tags/?${stringifiedParams}` : `/api/testimonial-tags/`
+}
+
+export const testimonialTagsList = async (params?: TestimonialTagsListParams, options?: RequestInit): Promise<testimonialTagsListResponse> => {
+  
+  return fetcher<testimonialTagsListResponse>(getTestimonialTagsListUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Lookup-table CRUD for testimonial tags.
+
+Read-open to anyone (tags are public taxonomy); writes require
+Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
+`is_published`-style gates don't apply here but the principle of
+"server controls metadata" does, and creating a tag shouldn't be
+free for any random authenticated user).
+ */
+export type testimonialTagsCreateResponse201 = {
+  data: TestimonialTag
+  status: 201
+}
+    
+export type testimonialTagsCreateResponseSuccess = (testimonialTagsCreateResponse201) & {
+  headers: Headers;
+};
+;
+
+export type testimonialTagsCreateResponse = (testimonialTagsCreateResponseSuccess)
+
+export const getTestimonialTagsCreateUrl = () => {
+
+
+  
+
+  return `/api/testimonial-tags/`
+}
+
+export const testimonialTagsCreate = async (testimonialTagRequest: TestimonialTagRequest, options?: RequestInit): Promise<testimonialTagsCreateResponse> => {
+  
+  return fetcher<testimonialTagsCreateResponse>(getTestimonialTagsCreateUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      testimonialTagRequest,)
+  }
+);}
+
+
+
+/**
+ * Lookup-table CRUD for testimonial tags.
+
+Read-open to anyone (tags are public taxonomy); writes require
+Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
+`is_published`-style gates don't apply here but the principle of
+"server controls metadata" does, and creating a tag shouldn't be
+free for any random authenticated user).
+ */
+export type testimonialTagsRetrieveResponse200 = {
+  data: TestimonialTag
+  status: 200
+}
+    
+export type testimonialTagsRetrieveResponseSuccess = (testimonialTagsRetrieveResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialTagsRetrieveResponse = (testimonialTagsRetrieveResponseSuccess)
+
+export const getTestimonialTagsRetrieveUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonial-tags/${id}/`
+}
+
+export const testimonialTagsRetrieve = async (id: number, options?: RequestInit): Promise<testimonialTagsRetrieveResponse> => {
+  
+  return fetcher<testimonialTagsRetrieveResponse>(getTestimonialTagsRetrieveUrl(id),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Lookup-table CRUD for testimonial tags.
+
+Read-open to anyone (tags are public taxonomy); writes require
+Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
+`is_published`-style gates don't apply here but the principle of
+"server controls metadata" does, and creating a tag shouldn't be
+free for any random authenticated user).
+ */
+export type testimonialTagsUpdateResponse200 = {
+  data: TestimonialTag
+  status: 200
+}
+    
+export type testimonialTagsUpdateResponseSuccess = (testimonialTagsUpdateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialTagsUpdateResponse = (testimonialTagsUpdateResponseSuccess)
+
+export const getTestimonialTagsUpdateUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonial-tags/${id}/`
+}
+
+export const testimonialTagsUpdate = async (id: number,
+    testimonialTagRequest: TestimonialTagRequest, options?: RequestInit): Promise<testimonialTagsUpdateResponse> => {
+  
+  return fetcher<testimonialTagsUpdateResponse>(getTestimonialTagsUpdateUrl(id),
+  {      
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      testimonialTagRequest,)
+  }
+);}
+
+
+
+/**
+ * Lookup-table CRUD for testimonial tags.
+
+Read-open to anyone (tags are public taxonomy); writes require
+Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
+`is_published`-style gates don't apply here but the principle of
+"server controls metadata" does, and creating a tag shouldn't be
+free for any random authenticated user).
+ */
+export type testimonialTagsPartialUpdateResponse200 = {
+  data: TestimonialTag
+  status: 200
+}
+    
+export type testimonialTagsPartialUpdateResponseSuccess = (testimonialTagsPartialUpdateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialTagsPartialUpdateResponse = (testimonialTagsPartialUpdateResponseSuccess)
+
+export const getTestimonialTagsPartialUpdateUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonial-tags/${id}/`
+}
+
+export const testimonialTagsPartialUpdate = async (id: number,
+    patchedTestimonialTagRequest: PatchedTestimonialTagRequest, options?: RequestInit): Promise<testimonialTagsPartialUpdateResponse> => {
+  
+  return fetcher<testimonialTagsPartialUpdateResponse>(getTestimonialTagsPartialUpdateUrl(id),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      patchedTestimonialTagRequest,)
+  }
+);}
+
+
+
+/**
+ * Lookup-table CRUD for testimonial tags.
+
+Read-open to anyone (tags are public taxonomy); writes require
+Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
+`is_published`-style gates don't apply here but the principle of
+"server controls metadata" does, and creating a tag shouldn't be
+free for any random authenticated user).
+ */
+export type testimonialTagsDestroyResponse204 = {
+  data: void
+  status: 204
+}
+    
+export type testimonialTagsDestroyResponseSuccess = (testimonialTagsDestroyResponse204) & {
+  headers: Headers;
+};
+;
+
+export type testimonialTagsDestroyResponse = (testimonialTagsDestroyResponseSuccess)
+
+export const getTestimonialTagsDestroyUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonial-tags/${id}/`
+}
+
+export const testimonialTagsDestroy = async (id: number, options?: RequestInit): Promise<testimonialTagsDestroyResponse> => {
+  
+  return fetcher<testimonialTagsDestroyResponse>(getTestimonialTagsDestroyUrl(id),
+  {      
+    ...options,
+    method: 'DELETE'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Read + write API for testimonials.
+
+Public list / detail read uses `TestimonialPublicSerializer` for
+everyone — masking is the same regardless of role on the public
+endpoint. Internal endpoints (the workflow audit info) require
+Advocate+ via the write-side permission class.
+
+Permissions layered per action:
+  list / retrieve             public (public serializer)
+  create                      CanSubmitTestimonial
+  update / partial_update     CanSubmitTestimonial + owner OR Advocate
+  destroy                     CanPublishTestimonial (rare — archives
+                              are preferred over deletes)
+  submit                      CanSubmitTestimonial
+  approve / reject            CanReviewTestimonial
+  publish / archive           CanPublishTestimonial
+ */
+export type testimonialsListResponse200 = {
+  data: PaginatedTestimonialPublicList
+  status: 200
+}
+    
+export type testimonialsListResponseSuccess = (testimonialsListResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialsListResponse = (testimonialsListResponseSuccess)
+
+export const getTestimonialsListUrl = (params?: TestimonialsListParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/testimonials/?${stringifiedParams}` : `/api/testimonials/`
+}
+
+export const testimonialsList = async (params?: TestimonialsListParams, options?: RequestInit): Promise<testimonialsListResponse> => {
+  
+  return fetcher<testimonialsListResponse>(getTestimonialsListUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Read + write API for testimonials.
+
+Public list / detail read uses `TestimonialPublicSerializer` for
+everyone — masking is the same regardless of role on the public
+endpoint. Internal endpoints (the workflow audit info) require
+Advocate+ via the write-side permission class.
+
+Permissions layered per action:
+  list / retrieve             public (public serializer)
+  create                      CanSubmitTestimonial
+  update / partial_update     CanSubmitTestimonial + owner OR Advocate
+  destroy                     CanPublishTestimonial (rare — archives
+                              are preferred over deletes)
+  submit                      CanSubmitTestimonial
+  approve / reject            CanReviewTestimonial
+  publish / archive           CanPublishTestimonial
+ */
+export type testimonialsCreateResponse201 = {
+  data: TestimonialWrite
+  status: 201
+}
+    
+export type testimonialsCreateResponseSuccess = (testimonialsCreateResponse201) & {
+  headers: Headers;
+};
+;
+
+export type testimonialsCreateResponse = (testimonialsCreateResponseSuccess)
+
+export const getTestimonialsCreateUrl = () => {
+
+
+  
+
+  return `/api/testimonials/`
+}
+
+export const testimonialsCreate = async (testimonialWriteRequest: TestimonialWriteRequest, options?: RequestInit): Promise<testimonialsCreateResponse> => {
+  
+  return fetcher<testimonialsCreateResponse>(getTestimonialsCreateUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      testimonialWriteRequest,)
+  }
+);}
+
+
+
+/**
+ * Read + write API for testimonials.
+
+Public list / detail read uses `TestimonialPublicSerializer` for
+everyone — masking is the same regardless of role on the public
+endpoint. Internal endpoints (the workflow audit info) require
+Advocate+ via the write-side permission class.
+
+Permissions layered per action:
+  list / retrieve             public (public serializer)
+  create                      CanSubmitTestimonial
+  update / partial_update     CanSubmitTestimonial + owner OR Advocate
+  destroy                     CanPublishTestimonial (rare — archives
+                              are preferred over deletes)
+  submit                      CanSubmitTestimonial
+  approve / reject            CanReviewTestimonial
+  publish / archive           CanPublishTestimonial
+ */
+export type testimonialsRetrieveResponse200 = {
+  data: TestimonialPublic
+  status: 200
+}
+    
+export type testimonialsRetrieveResponseSuccess = (testimonialsRetrieveResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialsRetrieveResponse = (testimonialsRetrieveResponseSuccess)
+
+export const getTestimonialsRetrieveUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonials/${id}/`
+}
+
+export const testimonialsRetrieve = async (id: number, options?: RequestInit): Promise<testimonialsRetrieveResponse> => {
+  
+  return fetcher<testimonialsRetrieveResponse>(getTestimonialsRetrieveUrl(id),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Read + write API for testimonials.
+
+Public list / detail read uses `TestimonialPublicSerializer` for
+everyone — masking is the same regardless of role on the public
+endpoint. Internal endpoints (the workflow audit info) require
+Advocate+ via the write-side permission class.
+
+Permissions layered per action:
+  list / retrieve             public (public serializer)
+  create                      CanSubmitTestimonial
+  update / partial_update     CanSubmitTestimonial + owner OR Advocate
+  destroy                     CanPublishTestimonial (rare — archives
+                              are preferred over deletes)
+  submit                      CanSubmitTestimonial
+  approve / reject            CanReviewTestimonial
+  publish / archive           CanPublishTestimonial
+ */
+export type testimonialsUpdateResponse200 = {
+  data: TestimonialWrite
+  status: 200
+}
+    
+export type testimonialsUpdateResponseSuccess = (testimonialsUpdateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialsUpdateResponse = (testimonialsUpdateResponseSuccess)
+
+export const getTestimonialsUpdateUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonials/${id}/`
+}
+
+export const testimonialsUpdate = async (id: number,
+    testimonialWriteRequest: TestimonialWriteRequest, options?: RequestInit): Promise<testimonialsUpdateResponse> => {
+  
+  return fetcher<testimonialsUpdateResponse>(getTestimonialsUpdateUrl(id),
+  {      
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      testimonialWriteRequest,)
+  }
+);}
+
+
+
+/**
+ * Read + write API for testimonials.
+
+Public list / detail read uses `TestimonialPublicSerializer` for
+everyone — masking is the same regardless of role on the public
+endpoint. Internal endpoints (the workflow audit info) require
+Advocate+ via the write-side permission class.
+
+Permissions layered per action:
+  list / retrieve             public (public serializer)
+  create                      CanSubmitTestimonial
+  update / partial_update     CanSubmitTestimonial + owner OR Advocate
+  destroy                     CanPublishTestimonial (rare — archives
+                              are preferred over deletes)
+  submit                      CanSubmitTestimonial
+  approve / reject            CanReviewTestimonial
+  publish / archive           CanPublishTestimonial
+ */
+export type testimonialsPartialUpdateResponse200 = {
+  data: TestimonialWrite
+  status: 200
+}
+    
+export type testimonialsPartialUpdateResponseSuccess = (testimonialsPartialUpdateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialsPartialUpdateResponse = (testimonialsPartialUpdateResponseSuccess)
+
+export const getTestimonialsPartialUpdateUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonials/${id}/`
+}
+
+export const testimonialsPartialUpdate = async (id: number,
+    patchedTestimonialWriteRequest: PatchedTestimonialWriteRequest, options?: RequestInit): Promise<testimonialsPartialUpdateResponse> => {
+  
+  return fetcher<testimonialsPartialUpdateResponse>(getTestimonialsPartialUpdateUrl(id),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      patchedTestimonialWriteRequest,)
+  }
+);}
+
+
+
+/**
+ * Read + write API for testimonials.
+
+Public list / detail read uses `TestimonialPublicSerializer` for
+everyone — masking is the same regardless of role on the public
+endpoint. Internal endpoints (the workflow audit info) require
+Advocate+ via the write-side permission class.
+
+Permissions layered per action:
+  list / retrieve             public (public serializer)
+  create                      CanSubmitTestimonial
+  update / partial_update     CanSubmitTestimonial + owner OR Advocate
+  destroy                     CanPublishTestimonial (rare — archives
+                              are preferred over deletes)
+  submit                      CanSubmitTestimonial
+  approve / reject            CanReviewTestimonial
+  publish / archive           CanPublishTestimonial
+ */
+export type testimonialsDestroyResponse204 = {
+  data: void
+  status: 204
+}
+    
+export type testimonialsDestroyResponseSuccess = (testimonialsDestroyResponse204) & {
+  headers: Headers;
+};
+;
+
+export type testimonialsDestroyResponse = (testimonialsDestroyResponseSuccess)
+
+export const getTestimonialsDestroyUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonials/${id}/`
+}
+
+export const testimonialsDestroy = async (id: number, options?: RequestInit): Promise<testimonialsDestroyResponse> => {
+  
+  return fetcher<testimonialsDestroyResponse>(getTestimonialsDestroyUrl(id),
+  {      
+    ...options,
+    method: 'DELETE'
+    
+    
+  }
+);}
+
+
+
+/**
+ * under_review → approved. Notes optional in body.
+ */
+export type testimonialsApproveCreateResponse200 = {
+  data: TestimonialPublic
+  status: 200
+}
+    
+export type testimonialsApproveCreateResponseSuccess = (testimonialsApproveCreateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialsApproveCreateResponse = (testimonialsApproveCreateResponseSuccess)
+
+export const getTestimonialsApproveCreateUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonials/${id}/approve/`
+}
+
+export const testimonialsApproveCreate = async (id: number, options?: RequestInit): Promise<testimonialsApproveCreateResponse> => {
+  
+  return fetcher<testimonialsApproveCreateResponse>(getTestimonialsApproveCreateUrl(id),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+
+
+
+/**
+ * published → archived. Soft-delete (row stays).
+ */
+export type testimonialsArchiveCreateResponse200 = {
+  data: TestimonialPublic
+  status: 200
+}
+    
+export type testimonialsArchiveCreateResponseSuccess = (testimonialsArchiveCreateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialsArchiveCreateResponse = (testimonialsArchiveCreateResponseSuccess)
+
+export const getTestimonialsArchiveCreateUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonials/${id}/archive/`
+}
+
+export const testimonialsArchiveCreate = async (id: number, options?: RequestInit): Promise<testimonialsArchiveCreateResponse> => {
+  
+  return fetcher<testimonialsArchiveCreateResponse>(getTestimonialsArchiveCreateUrl(id),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Decrypt and return the precise-location ciphertext.
+
+Same audit-on-read posture as the source endpoint.
+ */
+export type testimonialsPreciseLocationRetrieveResponse200 = {
+  data: TestimonialPublic
+  status: 200
+}
+    
+export type testimonialsPreciseLocationRetrieveResponseSuccess = (testimonialsPreciseLocationRetrieveResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialsPreciseLocationRetrieveResponse = (testimonialsPreciseLocationRetrieveResponseSuccess)
+
+export const getTestimonialsPreciseLocationRetrieveUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonials/${id}/precise_location/`
+}
+
+export const testimonialsPreciseLocationRetrieve = async (id: number, options?: RequestInit): Promise<testimonialsPreciseLocationRetrieveResponse> => {
+  
+  return fetcher<testimonialsPreciseLocationRetrieveResponse>(getTestimonialsPreciseLocationRetrieveUrl(id),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
+ * approved → published. Sets published_by / published_at.
+ */
+export type testimonialsPublishCreateResponse200 = {
+  data: TestimonialPublic
+  status: 200
+}
+    
+export type testimonialsPublishCreateResponseSuccess = (testimonialsPublishCreateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialsPublishCreateResponse = (testimonialsPublishCreateResponseSuccess)
+
+export const getTestimonialsPublishCreateUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonials/${id}/publish/`
+}
+
+export const testimonialsPublishCreate = async (id: number, options?: RequestInit): Promise<testimonialsPublishCreateResponse> => {
+  
+  return fetcher<testimonialsPublishCreateResponse>(getTestimonialsPublishCreateUrl(id),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+
+
+
+/**
+ * under_review → rejected. Notes required (reason).
+ */
+export type testimonialsRejectCreateResponse200 = {
+  data: TestimonialPublic
+  status: 200
+}
+    
+export type testimonialsRejectCreateResponseSuccess = (testimonialsRejectCreateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialsRejectCreateResponse = (testimonialsRejectCreateResponseSuccess)
+
+export const getTestimonialsRejectCreateUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonials/${id}/reject/`
+}
+
+export const testimonialsRejectCreate = async (id: number, options?: RequestInit): Promise<testimonialsRejectCreateResponse> => {
+  
+  return fetcher<testimonialsRejectCreateResponse>(getTestimonialsRejectCreateUrl(id),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Decrypt and return the real source identity.
+
+Audit-logged on read — even Advocate+ accesses leave a trace
+because the real source identity is the most sensitive datum
+on this row.
+ */
+export type testimonialsSourceRetrieveResponse200 = {
+  data: TestimonialPublic
+  status: 200
+}
+    
+export type testimonialsSourceRetrieveResponseSuccess = (testimonialsSourceRetrieveResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialsSourceRetrieveResponse = (testimonialsSourceRetrieveResponseSuccess)
+
+export const getTestimonialsSourceRetrieveUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonials/${id}/source/`
+}
+
+export const testimonialsSourceRetrieve = async (id: number, options?: RequestInit): Promise<testimonialsSourceRetrieveResponse> => {
+  
+  return fetcher<testimonialsSourceRetrieveResponse>(getTestimonialsSourceRetrieveUrl(id),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
+ * draft → under_review (or rejected → under_review for re-submit).
+ */
+export type testimonialsSubmitCreateResponse200 = {
+  data: TestimonialPublic
+  status: 200
+}
+    
+export type testimonialsSubmitCreateResponseSuccess = (testimonialsSubmitCreateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type testimonialsSubmitCreateResponse = (testimonialsSubmitCreateResponseSuccess)
+
+export const getTestimonialsSubmitCreateUrl = (id: number,) => {
+
+
+  
+
+  return `/api/testimonials/${id}/submit/`
+}
+
+export const testimonialsSubmitCreate = async (id: number, options?: RequestInit): Promise<testimonialsSubmitCreateResponse> => {
+  
+  return fetcher<testimonialsSubmitCreateResponse>(getTestimonialsSubmitCreateUrl(id),
+  {      
+    ...options,
+    method: 'POST'
     
     
   }

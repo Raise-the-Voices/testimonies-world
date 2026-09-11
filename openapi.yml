@@ -1052,9 +1052,14 @@ paths:
         schema:
           type: string
           enum:
+          - case_closed
           - deceased
           - detained
           - disappeared
+          - found_alive
+          - found_dead
+          - ongoing_enforced_disappearance
+          - other
           - released
           - restricted_movement
           - rights_restricted
@@ -1069,6 +1074,11 @@ paths:
           * `unknown` - Unknown
           * `stateless` - Stateless
           * `rights_restricted` - Rights Restricted
+          * `ongoing_enforced_disappearance` - Ongoing alleged enforced disappearance
+          * `found_alive` - Found alive
+          * `found_dead` - Found dead
+          * `case_closed` - Case closed
+          * `other` - Other
       - in: query
         name: gender
         schema:
@@ -1560,9 +1570,14 @@ paths:
         schema:
           type: string
           enum:
+          - case_closed
           - deceased
           - detained
           - disappeared
+          - found_alive
+          - found_dead
+          - ongoing_enforced_disappearance
+          - other
           - released
           - restricted_movement
           - rights_restricted
@@ -1577,6 +1592,11 @@ paths:
           * `unknown` - Unknown
           * `stateless` - Stateless
           * `rights_restricted` - Rights Restricted
+          * `ongoing_enforced_disappearance` - Ongoing alleged enforced disappearance
+          * `found_alive` - Found alive
+          * `found_dead` - Found dead
+          * `case_closed` - Case closed
+          * `other` - Other
       - in: query
         name: gender
         schema:
@@ -1720,9 +1740,14 @@ paths:
         schema:
           type: string
           enum:
+          - case_closed
           - deceased
           - detained
           - disappeared
+          - found_alive
+          - found_dead
+          - ongoing_enforced_disappearance
+          - other
           - released
           - restricted_movement
           - rights_restricted
@@ -1737,6 +1762,11 @@ paths:
           * `unknown` - Unknown
           * `stateless` - Stateless
           * `rights_restricted` - Rights Restricted
+          * `ongoing_enforced_disappearance` - Ongoing alleged enforced disappearance
+          * `found_alive` - Found alive
+          * `found_dead` - Found dead
+          * `case_closed` - Case closed
+          * `other` - Other
       - in: query
         name: gender
         schema:
@@ -2638,6 +2668,634 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/testimonial-tags/:
+    get:
+      operationId: testimonial_tags_list
+      description: |-
+        Lookup-table CRUD for testimonial tags.
+
+        Read-open to anyone (tags are public taxonomy); writes require
+        Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
+        `is_published`-style gates don't apply here but the principle of
+        "server controls metadata" does, and creating a tag shouldn't be
+        free for any random authenticated user).
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - testimonial-tags
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTestimonialTagList'
+          description: ''
+    post:
+      operationId: testimonial_tags_create
+      description: |-
+        Lookup-table CRUD for testimonial tags.
+
+        Read-open to anyone (tags are public taxonomy); writes require
+        Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
+        `is_published`-style gates don't apply here but the principle of
+        "server controls metadata" does, and creating a tag shouldn't be
+        free for any random authenticated user).
+      tags:
+      - testimonial-tags
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestimonialTagRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TestimonialTagRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TestimonialTagRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialTag'
+          description: ''
+  /api/testimonial-tags/{id}/:
+    get:
+      operationId: testimonial_tags_retrieve
+      description: |-
+        Lookup-table CRUD for testimonial tags.
+
+        Read-open to anyone (tags are public taxonomy); writes require
+        Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
+        `is_published`-style gates don't apply here but the principle of
+        "server controls metadata" does, and creating a tag shouldn't be
+        free for any random authenticated user).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial tag.
+        required: true
+      tags:
+      - testimonial-tags
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialTag'
+          description: ''
+    put:
+      operationId: testimonial_tags_update
+      description: |-
+        Lookup-table CRUD for testimonial tags.
+
+        Read-open to anyone (tags are public taxonomy); writes require
+        Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
+        `is_published`-style gates don't apply here but the principle of
+        "server controls metadata" does, and creating a tag shouldn't be
+        free for any random authenticated user).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial tag.
+        required: true
+      tags:
+      - testimonial-tags
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestimonialTagRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TestimonialTagRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TestimonialTagRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialTag'
+          description: ''
+    patch:
+      operationId: testimonial_tags_partial_update
+      description: |-
+        Lookup-table CRUD for testimonial tags.
+
+        Read-open to anyone (tags are public taxonomy); writes require
+        Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
+        `is_published`-style gates don't apply here but the principle of
+        "server controls metadata" does, and creating a tag shouldn't be
+        free for any random authenticated user).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial tag.
+        required: true
+      tags:
+      - testimonial-tags
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTestimonialTagRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTestimonialTagRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTestimonialTagRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialTag'
+          description: ''
+    delete:
+      operationId: testimonial_tags_destroy
+      description: |-
+        Lookup-table CRUD for testimonial tags.
+
+        Read-open to anyone (tags are public taxonomy); writes require
+        Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
+        `is_published`-style gates don't apply here but the principle of
+        "server controls metadata" does, and creating a tag shouldn't be
+        free for any random authenticated user).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial tag.
+        required: true
+      tags:
+      - testimonial-tags
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/testimonials/:
+    get:
+      operationId: testimonials_list
+      description: |-
+        Read + write API for testimonials.
+
+        Public list / detail read uses `TestimonialPublicSerializer` for
+        everyone — masking is the same regardless of role on the public
+        endpoint. Internal endpoints (the workflow audit info) require
+        Advocate+ via the write-side permission class.
+
+        Permissions layered per action:
+          list / retrieve             public (public serializer)
+          create                      CanSubmitTestimonial
+          update / partial_update     CanSubmitTestimonial + owner OR Advocate
+          destroy                     CanPublishTestimonial (rare — archives
+                                      are preferred over deletes)
+          submit                      CanSubmitTestimonial
+          approve / reject            CanReviewTestimonial
+          publish / archive           CanPublishTestimonial
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - testimonials
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTestimonialPublicList'
+          description: ''
+    post:
+      operationId: testimonials_create
+      description: |-
+        Read + write API for testimonials.
+
+        Public list / detail read uses `TestimonialPublicSerializer` for
+        everyone — masking is the same regardless of role on the public
+        endpoint. Internal endpoints (the workflow audit info) require
+        Advocate+ via the write-side permission class.
+
+        Permissions layered per action:
+          list / retrieve             public (public serializer)
+          create                      CanSubmitTestimonial
+          update / partial_update     CanSubmitTestimonial + owner OR Advocate
+          destroy                     CanPublishTestimonial (rare — archives
+                                      are preferred over deletes)
+          submit                      CanSubmitTestimonial
+          approve / reject            CanReviewTestimonial
+          publish / archive           CanPublishTestimonial
+      tags:
+      - testimonials
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestimonialWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TestimonialWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TestimonialWriteRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialWrite'
+          description: ''
+  /api/testimonials/{id}/:
+    get:
+      operationId: testimonials_retrieve
+      description: |-
+        Read + write API for testimonials.
+
+        Public list / detail read uses `TestimonialPublicSerializer` for
+        everyone — masking is the same regardless of role on the public
+        endpoint. Internal endpoints (the workflow audit info) require
+        Advocate+ via the write-side permission class.
+
+        Permissions layered per action:
+          list / retrieve             public (public serializer)
+          create                      CanSubmitTestimonial
+          update / partial_update     CanSubmitTestimonial + owner OR Advocate
+          destroy                     CanPublishTestimonial (rare — archives
+                                      are preferred over deletes)
+          submit                      CanSubmitTestimonial
+          approve / reject            CanReviewTestimonial
+          publish / archive           CanPublishTestimonial
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial.
+        required: true
+      tags:
+      - testimonials
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialPublic'
+          description: ''
+    put:
+      operationId: testimonials_update
+      description: |-
+        Read + write API for testimonials.
+
+        Public list / detail read uses `TestimonialPublicSerializer` for
+        everyone — masking is the same regardless of role on the public
+        endpoint. Internal endpoints (the workflow audit info) require
+        Advocate+ via the write-side permission class.
+
+        Permissions layered per action:
+          list / retrieve             public (public serializer)
+          create                      CanSubmitTestimonial
+          update / partial_update     CanSubmitTestimonial + owner OR Advocate
+          destroy                     CanPublishTestimonial (rare — archives
+                                      are preferred over deletes)
+          submit                      CanSubmitTestimonial
+          approve / reject            CanReviewTestimonial
+          publish / archive           CanPublishTestimonial
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial.
+        required: true
+      tags:
+      - testimonials
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestimonialWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TestimonialWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TestimonialWriteRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialWrite'
+          description: ''
+    patch:
+      operationId: testimonials_partial_update
+      description: |-
+        Read + write API for testimonials.
+
+        Public list / detail read uses `TestimonialPublicSerializer` for
+        everyone — masking is the same regardless of role on the public
+        endpoint. Internal endpoints (the workflow audit info) require
+        Advocate+ via the write-side permission class.
+
+        Permissions layered per action:
+          list / retrieve             public (public serializer)
+          create                      CanSubmitTestimonial
+          update / partial_update     CanSubmitTestimonial + owner OR Advocate
+          destroy                     CanPublishTestimonial (rare — archives
+                                      are preferred over deletes)
+          submit                      CanSubmitTestimonial
+          approve / reject            CanReviewTestimonial
+          publish / archive           CanPublishTestimonial
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial.
+        required: true
+      tags:
+      - testimonials
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTestimonialWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTestimonialWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTestimonialWriteRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialWrite'
+          description: ''
+    delete:
+      operationId: testimonials_destroy
+      description: |-
+        Read + write API for testimonials.
+
+        Public list / detail read uses `TestimonialPublicSerializer` for
+        everyone — masking is the same regardless of role on the public
+        endpoint. Internal endpoints (the workflow audit info) require
+        Advocate+ via the write-side permission class.
+
+        Permissions layered per action:
+          list / retrieve             public (public serializer)
+          create                      CanSubmitTestimonial
+          update / partial_update     CanSubmitTestimonial + owner OR Advocate
+          destroy                     CanPublishTestimonial (rare — archives
+                                      are preferred over deletes)
+          submit                      CanSubmitTestimonial
+          approve / reject            CanReviewTestimonial
+          publish / archive           CanPublishTestimonial
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial.
+        required: true
+      tags:
+      - testimonials
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/testimonials/{id}/approve/:
+    post:
+      operationId: testimonials_approve_create
+      description: under_review → approved. Notes optional in body.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial.
+        required: true
+      tags:
+      - testimonials
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialPublic'
+          description: ''
+  /api/testimonials/{id}/archive/:
+    post:
+      operationId: testimonials_archive_create
+      description: published → archived. Soft-delete (row stays).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial.
+        required: true
+      tags:
+      - testimonials
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialPublic'
+          description: ''
+  /api/testimonials/{id}/precise_location/:
+    get:
+      operationId: testimonials_precise_location_retrieve
+      description: |-
+        Decrypt and return the precise-location ciphertext.
+
+        Same audit-on-read posture as the source endpoint.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial.
+        required: true
+      tags:
+      - testimonials
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialPublic'
+          description: ''
+  /api/testimonials/{id}/publish/:
+    post:
+      operationId: testimonials_publish_create
+      description: approved → published. Sets published_by / published_at.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial.
+        required: true
+      tags:
+      - testimonials
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialPublic'
+          description: ''
+  /api/testimonials/{id}/reject/:
+    post:
+      operationId: testimonials_reject_create
+      description: under_review → rejected. Notes required (reason).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial.
+        required: true
+      tags:
+      - testimonials
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialPublic'
+          description: ''
+  /api/testimonials/{id}/source/:
+    get:
+      operationId: testimonials_source_retrieve
+      description: |-
+        Decrypt and return the real source identity.
+
+        Audit-logged on read — even Advocate+ accesses leave a trace
+        because the real source identity is the most sensitive datum
+        on this row.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial.
+        required: true
+      tags:
+      - testimonials
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialPublic'
+          description: ''
+  /api/testimonials/{id}/submit/:
+    post:
+      operationId: testimonials_submit_create
+      description: draft → under_review (or rejected → under_review for re-submit).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this testimonial.
+        required: true
+      tags:
+      - testimonials
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestimonialPublic'
+          description: ''
 components:
   schemas:
     ActionEnum:
@@ -2667,6 +3325,22 @@ components:
         * `media` - Media engagement
         * `advocacy` - Advocacy
         * `investigation` - Investigation
+        * `other` - Other
+    AdditionalSourceTypeEnum:
+      enum:
+      - lawyer
+      - ngo
+      - media
+      - court
+      - government
+      - other
+      type: string
+      description: |-
+        * `lawyer` - Lawyer
+        * `ngo` - NGO
+        * `media` - Media
+        * `court` - Court
+        * `government` - Government
         * `other` - Other
     AuditLog:
       type: object
@@ -2762,7 +3436,7 @@ components:
           type: string
           format: date
         status:
-          $ref: '#/components/schemas/StatusEnum'
+          $ref: '#/components/schemas/CaseworkRecordStatusEnum'
         next_steps:
           type: string
         notes:
@@ -2804,7 +3478,7 @@ components:
           type: string
           format: date
         status:
-          $ref: '#/components/schemas/StatusEnum'
+          $ref: '#/components/schemas/CaseworkRecordStatusEnum'
         next_steps:
           type: string
         notes:
@@ -2816,6 +3490,16 @@ components:
       required:
       - date
       - description
+    CaseworkRecordStatusEnum:
+      enum:
+      - open
+      - in_progress
+      - done
+      type: string
+      description: |-
+        * `open` - Open
+        * `in_progress` - In progress
+        * `done` - Done
     CategoryCount:
       type: object
       properties:
@@ -2826,6 +3510,16 @@ components:
       required:
       - count
       - name
+    ConsentStatusEnum:
+      enum:
+      - 'yes'
+      - 'no'
+      - pending
+      type: string
+      description: |-
+        * `yes` - Yes
+        * `no` - No
+        * `pending` - Pending
     Contact:
       type: object
       properties:
@@ -2920,6 +3614,11 @@ components:
       - unknown
       - stateless
       - rights_restricted
+      - ongoing_enforced_disappearance
+      - found_alive
+      - found_dead
+      - case_closed
+      - other
       type: string
       description: |-
         * `detained` - Detained
@@ -2930,6 +3629,11 @@ components:
         * `unknown` - Unknown
         * `stateless` - Stateless
         * `rights_restricted` - Rights Restricted
+        * `ongoing_enforced_disappearance` - Ongoing alleged enforced disappearance
+        * `found_alive` - Found alive
+        * `found_dead` - Found dead
+        * `case_closed` - Case closed
+        * `other` - Other
     DashboardActivityEntry:
       type: object
       properties:
@@ -3097,6 +3801,52 @@ components:
       - open_cases
       - stale_cases
       - unread_notifications
+    DuplicateCheckEnum:
+      enum:
+      - no_duplicate
+      - possible_duplicate
+      - existing_case
+      type: string
+      description: |-
+        * `no_duplicate` - No duplicate identified
+        * `possible_duplicate` - Possible duplicate
+        * `existing_case` - Existing case
+    EvidenceKindEnum:
+      enum:
+      - fir
+      - court_petition_order
+      - government_document
+      - identity_document
+      - photograph
+      - medical_document
+      - interview_transcript
+      - media_report
+      - ngo_report
+      - other
+      type: string
+      description: |-
+        * `fir` - FIR
+        * `court_petition_order` - Court petition/order
+        * `government_document` - Government document
+        * `identity_document` - Identity document
+        * `photograph` - Photograph
+        * `medical_document` - Medical document
+        * `interview_transcript` - Interview/transcript
+        * `media_report` - Media report
+        * `ngo_report` - NGO report
+        * `other` - Other
+    EvidenceStatusEnum:
+      enum:
+      - verified
+      - partially_verified
+      - unverified
+      - pending
+      type: string
+      description: |-
+        * `verified` - Verified
+        * `partially_verified` - Partially verified
+        * `unverified` - Unverified
+        * `pending` - Pending
     FamilyRelationship:
       type: object
       description: |-
@@ -3195,6 +3945,16 @@ components:
         * `F` - Female
         * `O` - Other
         * `U` - Unknown
+    IncidentDatePrecisionEnum:
+      enum:
+      - exact
+      - approximate
+      - unknown
+      type: string
+      description: |-
+        * `exact` - Exact
+        * `approximate` - Approximate
+        * `unknown` - Unknown
     KindEnum:
       enum:
       - record_created
@@ -3240,6 +4000,41 @@ components:
           type: string
           format: date-time
           readOnly: true
+        evidence_kind:
+          description: |-
+            Section H: FIR / Court petition / Photograph / etc.
+
+            * `fir` - FIR
+            * `court_petition_order` - Court petition/order
+            * `government_document` - Government document
+            * `identity_document` - Identity document
+            * `photograph` - Photograph
+            * `medical_document` - Medical document
+            * `interview_transcript` - Interview/transcript
+            * `media_report` - Media report
+            * `ngo_report` - NGO report
+            * `other` - Other
+          oneOf:
+          - $ref: '#/components/schemas/EvidenceKindEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        evidence_kind_other:
+          type: string
+          description: Free-text when evidence_kind = other.
+          maxLength: 255
+        evidence_reference_number:
+          type: string
+          maxLength: 200
+        evidence_status:
+          description: |-
+            Section H: Verified / Partially / Unverified / Pending.
+
+            * `verified` - Verified
+            * `partially_verified` - Partially verified
+            * `unverified` - Unverified
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/EvidenceStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         person:
           type: integer
           nullable: true
@@ -3273,6 +4068,41 @@ components:
         description:
           type: string
           maxLength: 500
+        evidence_kind:
+          description: |-
+            Section H: FIR / Court petition / Photograph / etc.
+
+            * `fir` - FIR
+            * `court_petition_order` - Court petition/order
+            * `government_document` - Government document
+            * `identity_document` - Identity document
+            * `photograph` - Photograph
+            * `medical_document` - Medical document
+            * `interview_transcript` - Interview/transcript
+            * `media_report` - Media report
+            * `ngo_report` - NGO report
+            * `other` - Other
+          oneOf:
+          - $ref: '#/components/schemas/EvidenceKindEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        evidence_kind_other:
+          type: string
+          description: Free-text when evidence_kind = other.
+          maxLength: 255
+        evidence_reference_number:
+          type: string
+          maxLength: 200
+        evidence_status:
+          description: |-
+            Section H: Verified / Partially / Unverified / Pending.
+
+            * `verified` - Verified
+            * `partially_verified` - Partially verified
+            * `unverified` - Unverified
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/EvidenceStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         person:
           type: integer
           nullable: true
@@ -3614,6 +4444,52 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Report'
+    PaginatedTestimonialPublicList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestimonialPublic'
+    PaginatedTestimonialTagList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestimonialTag'
     PaginatedUserPreferenceList:
       type: object
       required:
@@ -3649,7 +4525,7 @@ components:
           type: string
           format: date
         status:
-          $ref: '#/components/schemas/StatusEnum'
+          $ref: '#/components/schemas/CaseworkRecordStatusEnum'
         next_steps:
           type: string
         notes:
@@ -3738,6 +4614,41 @@ components:
         description:
           type: string
           maxLength: 500
+        evidence_kind:
+          description: |-
+            Section H: FIR / Court petition / Photograph / etc.
+
+            * `fir` - FIR
+            * `court_petition_order` - Court petition/order
+            * `government_document` - Government document
+            * `identity_document` - Identity document
+            * `photograph` - Photograph
+            * `medical_document` - Medical document
+            * `interview_transcript` - Interview/transcript
+            * `media_report` - Media report
+            * `ngo_report` - NGO report
+            * `other` - Other
+          oneOf:
+          - $ref: '#/components/schemas/EvidenceKindEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        evidence_kind_other:
+          type: string
+          description: Free-text when evidence_kind = other.
+          maxLength: 255
+        evidence_reference_number:
+          type: string
+          maxLength: 200
+        evidence_status:
+          description: |-
+            Section H: Verified / Partially / Unverified / Pending.
+
+            * `verified` - Verified
+            * `partially_verified` - Partially verified
+            * `unverified` - Unverified
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/EvidenceStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         person:
           type: integer
           nullable: true
@@ -3819,6 +4730,187 @@ components:
           - $ref: '#/components/schemas/NullEnum'
         is_published:
           type: boolean
+        case_received_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date the case file was received by the documentation officer
+            (Section A).
+        case_source_types:
+          description: Source-of-case checklist — list from {research_interview, family,
+            victim_survivor, lawyer, ngo_cso, media, government_document, other} (Section
+            A).
+        case_source_other:
+          type: string
+          description: Free-text when "other" is selected above (Section A).
+          maxLength: 255
+        duplicate_check:
+          description: |-
+            Duplicate-check outcome (Section A).
+
+            * `no_duplicate` - No duplicate identified
+            * `possible_duplicate` - Possible duplicate
+            * `existing_case` - Existing case
+          oneOf:
+          - $ref: '#/components/schemas/DuplicateCheckEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        age_at_incident:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Age at the time of the incident (Section B). Distinct from
+            date_of_birth.
+        occupation:
+          type: string
+          description: Occupation at time of incident (Section B).
+          maxLength: 255
+        district:
+          type: string
+          description: Person-level administrative district (Section B). Distinct
+            from Report.incident_district.
+          maxLength: 255
+        province:
+          type: string
+          description: Person-level administrative province (Section B). Distinct
+            from Report.incident_province.
+          maxLength: 255
+        identity_verified_methods:
+          description: Identity-verification checklist — list from {interview, family,
+            identity_document, court_document, other} (Section B).
+        identity_verified_other:
+          type: string
+          maxLength: 255
+        current_status_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date the current status was confirmed (Section D).
+        current_status_source:
+          type: string
+          description: Source of the current-status claim (Section D).
+          maxLength: 500
+        current_status_verification:
+          description: |-
+            Verification level of the current status (Section D).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        consent_documentation:
+          description: |-
+            Consent for documentation — Yes / No / Pending (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        consent_public_publication:
+          description: |-
+            Consent for public publication (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        public_identity_level:
+          description: |-
+            Full / Partial / Anonymous (Section K).
+
+            * `full` - Full name
+            * `partial` - Partial name
+            * `anonymous` - Anonymous
+          oneOf:
+          - $ref: '#/components/schemas/PublicIdentityLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        photograph_public:
+          description: |-
+            Yes / No / Pending (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        public_location_level:
+          description: |-
+            Province / District / City / Do not disclose (Section K).
+
+            * `province` - Province
+            * `district` - District
+            * `city` - City / general area
+            * `do_not_disclose` - Do not disclose
+          oneOf:
+          - $ref: '#/components/schemas/PublicLocationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        information_restricted_from_publication:
+          type: string
+          description: Free-text list of items withheld from publication (Section
+            K).
+        public_summary:
+          type: string
+          description: Approved-for-publication summary (Section N).
+        public_status_text:
+          type: string
+          description: Public-facing status text (Section N).
+          maxLength: 255
+        public_verification_level:
+          description: |-
+            Mirror of Section L for the public-facing display (Section N).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        entered_in_world:
+          description: |-
+            Has the case been entered into Testimonies.World — Yes / No / Pending (Section P).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        entry_date:
+          type: string
+          format: date
+          nullable: true
+        second_person_check_completed:
+          type: boolean
+        checked_against_original_documentation:
+          type: boolean
+        final_date:
+          type: string
+          format: date
+          nullable: true
+        case_received_by:
+          type: integer
+          nullable: true
+          description: Documentation officer who received the case (Section A).
+        duplicate_of:
+          type: integer
+          nullable: true
+          description: Set when duplicate_check = existing_case (Section A).
+        entered_by:
+          type: integer
+          nullable: true
+        final_reviewer:
+          type: integer
+          nullable: true
     PatchedReportRequest:
       type: object
       properties:
@@ -3860,8 +4952,370 @@ components:
         is_private:
           type: boolean
           description: If true, entire report hidden from public view
+        case_types:
+          description: Section C case-type checklist — list from {enforced_disappearance,
+            arbitrary_detention, detention, release_following, death_following, other}.
+        case_type_other:
+          type: string
+          maxLength: 255
+        incident_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date of incident / disappearance (Section C, 4-star field).
+        incident_date_precision:
+          description: |-
+            Exact / Approximate / Unknown (Section C).
+
+            * `exact` - Exact
+            * `approximate` - Approximate
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/IncidentDatePrecisionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        last_known_location:
+          type: string
+          description: Last known location of the person (Section C, 4-star field).
+          maxLength: 500
+        incident_district:
+          type: string
+          description: Administrative district of the incident (Section C).
+          maxLength: 255
+        incident_province:
+          type: string
+          description: Administrative province of the incident (Section C).
+          maxLength: 255
+        incident_information_source:
+          type: string
+          description: Source of this specific incident information (Section C).
+          maxLength: 500
+        incident_verification:
+          description: |-
+            Verification status of the incident (Section C).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        detention_alleged:
+          description: |-
+            Section F (4-star): Was detention alleged?
+
+            * `yes` - Yes
+            * `no` - No
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        alleged_detention_location:
+          type: string
+          description: Alleged detention location (Section F).
+          maxLength: 500
+        detention_acknowledged:
+          description: |-
+            Was the detention officially acknowledged? (Section F)
+
+            * `yes` - Yes
+            * `no` - No
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        detention_information:
+          type: string
+          description: Information / evidence about the detention (Section F).
+        detention_verification:
+          description: |-
+            Per-detention verification status (Section F).
+
+            * `reported` - Reported
+            * `partially_verified` - Partially verified
+            * `corroborated` - Corroborated
+            * `documented` - Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        primary_source_type:
+          description: |-
+            Primary source type (Section G).
+
+            * `victim_survivor` - Victim/survivor
+            * `family` - Family
+            * `witness` - Witness
+            * `official_document` - Official document
+          oneOf:
+          - $ref: '#/components/schemas/PrimarySourceTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        primary_source_description:
+          type: string
+          maxLength: 500
+        additional_source_type:
+          description: |-
+            Additional source type (Section G).
+
+            * `lawyer` - Lawyer
+            * `ngo` - NGO
+            * `media` - Media
+            * `court` - Court
+            * `government` - Government
+            * `other` - Other
+          oneOf:
+          - $ref: '#/components/schemas/AdditionalSourceTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        additional_source_description:
+          type: string
+          maxLength: 500
+        source_consistency:
+          description: |-
+            Consistency between primary and additional sources (Section G).
+
+            * `consistent` - Consistent
+            * `some_differences` - Some differences
+            * `major_conflict` - Major conflict
+            * `requires_further_verification` - Requires further verification
+          oneOf:
+          - $ref: '#/components/schemas/SourceConsistencyEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        source_verification_notes:
+          type: string
+          description: Free-text verification notes (Section G).
+        legal_fir_filed:
+          description: |-
+            Was an FIR filed? (Section I, starred on the form)
+
+            * `yes` - Yes
+            * `no` - No
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        fir_number:
+          type: string
+          maxLength: 200
+        police_station:
+          type: string
+          maxLength: 255
+        legal_court_case:
+          description: |-
+            Was a court case / petition filed? (Section I, starred)
+
+            * `yes` - Yes
+            * `no` - No
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        court_name:
+          type: string
+          maxLength: 255
+        case_number:
+          type: string
+          maxLength: 200
+        legal_commission_complaint:
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        legal_lawyer_involved:
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        current_legal_status:
+          type: string
+          description: Current status of the legal process (Section I).
+        official_response:
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        responding_authority:
+          type: string
+          maxLength: 255
+        response_date:
+          type: string
+          format: date
+          nullable: true
+        response_type:
+          oneOf:
+          - $ref: '#/components/schemas/ResponseTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        response_source_document:
+          type: string
+          maxLength: 500
+        response_verification:
+          description: |-
+            Per-response verification status (Section J).
+
+            * `reported` - Reported
+            * `partially_verified` - Partially verified
+            * `corroborated` - Corroborated
+            * `documented` - Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        verification_level:
+          description: |-
+            Case-level verification ladder (Section L).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        verification_reason:
+          type: string
+          description: Why this level was assigned (Section L).
+        unverified_information_remaining:
+          type: string
+          description: Information that remains unverified (Section L).
+        risk_level:
+          description: |-
+            INTERNAL — Section M. Never exposed via public API.
+
+            * `low` - Low
+            * `moderate` - Moderate
+            * `high` - High
+            * `critical` - Critical
+            * `not_assessed` - Not assessed
+          oneOf:
+          - $ref: '#/components/schemas/RiskLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        risk_concerns:
+          description: INTERNAL — Section M checklist.
+        risk_concerns_other:
+          type: string
+          description: INTERNAL — free-text when "other" is selected.
+          maxLength: 255
+        internal_notes:
+          type: string
+          description: INTERNAL — Section M. Stripped from public API always.
+        qc_name_checked:
+          type: boolean
+        qc_duplicate_check_completed:
+          type: boolean
+        qc_date_checked:
+          type: boolean
+        qc_location_checked:
+          type: boolean
+        qc_status_checked:
+          type: boolean
+        qc_sources_recorded:
+          type: boolean
+        qc_evidence_checked:
+          type: boolean
+        qc_legal_information_checked:
+          type: boolean
+        qc_government_response_checked:
+          type: boolean
+        qc_allegations_identified:
+          type: boolean
+        qc_consent_checked:
+          type: boolean
+        qc_sensitive_information_removed:
+          type: boolean
+        qc_verification_level_assigned:
+          type: boolean
+        qc_review_date:
+          type: string
+          format: date
+          nullable: true
+        qc_review_decision:
+          oneOf:
+          - $ref: '#/components/schemas/QcReviewDecisionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         person:
           type: integer
+        qc_reviewed_by:
+          type: integer
+          nullable: true
+    PatchedTestimonialTagRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[-a-zA-Z0-9_]+$
+        description:
+          type: string
+          maxLength: 255
+    PatchedTestimonialWriteRequest:
+      type: object
+      description: |-
+        Create / update shape for any role (Volunteer can create drafts).
+
+        Server-controlled fields are read-only and silently dropped on
+        input (SYSTEM_RULES §5):
+          - status + all `*_by` + `*_at` workflow fields: only mutated
+            via the transition actions, never via direct PATCH.
+          - schema_version + is_exported: server-pinned.
+          - created_by / created_at / updated_at: server-pinned.
+          - source_encrypted + precise_location_encrypted: never
+            serialized. Caller uses `set_source` / `set_precise_location`
+            accessors (exposed via dedicated action endpoints when
+            permission is held).
+      properties:
+        title:
+          type: string
+          maxLength: 255
+        slug:
+          type: string
+          maxLength: 255
+          pattern: ^[-a-zA-Z0-9_]+$
+        language:
+          type: string
+          minLength: 1
+          maxLength: 10
+        country:
+          type: string
+          maxLength: 100
+        region:
+          type: string
+          maxLength: 255
+        incident_date:
+          type: string
+          format: date
+          nullable: true
+        incident_types: {}
+        summary:
+          type: string
+        narrative:
+          type: string
+        outcome:
+          type: string
+        source_visibility:
+          $ref: '#/components/schemas/TestimonialSourceVisibilityEnum'
+        public_source_label:
+          type: string
+          maxLength: 255
+        location_visibility:
+          $ref: '#/components/schemas/TestimonialLocationVisibilityEnum'
+        public_location_display:
+          type: string
+          maxLength: 500
+        family_protected:
+          type: boolean
+        contact_protected:
+          type: boolean
+        verification_level:
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        person:
+          type: integer
+          nullable: true
+          description: Underlying Person this testimonial is built from.
+        report:
+          type: integer
+          nullable: true
+          description: Optional Report-level link (one event, one testimonial).
+        tags:
+          type: array
+          items:
+            type: integer
     PatchedUserPreferenceRequest:
       type: object
       properties:
@@ -3980,11 +5434,198 @@ components:
           type: string
           format: date-time
           readOnly: true
+        case_id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: External / website case ID (Section A).
+        case_received_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date the case file was received by the documentation officer
+            (Section A).
+        case_source_types:
+          description: Source-of-case checklist — list from {research_interview, family,
+            victim_survivor, lawyer, ngo_cso, media, government_document, other} (Section
+            A).
+        case_source_other:
+          type: string
+          description: Free-text when "other" is selected above (Section A).
+          maxLength: 255
+        duplicate_check:
+          description: |-
+            Duplicate-check outcome (Section A).
+
+            * `no_duplicate` - No duplicate identified
+            * `possible_duplicate` - Possible duplicate
+            * `existing_case` - Existing case
+          oneOf:
+          - $ref: '#/components/schemas/DuplicateCheckEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        age_at_incident:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Age at the time of the incident (Section B). Distinct from
+            date_of_birth.
+        occupation:
+          type: string
+          description: Occupation at time of incident (Section B).
+          maxLength: 255
+        district:
+          type: string
+          description: Person-level administrative district (Section B). Distinct
+            from Report.incident_district.
+          maxLength: 255
+        province:
+          type: string
+          description: Person-level administrative province (Section B). Distinct
+            from Report.incident_province.
+          maxLength: 255
+        identity_verified_methods:
+          description: Identity-verification checklist — list from {interview, family,
+            identity_document, court_document, other} (Section B).
+        identity_verified_other:
+          type: string
+          maxLength: 255
+        current_status_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date the current status was confirmed (Section D).
+        current_status_source:
+          type: string
+          description: Source of the current-status claim (Section D).
+          maxLength: 500
+        current_status_verification:
+          description: |-
+            Verification level of the current status (Section D).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        consent_documentation:
+          description: |-
+            Consent for documentation — Yes / No / Pending (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        consent_public_publication:
+          description: |-
+            Consent for public publication (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        public_identity_level:
+          description: |-
+            Full / Partial / Anonymous (Section K).
+
+            * `full` - Full name
+            * `partial` - Partial name
+            * `anonymous` - Anonymous
+          oneOf:
+          - $ref: '#/components/schemas/PublicIdentityLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        photograph_public:
+          description: |-
+            Yes / No / Pending (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        public_location_level:
+          description: |-
+            Province / District / City / Do not disclose (Section K).
+
+            * `province` - Province
+            * `district` - District
+            * `city` - City / general area
+            * `do_not_disclose` - Do not disclose
+          oneOf:
+          - $ref: '#/components/schemas/PublicLocationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        information_restricted_from_publication:
+          type: string
+          description: Free-text list of items withheld from publication (Section
+            K).
+        public_summary:
+          type: string
+          description: Approved-for-publication summary (Section N).
+        public_status_text:
+          type: string
+          description: Public-facing status text (Section N).
+          maxLength: 255
+        public_verification_level:
+          description: |-
+            Mirror of Section L for the public-facing display (Section N).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        entered_in_world:
+          description: |-
+            Has the case been entered into Testimonies.World — Yes / No / Pending (Section P).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        entry_date:
+          type: string
+          format: date
+          nullable: true
+        second_person_check_completed:
+          type: boolean
+        checked_against_original_documentation:
+          type: boolean
+        final_date:
+          type: string
+          format: date
+          nullable: true
         created_by:
           type: integer
           readOnly: true
           nullable: true
+        case_received_by:
+          type: integer
+          nullable: true
+          description: Documentation officer who received the case (Section A).
+        duplicate_of:
+          type: integer
+          nullable: true
+          description: Set when duplicate_check = existing_case (Section A).
+        entered_by:
+          type: integer
+          nullable: true
+        final_reviewer:
+          type: integer
+          nullable: true
       required:
+      - case_id
       - categories
       - country
       - created_at
@@ -4088,11 +5729,198 @@ components:
           type: string
           format: date-time
           readOnly: true
+        case_id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: External / website case ID (Section A).
+        case_received_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date the case file was received by the documentation officer
+            (Section A).
+        case_source_types:
+          description: Source-of-case checklist — list from {research_interview, family,
+            victim_survivor, lawyer, ngo_cso, media, government_document, other} (Section
+            A).
+        case_source_other:
+          type: string
+          description: Free-text when "other" is selected above (Section A).
+          maxLength: 255
+        duplicate_check:
+          description: |-
+            Duplicate-check outcome (Section A).
+
+            * `no_duplicate` - No duplicate identified
+            * `possible_duplicate` - Possible duplicate
+            * `existing_case` - Existing case
+          oneOf:
+          - $ref: '#/components/schemas/DuplicateCheckEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        age_at_incident:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Age at the time of the incident (Section B). Distinct from
+            date_of_birth.
+        occupation:
+          type: string
+          description: Occupation at time of incident (Section B).
+          maxLength: 255
+        district:
+          type: string
+          description: Person-level administrative district (Section B). Distinct
+            from Report.incident_district.
+          maxLength: 255
+        province:
+          type: string
+          description: Person-level administrative province (Section B). Distinct
+            from Report.incident_province.
+          maxLength: 255
+        identity_verified_methods:
+          description: Identity-verification checklist — list from {interview, family,
+            identity_document, court_document, other} (Section B).
+        identity_verified_other:
+          type: string
+          maxLength: 255
+        current_status_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date the current status was confirmed (Section D).
+        current_status_source:
+          type: string
+          description: Source of the current-status claim (Section D).
+          maxLength: 500
+        current_status_verification:
+          description: |-
+            Verification level of the current status (Section D).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        consent_documentation:
+          description: |-
+            Consent for documentation — Yes / No / Pending (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        consent_public_publication:
+          description: |-
+            Consent for public publication (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        public_identity_level:
+          description: |-
+            Full / Partial / Anonymous (Section K).
+
+            * `full` - Full name
+            * `partial` - Partial name
+            * `anonymous` - Anonymous
+          oneOf:
+          - $ref: '#/components/schemas/PublicIdentityLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        photograph_public:
+          description: |-
+            Yes / No / Pending (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        public_location_level:
+          description: |-
+            Province / District / City / Do not disclose (Section K).
+
+            * `province` - Province
+            * `district` - District
+            * `city` - City / general area
+            * `do_not_disclose` - Do not disclose
+          oneOf:
+          - $ref: '#/components/schemas/PublicLocationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        information_restricted_from_publication:
+          type: string
+          description: Free-text list of items withheld from publication (Section
+            K).
+        public_summary:
+          type: string
+          description: Approved-for-publication summary (Section N).
+        public_status_text:
+          type: string
+          description: Public-facing status text (Section N).
+          maxLength: 255
+        public_verification_level:
+          description: |-
+            Mirror of Section L for the public-facing display (Section N).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        entered_in_world:
+          description: |-
+            Has the case been entered into Testimonies.World — Yes / No / Pending (Section P).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        entry_date:
+          type: string
+          format: date
+          nullable: true
+        second_person_check_completed:
+          type: boolean
+        checked_against_original_documentation:
+          type: boolean
+        final_date:
+          type: string
+          format: date
+          nullable: true
         created_by:
           type: integer
           readOnly: true
           nullable: true
+        case_received_by:
+          type: integer
+          nullable: true
+          description: Documentation officer who received the case (Section A).
+        duplicate_of:
+          type: integer
+          nullable: true
+          description: Set when duplicate_check = existing_case (Section A).
+        entered_by:
+          type: integer
+          nullable: true
+        final_reviewer:
+          type: integer
+          nullable: true
       required:
+      - case_id
       - categories
       - country
       - created_at
@@ -4187,11 +6015,198 @@ components:
           type: string
           format: date-time
           readOnly: true
+        case_id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: External / website case ID (Section A).
+        case_received_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date the case file was received by the documentation officer
+            (Section A).
+        case_source_types:
+          description: Source-of-case checklist — list from {research_interview, family,
+            victim_survivor, lawyer, ngo_cso, media, government_document, other} (Section
+            A).
+        case_source_other:
+          type: string
+          description: Free-text when "other" is selected above (Section A).
+          maxLength: 255
+        duplicate_check:
+          description: |-
+            Duplicate-check outcome (Section A).
+
+            * `no_duplicate` - No duplicate identified
+            * `possible_duplicate` - Possible duplicate
+            * `existing_case` - Existing case
+          oneOf:
+          - $ref: '#/components/schemas/DuplicateCheckEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        age_at_incident:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Age at the time of the incident (Section B). Distinct from
+            date_of_birth.
+        occupation:
+          type: string
+          description: Occupation at time of incident (Section B).
+          maxLength: 255
+        district:
+          type: string
+          description: Person-level administrative district (Section B). Distinct
+            from Report.incident_district.
+          maxLength: 255
+        province:
+          type: string
+          description: Person-level administrative province (Section B). Distinct
+            from Report.incident_province.
+          maxLength: 255
+        identity_verified_methods:
+          description: Identity-verification checklist — list from {interview, family,
+            identity_document, court_document, other} (Section B).
+        identity_verified_other:
+          type: string
+          maxLength: 255
+        current_status_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date the current status was confirmed (Section D).
+        current_status_source:
+          type: string
+          description: Source of the current-status claim (Section D).
+          maxLength: 500
+        current_status_verification:
+          description: |-
+            Verification level of the current status (Section D).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        consent_documentation:
+          description: |-
+            Consent for documentation — Yes / No / Pending (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        consent_public_publication:
+          description: |-
+            Consent for public publication (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        public_identity_level:
+          description: |-
+            Full / Partial / Anonymous (Section K).
+
+            * `full` - Full name
+            * `partial` - Partial name
+            * `anonymous` - Anonymous
+          oneOf:
+          - $ref: '#/components/schemas/PublicIdentityLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        photograph_public:
+          description: |-
+            Yes / No / Pending (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        public_location_level:
+          description: |-
+            Province / District / City / Do not disclose (Section K).
+
+            * `province` - Province
+            * `district` - District
+            * `city` - City / general area
+            * `do_not_disclose` - Do not disclose
+          oneOf:
+          - $ref: '#/components/schemas/PublicLocationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        information_restricted_from_publication:
+          type: string
+          description: Free-text list of items withheld from publication (Section
+            K).
+        public_summary:
+          type: string
+          description: Approved-for-publication summary (Section N).
+        public_status_text:
+          type: string
+          description: Public-facing status text (Section N).
+          maxLength: 255
+        public_verification_level:
+          description: |-
+            Mirror of Section L for the public-facing display (Section N).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        entered_in_world:
+          description: |-
+            Has the case been entered into Testimonies.World — Yes / No / Pending (Section P).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        entry_date:
+          type: string
+          format: date
+          nullable: true
+        second_person_check_completed:
+          type: boolean
+        checked_against_original_documentation:
+          type: boolean
+        final_date:
+          type: string
+          format: date
+          nullable: true
         created_by:
           type: integer
           readOnly: true
           nullable: true
+        case_received_by:
+          type: integer
+          nullable: true
+          description: Documentation officer who received the case (Section A).
+        duplicate_of:
+          type: integer
+          nullable: true
+          description: Set when duplicate_check = existing_case (Section A).
+        entered_by:
+          type: integer
+          nullable: true
+        final_reviewer:
+          type: integer
+          nullable: true
       required:
+      - case_id
       - country
       - created_at
       - created_by
@@ -4273,9 +6288,238 @@ components:
           - $ref: '#/components/schemas/NullEnum'
         is_published:
           type: boolean
+        case_received_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date the case file was received by the documentation officer
+            (Section A).
+        case_source_types:
+          description: Source-of-case checklist — list from {research_interview, family,
+            victim_survivor, lawyer, ngo_cso, media, government_document, other} (Section
+            A).
+        case_source_other:
+          type: string
+          description: Free-text when "other" is selected above (Section A).
+          maxLength: 255
+        duplicate_check:
+          description: |-
+            Duplicate-check outcome (Section A).
+
+            * `no_duplicate` - No duplicate identified
+            * `possible_duplicate` - Possible duplicate
+            * `existing_case` - Existing case
+          oneOf:
+          - $ref: '#/components/schemas/DuplicateCheckEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        age_at_incident:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Age at the time of the incident (Section B). Distinct from
+            date_of_birth.
+        occupation:
+          type: string
+          description: Occupation at time of incident (Section B).
+          maxLength: 255
+        district:
+          type: string
+          description: Person-level administrative district (Section B). Distinct
+            from Report.incident_district.
+          maxLength: 255
+        province:
+          type: string
+          description: Person-level administrative province (Section B). Distinct
+            from Report.incident_province.
+          maxLength: 255
+        identity_verified_methods:
+          description: Identity-verification checklist — list from {interview, family,
+            identity_document, court_document, other} (Section B).
+        identity_verified_other:
+          type: string
+          maxLength: 255
+        current_status_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date the current status was confirmed (Section D).
+        current_status_source:
+          type: string
+          description: Source of the current-status claim (Section D).
+          maxLength: 500
+        current_status_verification:
+          description: |-
+            Verification level of the current status (Section D).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        consent_documentation:
+          description: |-
+            Consent for documentation — Yes / No / Pending (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        consent_public_publication:
+          description: |-
+            Consent for public publication (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        public_identity_level:
+          description: |-
+            Full / Partial / Anonymous (Section K).
+
+            * `full` - Full name
+            * `partial` - Partial name
+            * `anonymous` - Anonymous
+          oneOf:
+          - $ref: '#/components/schemas/PublicIdentityLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        photograph_public:
+          description: |-
+            Yes / No / Pending (Section K).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        public_location_level:
+          description: |-
+            Province / District / City / Do not disclose (Section K).
+
+            * `province` - Province
+            * `district` - District
+            * `city` - City / general area
+            * `do_not_disclose` - Do not disclose
+          oneOf:
+          - $ref: '#/components/schemas/PublicLocationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        information_restricted_from_publication:
+          type: string
+          description: Free-text list of items withheld from publication (Section
+            K).
+        public_summary:
+          type: string
+          description: Approved-for-publication summary (Section N).
+        public_status_text:
+          type: string
+          description: Public-facing status text (Section N).
+          maxLength: 255
+        public_verification_level:
+          description: |-
+            Mirror of Section L for the public-facing display (Section N).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        entered_in_world:
+          description: |-
+            Has the case been entered into Testimonies.World — Yes / No / Pending (Section P).
+
+            * `yes` - Yes
+            * `no` - No
+            * `pending` - Pending
+          oneOf:
+          - $ref: '#/components/schemas/ConsentStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        entry_date:
+          type: string
+          format: date
+          nullable: true
+        second_person_check_completed:
+          type: boolean
+        checked_against_original_documentation:
+          type: boolean
+        final_date:
+          type: string
+          format: date
+          nullable: true
+        case_received_by:
+          type: integer
+          nullable: true
+          description: Documentation officer who received the case (Section A).
+        duplicate_of:
+          type: integer
+          nullable: true
+          description: Set when duplicate_check = existing_case (Section A).
+        entered_by:
+          type: integer
+          nullable: true
+        final_reviewer:
+          type: integer
+          nullable: true
       required:
       - country
       - name
+    PrimarySourceTypeEnum:
+      enum:
+      - victim_survivor
+      - family
+      - witness
+      - official_document
+      type: string
+      description: |-
+        * `victim_survivor` - Victim/survivor
+        * `family` - Family
+        * `witness` - Witness
+        * `official_document` - Official document
+    PublicIdentityLevelEnum:
+      enum:
+      - full
+      - partial
+      - anonymous
+      type: string
+      description: |-
+        * `full` - Full name
+        * `partial` - Partial name
+        * `anonymous` - Anonymous
+    PublicLocationLevelEnum:
+      enum:
+      - province
+      - district
+      - city
+      - do_not_disclose
+      type: string
+      description: |-
+        * `province` - Province
+        * `district` - District
+        * `city` - City / general area
+        * `do_not_disclose` - Do not disclose
+    QcReviewDecisionEnum:
+      enum:
+      - approved
+      - corrections_required
+      - more_verification_required
+      - internal_only
+      - do_not_publish
+      type: string
+      description: |-
+        * `approved` - Approved
+        * `corrections_required` - Corrections required
+        * `more_verification_required` - More verification required
+        * `internal_only` - Internal only
+        * `do_not_publish` - Do not publish
     QualityTierEnum:
       enum:
       - 1
@@ -4365,11 +6609,288 @@ components:
           type: string
           format: date-time
           readOnly: true
+        case_types:
+          description: Section C case-type checklist — list from {enforced_disappearance,
+            arbitrary_detention, detention, release_following, death_following, other}.
+        case_type_other:
+          type: string
+          maxLength: 255
+        incident_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date of incident / disappearance (Section C, 4-star field).
+        incident_date_precision:
+          description: |-
+            Exact / Approximate / Unknown (Section C).
+
+            * `exact` - Exact
+            * `approximate` - Approximate
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/IncidentDatePrecisionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        last_known_location:
+          type: string
+          description: Last known location of the person (Section C, 4-star field).
+          maxLength: 500
+        incident_district:
+          type: string
+          description: Administrative district of the incident (Section C).
+          maxLength: 255
+        incident_province:
+          type: string
+          description: Administrative province of the incident (Section C).
+          maxLength: 255
+        incident_information_source:
+          type: string
+          description: Source of this specific incident information (Section C).
+          maxLength: 500
+        incident_verification:
+          description: |-
+            Verification status of the incident (Section C).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        detention_alleged:
+          description: |-
+            Section F (4-star): Was detention alleged?
+
+            * `yes` - Yes
+            * `no` - No
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        alleged_detention_location:
+          type: string
+          description: Alleged detention location (Section F).
+          maxLength: 500
+        detention_acknowledged:
+          description: |-
+            Was the detention officially acknowledged? (Section F)
+
+            * `yes` - Yes
+            * `no` - No
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        detention_information:
+          type: string
+          description: Information / evidence about the detention (Section F).
+        detention_verification:
+          description: |-
+            Per-detention verification status (Section F).
+
+            * `reported` - Reported
+            * `partially_verified` - Partially verified
+            * `corroborated` - Corroborated
+            * `documented` - Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        primary_source_type:
+          description: |-
+            Primary source type (Section G).
+
+            * `victim_survivor` - Victim/survivor
+            * `family` - Family
+            * `witness` - Witness
+            * `official_document` - Official document
+          oneOf:
+          - $ref: '#/components/schemas/PrimarySourceTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        primary_source_description:
+          type: string
+          maxLength: 500
+        additional_source_type:
+          description: |-
+            Additional source type (Section G).
+
+            * `lawyer` - Lawyer
+            * `ngo` - NGO
+            * `media` - Media
+            * `court` - Court
+            * `government` - Government
+            * `other` - Other
+          oneOf:
+          - $ref: '#/components/schemas/AdditionalSourceTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        additional_source_description:
+          type: string
+          maxLength: 500
+        source_consistency:
+          description: |-
+            Consistency between primary and additional sources (Section G).
+
+            * `consistent` - Consistent
+            * `some_differences` - Some differences
+            * `major_conflict` - Major conflict
+            * `requires_further_verification` - Requires further verification
+          oneOf:
+          - $ref: '#/components/schemas/SourceConsistencyEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        source_verification_notes:
+          type: string
+          description: Free-text verification notes (Section G).
+        legal_fir_filed:
+          description: |-
+            Was an FIR filed? (Section I, starred on the form)
+
+            * `yes` - Yes
+            * `no` - No
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        fir_number:
+          type: string
+          maxLength: 200
+        police_station:
+          type: string
+          maxLength: 255
+        legal_court_case:
+          description: |-
+            Was a court case / petition filed? (Section I, starred)
+
+            * `yes` - Yes
+            * `no` - No
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        court_name:
+          type: string
+          maxLength: 255
+        case_number:
+          type: string
+          maxLength: 200
+        legal_commission_complaint:
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        legal_lawyer_involved:
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        current_legal_status:
+          type: string
+          description: Current status of the legal process (Section I).
+        official_response:
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        responding_authority:
+          type: string
+          maxLength: 255
+        response_date:
+          type: string
+          format: date
+          nullable: true
+        response_type:
+          oneOf:
+          - $ref: '#/components/schemas/ResponseTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        response_source_document:
+          type: string
+          maxLength: 500
+        response_verification:
+          description: |-
+            Per-response verification status (Section J).
+
+            * `reported` - Reported
+            * `partially_verified` - Partially verified
+            * `corroborated` - Corroborated
+            * `documented` - Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        verification_level:
+          description: |-
+            Case-level verification ladder (Section L).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        verification_reason:
+          type: string
+          description: Why this level was assigned (Section L).
+        unverified_information_remaining:
+          type: string
+          description: Information that remains unverified (Section L).
+        risk_level:
+          description: |-
+            INTERNAL — Section M. Never exposed via public API.
+
+            * `low` - Low
+            * `moderate` - Moderate
+            * `high` - High
+            * `critical` - Critical
+            * `not_assessed` - Not assessed
+          oneOf:
+          - $ref: '#/components/schemas/RiskLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        risk_concerns:
+          description: INTERNAL — Section M checklist.
+        risk_concerns_other:
+          type: string
+          description: INTERNAL — free-text when "other" is selected.
+          maxLength: 255
+        internal_notes:
+          type: string
+          description: INTERNAL — Section M. Stripped from public API always.
+        qc_name_checked:
+          type: boolean
+        qc_duplicate_check_completed:
+          type: boolean
+        qc_date_checked:
+          type: boolean
+        qc_location_checked:
+          type: boolean
+        qc_status_checked:
+          type: boolean
+        qc_sources_recorded:
+          type: boolean
+        qc_evidence_checked:
+          type: boolean
+        qc_legal_information_checked:
+          type: boolean
+        qc_government_response_checked:
+          type: boolean
+        qc_allegations_identified:
+          type: boolean
+        qc_consent_checked:
+          type: boolean
+        qc_sensitive_information_removed:
+          type: boolean
+        qc_verification_level_assigned:
+          type: boolean
+        qc_review_date:
+          type: string
+          format: date
+          nullable: true
+        qc_review_decision:
+          oneOf:
+          - $ref: '#/components/schemas/QcReviewDecisionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         person:
           type: integer
         created_by:
           type: integer
           readOnly: true
+          nullable: true
+        qc_reviewed_by:
+          type: integer
           nullable: true
       required:
       - created_at
@@ -4420,11 +6941,318 @@ components:
         is_private:
           type: boolean
           description: If true, entire report hidden from public view
+        case_types:
+          description: Section C case-type checklist — list from {enforced_disappearance,
+            arbitrary_detention, detention, release_following, death_following, other}.
+        case_type_other:
+          type: string
+          maxLength: 255
+        incident_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date of incident / disappearance (Section C, 4-star field).
+        incident_date_precision:
+          description: |-
+            Exact / Approximate / Unknown (Section C).
+
+            * `exact` - Exact
+            * `approximate` - Approximate
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/IncidentDatePrecisionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        last_known_location:
+          type: string
+          description: Last known location of the person (Section C, 4-star field).
+          maxLength: 500
+        incident_district:
+          type: string
+          description: Administrative district of the incident (Section C).
+          maxLength: 255
+        incident_province:
+          type: string
+          description: Administrative province of the incident (Section C).
+          maxLength: 255
+        incident_information_source:
+          type: string
+          description: Source of this specific incident information (Section C).
+          maxLength: 500
+        incident_verification:
+          description: |-
+            Verification status of the incident (Section C).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        detention_alleged:
+          description: |-
+            Section F (4-star): Was detention alleged?
+
+            * `yes` - Yes
+            * `no` - No
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        alleged_detention_location:
+          type: string
+          description: Alleged detention location (Section F).
+          maxLength: 500
+        detention_acknowledged:
+          description: |-
+            Was the detention officially acknowledged? (Section F)
+
+            * `yes` - Yes
+            * `no` - No
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        detention_information:
+          type: string
+          description: Information / evidence about the detention (Section F).
+        detention_verification:
+          description: |-
+            Per-detention verification status (Section F).
+
+            * `reported` - Reported
+            * `partially_verified` - Partially verified
+            * `corroborated` - Corroborated
+            * `documented` - Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        primary_source_type:
+          description: |-
+            Primary source type (Section G).
+
+            * `victim_survivor` - Victim/survivor
+            * `family` - Family
+            * `witness` - Witness
+            * `official_document` - Official document
+          oneOf:
+          - $ref: '#/components/schemas/PrimarySourceTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        primary_source_description:
+          type: string
+          maxLength: 500
+        additional_source_type:
+          description: |-
+            Additional source type (Section G).
+
+            * `lawyer` - Lawyer
+            * `ngo` - NGO
+            * `media` - Media
+            * `court` - Court
+            * `government` - Government
+            * `other` - Other
+          oneOf:
+          - $ref: '#/components/schemas/AdditionalSourceTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        additional_source_description:
+          type: string
+          maxLength: 500
+        source_consistency:
+          description: |-
+            Consistency between primary and additional sources (Section G).
+
+            * `consistent` - Consistent
+            * `some_differences` - Some differences
+            * `major_conflict` - Major conflict
+            * `requires_further_verification` - Requires further verification
+          oneOf:
+          - $ref: '#/components/schemas/SourceConsistencyEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        source_verification_notes:
+          type: string
+          description: Free-text verification notes (Section G).
+        legal_fir_filed:
+          description: |-
+            Was an FIR filed? (Section I, starred on the form)
+
+            * `yes` - Yes
+            * `no` - No
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        fir_number:
+          type: string
+          maxLength: 200
+        police_station:
+          type: string
+          maxLength: 255
+        legal_court_case:
+          description: |-
+            Was a court case / petition filed? (Section I, starred)
+
+            * `yes` - Yes
+            * `no` - No
+            * `unknown` - Unknown
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        court_name:
+          type: string
+          maxLength: 255
+        case_number:
+          type: string
+          maxLength: 200
+        legal_commission_complaint:
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        legal_lawyer_involved:
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        current_legal_status:
+          type: string
+          description: Current status of the legal process (Section I).
+        official_response:
+          oneOf:
+          - $ref: '#/components/schemas/YesNoUnknownEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        responding_authority:
+          type: string
+          maxLength: 255
+        response_date:
+          type: string
+          format: date
+          nullable: true
+        response_type:
+          oneOf:
+          - $ref: '#/components/schemas/ResponseTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        response_source_document:
+          type: string
+          maxLength: 500
+        response_verification:
+          description: |-
+            Per-response verification status (Section J).
+
+            * `reported` - Reported
+            * `partially_verified` - Partially verified
+            * `corroborated` - Corroborated
+            * `documented` - Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationStatusEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        verification_level:
+          description: |-
+            Case-level verification ladder (Section L).
+
+            * `level_1_reported` - Level 1 — Reported
+            * `level_2_partially_verified` - Level 2 — Partially verified
+            * `level_3_corroborated` - Level 3 — Corroborated
+            * `level_4_documented` - Level 4 — Documented
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        verification_reason:
+          type: string
+          description: Why this level was assigned (Section L).
+        unverified_information_remaining:
+          type: string
+          description: Information that remains unverified (Section L).
+        risk_level:
+          description: |-
+            INTERNAL — Section M. Never exposed via public API.
+
+            * `low` - Low
+            * `moderate` - Moderate
+            * `high` - High
+            * `critical` - Critical
+            * `not_assessed` - Not assessed
+          oneOf:
+          - $ref: '#/components/schemas/RiskLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        risk_concerns:
+          description: INTERNAL — Section M checklist.
+        risk_concerns_other:
+          type: string
+          description: INTERNAL — free-text when "other" is selected.
+          maxLength: 255
+        internal_notes:
+          type: string
+          description: INTERNAL — Section M. Stripped from public API always.
+        qc_name_checked:
+          type: boolean
+        qc_duplicate_check_completed:
+          type: boolean
+        qc_date_checked:
+          type: boolean
+        qc_location_checked:
+          type: boolean
+        qc_status_checked:
+          type: boolean
+        qc_sources_recorded:
+          type: boolean
+        qc_evidence_checked:
+          type: boolean
+        qc_legal_information_checked:
+          type: boolean
+        qc_government_response_checked:
+          type: boolean
+        qc_allegations_identified:
+          type: boolean
+        qc_consent_checked:
+          type: boolean
+        qc_sensitive_information_removed:
+          type: boolean
+        qc_verification_level_assigned:
+          type: boolean
+        qc_review_date:
+          type: string
+          format: date
+          nullable: true
+        qc_review_decision:
+          oneOf:
+          - $ref: '#/components/schemas/QcReviewDecisionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         person:
           type: integer
+        qc_reviewed_by:
+          type: integer
+          nullable: true
       required:
       - narrative
       - person
+    ResponseTypeEnum:
+      enum:
+      - confirmation
+      - denial
+      - investigation
+      - detention_acknowledged
+      - release_confirmed
+      - other
+      type: string
+      description: |-
+        * `confirmation` - Confirmation
+        * `denial` - Denial
+        * `investigation` - Investigation
+        * `detention_acknowledged` - Detention acknowledged
+        * `release_confirmed` - Release confirmed
+        * `other` - Other
+    RiskLevelEnum:
+      enum:
+      - low
+      - moderate
+      - high
+      - critical
+      - not_assessed
+      type: string
+      description: |-
+        * `low` - Low
+        * `moderate` - Moderate
+        * `high` - High
+        * `critical` - Critical
+        * `not_assessed` - Not assessed
     RoleEnum:
       enum:
       - family
@@ -4453,6 +7281,18 @@ components:
         * `staff` - staff
         * `advocate` - advocate
         * `volunteer` - volunteer
+    SourceConsistencyEnum:
+      enum:
+      - consistent
+      - some_differences
+      - major_conflict
+      - requires_further_verification
+      type: string
+      description: |-
+        * `consistent` - Consistent
+        * `some_differences` - Some differences
+        * `major_conflict` - Major conflict
+        * `requires_further_verification` - Requires further verification
     SourceTypeEnum:
       enum:
       - firsthand
@@ -4502,16 +7342,343 @@ components:
       - by_medical
       - by_status
       - total
-    StatusEnum:
+    TestimonialLocationVisibilityEnum:
       enum:
-      - open
-      - in_progress
-      - done
+      - public_precise
+      - public_region
+      - public_country
+      - hidden
       type: string
       description: |-
-        * `open` - Open
-        * `in_progress` - In progress
-        * `done` - Done
+        * `public_precise` - Public — precise
+        * `public_region` - Public — region only
+        * `public_country` - Public — country only
+        * `hidden` - Hidden
+    TestimonialPublic:
+      type: object
+      description: |-
+        Public-facing payload — masks source + location by visibility flags.
+
+        Server-side masking is the security boundary (SYSTEM_RULES §10).
+        The frontend never sees redacted fields in the first place.
+
+        The `source_visible` boolean captures whether *any* source
+        descriptor is shown publicly (public_named / public_anonymous).
+        Hidden rows surface `null`.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        title:
+          type: string
+          readOnly: true
+        language:
+          type: string
+          readOnly: true
+        country:
+          type: string
+          readOnly: true
+        region:
+          type: string
+          readOnly: true
+        public_location_display:
+          type: string
+          readOnly: true
+        incident_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        incident_types:
+          readOnly: true
+        summary:
+          type: string
+          readOnly: true
+        narrative:
+          type: string
+          readOnly: true
+        outcome:
+          type: string
+          readOnly: true
+        verification_level:
+          allOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          readOnly: true
+        source_visible:
+          type: boolean
+          readOnly: true
+        public_source_label:
+          type: string
+          readOnly: true
+        family_protected:
+          type: boolean
+          readOnly: true
+        contact_protected:
+          type: boolean
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TestimonialStatusEnum'
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestimonialTag'
+          readOnly: true
+        translation_group:
+          type: string
+          format: uuid
+          readOnly: true
+        linked_person_id:
+          type: integer
+          readOnly: true
+        linked_report_id:
+          type: integer
+          readOnly: true
+        schema_version:
+          type: integer
+          readOnly: true
+      required:
+      - contact_protected
+      - country
+      - family_protected
+      - id
+      - incident_date
+      - incident_types
+      - language
+      - linked_person_id
+      - linked_report_id
+      - narrative
+      - outcome
+      - public_location_display
+      - public_source_label
+      - published_at
+      - region
+      - schema_version
+      - slug
+      - source_visible
+      - status
+      - summary
+      - tags
+      - title
+      - translation_group
+      - verification_level
+    TestimonialSourceVisibilityEnum:
+      enum:
+      - public_named
+      - public_anonymous
+      - hidden
+      type: string
+      description: |-
+        * `public_named` - Public — named
+        * `public_anonymous` - Public — anonymous
+        * `hidden` - Hidden
+    TestimonialStatusEnum:
+      enum:
+      - draft
+      - under_review
+      - approved
+      - published
+      - rejected
+      - archived
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `under_review` - Under review
+        * `approved` - Approved
+        * `published` - Published
+        * `rejected` - Rejected
+        * `archived` - Archived
+    TestimonialTag:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 64
+          pattern: ^[-a-zA-Z0-9_]+$
+        description:
+          type: string
+          maxLength: 255
+      required:
+      - id
+      - name
+    TestimonialTagRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[-a-zA-Z0-9_]+$
+        description:
+          type: string
+          maxLength: 255
+      required:
+      - name
+    TestimonialWrite:
+      type: object
+      description: |-
+        Create / update shape for any role (Volunteer can create drafts).
+
+        Server-controlled fields are read-only and silently dropped on
+        input (SYSTEM_RULES §5):
+          - status + all `*_by` + `*_at` workflow fields: only mutated
+            via the transition actions, never via direct PATCH.
+          - schema_version + is_exported: server-pinned.
+          - created_by / created_at / updated_at: server-pinned.
+          - source_encrypted + precise_location_encrypted: never
+            serialized. Caller uses `set_source` / `set_precise_location`
+            accessors (exposed via dedicated action endpoints when
+            permission is held).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        slug:
+          type: string
+          maxLength: 255
+          pattern: ^[-a-zA-Z0-9_]+$
+        language:
+          type: string
+          maxLength: 10
+        country:
+          type: string
+          maxLength: 100
+        region:
+          type: string
+          maxLength: 255
+        incident_date:
+          type: string
+          format: date
+          nullable: true
+        incident_types: {}
+        summary:
+          type: string
+        narrative:
+          type: string
+        outcome:
+          type: string
+        source_visibility:
+          $ref: '#/components/schemas/TestimonialSourceVisibilityEnum'
+        public_source_label:
+          type: string
+          maxLength: 255
+        location_visibility:
+          $ref: '#/components/schemas/TestimonialLocationVisibilityEnum'
+        public_location_display:
+          type: string
+          maxLength: 500
+        family_protected:
+          type: boolean
+        contact_protected:
+          type: boolean
+        verification_level:
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        person:
+          type: integer
+          nullable: true
+          description: Underlying Person this testimonial is built from.
+        report:
+          type: integer
+          nullable: true
+          description: Optional Report-level link (one event, one testimonial).
+        tags:
+          type: array
+          items:
+            type: integer
+      required:
+      - id
+    TestimonialWriteRequest:
+      type: object
+      description: |-
+        Create / update shape for any role (Volunteer can create drafts).
+
+        Server-controlled fields are read-only and silently dropped on
+        input (SYSTEM_RULES §5):
+          - status + all `*_by` + `*_at` workflow fields: only mutated
+            via the transition actions, never via direct PATCH.
+          - schema_version + is_exported: server-pinned.
+          - created_by / created_at / updated_at: server-pinned.
+          - source_encrypted + precise_location_encrypted: never
+            serialized. Caller uses `set_source` / `set_precise_location`
+            accessors (exposed via dedicated action endpoints when
+            permission is held).
+      properties:
+        title:
+          type: string
+          maxLength: 255
+        slug:
+          type: string
+          maxLength: 255
+          pattern: ^[-a-zA-Z0-9_]+$
+        language:
+          type: string
+          minLength: 1
+          maxLength: 10
+        country:
+          type: string
+          maxLength: 100
+        region:
+          type: string
+          maxLength: 255
+        incident_date:
+          type: string
+          format: date
+          nullable: true
+        incident_types: {}
+        summary:
+          type: string
+        narrative:
+          type: string
+        outcome:
+          type: string
+        source_visibility:
+          $ref: '#/components/schemas/TestimonialSourceVisibilityEnum'
+        public_source_label:
+          type: string
+          maxLength: 255
+        location_visibility:
+          $ref: '#/components/schemas/TestimonialLocationVisibilityEnum'
+        public_location_display:
+          type: string
+          maxLength: 500
+        family_protected:
+          type: boolean
+        contact_protected:
+          type: boolean
+        verification_level:
+          oneOf:
+          - $ref: '#/components/schemas/VerificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        person:
+          type: integer
+          nullable: true
+          description: Underlying Person this testimonial is built from.
+        report:
+          type: integer
+          nullable: true
+          description: Optional Report-level link (one event, one testimonial).
+        tags:
+          type: array
+          items:
+            type: integer
     UnreadCountResponse:
       type: object
       properties:
@@ -4537,6 +7704,30 @@ components:
         notify_inapp:
           type: boolean
           description: Show in-app notifications in the bell.
+    VerificationLevelEnum:
+      enum:
+      - level_1_reported
+      - level_2_partially_verified
+      - level_3_corroborated
+      - level_4_documented
+      type: string
+      description: |-
+        * `level_1_reported` - Level 1 — Reported
+        * `level_2_partially_verified` - Level 2 — Partially verified
+        * `level_3_corroborated` - Level 3 — Corroborated
+        * `level_4_documented` - Level 4 — Documented
+    VerificationStatusEnum:
+      enum:
+      - reported
+      - partially_verified
+      - corroborated
+      - documented
+      type: string
+      description: |-
+        * `reported` - Reported
+        * `partially_verified` - Partially verified
+        * `corroborated` - Corroborated
+        * `documented` - Documented
     VisibilityEnum:
       enum:
       - public
@@ -4547,6 +7738,16 @@ components:
         * `public` - Public
         * `restricted` - Restricted — authenticated users only
         * `sensitive` - Sensitive — advocates/admin only
+    YesNoUnknownEnum:
+      enum:
+      - 'yes'
+      - 'no'
+      - unknown
+      type: string
+      description: |-
+        * `yes` - Yes
+        * `no` - No
+        * `unknown` - Unknown
   securitySchemes:
     cookieAuth:
       type: apiKey
@@ -4567,5 +7768,9 @@ tags:
   description: Casework records (advocacy actions)
 - name: categories
   description: Case categories
+- name: testimonials
+  description: Publication-facing wrappers around cases
+- name: testimonial-tags
+  description: Tag taxonomy for testimonials
 - name: session
   description: Current session / authentication
