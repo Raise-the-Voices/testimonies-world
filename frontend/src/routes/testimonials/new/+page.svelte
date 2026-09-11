@@ -46,74 +46,116 @@
 	let saving = $state(false);
 	let errors = $state<Record<string, string>>({});
 	let formError = $state('');
+	/* successMessage: explicit confirmation after a successful
+	   save/submit. Distinct from the "View created testimonial →"
+	   link that appears inline — this is a top-of-form banner so
+	   the user gets unambiguous feedback that the click did
+	   something, addressing the silent-failure UX. */
+	let successMessage = $state('');
 	let createdId = $state<number | null>(null);
 
 	// Local submit lifecycle: create (always → status=draft) →
 	// optional submit (status=under_review) → final redirect.
 	async function save(submitAfter: boolean) {
+		// Re-entrancy guard — if a fast double-click beats the
+		// disabled={saving} DOM attribute, bail before any state
+		// changes so we don't kick off two concurrent fetches.
 		if (saving) return;
+
 		saving = true;
 		formError = '';
+		successMessage = '';
 		errors = {};
 
-		const body: TestimonialWriteRequest = {
-			title: title.trim(),
-			country: country.trim(),
-			region: region.trim(),
-			incident_date: incidentDate || null,
-			summary: summary.trim(),
-			narrative: narrative.trim(),
-			outcome: outcome.trim(),
-			language,
-			verification_level: (verificationLevel || undefined) as
-				| TestimonialWriteRequest['verification_level']
-				| undefined,
-			source_visibility: sourceVisibility,
-			public_source_label: publicSourceLabel.trim(),
-			location_visibility: locationVisibility,
-			family_protected: familyProtected,
-			contact_protected: contactProtected,
-		};
-		// `incident_date_precision` and `incident_types` exist on the
-		// model but aren't in the generated `TestimonialWriteRequest`
-		// (drf-spectacular skipped them during introspection). The
-		// backend accepts them via raw POST; we lose the round-trip
-		// type safety until the bug is fixed in the schema layer.
-		const bodyWithExtras = body as TestimonialWriteRequest & {
-			incident_date_precision?: string;
-			incident_types?: string[];
-		};
-		bodyWithExtras.incident_date_precision = incidentDatePrecision;
-
-		let id: number | null = null;
+		// Outer try/finally ensures `saving` resets no matter which
+		// branch exits (early return on error, success, or even an
+		// unexpected throw). Without finally, an unhandled error path
+		// would leave saving=true forever and the button stuck.
 		try {
-			const res = await testimonialsCreate(body);
-			const data = (res as { data?: { id?: number } }).data;
-			id = data?.id ?? null;
-			createdId = id;
-		} catch (e: unknown) {
-			formError =
-				e instanceof Error ? e.message : 'Could not create the testimonial.';
-			saving = false;
-			return;
-		}
+			const body: TestimonialWriteRequest = {
+				title: title.trim(),
+				country: country.trim(),
+				region: region.trim(),
+				incident_date: incidentDate || null,
+				summary: summary.trim(),
+				narrative: narrative.trim(),
+				outcome: outcome.trim(),
+				language,
+				verification_level: (verificationLevel || undefined) as
+					| TestimonialWriteRequest['verification_level']
+					| undefined,
+				source_visibility: sourceVisibility,
+				public_source_label: publicSourceLabel.trim(),
+				location_visibility: locationVisibility,
+				family_protected: familyProtected,
+				contact_protected: contactProtected,
+			};
+			// `incident_date_precision` and `incident_types` exist on the
+			// model but aren't in the generated `TestimonialWriteRequest`
+			// (drf-spectacular skipped them during introspection). The
+			// backend accepts them via raw POST; we lose the round-trip
+			// type safety until the bug is fixed in the schema layer.
+			const bodyWithExtras = body as TestimonialWriteRequest & {
+				incident_date_precision?: string;
+				incident_types?: string[];
+			};
+			bodyWithExtras.incident_date_precision = incidentDatePrecision;
 
-		if (submitAfter && id !== null) {
+			let id: number | null = null;
 			try {
-				await testimonialsSubmitCreate(id, {});
+				const res = await testimonialsCreate(body);
+				const data = (res as { data?: { id?: number } }).data;
+				id = data?.id ?? null;
+				createdId = id;
+
+				// Silent-failure guard: if the API returned 200 but with
+				// an unexpected response shape (no `id`), don't leave the
+				// user staring at a spinner-reset form wondering if it
+				// worked. Surface as an explicit error.
+				if (id === null) {
+					throw new Error(
+						'The server response did not include a testimonial id. ' +
+							'Please retry in a moment; if the problem persists, ' +
+							'report it via the audit-log contact.'
+					);
+				}
 			} catch (e: unknown) {
 				formError =
-					e instanceof Error
-						? 'Saved as draft, but submission failed: ' + e.message
-						: 'Saved as draft, but the submit call failed.';
-				saving = false;
+					e instanceof Error ? e.message : 'Could not create the testimonial.';
 				return;
 			}
-		}
 
-		saving = false;
-		if (id !== null) {
-			await goto(`${base}/testimonials/${id}`);
+			if (submitAfter) {
+				try {
+					await testimonialsSubmitCreate(id, {});
+				} catch (e: unknown) {
+					// Row was created but the workflow transition failed.
+					// Tell the user both halves of the result so they don't
+					// try to create the same row again.
+					formError =
+						e instanceof Error
+							? `Saved as draft, but submission failed: ${e.message}. ` +
+								'You can retry the submit from the testimonial page.'
+							: 'Saved as draft, but the submit step failed. ' +
+								'You can retry from the testimonial page.';
+					return;
+				}
+			}
+
+			// Success. Two paths:
+			//   - submitAfter: navigate to the detail page (the page
+			//     itself IS the success confirmation).
+			//   - !submitAfter (save draft): stay on the form and show an
+			//     explicit success banner. The user gets unambiguous
+			//     feedback that the click landed.
+			if (submitAfter) {
+				await goto(`${base}/testimonials/${id}`);
+			} else {
+				successMessage =
+					'Saved as draft. You can keep editing or submit for review when ready.';
+			}
+		} finally {
+			saving = false;
 		}
 	}
 </script>
@@ -322,6 +364,10 @@
 				</label>
 			</fieldset>
 
+			{#if successMessage}
+				<div class="form-success" role="status">{successMessage}</div>
+			{/if}
+
 			{#if formError}
 				<div class="form-error" role="alert">{formError}</div>
 			{/if}
@@ -466,6 +512,15 @@
 	.checkbox-row input[type='checkbox'] {
 		width: 1.1rem;
 		height: 1.1rem;
+	}
+
+	.form-success {
+		padding: 0.85rem 1rem;
+		border: 1px solid #86efac;
+		border-left: 3px solid #16a34a;
+		border-radius: var(--radius-card);
+		color: #166534;
+		background: #f0fdf4;
 	}
 
 	.form-error {
