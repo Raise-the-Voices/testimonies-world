@@ -1086,3 +1086,231 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f'{self.user} {self.action} {self.target_type}#{self.target_id}'
+
+
+# ============================================================================
+# Testimonials — publication-facing wrapper around cases.
+#
+# Testimonials are read-mostly "published artifacts" derived from
+# casework (Person / Report). They have their own lifecycle (draft →
+# review → published) and a stricter privacy posture than the source
+# casework (source-hidden, location-masking, family-protection).
+#
+# All "export-relevant" columns are simple primitives — title,
+# narrative, dates — to keep the export contract stable. Encrypted
+# columns (source identity, precise location) live in `BinaryField`
+# slots and never leave the server in plaintext.
+#
+# Schema-versioning: see the README "Testimonials" section. Bump
+# `schema_version` manually when adding a column that participates
+# in the canonical export shape (`TestimonialExportSerializer`).
+# ============================================================================
+
+
+class TestimonialTag(models.Model):
+    """Free-form tag taxonomy for testimonials (e.g. `arbitrary-detention`,
+    `family-testimony`, `press-quote`). Stored as a lookup table so the
+    frontend and export contract can reference stable IDs."""
+
+    name = models.SlugField(max_length=64, unique=True)
+    description = models.CharField(max_length=255, blank=True, default='')
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Testimonial(models.Model):
+    class SourceVisibility(models.TextChoices):
+        PUBLIC_NAMED = 'public_named', 'Public — named'
+        PUBLIC_ANONYMOUS = 'public_anonymous', 'Public — anonymous'
+        HIDDEN = 'hidden', 'Hidden'
+
+    class LocationVisibility(models.TextChoices):
+        PUBLIC_PRECISE = 'public_precise', 'Public — precise'
+        PUBLIC_REGION = 'public_region', 'Public — region only'
+        PUBLIC_COUNTRY = 'public_country', 'Public — country only'
+        HIDDEN = 'hidden', 'Hidden'
+
+    class Status(models.TextChoices):
+        DRAFT = 'draft', 'Draft'
+        UNDER_REVIEW = 'under_review', 'Under review'
+        APPROVED = 'approved', 'Approved'
+        PUBLISHED = 'published', 'Published'
+        REJECTED = 'rejected', 'Rejected'
+        ARCHIVED = 'archived', 'Archived'
+
+    # ----- Reference to source casework (soft FK) -----
+    person = models.ForeignKey(
+        'Person', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='testimonials',
+        help_text='Underlying Person this testimonial is built from.',
+    )
+    report = models.ForeignKey(
+        'Report', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='testimonials',
+        help_text='Optional Report-level link (one event, one testimonial).',
+    )
+
+    # ----- Identity -----
+    title = models.CharField(max_length=255, blank=True, default='')
+    # Slug is auto-generated in save() when blank, so a creator
+    # never needs to invent one. Slug remains unique=True so the
+    # model enforces no-collision; the auto-gen uses a 12-hex prefix
+    # of uuid4 → collision probability is ~1e-7 over 1B rows.
+    slug = models.SlugField(max_length=255, unique=True, blank=True)
+    language = models.CharField(max_length=10, default='en')
+
+    # ----- Structured content (front-end falls back to legacy case data) -----
+    country = models.CharField(max_length=100, blank=True, default='')
+    region = models.CharField(max_length=255, blank=True, default='')
+    incident_date = models.DateField(null=True, blank=True)
+    incident_types = models.JSONField(default=list, blank=True)
+    summary = models.TextField(blank=True, default='')
+    narrative = models.TextField(blank=True, default='')
+    outcome = models.TextField(blank=True, default='')
+
+    # ----- Source privacy -----
+    source_visibility = models.CharField(
+        max_length=20, choices=SourceVisibility.choices,
+        default=SourceVisibility.HIDDEN,
+    )
+    # Fernet ciphertext of the real source identity. Decrypted only via
+    # `Testimonial.get_source()` (gated by CanViewEncryptedSource).
+    source_encrypted = models.BinaryField(null=True, blank=True)
+    # Public-safe descriptor (e.g. "Family member", "Witness"). Always
+    # available — this is what shows on the public page.
+    public_source_label = models.CharField(max_length=255, blank=True, default='')
+
+    # ----- Location privacy -----
+    location_visibility = models.CharField(
+        max_length=20, choices=LocationVisibility.choices,
+        default=LocationVisibility.PUBLIC_REGION,
+    )
+    precise_location_encrypted = models.BinaryField(null=True, blank=True)
+    public_location_display = models.CharField(max_length=500, blank=True, default='')
+
+    # ----- Auto-protection flags -----
+    family_protected = models.BooleanField(default=True)
+    contact_protected = models.BooleanField(default=True)
+
+    # ----- Approval workflow -----
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.DRAFT,
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='testimonials_submitted',
+    )
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='testimonials_reviewed',
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_notes = models.TextField(blank=True, default='')
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='testimonials_approved',
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='testimonials_published',
+    )
+    published_at = models.DateTimeField(null=True, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+
+    # ----- Verification (mirrors cases.Report.verification_level) -----
+    verification_level = models.CharField(
+        max_length=50, blank=True, default='',
+        choices=VerificationLevel.choices,
+    )
+
+    tags = models.ManyToManyField(TestimonialTag, blank=True, related_name='testimonials')
+
+    # ----- Schema versioning + export lock -----
+    # Bump manually when adding a column that participates in the
+    # canonical export shape (`TestimonialExportSerializer`). See
+    # README "Testimonials — schema versioning".
+    schema_version = models.PositiveSmallIntegerField(default=1)
+    # Set when an export has been generated for this row. Acts as a
+    # "pinned" mark so re-exports don't churn.
+    is_exported = models.BooleanField(default=False)
+
+    # ----- Meta -----
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='testimonials_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    # Translation group: siblings (different languages of the same
+    # testimonial) share a UUID. Single-language testimonials share
+    # their own UUID with themselves — pattern matches international-
+    # body expectations (one row per language per topic).
+    translation_group = models.UUIDField(default=uuid.uuid4, editable=False)
+
+    class Meta:
+        ordering = ['-published_at', '-created_at']
+        indexes = [
+            # Default publication list: published, newest first.
+            models.Index(
+                fields=['status', '-published_at'],
+                name='testim_status_pub_idx',
+            ),
+            # Locale filter on public list / sitemap.
+            models.Index(
+                fields=['language', 'status'],
+                name='testim_lang_status_idx',
+            ),
+            # Translation siblings lookup (translation switcher).
+            models.Index(
+                fields=['translation_group'],
+                name='testim_translation_idx',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.title or "(untitled)"} [{self.language}] {self.status}'
+
+    def save(self, *args, **kwargs):
+        """Auto-generate slug from translation_group UUID when blank.
+
+        Pre-fill before super().save() so the unique constraint can
+        fail loudly at INSERT rather than on a follow-up UPDATE.
+        """
+        if not self.slug:
+            # 12 hex chars from the translation_group uuid — same
+            # language siblings share a translation_group and get
+            # different slugs because uuid.uuid4 is called again
+            # here (we don't reuse the group as the slug).
+            base = uuid.uuid4().hex[:12]
+            self.slug = f't-{base}'
+        super().save(*args, **kwargs)
+
+    # -- Encrypted accessors -----------------------------------------------
+    # These are the only sanctioned read paths for the ciphertext
+    # columns. Direct .source_encrypted access is forbidden by the
+    # serializer (not exposed) — that contract is what makes the
+    # encryption meaningful.
+
+    def set_source(self, plaintext: str) -> None:
+        from .testimonials.encryption import encrypt_str
+        self.source_encrypted = encrypt_str(plaintext or '')
+
+    def get_source(self):
+        """Return the decrypted source identity. Caller MUST verify
+        `CanViewEncryptedSource` first — see views.py."""
+        from .testimonials.encryption import decrypt_str
+        return decrypt_str(self.source_encrypted)
+
+    def set_precise_location(self, plaintext: str) -> None:
+        from .testimonials.encryption import encrypt_str
+        self.precise_location_encrypted = encrypt_str(plaintext or '')
+
+    def get_precise_location(self):
+        from .testimonials.encryption import decrypt_str
+        return decrypt_str(self.precise_location_encrypted)

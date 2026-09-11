@@ -400,6 +400,50 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
     'GENERIC_ADDITIONAL_PROPERTIES': False,
+    # ENUM_NAME_OVERRIDES collapses drf-spectacular's per-field enum
+    # component names (auto-derived from the field name) into a
+    # single canonical name per shared TextChoices. Without this,
+    # spectacular warns that the same choice values are emitted
+    # under multiple distinct component names — visually fine but
+    # polluting the schema, and triggering `spectacular --fail-on-warn`
+    # in CI.
+    #
+    # Format (verified against drf_spectacular/plumbing.py):
+    #   { <canonical_name>: <choices_class_or_value_list> }
+    # The KEY is the canonical OpenAPI component name. The VALUE is
+    # the TextChoices class as a dotted import path (or the class
+    # itself, or a list of (value, label) tuples). When a serializer
+    # field's choices match one of these values, spectacular emits
+    # it under the canonical name — collapsing duplicates.
+    #
+    # Bump protocol: when a new TextChoices is introduced, add it
+    # here so future fields have an obvious canonical name to reuse.
+    'ENUM_NAME_OVERRIDES': {
+        # YesNoUnknown — yes / no / unknown. Used on many Report
+        # fields in the Cases module.
+        'YesNoUnknownEnum': 'cases.models.YesNoUnknown',
+
+        # ConsentStatus — yes / no / pending. Person-level consent
+        # + website-entry flags.
+        'ConsentStatusEnum': 'cases.models.ConsentStatus',
+
+        # VerificationLevel — Level 1..4 case-level ladder.
+        # Used on Report.verification_level + Person mirrors.
+        'VerificationLevelEnum': 'cases.models.VerificationLevel',
+
+        # VerificationStatus — per-evidence / per-response status
+        # (Reported / Partially / Corroborated / Documented).
+        # Distinct from the case-level ladder above.
+        'VerificationStatusEnum': 'cases.models.VerificationStatus',
+
+        # Testimonial enums: each used by multiple serializers
+        # (public / internal / write all reference the same column).
+        'TestimonialSourceVisibilityEnum':
+            'cases.models.Testimonial.SourceVisibility',
+        'TestimonialLocationVisibilityEnum':
+            'cases.models.Testimonial.LocationVisibility',
+        'TestimonialStatusEnum': 'cases.models.Testimonial.Status',
+    },
     'TAGS': [
         {'name': 'persons', 'description': 'Person records (cases) — read public, write auth'},
         {'name': 'media', 'description': 'Media files (photos, videos, documents, links)'},
@@ -408,6 +452,8 @@ SPECTACULAR_SETTINGS = {
         {'name': 'contacts', 'description': 'Always-private contact records (advocate-only)'},
         {'name': 'casework', 'description': 'Casework records (advocacy actions)'},
         {'name': 'categories', 'description': 'Case categories'},
+        {'name': 'testimonials', 'description': 'Publication-facing wrappers around cases'},
+        {'name': 'testimonial-tags', 'description': 'Tag taxonomy for testimonials'},
         {'name': 'session', 'description': 'Current session / authentication'},
     ],
 }
