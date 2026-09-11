@@ -301,19 +301,44 @@
 		}
 		.page-header {
 			flex-direction: column;
+			/* justify-content default (flex-start) is the right
+			   behavior on mobile. The desktop value above is
+			   `space-between` which would push children apart in
+			   the main axis — fine on a row, harmful on a column
+			   because it inserts vertical air between the headline
+			   and the metric. Override explicitly so the desktop
+			   value never crosses over accidentally. */
+			justify-content: flex-start;
 			align-items: stretch;
-			/* Tighten the gap between the subtitle and the
-			   `.total-badge`. The earlier 0.5rem fix tightened
-			   this but the badge's card-style chrome (white
-			   background, border, shadow) was still visually heavy
-			   at narrow widths and read as disconnected from the
-			   paragraph above it — the gap was small but the
-			   perceived disconnect was large. 0.25rem makes the
-			   pair feel like one block; .total-badge below drops
-			   its card chrome for mobile so it reads inline. */
 			gap: 0.25rem;
 			padding-bottom: 0;
 			border-bottom: none;
+		}
+		/* ROOT CAUSE OF THE BREAKING BUG (find #3 from the user's
+		   report, retried three times before this fix).
+
+		   The desktop rule has `.page-header-text { flex: 1 1 300px }`
+		   — a sensible desktop-row pattern where the basis (300px)
+		   is the meaningful horizontal axis. On mobile the parent
+		   flips to `flex-direction: column` so the *same* `300px`
+		   basis now applies to the *vertical* axis. Net effect:
+		   `.page-header-text` gets a 300px min-height even when its
+		   content is one short subtitle paragraph — and the
+		   `.total-badge` then sits 300px below the subtitle no
+		   matter what gap / padding / border values we tried.
+
+		   No margin tweak ever fixed it. Even removing the badge
+		   chrome (which is what v2 did) couldn't shrink the
+		   implicit 300px vertical hole.
+
+		   The fix is to reset flex on mobile so the basis drops
+		   out of the layout entirely. `flex: none` is shorthand
+		   for `flex: 0 0 auto` — no growth, no shrink, basis from
+		   content. `.page-header-text` then sizes by its content
+		   height (a single h1 + p), and the badge sits immediately
+		   under it with just the parent's 0.25rem gap between. */
+		.page-header-text {
+			flex: none;
 		}
 		/* On mobile the badge is not a separate card — it's the
 		   next-line continuation of the headline. Inline-flex
