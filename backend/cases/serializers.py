@@ -3,12 +3,67 @@ from urllib.parse import urljoin
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report
+from .models import (
+    AuditLog, CaseCategory, CaseEvent, CaseUpdate,
+    FamilyRelationship, Media, Person, Report,
+)
 from .sanitizers import sanitize_text, sanitize_url
 
 # Fields that are always excluded from public API responses
 PRIVATE_PERSON_FIELDS = ['medical_notes', 'precise_location']
 PRIVATE_REPORT_FIELDS = ['reporter_name', 'reporter_contact', 'precise_location']
+
+# Section M — internal risk / security fields. Stripped from every
+# response unless the requester is in the Advocate group or is_staff.
+# `internal_notes` is the most sensitive of these and warrants the
+# strongest gate; `risk_*` are gated identically for simplicity
+# (one gate, one audit trail).
+INTERNAL_REPORT_FIELDS = [
+    'risk_level', 'risk_concerns', 'risk_concerns_other',
+    'internal_notes',
+]
+
+
+def _can_view_internal(request) -> bool:
+    """True if `request.user` may see Section M (internal) fields.
+
+    Permission table:
+      - Anonymous:           no
+      - Authenticated, no role: no
+      - Volunteer group:    no (volunteers handle cases; they shouldn't
+                            see the same risk metadata that exposes
+                            source identity in a retaliation scenario)
+      - Advocate group:     yes
+      - is_staff (Admin):   yes
+
+    The mirror check lives in the frontend (`canViewInternal(user)`);
+    the backend must agree or a savvy volunteer could pull internal
+    data with curl.
+
+    The role check is memoized on the request object for the lifetime
+    of the request. Without this cache, `to_representation` running
+    per Report would issue a fresh `user.groups.filter(...).exists()`
+    query per row — busting the /api/reports/ query-count budget
+    (test_report_list_under_10_queries was 15 queries without the
+    cache, 8 with it). The cache key uses `_tw_internal_view`
+    rather than `_can_view_internal` to avoid shadowing the function
+    name on the request.
+    """
+    cached = getattr(request, '_tw_internal_view', None)
+    if cached is not None:
+        return cached
+    user = getattr(request, 'user', None)
+    if not user or not user.is_authenticated:
+        result = False
+    elif user.is_staff:
+        result = True
+    else:
+        # `user.groups.filter(...).exists()` is uncached; for a list
+        # of 10 reports serialized by the same volunteer, this would
+        # otherwise be 10 SQL round-trips.
+        result = user.groups.filter(name='Advocate').exists()
+    request._tw_internal_view = result
+    return result
 
 
 class SanitizingModelSerializerMixin:
@@ -115,9 +170,21 @@ class ReportSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializ
     # `narrative` is the canonical human-rights testimony; `reporter_*`
     # and `precise_location` are private. All are free-text and could
     # be rendered in a future HTML view, so all are sanitized.
+    # Documentation-form additions (Sections C-J, L-M) introduced many
+    # new TextFields — every one is included below so volunteer /
+    # advocate free-form input is HTML-stripped before save.
     text_fields = [
+        # Legacy free-text fields
         'narrative', 'suspected_reason', 'official_reason',
         'reporter_contact', 'source_attribution', 'reporter_name',
+        # Section C / F / G / I / J
+        'detention_information',
+        'source_verification_notes',
+        'current_legal_status',
+        # Section L / M
+        'verification_reason',
+        'unverified_information_remaining',
+        'internal_notes',
     ]
     media_files = MediaSerializer(many=True, read_only=True)
 
@@ -129,9 +196,21 @@ class ReportSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializ
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get('request')
+
+        # Existing privacy gate: strip private fields for anonymous
+        # viewers. Authenticated viewers always see them.
         if not request or not request.user.is_authenticated:
             for field in PRIVATE_REPORT_FIELDS:
                 data.pop(field, None)
+
+        # Documentation-form gate: Section M (internal risk /
+        # security) is stripped unless the requester is Advocate or
+        # staff. Internal_notes in particular could expose the
+        # identity of a confidential source.
+        if not _can_view_internal(request):
+            for field in INTERNAL_REPORT_FIELDS:
+                data.pop(field, None)
+
         return data
 
 
@@ -433,3 +512,72 @@ class AuditLogSerializer(serializers.ModelSerializer):
             'ip_address',
         ]
         read_only_fields = fields  # audit rows are write-once, never editable
+
+
+class CaseEventSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
+    """Section E — Timeline event on a case file.
+
+    One row per dated event (detention / transfer / court hearing /
+    release / status change / …). Both `event_kind` (structured
+    enum) and `description` (free text) are exposed so the timeline
+    can render rich chips on incoming records and fall back to text
+    on legacy ones.
+
+    The `person` field is the FK to Person; for nested reading
+    (e.g. the case-detail page's "Timeline" section) the frontend
+    can pass `person` as an ID. The optional `report` soft-link
+    is also surfaced as an integer for predictability.
+    """
+
+    # Free-text defenses: `description` could be rendered under a
+    # timeline heading; `source` is a credit / attribution line.
+    text_fields = ['description', 'source']
+
+    class Meta:
+        model = CaseEvent
+        fields = [
+            'id',
+            'person',
+            'report',
+            'event_date',
+            'event_kind',
+            'description',
+            'source',
+            'verification',
+            'created_at',
+        ]
+        read_only_fields = ['created_at']
+
+
+class CaseUpdateSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
+    """Section Q — Future Update on an entered case file.
+
+    Distinct from `CaseEvent` (events about the person). This
+    records events about the case file itself: new evidence
+    arrived, status changed, verification improved.
+
+    `verified_by` is FK-rendered as an integer; the frontend joins
+    against the user list to display the name only when staff ask
+    for the audit trail.
+    """
+
+    text_fields = ['new_information', 'source', 'evidence']
+
+    class Meta:
+        model = CaseUpdate
+        fields = [
+            'id',
+            'person',
+            'update_date',
+            'new_information',
+            'source',
+            'evidence',
+            'verification',
+            'status_changes',
+            'new_status',
+            'website_updated',
+            'verified_by',
+            'verified_date',
+            'created_at',
+        ]
+        read_only_fields = ['created_at']
