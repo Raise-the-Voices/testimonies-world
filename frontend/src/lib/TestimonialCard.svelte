@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
+	import { isEmptyAfterSanitization, safeText, safeTextOr } from '$lib/testimonial-sanitize';
 
 	/**
 	 * One-testimonial card for the public list and the "My drafts"
@@ -11,6 +12,15 @@
 	 * ciphertext here. The `source_visible` boolean is the server-
 	 * computed mask: when `false` (the row's `source_visibility`
 	 * is `hidden`) the source descriptor is omitted entirely.
+	 *
+	 * Defensive text rendering (see lib/testimonial-sanitize.ts):
+	 * every text field is run through `safeText()` so a row containing
+	 * raw Git conflict markers (<<<<<<< / ======= / >>>>>>>) or other
+	 * corruption never renders that text verbatim. If the row is so
+	 * corrupted that EVERY display field is empty after sanitisation,
+	 * the card renders nothing at all — the list page hides it via
+	 * `{#if !isEmpty}`. This is the post-validation safety net for
+	 * rows that pre-date the client-side form validation gate.
 	 */
 
 	interface Props {
@@ -19,6 +29,22 @@
 	}
 
 	let { testimonial, showStatus = false }: Props = $props();
+
+	const safeTitle = $derived(safeText(testimonial.title));
+	const safeSummary = $derived(safeText(testimonial.summary));
+	const safeCountry = $derived(safeText(testimonial.country));
+	const safeRegion = $derived(safeText(testimonial.region));
+	const safeLocationDisplay = $derived(safeText(testimonial.public_location_display));
+	const safeSourceLabel = $derived(safeText(testimonial.public_source_label));
+
+	const isEmpty = $derived(
+		isEmptyAfterSanitization({
+			title: testimonial.title,
+			summary: testimonial.summary,
+			country: testimonial.country,
+			public_location_display: testimonial.public_location_display,
+		})
+	);
 
 	const publishedLabel = $derived(
 		testimonial.published_at
@@ -31,71 +57,73 @@
 	);
 </script>
 
-<a class="testimonial-card" href="{base}/testimonials/{testimonial.id}">
-	{#if testimonial.country || testimonial.region}
-		<p class="testimonial-card-location">
-			{#if testimonial.public_location_display}
-				{testimonial.public_location_display}
-			{:else if testimonial.country}
-				{testimonial.country}{#if testimonial.region}, {testimonial.region}{/if}
+{#if !isEmpty}
+	<a class="testimonial-card" href="{base}/testimonials/{testimonial.id}">
+		{#if safeLocationDisplay || safeCountry}
+			<p class="testimonial-card-location">
+				{#if safeLocationDisplay}
+					{safeLocationDisplay}
+				{:else if safeCountry}
+					{safeCountry}{#if safeRegion}, {safeRegion}{/if}
+				{/if}
+			</p>
+		{/if}
+
+		<h3 class="testimonial-card-title">
+			{#if safeTitle}
+				{safeTitle}
+			{:else}
+				{safeCountry || 'Untitled'} case
 			{/if}
-		</p>
-	{/if}
+		</h3>
 
-	<h3 class="testimonial-card-title">
-		{#if testimonial.title}
-			{testimonial.title}
-		{:else}
-			{testimonial.country || 'Untitled'} case
+		{#if safeSummary}
+			<p class="testimonial-card-summary">{safeSummary}</p>
 		{/if}
-	</h3>
 
-	{#if testimonial.summary}
-		<p class="testimonial-card-summary">{testimonial.summary}</p>
-	{/if}
+		<dl class="testimonial-card-meta">
+			{#if testimonial.source_visible && safeSourceLabel}
+				<dt>Source</dt>
+				<dd>{safeSourceLabel}</dd>
+			{/if}
+			{#if testimonial.incident_date}
+				<dt>Incident</dt>
+				<dd>
+					<time datetime={testimonial.incident_date ?? ''}>
+						{new Date(testimonial.incident_date ?? '').toLocaleDateString(undefined, {
+							year: 'numeric',
+							month: 'short',
+							day: 'numeric',
+						})}
+					</time>
+				</dd>
+			{/if}
+			{#if testimonial.verification_level}
+				<dt>Verification</dt>
+				<dd class="testimonial-card-verification">{(testimonial.verification_level ?? '').replace(/_/g, ' ').replace('level ', 'Level ')}</dd>
+			{/if}
+		</dl>
 
-	<dl class="testimonial-card-meta">
-		{#if testimonial.source_visible && testimonial.public_source_label}
-			<dt>Source</dt>
-			<dd>{testimonial.public_source_label}</dd>
+		{#if testimonial.tags && testimonial.tags.length > 0}
+			<ul class="testimonial-card-tags" aria-label="Tags">
+				{#each testimonial.tags as tag (tag.id)}
+					<li class="testimonial-card-tag">{safeText(tag.name)}</li>
+				{/each}
+			</ul>
 		{/if}
-		{#if testimonial.incident_date}
-			<dt>Incident</dt>
-			<dd>
-				<time datetime={testimonial.incident_date ?? ''}>
-					{new Date(testimonial.incident_date ?? '').toLocaleDateString(undefined, {
-						year: 'numeric',
-						month: 'short',
-						day: 'numeric',
-					})}
-				</time>
-			</dd>
-		{/if}
-		{#if testimonial.verification_level}
-			<dt>Verification</dt>
-			<dd class="testimonial-card-verification">{testimonial.verification_level.replace(/_/g, ' ').replace('level ', 'Level ')}</dd>
-		{/if}
-	</dl>
 
-	{#if testimonial.tags && testimonial.tags.length > 0}
-		<ul class="testimonial-card-tags" aria-label="Tags">
-			{#each testimonial.tags as tag (tag.id)}
-				<li class="testimonial-card-tag">{tag.name}</li>
-			{/each}
-		</ul>
-	{/if}
-
-	<footer class="testimonial-card-footer">
-		{#if publishedLabel}
-			<time datetime={testimonial.published_at ?? ''}>Published {publishedLabel}</time>
-		{/if}
-		{#if showStatus}
-			<span class="testimonial-card-status testimonial-card-status-{testimonial.status}">
-				{testimonial.status.replace('_', ' ')}
-			</span>
-		{/if}
-	</footer>
-</a>
+		<footer class="testimonial-card-footer">
+			{#if publishedLabel}
+				<time datetime={testimonial.published_at ?? ''}>Published {publishedLabel}</time>
+			{/if}
+			{#if showStatus}
+				<span class="testimonial-card-status testimonial-card-status-{testimonial.status}">
+					{testimonial.status.replace('_', ' ')}
+				</span>
+			{/if}
+		</footer>
+	</a>
+{/if}
 
 <style>
 	.testimonial-card {
