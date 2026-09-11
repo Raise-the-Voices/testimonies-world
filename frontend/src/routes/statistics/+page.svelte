@@ -302,9 +302,27 @@
 		.page-header {
 			flex-direction: column;
 			align-items: stretch;
+			/* Tighten the gap between the subtitle and the
+			   `.total-badge` (the "129 TOTAL CASES" card). Desktop
+			   gets a comfortable 1rem; on a narrow viewport the
+			   cumulative page-level gap (1.5rem) + this 1rem pushed
+			   the badge visibly far from the description, breaking
+			   the visual flow. 0.5rem lands it compactly below the
+			   paragraph and the `padding-bottom: 0` keeps the
+			   header's border-bottom hugging the metric card. */
+			gap: 0.5rem;
+			padding-bottom: 0;
 		}
 		.total-badge {
 			align-self: flex-start;
+		}
+		/* Same idea on the page level: 1.5rem between the header
+		   and the cards-grid is fine on a spacious viewport, but
+		   combined with the per-child gap above it doubled the
+		   perceived whitespace on mobile. 1rem is closer to the
+		   spacing tokens elsewhere on the app. */
+		.statistics-page {
+			gap: 1rem;
 		}
 	}
 </style>
