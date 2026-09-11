@@ -11,10 +11,14 @@ import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
 
 export async function load({ fetch, url }) {
 	const searchParams = url.searchParams;
-	const params: Record<string, string> = {};
-	// Sort newest published first as a sane default; the page UI lets
-	// users change ordering, but those changes are client-side only
-	// (no need to round-trip through SSR).
+	const params: Record<string, string> = { status: 'published' };
+	// ?status=published pins the SSR payload to published rows for
+	// EVERY viewer, including authenticated users — without this,
+	// the backend's `get_queryset` (which only filters for anon)
+	// would hand the list page a mixed bag of drafts + published +
+	// archived rows, all displayed under the "Published" tab. The
+	// "My drafts" / "Review queue" tabs are client-side and can
+	// fetch whatever they need.
 	const ordering = searchParams.get('ordering');
 	if (ordering) params.ordering = ordering;
 	const page = searchParams.get('page');

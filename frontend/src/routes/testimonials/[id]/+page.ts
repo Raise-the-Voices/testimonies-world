@@ -20,8 +20,15 @@ export async function load({ fetch, params }) {
 		if (!res.ok) {
 			return { testimonial: null, error: `HTTP ${res.status}` };
 		}
-		const data = (await res.json()) as { data?: TestimonialPublic };
-		return { testimonial: data.data ?? null, error: null };
+		// DRF returns the serializer data DIRECTLY (not wrapped in
+		// {data, status} the way the orval-generated TS type assumes).
+		// Reading `data.data` returns undefined on every real response
+		// and the page falls into the 'not available' branch. The fix
+		// is to treat the response body as the testimonial directly.
+		// (Same response-shape mismatch I fixed in the create form
+		// earlier — this file just never got the same treatment.)
+		const data = (await res.json()) as TestimonialPublic;
+		return { testimonial: data ?? null, error: null };
 	} catch (e) {
 		return {
 			testimonial: null,
