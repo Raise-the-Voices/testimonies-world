@@ -242,16 +242,21 @@
 	.header-container {
 		background: var(--color-primary);
 	}
-	/* Header grid: logo (left) + hamburger (right) on mobile; logo
-	   (left) + nav (right) on desktop. The nav uses `margin-left: auto`
-	   so it sits at the right end without forcing an artificial gap
-	   between logo and first link — the gap is owned by the parent
-	   flex container and the inner <ul>'s gap property. */
+	/* Header flex layout: two top-level children (logo on the left,
+	   action items on the right). `justify-content: space-between`
+	   pushes them to opposite edges so mobile shows the burger on
+	   the right margin and desktop shows the nav on the right
+	   margin — same DOM structure, no per-breakpoint reflow needed.
+
+	   `gap` was kept at 1rem for graceful collapse: on the narrowest
+	   viewports the gap between the logo and a single 38px hamburger
+	   is the only padding between them and the right edge anyway. */
 	.main-header {
 		min-height: 80px;
 		display: flex;
 		align-items: center;
-		gap: 1.5rem;
+		justify-content: space-between;
+		gap: 1rem;
 		padding-block: 0.75rem;
 		letter-spacing: 0.08rem;
 	}
@@ -259,7 +264,7 @@
 	@media (max-width: 767px) {
 		.main-header {
 			min-height: 60px;
-			gap: 0.75rem;
+			gap: 0.5rem;
 		}
 	}
 
@@ -343,37 +348,42 @@
 
 	/* === Desktop nav ===
 	   Visible >=768px. Hidden on mobile — the drawer takes over.
-	   `margin-left: auto` pushes the nav to the right end of the
-	   header without forcing an artificial gap between logo and
-	   first link; `flex: 0 1 auto` lets the nav shrink on narrow
-	   desktop widths so items wrap inside the <ul> instead of
-	   overflowing the header.
+	   The right edge of the header is owned by the parent's
+	   `justify-content: space-between` (see `.main-header`), so this
+	   block only needs to size itself, not position itself.
 
-	   At an advocate's max item count (~10 links + bell + avatar),
-	   the nav needs to fit on a single row from 1024px upward. The
-	   padding/font/gap below are sized for that — smaller than the
-	   previous 0.7rem / 0.85rem / 0.5rem values, which pushed items
-	   onto a second row at typical desktop widths and gave the
-	   "scattered" appearance. */
+	   `flex: 0 1 auto; min-width: 0` lets the nav shrink on narrow
+	   desktop widths instead of overflowing the header. Inside, the
+	   <ul> is `flex-wrap: nowrap` so 10+ items stay on one row at
+	   1024px+ (advocte's max item count), and `overflow-x: auto`
+	   is the graceful degradation for anything narrower — scroll
+	   instead of wrap onto a second line, per SYSTEM_RULES §4
+	   "responsive wrappers" (the same pattern used on /watchdog
+	   and /contacts tables). */
 	.main-navigation {
-		margin-left: auto;
 		flex: 0 1 auto;
 		min-width: 0;
+		max-width: 100%;
 	}
 	.main-navigation ul {
 		display: flex;
 		align-items: center;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 		justify-content: flex-end;
-		gap: 0.25rem;
+		gap: 0.2rem;
 		list-style: none;
 		margin: 0;
 		padding: 0;
+		overflow-x: auto;
+		/* Hide the scrollbar so the row reads cleanly until it
+		   actually overflows; visible only when needed. */
+		scrollbar-width: thin;
 	}
 	.main-navigation li {
 		display: flex;
 		align-items: center;
-		font-size: 0.88em;
+		font-size: 0.85em;
+		flex: 0 0 auto;
 	}
 	/* All nav items (text link, bell, avatar) sit on the same
 	   baseline via inline-flex + align-items: center. Compact
@@ -383,7 +393,7 @@
 	.main-navigation a {
 		display: inline-flex;
 		align-items: center;
-		padding: 0.55rem 0.65rem;
+		padding: 0.45rem 0.55rem;
 		font-weight: 700;
 		text-decoration: none;
 		text-transform: uppercase;
