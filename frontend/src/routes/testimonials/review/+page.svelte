@@ -22,11 +22,27 @@
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 
+	// One-shot sentinel: fetch the queue ONCE per mount (or per auth
+	// change), not on every $effect re-run. Without this, the
+	// `rows.length === 0` check below re-fired infinitely whenever
+	// the backend returned an empty list — driving the
+	// "Loading queue…" UI in an endless cycle. `didAttempt` flips
+	// to true the first time we kick off loadAll(); the refresh
+	// button below resets it.
+	let didAttempt = $state(false);
+
 	// Per-row action state. `busyId` ensures only one transition is in
 	// flight at a time and that the row is visually marked as
 	// "in-flight" so the reviewer doesn't double-click.
 	let busyId = $state<number | null>(null);
 	let actionError = $state<string | null>(null);
+	// Brief success banner after a workflow action (Approve, Reject,
+	// Publish, Archive, Submit). The bucket row movement is already
+	// a strong signal but a transient confirmation ensures the
+	// user gets explicit feedback that the click landed — addresses
+	// the same silent-failure UX as /testimonials/new.
+	let actionSuccess = $state<string | null>(null);
+	let actionSuccessTimer: ReturnType<typeof setTimeout> | null = null;
 
 	// The reject dialog (review_notes required per the backend
 	// transition rule) lives inline rather than as a separate modal —
@@ -38,14 +54,31 @@
 	async function loadAll() {
 		loading = true;
 		error = null;
+		// Hard ceiling on how long the loading state can be shown for
+		// a single fetch. Without this, a server-side hang (DB
+		// connection pool exhausted, broker timeout) leaves the UI
+		// stuck on 'Loading queue…' indefinitely. 10s is short
+		// enough to be obvious, long enough that a slow response
+		// from the API doesn't false-positive.
+		const TIMEOUT_MS = 10_000;
+		let timedOut = false;
+		const timer = setTimeout(() => {
+			timedOut = true;
+			error = 'The queue did not load in time. Please retry.';
+			loading = false;
+		}, TIMEOUT_MS);
 		try {
 			const res = await testimonialsList();
+			if (timedOut) return; // timer already settled state
+			clearTimeout(timer);
 			const body = (res as { data?: Paginated<TestimonialPublic> }).data;
 			rows = body?.results ?? [];
 		} catch (e) {
+			if (timedOut) return;
+			clearTimeout(timer);
 			error = e instanceof Error ? e.message : 'Failed to load the queue.';
 		} finally {
-			loading = false;
+			if (!timedOut) loading = false;
 		}
 	}
 
@@ -73,6 +106,22 @@
 					break;
 			}
 			await loadAll();
+			// Map the action verb to a human-readable label for the
+			// confirmation banner. The actionError stays cleared on
+			// success so the error banner renders only on failure.
+			const label = action === 'submit'
+				? 'Submitted for review'
+				: action === 'approve'
+					? 'Approved'
+					: action === 'publish'
+						? 'Published'
+						: 'Archived';
+			actionSuccess = `${label}.`;
+			if (actionSuccessTimer) clearTimeout(actionSuccessTimer);
+			actionSuccessTimer = setTimeout(() => {
+				actionSuccess = null;
+				actionSuccessTimer = null;
+			}, 4000);
 		} catch (e) {
 			actionError =
 				e instanceof Error
@@ -111,9 +160,20 @@
 
 	$effect(() => {
 		void canReview;
-		if (canReview && rows.length === 0 && !loading && !error) {
-			loadAll();
+		// Reset on auth change so a fresh login re-fetches (the user
+		// may now see rows they couldn't before, and a fresh review
+		// queue fetch reflects the new session's permissions).
+		if (!canReview) {
+			didAttempt = false;
+			return;
 		}
+		// The `didAttempt` sentinel is the infinite-loading fix —
+		// don't re-run loadAll() while rows is empty. Manual
+		// refresh below resets didAttempt to retry.
+		if (didAttempt) return;
+		if (loading) return;
+		didAttempt = true;
+		loadAll();
 	});
 
 	// Buckets for the reviewer. `draft` and `under_review` are the
@@ -177,6 +237,10 @@
 	{:else}
 		{#if actionError}
 			<div class="action-error" role="alert">{actionError}</div>
+		{/if}
+
+		{#if actionSuccess}
+			<div class="action-success" role="status">{actionSuccess}</div>
 		{/if}
 
 		<section class="bucket">
@@ -347,7 +411,15 @@
 		{/if}
 
 		<section class="refresh-row">
-			<button type="button" class="btn btn-secondary" onclick={loadAll} disabled={loading}>
+			<button
+				type="button"
+				class="btn btn-secondary"
+				onclick={() => {
+					didAttempt = false;
+					loadAll();
+				}}
+				disabled={loading}
+			>
 				Refresh
 			</button>
 		</section>
@@ -442,6 +514,14 @@
 		color: var(--color-danger);
 		background: #fef2f2;
 		text-align: left;
+	}
+	.action-success {
+		padding: 0.85rem 1rem;
+		border: 1px solid #86efac;
+		border-left: 3px solid #16a34a;
+		border-radius: var(--radius-card);
+		color: #166534;
+		background: #f0fdf4;
 	}
 	.error-state {
 		border-left: 3px solid var(--color-danger);

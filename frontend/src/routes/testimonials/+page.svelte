@@ -39,6 +39,15 @@
 	let mineLoading = $state(false);
 	let mineError = $state<string | null>(null);
 
+	// `mineAttempted` / `reviewAttempted` are one-shot sentinels that
+	// gate the lazy fetch. The earlier pattern used `$effect` with
+	// `length === 0` as the trigger, which re-fired infinitely when the
+	// backend returned an empty list — keeping the loading state on
+	// forever. The sentinel flips to true once a fetch has been kicked
+	// off for the current auth session.
+	let mineAttempted = $state(false);
+	let reviewAttempted = $state(false);
+
 	async function loadMine() {
 		if (!currentUser.authenticated) return;
 		mineLoading = true;
@@ -85,12 +94,39 @@
 	}
 
 	$effect(() => {
+		// Re-fires when auth changes OR tab changes; we only want the
+		// fetch to happen on a real signal (tab activation, not
+		// reactive emptiness), so we read the values but use the
+		// per-tab attempted sentinel as the gate.
 		void currentUser.authenticated;
 		void activeTab;
-		if (activeTab === 'mine' && showMineTab && mineList.length === 0 && !mineLoading && !mineError) {
+
+		// Reset on auth changes so a fresh login refetches. The
+		// 'activeTab' dependency already triggers a re-run when the
+		// user clicks a tab, so resetting only on auth flips is the
+		// minimum needed.
+		if (!currentUser.authenticated) {
+			mineAttempted = false;
+			reviewAttempted = false;
+			return;
+		}
+
+		if (
+			activeTab === 'mine' &&
+			showMineTab &&
+			!mineAttempted &&
+			!mineLoading
+		) {
+			mineAttempted = true;
 			loadMine();
 		}
-		if (activeTab === 'review' && showReviewTab && reviewList.length === 0 && !reviewLoading && !reviewError) {
+		if (
+			activeTab === 'review' &&
+			showReviewTab &&
+			!reviewAttempted &&
+			!reviewLoading
+		) {
+			reviewAttempted = true;
 			loadReview();
 		}
 	});
