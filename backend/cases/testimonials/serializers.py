@@ -13,6 +13,7 @@ Decrypted plaintext only flows through dedicated endpoints behind
 `CanViewEncryptedSource` — see views.py.
 """
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from cases.models import Testimonial, TestimonialTag
@@ -74,6 +75,7 @@ class TestimonialPublicSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields  # public reads — never write
 
+    @extend_schema_field(serializers.BooleanField())
     def get_source_visible(self, obj):
         """True iff the public surface shows any source descriptor.
 
