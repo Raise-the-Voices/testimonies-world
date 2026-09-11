@@ -36,6 +36,13 @@
 	// "in-flight" so the reviewer doesn't double-click.
 	let busyId = $state<number | null>(null);
 	let actionError = $state<string | null>(null);
+	// Brief success banner after a workflow action (Approve, Reject,
+	// Publish, Archive, Submit). The bucket row movement is already
+	// a strong signal but a transient confirmation ensures the
+	// user gets explicit feedback that the click landed — addresses
+	// the same silent-failure UX as /testimonials/new.
+	let actionSuccess = $state<string | null>(null);
+	let actionSuccessTimer: ReturnType<typeof setTimeout> | null = null;
 
 	// The reject dialog (review_notes required per the backend
 	// transition rule) lives inline rather than as a separate modal —
@@ -99,6 +106,22 @@
 					break;
 			}
 			await loadAll();
+			// Map the action verb to a human-readable label for the
+			// confirmation banner. The actionError stays cleared on
+			// success so the error banner renders only on failure.
+			const label = action === 'submit'
+				? 'Submitted for review'
+				: action === 'approve'
+					? 'Approved'
+					: action === 'publish'
+						? 'Published'
+						: 'Archived';
+			actionSuccess = `${label}.`;
+			if (actionSuccessTimer) clearTimeout(actionSuccessTimer);
+			actionSuccessTimer = setTimeout(() => {
+				actionSuccess = null;
+				actionSuccessTimer = null;
+			}, 4000);
 		} catch (e) {
 			actionError =
 				e instanceof Error
@@ -214,6 +237,10 @@
 	{:else}
 		{#if actionError}
 			<div class="action-error" role="alert">{actionError}</div>
+		{/if}
+
+		{#if actionSuccess}
+			<div class="action-success" role="status">{actionSuccess}</div>
 		{/if}
 
 		<section class="bucket">
@@ -487,6 +514,14 @@
 		color: var(--color-danger);
 		background: #fef2f2;
 		text-align: left;
+	}
+	.action-success {
+		padding: 0.85rem 1rem;
+		border: 1px solid #86efac;
+		border-left: 3px solid #16a34a;
+		border-radius: var(--radius-card);
+		color: #166534;
+		background: #f0fdf4;
 	}
 	.error-state {
 		border-left: 3px solid var(--color-danger);
