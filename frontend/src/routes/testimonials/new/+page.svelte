@@ -46,16 +46,98 @@
 	let saving = $state(false);
 	let errors = $state<Record<string, string>>({});
 	let formError = $state('');
+	/* Explicit success feedback for the 'Save as draft' path.
+	   Navigation is the success indicator on 'Submit for review',
+	   so this banner only fires when the user stays on the page. */
+	let formSuccess = $state('');
 	let createdId = $state<number | null>(null);
+
+	/* `validate()` — runs locally before any network call. The
+	   backend enforces the same rules server-side too, but
+	   filtering at the client keeps the user from round-tripping
+	   for obvious errors and prevents single-character "f" or
+	   "m" gibberish that should never reach the DB.
+
+	   Returns a per-field error map. Empty object = valid. */
+	function validate(): Record<string, string> {
+		const e: Record<string, string> = {};
+		const t = title.trim();
+		const c = country.trim();
+		const s = summary.trim();
+		const n = narrative.trim();
+		const src = publicSourceLabel.trim();
+
+		if (!t) {
+			e.title = 'Title is required.';
+		} else if (t.length < 5) {
+			e.title = 'Title needs at least 5 characters — a single letter or a placeholder is not enough context.';
+		}
+		if (!c) {
+			e.country = 'Country is required.';
+		} else if (c.length < 2) {
+			e.country = 'Country needs at least 2 characters.';
+		}
+		if (!s) {
+			e.summary = 'Summary is required for readers.';
+		} else if (s.length < 20) {
+			e.summary = 'Summary should be at least 20 characters — a sentence, not a placeholder.';
+		} else if (/^[\W_]+$/.test(s) || /^(.)\1{4,}$/.test(s)) {
+			// Reject strings of punctuation / whitespace or single-
+			// character spam like 'aaaaa' or '-----'.
+			e.summary = 'Summary looks like gibberish — please write a real description.';
+		}
+		if (!n) {
+			e.narrative = 'Narrative is required.';
+		} else if (n.length < 50) {
+			e.narrative = 'Narrative should be at least 50 characters — even a short testimony needs a paragraph.';
+		} else if (/^[\W_]+$/.test(n) || /^(.)\1{4,}$/.test(n)) {
+			e.narrative = 'Narrative looks like gibberish.';
+		}
+		if (sourceVisibility !== 'hidden' && src.length < 3) {
+			e.public_source_label =
+				'Public source label is required when source is not hidden — describe the role (e.g. "Family member", "Local witness").';
+		}
+
+		return e;
+	}
 
 	// Local submit lifecycle: create (always → status=draft) →
 	// optional submit (status=under_review) → final redirect.
 	async function save(submitAfter: boolean) {
+		// Re-entrancy guard — if a fast double-click beats the
+		// disabled={saving} DOM attribute, bail before any state
+		// changes so we don't kick off two concurrent fetches.
 		if (saving) return;
+
+		// Client-side validation gate — never enter the network
+		// path with placeholder or missing values.
+		const v = validate();
+		if (Object.keys(v).length > 0) {
+			errors = v;
+			formError = 'Some fields need attention — see below.';
+			// Pull the user's eye to the first invalid field.
+			if (typeof document !== 'undefined') {
+				const firstKey = Object.keys(v)[0];
+				const el = document.getElementById(firstKey);
+				el?.focus();
+				el?.scrollIntoView({ block: 'center' });
+			}
+			return;
+		}
+
 		saving = true;
 		formError = '';
+		formSuccess = '';
 		errors = {};
 
+		try {
+			return await saveImpl(submitAfter);
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function saveImpl(submitAfter: boolean): Promise<void> {
 		const body: TestimonialWriteRequest = {
 			title: title.trim(),
 			country: country.trim(),
@@ -85,35 +167,92 @@
 		};
 		bodyWithExtras.incident_date_precision = incidentDatePrecision;
 
+		// Outer try/finally: `saving` resets on every exit so the
+		// button never sticks in 'Submitting…' state.
 		let id: number | null = null;
 		try {
 			const res = await testimonialsCreate(body);
-			const data = (res as { data?: { id?: number } }).data;
-			id = data?.id ?? null;
+
+			// Response-shape fix: DRF's ModelViewSet.create returns the
+			// serializer data directly (NOT wrapped in {data, status}),
+			// even though orval's generated TypeScript type assumes
+			// the wrapper. The earlier code read `res.data.id` and
+			// fell through to the 'did not include id' branch on
+			// every successful create — surfacing 'broken cards' and
+			// a frozen form. Read the shape defensively so both the
+			// wrapped (orval spec) and unwrapped (DRF default) work.
+			const record = res as unknown as
+				| { id?: number; data?: { id?: number } }
+				| null
+				| undefined;
+			const unwrapped = record && typeof record === 'object'
+				? (record as Record<string, unknown>)
+				: {};
+			const candidate = unwrapped.data ?? unwrapped;
+			const candidateId =
+				typeof candidate === 'object' && candidate !== null
+					? (candidate as { id?: unknown }).id
+					: undefined;
+			id = typeof candidateId === 'number' ? candidateId : null;
+
+			if (id === null || !Number.isFinite(id)) {
+				throw new Error(
+					'The server accepted the testimonial but its response was missing a valid id. ' +
+						'Please retry — if the problem persists, contact support via the audit log.'
+				);
+			}
 			createdId = id;
 		} catch (e: unknown) {
 			formError =
 				e instanceof Error ? e.message : 'Could not create the testimonial.';
-			saving = false;
-			return;
+			return; // finally clears saving
 		}
 
-		if (submitAfter && id !== null) {
+		if (submitAfter) {
 			try {
 				await testimonialsSubmitCreate(id, {});
 			} catch (e: unknown) {
+				// Row was created but the workflow transition failed.
+				// Tell the user both halves of the result so they don't
+				// try to create the same row again.
 				formError =
 					e instanceof Error
-						? 'Saved as draft, but submission failed: ' + e.message
-						: 'Saved as draft, but the submit call failed.';
-				saving = false;
-				return;
+						? `Saved as draft, but submission failed: ${e.message}. ` +
+							'You can retry the submit from the testimonial page.'
+						: 'Saved as draft, but the submit step failed. ' +
+							'You can retry from the testimonial page.';
+				return; // finally clears saving
 			}
 		}
 
-		saving = false;
-		if (id !== null) {
+		// Success. Two paths:
+		//   - submitAfter: navigate to the detail page (the page
+		//     itself IS the success confirmation).
+		//   - !submitAfter (save draft): clear the form and show an
+		//     explicit success banner with a link to the new draft,
+		//     so the user gets unambiguous feedback that the click
+		//     landed (no more 'nothing happens' UX).
+		if (submitAfter) {
 			await goto(`${base}/testimonials/${id}`);
+		} else {
+			formSuccess =
+				'Draft saved. You can keep editing below, or jump to the new draft’s page.';
+			// Reset form so the user can start a new entry without
+			// manually clearing fields.
+			title = '';
+			country = '';
+			region = '';
+			incidentDate = '';
+			incidentDatePrecision = 'unknown';
+			summary = '';
+			narrative = '';
+			outcome = '';
+			verificationLevel = '';
+			publicSourceLabel = '';
+			sourceVisibility = 'hidden';
+			locationVisibility = 'public_region';
+			familyProtected = true;
+			contactProtected = true;
 		}
 	}
 </script>
@@ -151,26 +290,36 @@
 				<legend>Identity</legend>
 
 				<div class="form-row">
-					<label for="title">Title</label>
+					<label for="title">Title <span class="form-required" aria-hidden="true">*</span></label>
 					<input
 						id="title"
 						type="text"
 						maxlength="255"
 						bind:value={title}
 						placeholder="Detention in Erbil, March 2024"
+						aria-invalid={errors.title ? 'true' : undefined}
+						aria-describedby={errors.title ? 'title-error' : undefined}
 					/>
+					{#if errors.title}
+						<p id="title-error" class="form-field-error">{errors.title}</p>
+					{/if}
 				</div>
 
 				<div class="form-row form-row-grid">
 					<div>
-						<label for="country">Country</label>
+						<label for="country">Country <span class="form-required" aria-hidden="true">*</span></label>
 						<input
 							id="country"
 							type="text"
 							maxlength="100"
 							bind:value={country}
 							placeholder="Iraq"
+							aria-invalid={errors.country ? 'true' : undefined}
+							aria-describedby={errors.country ? 'country-error' : undefined}
 						/>
+						{#if errors.country}
+							<p id="country-error" class="form-field-error">{errors.country}</p>
+						{/if}
 					</div>
 					<div>
 						<label for="region">Region / province</label>
@@ -215,23 +364,33 @@
 				<legend>Narrative</legend>
 
 				<div class="form-row">
-					<label for="summary">Summary (1–2 paragraphs)</label>
+					<label for="summary">Summary (1–2 paragraphs) <span class="form-required" aria-hidden="true">*</span></label>
 					<textarea
 						id="summary"
 						rows="3"
 						maxlength="2000"
 						bind:value={summary}
+						aria-invalid={errors.summary ? 'true' : undefined}
+						aria-describedby={errors.summary ? 'summary-error' : undefined}
 					></textarea>
+					{#if errors.summary}
+						<p id="summary-error" class="form-field-error">{errors.summary}</p>
+					{/if}
 				</div>
 
 				<div class="form-row">
-					<label for="narrative">Narrative (long form)</label>
+					<label for="narrative">Narrative (long form) <span class="form-required" aria-hidden="true">*</span></label>
 					<textarea
 						id="narrative"
 						rows="8"
 						maxlength="20000"
 						bind:value={narrative}
+						aria-invalid={errors.narrative ? 'true' : undefined}
+						aria-describedby={errors.narrative ? 'narrative-error' : undefined}
 					></textarea>
+					{#if errors.narrative}
+						<p id="narrative-error" class="form-field-error">{errors.narrative}</p>
+					{/if}
 				</div>
 
 				<div class="form-row">
@@ -321,6 +480,17 @@
 					Never display contact information publicly
 				</label>
 			</fieldset>
+
+			{#if formSuccess}
+				<div class="form-success" role="status">
+					<span>{formSuccess}</span>
+					{#if createdId}
+						<a class="form-success-link" href="{base}/testimonials/{createdId}">
+							View draft →
+						</a>
+					{/if}
+				</div>
+			{/if}
 
 			{#if formError}
 				<div class="form-error" role="alert">{formError}</div>
@@ -475,6 +645,46 @@
 		border-radius: var(--radius-card);
 		color: var(--color-danger);
 		background: #fef2f2;
+	}
+
+	/* Success banner — explicit feedback when 'Save as draft'
+	   succeeds (the submission path's success is the goto itself).
+	   Uses the same emerald-700 palette as TestimonialCard's
+	   'published' status pill for visual consistency. */
+	.form-success {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+		padding: 0.85rem 1rem;
+		border: 1px solid #86efac;
+		border-left: 3px solid #16a34a;
+		border-radius: var(--radius-card);
+		color: #166534;
+		background: #f0fdf4;
+	}
+	.form-success-link {
+		color: #166534;
+		font-weight: 700;
+		text-decoration: underline;
+	}
+
+	/* Required-field indicator + inline field-error text. The red
+	   underline on aria-invalid="true" mirrors the form-field-error
+	   message below so screen-reader users and visual users get
+	   the same signal at the same input. */
+	.form-required {
+		color: var(--color-danger);
+		margin-left: 0.15rem;
+	}
+	.form-field-error {
+		margin: 0;
+		font-size: 0.82rem;
+		color: var(--color-danger);
+	}
+	input[aria-invalid='true'],
+	textarea[aria-invalid='true'] {
+		border-color: var(--color-danger);
 	}
 
 	.form-actions {
