@@ -10,6 +10,10 @@ from drf_spectacular.views import (
 )
 from rest_framework.routers import DefaultRouter
 
+from cases.testimonials.views import (
+    TestimonialTagViewSet,
+    TestimonialViewSet,
+)
 from cases.views import (
     AuditLogViewSet,
     CaseCategoryViewSet,
@@ -45,6 +49,12 @@ router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
 # /api/dashboard/ — role-scoped aggregator for the SvelteKit
 # /dashboard page. See cases/dashboard.py for the role scoping rules.
 router.register(r'dashboard', DashboardViewSet, basename='dashboard')
+# /api/testimonials/ — publication-facing wrappers around cases.
+# Transition actions (/submit/, /approve/, /reject/, /publish/,
+# /archive/) and the encrypted-source endpoints are detailed in
+# cases/testimonials/views.py.
+router.register(r'testimonials', TestimonialViewSet, basename='testimonial')
+router.register(r'testimonial-tags', TestimonialTagViewSet, basename='testimonial-tag')
 
 
 def session_info(request):
