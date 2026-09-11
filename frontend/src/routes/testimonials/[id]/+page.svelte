@@ -1,12 +1,35 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { user } from '$lib/session';
+	import { safeText, isEmptyAfterSanitization } from '$lib/testimonial-sanitize';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let currentUser = $derived(data.user ?? $user);
 
+	// Sanitise every text field at the boundary. A row whose
+	// `title` is literal git conflict text would otherwise render
+	// that text on the public detail page; safeText() strips
+	// conflict markers and returns '' if the field is wholly corrupt.
+	// The page then shows a clear 'not available' panel instead of
+	// misleading content.
 	const t = $derived(data.testimonial);
+	const safeTitle = $derived(safeText(t?.title));
+	const safeSummary = $derived(safeText(t?.summary));
+	const safeNarrative = $derived(safeText(t?.narrative));
+	const safeOutcome = $derived(safeText(t?.outcome));
+	const safeCountry = $derived(safeText(t?.country));
+	const safeRegion = $derived(safeText(t?.region));
+	const safeLocationDisplay = $derived(safeText(t?.public_location_display));
+	const safeSourceLabel = $derived(safeText(t?.public_source_label));
+	const isRowCorrupt = $derived(
+		!!t && isEmptyAfterSanitization({
+			title: t.title,
+			summary: t.summary,
+			country: t.country,
+			public_location_display: t.public_location_display,
+		})
+	);
 
 	function formatDate(iso: string | null | undefined): string {
 		if (!iso) return '';
@@ -19,9 +42,9 @@
 </script>
 
 <svelte:head>
-	{#if t}
-		<title>{t.title || 'Testimonial'} — Testimonies.world</title>
-		<meta name="description" content={t.summary || 'A documented testimonial.'} />
+	{#if t && !isRowCorrupt}
+		<title>{safeTitle || 'Testimonial'} — Testimonies.world</title>
+		<meta name="description" content={safeSummary || 'A documented testimonial.'} />
 	{:else}
 		<title>Testimonial — Testimonies.world</title>
 	{/if}
@@ -30,21 +53,27 @@
 <div class="testimonial-detail">
 	<a href="{base}/testimonials" class="back-link">← Back to testimonials</a>
 
-	{#if data.error || !t}
+	{#if data.error || !t || isRowCorrupt}
 		<div class="error-state" role="alert">
 			<h1>Testimonial not available</h1>
-			<p>{data.error ?? 'This testimonial could not be loaded.'}</p>
+			<p>
+				{data.error
+					? data.error
+					: isRowCorrupt
+						? 'This testimonial record appears to be corrupted or empty. Please contact the audit team to investigate.'
+						: 'This testimonial could not be loaded.'}
+			</p>
 			<a class="btn btn-secondary" href="{base}/testimonials">Return to list</a>
 		</div>
 	{:else}
 		<article class="testimonial-card-detail">
 			<header class="testimonial-card-header">
-				{#if t.country || t.public_location_display}
+				{#if safeLocationDisplay || safeCountry}
 					<p class="testimonial-card-location">
-						{t.public_location_display || t.country}{#if t.country && t.region && t.region !== t.public_location_display}, {t.region}{/if}
+						{safeLocationDisplay || safeCountry}{#if safeCountry && safeRegion && safeRegion !== safeLocationDisplay}, {safeRegion}{/if}
 					</p>
 				{/if}
-				<h1>{t.title || 'Untitled testimonial'}</h1>
+				<h1>{safeTitle || 'Untitled testimonial'}</h1>
 				{#if t.incident_date}
 					<p class="testimonial-card-date">
 						Incident on
@@ -53,35 +82,35 @@
 				{/if}
 			</header>
 
-			{#if t.summary}
+			{#if safeSummary}
 				<section class="testimonial-section">
 					<h2>Summary</h2>
-					<p class="testimonial-summary">{t.summary}</p>
+					<p class="testimonial-summary">{safeSummary}</p>
 				</section>
 			{/if}
 
-			{#if t.narrative}
+			{#if safeNarrative}
 				<section class="testimonial-section">
 					<h2>Narrative</h2>
-					<p class="testimonial-narrative">{t.narrative}</p>
+					<p class="testimonial-narrative">{safeNarrative}</p>
 				</section>
 			{/if}
 
-			{#if t.outcome}
+			{#if safeOutcome}
 				<section class="testimonial-section">
 					<h2>Outcome</h2>
-					<p class="testimonial-outcome">{t.outcome}</p>
+					<p class="testimonial-outcome">{safeOutcome}</p>
 				</section>
 			{/if}
 
 			<dl class="testimonial-meta">
-				{#if t.source_visible && t.public_source_label}
+				{#if t.source_visible && safeSourceLabel}
 					<dt>Source</dt>
-					<dd>{t.public_source_label}</dd>
+					<dd>{safeSourceLabel}</dd>
 				{/if}
 				{#if t.verification_level}
 					<dt>Verification</dt>
-					<dd class="capitalize">{t.verification_level.replace(/level_/g, '').replace(/_/g, ' ')}</dd>
+					<dd class="capitalize">{(t.verification_level ?? '').replace(/level_/g, '').replace(/_/g, ' ')}</dd>
 				{/if}
 				{#if t.published_at}
 					<dt>Published</dt>
@@ -96,7 +125,7 @@
 					<dd>
 						<ul class="testimonial-tags-list">
 							{#each t.tags as tag (tag.id)}
-								<li class="testimonial-tag">{tag.name}</li>
+								<li class="testimonial-tag">{safeText(tag.name)}</li>
 							{/each}
 						</ul>
 					</dd>
