@@ -54,8 +54,15 @@
 		mineError = null;
 		try {
 			const res = await testimonialsList();
-			const body = (res as { data?: Paginated<TestimonialPublic> }).data;
-			mineList = body?.results ?? [];
+			// Response-shape note: orval's type says `testimonialsList()`
+			// returns {data, status, headers}, but the actual DRF
+			// response body IS the paginated list directly. Reading
+			// `res.data` always yields `undefined` on a real response
+			// and the "My drafts" tab silently shows empty. Treat the
+			// response as the paginated body — same pattern I applied
+			// in the create form (9b11b51) and detail page (e3c8527).
+			const body = (res as unknown as Paginated<TestimonialPublic>).results ?? [];
+			mineList = body;
 			// Volunteers only see their own drafts in `mine`; an
 			// Advocate's `mine` would overlap with the review queue
 			// since they see everything anyway, so for staff we just
@@ -84,8 +91,10 @@
 		reviewError = null;
 		try {
 			const res = await testimonialsList();
-			const body = (res as { data?: Paginated<TestimonialPublic> }).data;
-			reviewList = body?.results ?? [];
+			// Response-shape note: same orval-vs-DRF mismatch as
+			// loadMine — read the response as the paginated body.
+			const body = (res as unknown as Paginated<TestimonialPublic>).results ?? [];
+			reviewList = body;
 		} catch (e) {
 			reviewError = e instanceof Error ? e.message : 'Failed to load review queue.';
 		} finally {
