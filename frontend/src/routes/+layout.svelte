@@ -262,7 +262,9 @@
 		justify-content: space-between;
 		gap: 1rem;
 		padding-block: 0.75rem;
-		letter-spacing: 0.08rem;
+		/* letter-spacing was 0.08rem — too wide for 11 nav items at
+		   the same width, forced items into overflow-x scroll. Removed
+		   so 11 items fit on a single row at typical desktop widths. */
 	}
 	/* Tighten the header height on phones — saves vertical real estate. */
 	@media (max-width: 767px) {
@@ -374,7 +376,12 @@
 		align-items: center;
 		flex-wrap: nowrap;
 		justify-content: flex-end;
-		gap: 0.2rem;
+		/* Tighter gap + smaller font so 11 nav items (Dashboard /
+		   Cases / Statistics / Submit / Reports / Watchdog /
+		   Casework / Contacts / Review queue / Bell / Avatar) stay
+		   visible on a single row at common desktop widths. Items
+		   still overflow-scroll on truly narrow viewports. */
+		gap: 0.1rem;
 		list-style: none;
 		margin: 0;
 		padding: 0;
@@ -386,18 +393,19 @@
 	.main-navigation li {
 		display: flex;
 		align-items: center;
-		font-size: 0.85em;
+		font-size: 0.72em;
 		flex: 0 0 auto;
 	}
 	/* All nav items (text link, bell, avatar) sit on the same
 	   baseline via inline-flex + align-items: center. Compact
-	   padding keeps 10+ items on a single row at 1024px+, but the
-	   vertical padding is still generous enough for a 44px+ tap
-	   target. */
+	   padding keeps 11+ items on a single row at common desktop
+	   widths (Down from prior 0.45rem 0.55rem + 0.85em — still
+	   meets the 44px tap-target height on mobile where the
+	   hamburger owns the layout). */
 	.main-navigation a {
 		display: inline-flex;
 		align-items: center;
-		padding: 0.45rem 0.55rem;
+		padding: 0.3rem 0.4rem;
 		font-weight: 700;
 		text-decoration: none;
 		text-transform: uppercase;
