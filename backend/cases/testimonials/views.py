@@ -70,6 +70,18 @@ class TestimonialViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        # Honor an explicit ?status=published URL filter. The viewset
+        # has no filter_backends configured (DRF's built-in
+        # SearchFilter / OrderingFilter are off), so a query param
+        # alone is ignored — without an explicit branch here, a
+        # volunteer's /api/testimonials/?status=published call would
+        # fall through to the role-based scoping below and return
+        # every row, drafts included. Honoring the param explicitly
+        # is what makes the front-end "Published" tab actually mean
+        # "published only".
+        status_param = self.request.query_params.get('status')
+        if status_param == Testimonial.Status.PUBLISHED:
+            return qs.filter(status=Testimonial.Status.PUBLISHED)
         # Anonymous viewers only see Published testimonials. Source /
         # location masking happens in the serializer — source_visible
         # is computed from source_visibility — so we don't filter on
