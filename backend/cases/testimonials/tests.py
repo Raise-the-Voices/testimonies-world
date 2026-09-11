@@ -238,6 +238,7 @@ class EncryptedSourceEndpointTests(BaseTestCase):
 class PublicPayloadMaskingTests(BaseTestCase):
     def setUp(self):
         super().setUp()
+        self.volunteer = make_user('vol-pm', in_group='Volunteer')
         self.t = Testimonial.objects.create(
             title='x', slug='public-1',
             language='en', country='Iraq', region='Erbil',
@@ -273,6 +274,50 @@ class PublicPayloadMaskingTests(BaseTestCase):
         self.assertEqual(res.status_code, 200)
         statuses = [r['status'] for r in res.json()['results']]
         self.assertEqual(statuses, ['published'])
+
+    def test_volunteer_does_not_see_other_users_drafts(self):
+        # A second volunteer's "My drafts" tab must not leak the
+        # first volunteer's in-flight rows. The get_queryset filter
+        # scopes non-staff authenticated users to their own rows plus
+        # every published row.
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        other_volunteer, _ = User.objects.get_or_create(
+            username='vol2',
+            defaults={'is_active': True, 'email': 'vol2@test.local'},
+        )
+        from django.contrib.auth.models import Group
+        try:
+            volunteer_group = Group.objects.get(name='Volunteer')
+            other_volunteer.groups.add(volunteer_group)
+        except Group.DoesNotExist:
+            pass
+
+        # Create a draft authored by the OTHER volunteer.
+        Testimonial.objects.create(
+            title='other-vol-draft', slug='other-1',
+            language='en', country='Iraq',
+            status=Testimonial.Status.DRAFT,
+            summary='', narrative='', outcome='',
+            region='',
+            created_by=other_volunteer,
+        )
+        # `self.t` (created in setUp) is published, so it must still
+        # be visible — published rows are public to every viewer.
+
+        self.client.force_login(self.volunteer)
+        res = self.client.get('/api/testimonials/')
+        self.assertEqual(res.status_code, 200)
+        ids = [r['id'] for r in res.json()['results']]
+        # The published row from setUp is visible; the other
+        # volunteer's draft is not.
+        self.assertIn(self.t.id, ids)
+        for r in res.json()['results']:
+            if r['status'] == 'draft':
+                self.fail(
+                    f"Volunteer can see another volunteer's draft "
+                    f"(id={r['id']!r}, title={r.get('title')!r})"
+                )
 
 
 # Mass-assignment guard: volunteer cannot mark source as public_named.
