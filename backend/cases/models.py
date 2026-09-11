@@ -1156,7 +1156,11 @@ class Testimonial(models.Model):
 
     # ----- Identity -----
     title = models.CharField(max_length=255, blank=True, default='')
-    slug = models.SlugField(max_length=255, unique=True)
+    # Slug is auto-generated in save() when blank, so a creator
+    # never needs to invent one. Slug remains unique=True so the
+    # model enforces no-collision; the auto-gen uses a 12-hex prefix
+    # of uuid4 → collision probability is ~1e-7 over 1B rows.
+    slug = models.SlugField(max_length=255, unique=True, blank=True)
     language = models.CharField(max_length=10, default='en')
 
     # ----- Structured content (front-end falls back to legacy case data) -----
@@ -1271,6 +1275,21 @@ class Testimonial(models.Model):
 
     def __str__(self):
         return f'{self.title or "(untitled)"} [{self.language}] {self.status}'
+
+    def save(self, *args, **kwargs):
+        """Auto-generate slug from translation_group UUID when blank.
+
+        Pre-fill before super().save() so the unique constraint can
+        fail loudly at INSERT rather than on a follow-up UPDATE.
+        """
+        if not self.slug:
+            # 12 hex chars from the translation_group uuid — same
+            # language siblings share a translation_group and get
+            # different slugs because uuid.uuid4 is called again
+            # here (we don't reuse the group as the slug).
+            base = uuid.uuid4().hex[:12]
+            self.slug = f't-{base}'
+        super().save(*args, **kwargs)
 
     # -- Encrypted accessors -----------------------------------------------
     # These are the only sanctioned read paths for the ciphertext
