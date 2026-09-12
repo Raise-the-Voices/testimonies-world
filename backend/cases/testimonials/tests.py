@@ -588,6 +588,92 @@ class TestimonialStatusFilterTests(BaseTestCase):
         for s in statuses:
             self.assertEqual(s, 'published')
 
+    def test_volunteer_status_draft_returns_only_own_drafts(self):
+        """`?status=draft` for a Volunteer must narrow to that
+        volunteer's own drafts. Without the explicit filter, the
+        queryset would fall through to the role-based union
+        (`created_by=user | status=PUBLISHED`) and the volunteer
+        would see every published row mixed in — which is exactly
+        the "My drafts" tab loading the wrong rows bug the front
+        end was reporting.
+        """
+        # Stage: own draft, other-volunteer draft, own under_review,
+        # published-by-someone-else. Only the first should appear.
+        own_draft = self._make_row(
+            status_value=Testimonial.Status.DRAFT,
+            created_by=self.author,
+        )
+        self._make_row(
+            status_value=Testimonial.Status.DRAFT,
+            created_by=self.other_volunteer,
+        )
+        self._make_row(
+            status_value=Testimonial.Status.UNDER_REVIEW,
+            created_by=self.author,
+        )
+        self._make_row(
+            status_value=Testimonial.Status.PUBLISHED,
+            created_by=self.other_volunteer,
+        )
+
+        self.client.force_login(self.author)
+        res = self.client.get('/api/testimonials/?status=draft')
+        self.assertEqual(res.status_code, 200)
+        ids = [r['id'] for r in res.json()['results']]
+        self.assertEqual(ids, [own_draft.id])
+        for r in res.json()['results']:
+            self.assertEqual(r['status'], 'draft')
+
+    def test_advocate_status_under_review_narrows_to_under_review(self):
+        """`?status=under_review` for an Advocate narrows to that
+        status. Without the explicit filter, an Advocate (who
+        normally sees everything) would get the full queryset and
+        the front-end "Review queue" tab would have to bucket-filter
+        client-side — slow and error-prone.
+        """
+        pending = self._make_row(status_value=Testimonial.Status.UNDER_REVIEW)
+        self._make_row(status_value=Testimonial.Status.DRAFT)
+        self._make_row(status_value=Testimonial.Status.APPROVED)
+        self._make_row(status_value=Testimonial.Status.PUBLISHED)
+
+        self.client.force_login(self.advocate)
+        res = self.client.get('/api/testimonials/?status=under_review')
+        self.assertEqual(res.status_code, 200)
+        ids = [r['id'] for r in res.json()['results']]
+        self.assertEqual(ids, [pending.id])
+        for r in res.json()['results']:
+            self.assertEqual(r['status'], 'under_review')
+
+    def test_anonymous_status_draft_does_not_leak(self):
+        """`?status=draft` for an anonymous client must NOT return
+        drafts — that's private information. The backend should
+        silently fall back to the PUBLISHED-only branch rather
+        than 500 or leak rows.
+        """
+        self._make_row(status_value=Testimonial.Status.DRAFT)
+        self._make_row(status_value=Testimonial.Status.PUBLISHED)
+
+        # Anonymous client — no force_login.
+        res = self.client.get('/api/testimonials/?status=draft')
+        self.assertEqual(res.status_code, 200)
+        statuses = [r['status'] for r in res.json()['results']]
+        for s in statuses:
+            self.assertEqual(s, 'published')
+
+    def test_unknown_status_param_falls_through_safely(self):
+        """Garbage status values (?status=banana) must not 500 or
+        return every row. They fall through to the role-based
+        default scoping (anonymous → PUBLISHED only).
+        """
+        self._make_row(status_value=Testimonial.Status.DRAFT)
+        self._make_row(status_value=Testimonial.Status.PUBLISHED)
+
+        res = self.client.get('/api/testimonials/?status=banana')
+        self.assertEqual(res.status_code, 200)
+        statuses = [r['status'] for r in res.json()['results']]
+        for s in statuses:
+            self.assertEqual(s, 'published')
+
 
 # Schema-version pinning: bumping the field list / JSON Schema \$id is
 # an atomic, deliberate action — pin the v1 contract today.
