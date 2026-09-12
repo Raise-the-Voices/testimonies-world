@@ -7,7 +7,25 @@
 		testimonialsSubmitCreate,
 	} from '$lib/api/generated/endpoints';
 	import type { TestimonialWriteRequest } from '$lib/api/generated/endpoints.schemas';
+	import {
+		newTestimonialSchema,
+		zodToFieldErrors,
+		type NewTestimonialInput,
+	} from '$lib/schemas/testimonialForm';
 	import type { PageData } from './$types';
+
+	// `incident_date_precision` and `incident_types` exist on the model
+	// but aren't in the generated `TestimonialWriteRequest` —
+	// drf-spectacular skipped them during introspection. The backend
+	// still accepts them on POST, so we extend the request type once
+	// at module scope and build a single typed body below. This keeps
+	// the call site from doing post-hoc mutation on an aliased copy
+	// (`body as Foo & Bar`) and keeps the request contract auditable
+	// in one place.
+	type TestimonialWriteRequestWithExtras = TestimonialWriteRequest & {
+		incident_date_precision?: 'exact' | 'approximate' | 'unknown';
+		incident_types?: string[];
+	};
 
 	let { data }: { data: PageData } = $props();
 
@@ -52,53 +70,27 @@
 	let formSuccess = $state('');
 	let createdId = $state<number | null>(null);
 
-	/* `validate()` — runs locally before any network call. The
-	   backend enforces the same rules server-side too, but
-	   filtering at the client keeps the user from round-tripping
-	   for obvious errors and prevents single-character "f" or
-	   "m" gibberish that should never reach the DB.
-
-	   Returns a per-field error map. Empty object = valid. */
-	function validate(): Record<string, string> {
-		const e: Record<string, string> = {};
-		const t = title.trim();
-		const c = country.trim();
-		const s = summary.trim();
-		const n = narrative.trim();
-		const src = publicSourceLabel.trim();
-
-		if (!t) {
-			e.title = 'Title is required.';
-		} else if (t.length < 5) {
-			e.title = 'Title needs at least 5 characters — a single letter or a placeholder is not enough context.';
-		}
-		if (!c) {
-			e.country = 'Country is required.';
-		} else if (c.length < 2) {
-			e.country = 'Country needs at least 2 characters.';
-		}
-		if (!s) {
-			e.summary = 'Summary is required for readers.';
-		} else if (s.length < 20) {
-			e.summary = 'Summary should be at least 20 characters — a sentence, not a placeholder.';
-		} else if (/^[\W_]+$/.test(s) || /^(.)\1{4,}$/.test(s)) {
-			// Reject strings of punctuation / whitespace or single-
-			// character spam like 'aaaaa' or '-----'.
-			e.summary = 'Summary looks like gibberish — please write a real description.';
-		}
-		if (!n) {
-			e.narrative = 'Narrative is required.';
-		} else if (n.length < 50) {
-			e.narrative = 'Narrative should be at least 50 characters — even a short testimony needs a paragraph.';
-		} else if (/^[\W_]+$/.test(n) || /^(.)\1{4,}$/.test(n)) {
-			e.narrative = 'Narrative looks like gibberish.';
-		}
-		if (sourceVisibility !== 'hidden' && src.length < 3) {
-			e.public_source_label =
-				'Public source label is required when source is not hidden — describe the role (e.g. "Family member", "Local witness").';
-		}
-
-		return e;
+	/* Build a single payload object from the reactive form state. The
+	   field names match the keys in `newTestimonialSchema`, so the
+	   schema's `safeParse` validates without a translation step. */
+	function buildInput() {
+		return {
+			title,
+			country,
+			region,
+			incidentDate,
+			incidentDatePrecision,
+			language,
+			summary,
+			narrative,
+			outcome,
+			verificationLevel,
+			sourceVisibility,
+			publicSourceLabel,
+			locationVisibility,
+			familyProtected,
+			contactProtected,
+		};
 	}
 
 	// Local submit lifecycle: create (always → status=draft) →
@@ -110,9 +102,12 @@
 		if (saving) return;
 
 		// Client-side validation gate — never enter the network
-		// path with placeholder or missing values.
-		const v = validate();
-		if (Object.keys(v).length > 0) {
+		// path with placeholder or missing values. The schema lives
+		// in `$lib/schemas/testimonialForm.ts` so the rules are
+		// shared with any future editor/publish flow.
+		const result = newTestimonialSchema.safeParse(buildInput());
+		if (!result.success) {
+			const v = zodToFieldErrors(result.error);
 			errors = v;
 			formError = 'Some fields need attention — see below.';
 			// Pull the user's eye to the first invalid field.
@@ -131,110 +126,59 @@
 		errors = {};
 
 		try {
-			return await saveImpl(submitAfter);
+			return await saveImpl(submitAfter, result.data);
 		} finally {
 			saving = false;
 		}
 	}
 
-	async function saveImpl(submitAfter: boolean): Promise<void> {
-		const body: TestimonialWriteRequest = {
-			title: title.trim(),
-			country: country.trim(),
-			region: region.trim(),
-			incident_date: incidentDate || null,
-			summary: summary.trim(),
-			narrative: narrative.trim(),
-			outcome: outcome.trim(),
-			language,
-			verification_level: (verificationLevel || undefined) as
+	async function saveImpl(
+		submitAfter: boolean,
+		data: NewTestimonialInput,
+	): Promise<void> {
+		// Build ONE body. The schema has already trimmed every string
+		// field, so the request payload is constructed directly from
+		// `data` — no extra `.trim()` calls scattered through here.
+		// `verification_level` accepts an empty string from the form
+		// ("not set"), which the backend treats as null; coerce to
+		// undefined so JSON.stringify drops it from the wire payload.
+		const body: TestimonialWriteRequestWithExtras = {
+			title: data.title,
+			country: data.country,
+			region: data.region,
+			incident_date: data.incidentDate || null,
+			incident_date_precision: incidentDatePrecision,
+			summary: data.summary,
+			narrative: data.narrative,
+			outcome: data.outcome,
+			language: data.language,
+			verification_level: (data.verificationLevel || undefined) as
 				| TestimonialWriteRequest['verification_level']
 				| undefined,
-			source_visibility: sourceVisibility,
-			public_source_label: publicSourceLabel.trim(),
-			location_visibility: locationVisibility,
-			family_protected: familyProtected,
-			contact_protected: contactProtected,
+			source_visibility: data.sourceVisibility,
+			public_source_label: data.publicSourceLabel,
+			location_visibility: data.locationVisibility,
+			family_protected: data.familyProtected,
+			contact_protected: data.contactProtected,
 		};
-		// `incident_date_precision` and `incident_types` exist on the
-		// model but aren't in the generated `TestimonialWriteRequest`
-		// (drf-spectacular skipped them during introspection). The
-		// backend accepts them via raw POST; we lose the round-trip
-		// type safety until the bug is fixed in the schema layer.
-		const bodyWithExtras = body as TestimonialWriteRequest & {
-			incident_date_precision?: string;
-			incident_types?: string[];
-		};
-		bodyWithExtras.incident_date_precision = incidentDatePrecision;
 
-		// Outer try/finally: `saving` resets on every exit so the
-		// button never sticks in 'Submitting…' state.
-		let id: number | null = null;
+		// One create call, regardless of submit/draft — `testimonialsCreate`
+		// always lands the row at status='draft'. The optional submit
+		// transition below is a separate, idempotent call against the
+		// already-saved id; if it fails the row stays a draft on the
+		// server and the user can retry.
+		let id: number;
 		try {
 			const res = await testimonialsCreate(body);
-
-			// Response-shape fix: DRF's ModelViewSet.create returns the
-			// serializer data directly (NOT wrapped in {data, status}),
-			// even though orval's generated TypeScript type assumes
-			// the wrapper. The earlier code read `res.data.id` and
-			// fell through to the 'did not include id' branch on
-			// every successful create — surfacing 'broken cards' and
-			// a frozen form. Read the shape defensively so both the
-			// wrapped (orval spec) and unwrapped (DRF default) work.
-			const record = res as unknown as
-				| { id?: number; data?: { id?: number } }
-				| null
-				| undefined;
-			const unwrapped = record && typeof record === 'object'
-				? (record as Record<string, unknown>)
-				: {};
-			const candidate = unwrapped.data ?? unwrapped;
-			const candidateId =
-				typeof candidate === 'object' && candidate !== null
-					? (candidate as { id?: unknown }).id
-					: undefined;
-			id = typeof candidateId === 'number' ? candidateId : null;
-
-			if (id === null || !Number.isFinite(id)) {
-				throw new Error(
-					'The server accepted the testimonial but its response was missing a valid id. ' +
-						'Please retry — if the problem persists, contact support via the audit log.'
-				);
-			}
-			createdId = id;
+			id = extractCreatedId(res);
 		} catch (e: unknown) {
 			formError =
 				e instanceof Error ? e.message : 'Could not create the testimonial.';
-			return; // finally clears saving
+			return;
 		}
+		createdId = id;
 
-		if (submitAfter) {
-			try {
-				await testimonialsSubmitCreate(id, {});
-			} catch (e: unknown) {
-				// Row was created but the workflow transition failed.
-				// Tell the user both halves of the result so they don't
-				// try to create the same row again.
-				formError =
-					e instanceof Error
-						? `Saved as draft, but submission failed: ${e.message}. ` +
-							'You can retry the submit from the testimonial page.'
-						: 'Saved as draft, but the submit step failed. ' +
-							'You can retry from the testimonial page.';
-				return; // finally clears saving
-			}
-		}
-
-		// Success. Two paths:
-		//   - submitAfter: navigate to the detail page (the page
-		//     itself IS the success confirmation).
-		//   - !submitAfter (save draft): clear the form and show an
-		//     explicit success banner with a link to the new draft,
-		//     so the user gets unambiguous feedback that the click
-		//     landed (no more 'nothing happens' UX).
-		if (submitAfter) {
-			await goto(`${base}/testimonials/${id}`);
-		} else {
+		if (!submitAfter) {
 			formSuccess =
 				'Draft saved. You can keep editing below, or jump to the new draft’s page.';
 			// Reset form so the user can start a new entry without
@@ -253,7 +197,54 @@
 			locationVisibility = 'public_region';
 			familyProtected = true;
 			contactProtected = true;
+			return;
 		}
+
+		// submitAfter === true: transition draft → under_review. If
+		// this fails the row is still a draft on the server; surface
+		// both halves of the result so the user doesn't re-submit and
+		// double-create.
+		try {
+			await testimonialsSubmitCreate(id, {});
+		} catch (e: unknown) {
+			formError =
+				e instanceof Error
+					? `Saved as draft, but submission failed: ${e.message}. ` +
+						'You can retry the submit from the testimonial page.'
+					: 'Saved as draft, but the submit step failed. ' +
+						'You can retry from the testimonial page.';
+			return;
+		}
+		// The detail page IS the success confirmation for the submit
+		// path — no banner needed (and no banner would be visible
+		// anyway after navigation).
+		await goto(`${base}/testimonials/${id}`);
+	}
+
+	/**
+	 * DRF's `ModelViewSet.create` returns the serializer data
+	 * directly — NOT wrapped in `{ data, status }` — even though
+	 * orval's generated TypeScript type assumes the wrapper. Earlier
+	 * code read `res.data.id` and fell through to the
+	 * "did not include id" branch on every successful create,
+	 * surfacing "broken cards" and a frozen form. Accept either
+	 * shape; throw a typed error if the id is missing or wrong-type
+	 * so the caller surfaces a clear, user-friendly message.
+	 */
+	function extractCreatedId(res: unknown): number {
+		const outer = (res ?? {}) as Record<string, unknown>;
+		const candidate =
+			outer.data && typeof outer.data === 'object'
+				? (outer.data as Record<string, unknown>)
+				: outer;
+		const id = candidate.id;
+		if (typeof id !== 'number' || !Number.isFinite(id)) {
+			throw new Error(
+				'The server accepted the testimonial but its response was missing a valid id. ' +
+					'Please retry — if the problem persists, contact support via the audit log.',
+			);
+		}
+		return id;
 	}
 </script>
 
