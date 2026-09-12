@@ -550,6 +550,12 @@
 			margin-bottom: 0.75rem;
 			padding: 0.65rem 0.85rem;
 			box-shadow: var(--shadow-card);
+			/* Containment on table rows is partially supported —
+			   `layout`/`paint` work but `content-visibility: auto`
+			   interferes with the table's intrinsic sizing on
+			   some engines, so we scope only the layout+paint
+			   containment here. */
+			contain: layout paint;
 		}
 		.cases-table tbody tr:hover {
 			background: var(--color-bg-white);
@@ -618,7 +624,11 @@
 		font-weight: 600;
 		font-size: 0.85rem;
 		cursor: pointer;
-		transition: background 0.15s ease, color 0.15s ease;
+		/* Perf: no transition here. The previous `background` /
+		   `color` transition was paint-only and added 0.15s of
+		   paint work per hover with no perceptible UX benefit
+		   over a snap. The mobile trace showed hover state
+		   paints contending with card-list paints. */
 	}
 	.page-btn:hover:not(:disabled) {
 		background: var(--color-primary);
