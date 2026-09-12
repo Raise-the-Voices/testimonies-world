@@ -434,6 +434,15 @@ export const ReportsListSourceType = {
   secondhand: 'secondhand',
 } as const;
 
+export const TestimonialsListStatus = {
+  approved: 'approved',
+  archived: 'archived',
+  draft: 'draft',
+  published: 'published',
+  rejected: 'rejected',
+  under_review: 'under_review',
+} as const;
+
 export const PatchedReportRequestAdditionalSourceType = {...AdditionalSourceTypeEnum,...BlankEnum,} as const
 
 export const ReportAdditionalSourceType = {...AdditionalSourceTypeEnum,...BlankEnum,} as const
@@ -4356,5 +4365,13 @@ page?: number;
  * A search term.
  */
 search?: string;
+/**
+ * Filter by workflow status. Intersected with role-based scoping — anonymous viewers see PUBLISHED-only regardless of this value; Volunteers with a non-PUBLISHED status see only their own rows; Advocate+ see any status. Unknown values fall through to the role-based default (no narrowing).
+ */
+status?: TestimonialsListStatus;
 };
+
+export type TestimonialsListStatus = typeof TestimonialsListStatus[keyof typeof TestimonialsListStatus];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
 

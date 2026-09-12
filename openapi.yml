@@ -2915,6 +2915,21 @@ paths:
         description: A search term.
         schema:
           type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - approved
+          - archived
+          - draft
+          - published
+          - rejected
+          - under_review
+        description: Filter by workflow status. Intersected with role-based scoping
+          — anonymous viewers see PUBLISHED-only regardless of this value; Volunteers
+          with a non-PUBLISHED status see only their own rows; Advocate+ see any status.
+          Unknown values fall through to the role-based default (no narrowing).
       tags:
       - testimonials
       security:
