@@ -137,7 +137,23 @@
 		box-shadow: var(--shadow-card);
 		color: inherit;
 		text-decoration: none;
-		transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+		/* Perf: hover lift only transitions `transform` — a
+		   compositor-only property. Earlier this transitioned
+		   `box-shadow` and `border-color` as well, both of which
+		   are paint-triggering; on a list of 20 cards each hover
+		   frame painted a 300×200px shadow region for the full
+		   0.2s window. The lift is still visible (translateY(-2px))
+		   and the resting/hover shadow values are unchanged —
+		   the only difference is the snap from rest→hover is
+		   instant for the shadow. Browsers without `contain`
+		   degrade gracefully. */
+		transition: transform 0.2s ease;
+		/* See PersonCard for the rationale — scope layout/style/
+		   paint to this card so off-card hover / image decode
+		   doesn't invalidate the whole list. */
+		contain: layout style paint;
+		content-visibility: auto;
+		contain-intrinsic-size: 0 200px;
 	}
 	.testimonial-card:hover {
 		transform: translateY(-2px);
