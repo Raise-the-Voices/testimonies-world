@@ -53,7 +53,14 @@
 		mineLoading = true;
 		mineError = null;
 		try {
-			const res = await testimonialsList();
+			// Narrow to the requester's own drafts on the server. The
+			// backend's `?status=draft` filter intersects with role-
+			// based scoping (Volunteer → own rows at that status;
+			// Advocate+ → all rows at that status). Without this
+			// param the page would receive `(own drafts ∪ all
+			// PUBLISHED)` — the published rows are noise in the
+			// "My drafts" tab.
+			const res = await testimonialsList({ status: 'draft' });
 			// Response-shape note: orval's type says `testimonialsList()`
 			// returns {data, status, headers}, but the actual DRF
 			// response body IS the paginated list directly. Reading
@@ -63,12 +70,10 @@
 			// in the create form (9b11b51) and detail page (e3c8527).
 			const body = (res as unknown as Paginated<TestimonialPublic>).results ?? [];
 			mineList = body;
-			// Volunteers only see their own drafts in `mine`; an
-			// Advocate's `mine` would overlap with the review queue
-			// since they see everything anyway, so for staff we just
-			// collapse into the queue. Until the backend exposes a
-			// `created_by_username` filter, `mine` for staff is
-			// identical to `review` minus the action buttons.
+			// For an Advocate, `mine` would otherwise overlap with
+			// the review queue (they see everything). Empty it for
+			// staff so the tab isn't a duplicate of "Review queue"
+			// until the backend exposes a created_by_username filter.
 			if (canReview) mineList = [];
 		} catch (e) {
 			mineError = e instanceof Error ? e.message : 'Failed to load your drafts.';
@@ -90,7 +95,12 @@
 		reviewLoading = true;
 		reviewError = null;
 		try {
-			const res = await testimonialsList();
+			// Narrow to under_review rows on the server. Without
+			// this filter the Advocate would receive every status
+			// (draft + approved + published + archived + rejected)
+			// and the "Review queue" tab would have to bucket-
+			// filter client-side — wasteful and slow on a busy queue.
+			const res = await testimonialsList({ status: 'under_review' });
 			// Response-shape note: same orval-vs-DRF mismatch as
 			// loadMine — read the response as the paginated body.
 			const body = (res as unknown as Paginated<TestimonialPublic>).results ?? [];
