@@ -7,6 +7,11 @@
 		testimonialsSubmitCreate,
 	} from '$lib/api/generated/endpoints';
 	import type { TestimonialWriteRequest } from '$lib/api/generated/endpoints.schemas';
+	import {
+		newTestimonialSchema,
+		zodToFieldErrors,
+		type NewTestimonialInput,
+	} from '$lib/schemas/testimonialForm';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -52,53 +57,27 @@
 	let formSuccess = $state('');
 	let createdId = $state<number | null>(null);
 
-	/* `validate()` — runs locally before any network call. The
-	   backend enforces the same rules server-side too, but
-	   filtering at the client keeps the user from round-tripping
-	   for obvious errors and prevents single-character "f" or
-	   "m" gibberish that should never reach the DB.
-
-	   Returns a per-field error map. Empty object = valid. */
-	function validate(): Record<string, string> {
-		const e: Record<string, string> = {};
-		const t = title.trim();
-		const c = country.trim();
-		const s = summary.trim();
-		const n = narrative.trim();
-		const src = publicSourceLabel.trim();
-
-		if (!t) {
-			e.title = 'Title is required.';
-		} else if (t.length < 5) {
-			e.title = 'Title needs at least 5 characters — a single letter or a placeholder is not enough context.';
-		}
-		if (!c) {
-			e.country = 'Country is required.';
-		} else if (c.length < 2) {
-			e.country = 'Country needs at least 2 characters.';
-		}
-		if (!s) {
-			e.summary = 'Summary is required for readers.';
-		} else if (s.length < 20) {
-			e.summary = 'Summary should be at least 20 characters — a sentence, not a placeholder.';
-		} else if (/^[\W_]+$/.test(s) || /^(.)\1{4,}$/.test(s)) {
-			// Reject strings of punctuation / whitespace or single-
-			// character spam like 'aaaaa' or '-----'.
-			e.summary = 'Summary looks like gibberish — please write a real description.';
-		}
-		if (!n) {
-			e.narrative = 'Narrative is required.';
-		} else if (n.length < 50) {
-			e.narrative = 'Narrative should be at least 50 characters — even a short testimony needs a paragraph.';
-		} else if (/^[\W_]+$/.test(n) || /^(.)\1{4,}$/.test(n)) {
-			e.narrative = 'Narrative looks like gibberish.';
-		}
-		if (sourceVisibility !== 'hidden' && src.length < 3) {
-			e.public_source_label =
-				'Public source label is required when source is not hidden — describe the role (e.g. "Family member", "Local witness").';
-		}
-
-		return e;
+	/* Build a single payload object from the reactive form state. The
+	   field names match the keys in `newTestimonialSchema`, so the
+	   schema's `safeParse` validates without a translation step. */
+	function buildInput() {
+		return {
+			title,
+			country,
+			region,
+			incidentDate,
+			incidentDatePrecision,
+			language,
+			summary,
+			narrative,
+			outcome,
+			verificationLevel,
+			sourceVisibility,
+			publicSourceLabel,
+			locationVisibility,
+			familyProtected,
+			contactProtected,
+		};
 	}
 
 	// Local submit lifecycle: create (always → status=draft) →
@@ -110,9 +89,12 @@
 		if (saving) return;
 
 		// Client-side validation gate — never enter the network
-		// path with placeholder or missing values.
-		const v = validate();
-		if (Object.keys(v).length > 0) {
+		// path with placeholder or missing values. The schema lives
+		// in `$lib/schemas/testimonialForm.ts` so the rules are
+		// shared with any future editor/publish flow.
+		const result = newTestimonialSchema.safeParse(buildInput());
+		if (!result.success) {
+			const v = zodToFieldErrors(result.error);
 			errors = v;
 			formError = 'Some fields need attention — see below.';
 			// Pull the user's eye to the first invalid field.
@@ -131,30 +113,36 @@
 		errors = {};
 
 		try {
-			return await saveImpl(submitAfter);
+			return await saveImpl(submitAfter, result.data);
 		} finally {
 			saving = false;
 		}
 	}
 
-	async function saveImpl(submitAfter: boolean): Promise<void> {
+	async function saveImpl(
+		submitAfter: boolean,
+		data: NewTestimonialInput,
+	): Promise<void> {
+		// The schema has already trimmed every string field, so the
+		// body is built from `data` directly — no extra `.trim()`
+		// calls scattered through here.
 		const body: TestimonialWriteRequest = {
-			title: title.trim(),
-			country: country.trim(),
-			region: region.trim(),
-			incident_date: incidentDate || null,
-			summary: summary.trim(),
-			narrative: narrative.trim(),
-			outcome: outcome.trim(),
-			language,
-			verification_level: (verificationLevel || undefined) as
+			title: data.title,
+			country: data.country,
+			region: data.region,
+			incident_date: data.incidentDate || null,
+			summary: data.summary,
+			narrative: data.narrative,
+			outcome: data.outcome,
+			language: data.language,
+			verification_level: (data.verificationLevel || undefined) as
 				| TestimonialWriteRequest['verification_level']
 				| undefined,
-			source_visibility: sourceVisibility,
-			public_source_label: publicSourceLabel.trim(),
-			location_visibility: locationVisibility,
-			family_protected: familyProtected,
-			contact_protected: contactProtected,
+			source_visibility: data.sourceVisibility,
+			public_source_label: data.publicSourceLabel,
+			location_visibility: data.locationVisibility,
+			family_protected: data.familyProtected,
+			contact_protected: data.contactProtected,
 		};
 		// `incident_date_precision` and `incident_types` exist on the
 		// model but aren't in the generated `TestimonialWriteRequest`
