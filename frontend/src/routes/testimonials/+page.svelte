@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
+	import { afterNavigate } from '$app/navigation';
 	import { user, isVolunteer, isAdvocate } from '$lib/session';
 	import { testimonialsList } from '$lib/api/generated/endpoints';
 	import TestimonialCard from '$lib/TestimonialCard.svelte';
@@ -206,6 +207,23 @@
 			loadRejected();
 		}
 	});
+
+	/* Reset the one-shot sentinels on cross-page navigation. Without
+	   this, a Volunteer who visits /testimonials → clicks My drafts
+	   (cache: []) → creates a new draft on /testimonials/new → clicks
+	   the navbar Testimonials link → lands back here → clicks My
+	   drafts AGAIN would see the stale `[]` because mineAttempted is
+	   still true from the first visit. SvelteKit normally re-mounts
+	   the +page.svelte on cross-route nav, so this reset is
+	   defense-in-depth for partial-hydration / browser-back-button
+	   edge cases. */
+	afterNavigate(({ from, to }) => {
+		if (from?.url.pathname !== to?.url.pathname) {
+			mineAttempted = false;
+			reviewAttempted = false;
+			rejectedAttempted = false;
+		}
+	});
 </script>
 
 <svelte:head>
@@ -258,7 +276,7 @@
 				onclick={() => (activeTab = 'mine')}
 			>
 				My drafts
-				{#if mineList.length > 0}<span class="testimonials-tab-count">{mineList.length}</span>{/if}
+				<span class="testimonials-tab-count">{mineList.length}</span>
 			</button>
 		{/if}
 
@@ -271,7 +289,7 @@
 				onclick={() => (activeTab = 'review')}
 			>
 				Review queue
-				{#if reviewList.length > 0}<span class="testimonials-tab-count">{reviewList.length}</span>{/if}
+				<span class="testimonials-tab-count">{reviewList.length}</span>
 			</button>
 		{/if}
 
@@ -284,7 +302,7 @@
 				onclick={() => (activeTab = 'rejected')}
 			>
 				Rejected
-				{#if rejectedList.length > 0}<span class="testimonials-tab-count">{rejectedList.length}</span>{/if}
+				<span class="testimonials-tab-count">{rejectedList.length}</span>
 			</button>
 		{/if}
 	</nav>
