@@ -21,30 +21,56 @@
 
 	   Hash routing instead of query-string so the back button stays
 	   sensible and the URL stays clean for the public. */
-	type Tab = 'published' | 'mine' | 'review';
+	type Tab = 'published' | 'mine' | 'review' | 'rejected';
 	let activeTab = $state<Tab>('published');
 
 	/* Auth-gated tabs only render for authenticated users. Volunteers
 	   can have `mine` (their own drafts). Review tab is Advocate-only
-	   because drafts/under_review queue is staff territory. */
+	   because drafts/under_review queue is staff territory. The
+	   Rejected tab is open to every authenticated user — a Volunteer
+	   sees their own rejected rows (the rejection reason is their
+	   actionable feedback), and an Advocate sees the full rejection
+	   backlog (useful for periodic re-review and archival planning). */
 	const showMineTab = $derived(currentUser.authenticated);
 	const showReviewTab = $derived(canReview);
+	const showRejectedTab = $derived(currentUser.authenticated);
+
+	/* Wire-shape extends TestimonialPublic with the workflow metadata
+	   fields returned by `TestimonialInternalSerializer` (the
+	   serializer authed GETs receive). The public serializer is what
+	   anonymous users get and doesn't include `review_notes`; the
+	   rejected tab is auth-only, so widening the type here is safe.
+	   Same widening pattern used in [id]/+page.svelte and the
+	   WorkflowActions card. */
+	type TestimonialWithWorkflow = TestimonialPublic & {
+		readonly review_notes?: string;
+		readonly reviewed_at?: string | null;
+	};
 
 	/* Mine-tab client-side state — fetched lazily on tab activation.
 	   The Internal serializer omits `created_by_username` for the
 	   canonical record (the OpenAPI spec doesn't include it), so we
 	   keep the same shape across all three lists and use the published
 	   tab as the canonical "what's visible publicly" surface. */
-	let mineList: TestimonialPublic[] = $state([]);
+	let mineList: TestimonialWithWorkflow[] = $state([]);
 	let mineLoading = $state(false);
 	let mineError = $state<string | null>(null);
 
-	// `mineAttempted` / `reviewAttempted` are one-shot sentinels that
-	// gate the lazy fetch. The earlier pattern used `$effect` with
-	// `length === 0` as the trigger, which re-fired infinitely when the
-	// backend returned an empty list — keeping the loading state on
-	// forever. The sentinel flips to true once a fetch has been kicked
-	// off for the current auth session.
+	/* Rejected-tab state. Same auth-gated lazy-fetch pattern as the
+	   mine + review tabs — the one-shot sentinel stops the loading
+	   state from looping on empty result sets. */
+	let rejectedList: TestimonialWithWorkflow[] = $state([]);
+	let rejectedLoading = $state(false);
+	let rejectedError = $state<string | null>(null);
+	let rejectedAttempted = $state(false);
+
+	// `mineAttempted` / `reviewAttempted` / `rejectedAttempted` are
+	// one-shot sentinels that gate the lazy fetch. The earlier
+	// pattern used `$effect` with `length === 0` as the trigger,
+	// which re-fired infinitely when the backend returned an empty
+	// list — keeping the loading state on forever. The sentinel
+	// flips to true once a fetch has been kicked off for the
+	// current auth session.
 	let mineAttempted = $state(false);
 	let reviewAttempted = $state(false);
 
@@ -68,7 +94,7 @@
 			// and the "My drafts" tab silently shows empty. Treat the
 			// response as the paginated body — same pattern I applied
 			// in the create form (9b11b51) and detail page (e3c8527).
-			const body = (res as unknown as Paginated<TestimonialPublic>).results ?? [];
+			const body = (res as unknown as Paginated<TestimonialWithWorkflow>).results ?? [];
 			mineList = body;
 			// For an Advocate, `mine` would otherwise overlap with
 			// the review queue (they see everything). Empty it for
@@ -112,6 +138,27 @@
 		}
 	}
 
+	/* Rejected-tab loader. Visible to every authenticated user; the
+	   backend's `?status=rejected` filter intersects with role-based
+	   scoping (Volunteer → own rejected rows; Advocate+ → every
+	   rejected row). Same one-shot sentinel pattern as loadMine. */
+	async function loadRejected() {
+		if (!currentUser.authenticated) return;
+		rejectedLoading = true;
+		rejectedError = null;
+		try {
+			const res = await testimonialsList({ status: 'rejected' });
+			const body =
+				(res as unknown as Paginated<TestimonialWithWorkflow>).results ?? [];
+			rejectedList = body;
+		} catch (e) {
+			rejectedError =
+				e instanceof Error ? e.message : 'Failed to load rejected testimonials.';
+		} finally {
+			rejectedLoading = false;
+		}
+	}
+
 	$effect(() => {
 		// Re-fires when auth changes OR tab changes; we only want the
 		// fetch to happen on a real signal (tab activation, not
@@ -127,6 +174,7 @@
 		if (!currentUser.authenticated) {
 			mineAttempted = false;
 			reviewAttempted = false;
+			rejectedAttempted = false;
 			return;
 		}
 
@@ -147,6 +195,15 @@
 		) {
 			reviewAttempted = true;
 			loadReview();
+		}
+		if (
+			activeTab === 'rejected' &&
+			showRejectedTab &&
+			!rejectedAttempted &&
+			!rejectedLoading
+		) {
+			rejectedAttempted = true;
+			loadRejected();
 		}
 	});
 </script>
@@ -217,6 +274,19 @@
 				{#if reviewList.length > 0}<span class="testimonials-tab-count">{reviewList.length}</span>{/if}
 			</button>
 		{/if}
+
+		{#if showRejectedTab}
+			<button
+				type="button"
+				class="testimonials-tab"
+				class:testimonials-tab-active={activeTab === 'rejected'}
+				aria-current={activeTab === 'rejected' ? 'page' : undefined}
+				onclick={() => (activeTab = 'rejected')}
+			>
+				Rejected
+				{#if rejectedList.length > 0}<span class="testimonials-tab-count">{rejectedList.length}</span>{/if}
+			</button>
+		{/if}
 	</nav>
 
 	{#if activeTab === 'published'}
@@ -285,6 +355,59 @@
 			<div class="testimonials-grid">
 				{#each reviewList as t (t.id)}
 					<TestimonialCard testimonial={t} showStatus />
+				{/each}
+			</div>
+		{/if}
+	{:else if activeTab === 'rejected'}
+		{#if !currentUser.authenticated}
+			<div class="empty-state">
+				<p>Sign in to see rejected testimonials.</p>
+			</div>
+		{:else if rejectedLoading}
+			<div class="testimonials-grid" aria-busy="true">
+				<Skeleton variant="card" />
+				<Skeleton variant="card" />
+				<Skeleton variant="card" />
+			</div>
+		{:else if rejectedError}
+			<div class="error-state" role="alert">
+				<p>Could not load rejected testimonials: {rejectedError}</p>
+			</div>
+		{:else if rejectedList.length === 0}
+			<div class="empty-state">
+				<p>Nothing has been rejected yet.</p>
+			</div>
+		{:else}
+			<div class="testimonials-grid">
+				{#each rejectedList as t (t.id)}
+					<div class="rejected-card-wrap">
+						<TestimonialCard testimonial={t} showStatus />
+						<!-- The rejection reason is the actionable
+						     signal for the submitter (Volunteer sees
+						     their own feedback) and the audit trail
+						     for reviewers. Backend requires
+						     `review_notes` non-empty at reject time
+						     (TestimonialViewSet.reject), so a
+						     missing reason here is a real bug
+						     worth surfacing. -->
+						{#if t.review_notes}
+							<aside class="rejection-reason" aria-label="Rejection reason">
+								<header class="rejection-reason-header">
+									<span class="rejection-reason-label">Rejection reason</span>
+									{#if t.reviewed_at}
+										<time class="rejection-reason-date" datetime={t.reviewed_at}>
+											{new Date(t.reviewed_at).toLocaleDateString(undefined, {
+												year: 'numeric',
+												month: 'short',
+												day: 'numeric',
+											})}
+										</time>
+									{/if}
+								</header>
+								<p class="rejection-reason-text">{t.review_notes}</p>
+							</aside>
+						{/if}
+					</div>
 				{/each}
 			</div>
 		{/if}
@@ -411,5 +534,56 @@
 	.error-state {
 		border-left: 3px solid var(--color-danger);
 		text-align: left;
+	}
+
+	/* Rejected tab — each card is wrapped so the rejection reason
+	   sits flush against its card and reads as a continuation of
+	   the same record rather than a separate row. */
+	.rejected-card-wrap {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+	}
+
+	.rejection-reason {
+		margin-top: -1px; /* tuck under the card's border-radius edge */
+		padding: 0.85rem 1rem 0.95rem;
+		background: #fef2f2;
+		border: 1px solid var(--color-danger);
+		border-top: 0;
+		border-radius: 0 0 var(--radius-card) var(--radius-card);
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+
+	.rejection-reason-header {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.rejection-reason-label {
+		font-size: 0.72rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06rem;
+		color: var(--color-danger);
+	}
+
+	.rejection-reason-date {
+		font-size: 0.72rem;
+		color: #9b2c2c;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.rejection-reason-text {
+		margin: 0;
+		font-size: 0.92rem;
+		line-height: 1.5;
+		color: #7b1f1f;
+		white-space: pre-line;
 	}
 </style>
