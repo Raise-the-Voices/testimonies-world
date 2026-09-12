@@ -22,6 +22,7 @@ sensitive data — the encryption boundary is the URL itself.
 
 from django.db.models import Q
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -68,24 +69,92 @@ class TestimonialViewSet(viewsets.ModelViewSet):
     ).prefetch_related('tags')
     permission_classes = [CanSubmitTestimonial]
 
+    # `?status=<value>` is documented here so drf-spectacular emits
+    # the parameter into openapi.yml and orval regenerates
+    # `TestimonialsListParams` with the matching `status?: string`
+    # field. The actual filtering happens in `get_queryset` below —
+    # we use @extend_schema (not DjangoFilterBackend) because the
+    # semantics are role-aware and don't fit the generic
+    # filterset_fields model.
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name='status',
+                required=False,
+                type=str,
+                enum=[c for c, _ in Testimonial.Status.choices],
+                location=OpenApiParameter.QUERY,
+                description=(
+                    'Filter by workflow status. Intersected with '
+                    'role-based scoping — anonymous viewers see '
+                    'PUBLISHED-only regardless of this value; '
+                    'Volunteers with a non-PUBLISHED status see '
+                    'only their own rows; Advocate+ see any status. '
+                    'Unknown values fall through to the role-based '
+                    'default (no narrowing).'
+                ),
+            ),
+        ],
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
     def get_queryset(self):
         qs = super().get_queryset()
-        # Honor an explicit ?status=published URL filter. The viewset
-        # has no filter_backends configured (DRF's built-in
-        # SearchFilter / OrderingFilter are off), so a query param
-        # alone is ignored — without an explicit branch here, a
-        # volunteer's /api/testimonials/?status=published call would
-        # fall through to the role-based scoping below and return
-        # every row, drafts included. Honoring the param explicitly
-        # is what makes the front-end "Published" tab actually mean
-        # "published only".
+        # Honor an explicit ?status=<value> URL filter — pin the
+        # intersection with role-based scoping so the front-end tabs
+        # ("My drafts", "Review queue") actually mean what they say.
+        # The viewset has no filter_backends configured (DRF's
+        # built-in SearchFilter / OrderingFilter are off), so a
+        # query param alone is ignored — without an explicit branch
+        # here, a volunteer's /api/testimonials/?status=under_review
+        # call would fall through to the role-based scoping below
+        # and return every row. Honoring the param explicitly is
+        # what makes the front-end tabs narrow correctly.
+        #
+        # Scope-by-status policy:
+        #   ?status=published              → only PUBLISHED rows (any
+        #                                   viewer, including anon)
+        #   ?status=<other> for Advocate+  → only rows at that status
+        #   ?status=<other> for Volunteer  → only rows at that status
+        #                                   AND authored by the user
+        #                                   (otherwise a Volunteer
+        #                                   hitting ?status=draft
+        #                                   could see another
+        #                                   volunteer's drafts — same
+        #                                   privacy leak we pinned
+        #                                   in PublicPayloadMaskingTests)
+        #   ?status=<unknown>             → silently falls through to
+        #                                   the role-based union below;
+        #                                   invalid values shouldn't
+        #                                   500 the client.
         status_param = self.request.query_params.get('status')
-        if status_param == Testimonial.Status.PUBLISHED:
-            return qs.filter(status=Testimonial.Status.PUBLISHED)
-        # Anonymous viewers only see Published testimonials. Source /
-        # location masking happens in the serializer — source_visible
-        # is computed from source_visibility — so we don't filter on
-        # source_visibility here.
+        valid_statuses = {choice for choice, _ in Testimonial.Status.choices}
+        if status_param and status_param in valid_statuses:
+            user = self.request.user
+            if user.is_authenticated and (
+                user.is_staff or user.groups.filter(name='Advocate').exists()
+            ):
+                # Advocate+: explicit status narrows to that status.
+                return qs.filter(status=status_param)
+            if user.is_authenticated:
+                # Volunteer: explicit status narrows to OWN rows at
+                # that status (otherwise we'd leak other users'
+                # drafts on a ?status=draft call).
+                return qs.filter(created_by=user, status=status_param)
+            # Anonymous + explicit status: only PUBLISHED is safe to
+            # surface — every other status is private and would leak
+            # the existence of unpublished rows. Falling through to
+            # the union below for non-PUBLISHED keeps the privacy
+            # posture tight without 400-ing the client.
+            if status_param == Testimonial.Status.PUBLISHED:
+                return qs.filter(status=Testimonial.Status.PUBLISHED)
+        # No status param (or unknown value) — apply role-based
+        # default scoping. Anonymous viewers only see Published
+        # testimonials. Source / location masking happens in the
+        # serializer — source_visible is computed from
+        # source_visibility — so we don't filter on source_visibility
+        # here.
         if not self.request.user.is_authenticated:
             return qs.filter(status=Testimonial.Status.PUBLISHED)
         # Authenticated non-staff viewers (volunteers) see only the
