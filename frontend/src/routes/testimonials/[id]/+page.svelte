@@ -2,10 +2,30 @@
 	import { base } from '$app/paths';
 	import { user } from '$lib/session';
 	import { safeText, isEmptyAfterSanitization } from '$lib/testimonial-sanitize';
+	import WorkflowActions from '$lib/WorkflowActions.svelte';
+	import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let currentUser = $derived(data.user ?? $user);
+
+	// The backend's `get_serializer_class` returns
+	// `TestimonialInternalSerializer` for authenticated GETs — that
+	// payload is a superset of TestimonialPublic with workflow
+	// metadata (submitted_at, reviewed_at, created_by, …). Widen the
+	// cast so the WorkflowActions card can read those fields without
+	// a second fetch. Anonymous GETs use TestimonialPublic and don't
+	// carry the workflow fields — WorkflowActions hides itself in
+	// that case, so the wider type is safe.
+	type WorkflowFields = {
+		readonly created_by?: number | null;
+		readonly submitted_at?: string | null;
+		readonly reviewed_at?: string | null;
+		readonly approved_at?: string | null;
+		readonly archived_at?: string | null;
+	};
+	type TestimonialWithWorkflow = TestimonialPublic & WorkflowFields;
+	const t = $derived(data.testimonial as TestimonialWithWorkflow | null | undefined);
 
 	// Sanitise every text field at the boundary. A row whose
 	// `title` is literal git conflict text would otherwise render
@@ -13,7 +33,6 @@
 	// conflict markers and returns '' if the field is wholly corrupt.
 	// The page then shows a clear 'not available' panel instead of
 	// misleading content.
-	const t = $derived(data.testimonial);
 	const safeTitle = $derived(safeText(t?.title));
 	const safeSummary = $derived(safeText(t?.summary));
 	const safeNarrative = $derived(safeText(t?.narrative));
@@ -131,6 +150,12 @@
 					</dd>
 				{/if}
 			</dl>
+
+			<!-- Workflow action bar — role-aware state-machine
+			     controls. Rendered just above the privacy aside per
+			     the design proposal. The component self-hides when
+			     there's nothing actionable for the current viewer. -->
+			<WorkflowActions testimonial={t} currentUser={currentUser} />
 
 			{#if t.family_protected || t.contact_protected}
 				<aside class="testimonial-privacy" aria-label="Privacy protections in effect">
