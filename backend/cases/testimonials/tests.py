@@ -358,6 +358,237 @@ class SourceVisibilityPolicyTests(BaseTestCase):
         self.assertEqual(res.json()['source_visibility'], 'public_named')
 
 
+# Status filtering: pin the contract that drafts NEVER leak to
+# anonymous users, and that the create path always lands at
+# status='draft' regardless of what the client tries to send.
+#
+# These tests are the safety net for the public-vs-private boundary.
+# Existing list tests (PublicPayloadMaskingTests) cover the
+# anonymous list; this class closes the gap on:
+#   - create defaults to DRAFT (and silently drops client-supplied
+#     status, since TestimonialWriteSerializer excludes it)
+#   - retrieve honors the same role/status scoping as list
+#   - the explicit ?status=published query param works for any
+#     authenticated viewer (anonymous is already filtered above)
+@FERNET_KEY_SETTING
+class TestimonialStatusFilterTests(BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.author = make_user('author', in_group='Volunteer')
+        self.other_volunteer = make_user('other-vol', in_group='Volunteer')
+        self.advocate = make_user('adv', in_group='Advocate')
+        self.client = APIClient()
+
+    def _make_row(self, *, status_value, created_by=None, slug=None):
+        """Insert a Testimonial directly (bypasses create flow) so we
+        can stage arbitrary statuses for the read-path tests below."""
+        slug = slug or f's-{Testimonial.objects.count() + 1}-{uuid.uuid4().hex[:6]}'
+        return Testimonial.objects.create(
+            title='row', slug=slug, language='en',
+            country='Iraq', region='Erbil',
+            summary='s', narrative='n', outcome='o',
+            source_visibility='hidden',
+            public_source_label='Family member',
+            location_visibility='public_region',
+            public_location_display='Erbil',
+            status=status_value,
+            created_by=created_by,
+        )
+
+    # ---- Create defaults to DRAFT, ignores client status payload ----
+
+    def test_create_defaults_to_draft_status(self):
+        """POST without `status` → server lands at draft.
+
+        The model has default=Status.DRAFT and the write serializer
+        excludes `status`, so this combination lands every create at
+        'draft' regardless of client input. Pin it: a regression that
+        defaulted to PUBLISHED here would publish every draft by
+        accident — the original 'drafts leaking' incident in spirit.
+        """
+        self.client.force_login(self.author)
+        res = self.client.post('/api/testimonials/', {
+            'title': 'Detention in Erbil',
+            'language': 'en',
+            'country': 'Iraq',
+            'region': 'Erbil',
+            'summary': 'summary',
+            'narrative': 'narrative',
+            'outcome': 'outcome',
+            'source_visibility': 'hidden',
+            'public_source_label': 'Family member',
+            'location_visibility': 'public_region',
+            'public_location_display': 'Erbil',
+        }, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        # The create response uses the write serializer (which
+        # excludes `status`); re-fetch the row from DB to read the
+        # post-save status — that's the source of truth.
+        row = Testimonial.objects.get(pk=res.json()['id'])
+        self.assertEqual(row.status, Testimonial.Status.DRAFT)
+
+    def test_create_ignores_client_supplied_status(self):
+        """A malicious or confused client cannot self-publish via POST.
+
+        `status` is in `TestimonialWriteSerializer.Meta.exclude`, so
+        any payload value is silently dropped. The model default
+        (DRAFT) wins. This is the mass-assignment guard from
+        SYSTEM_RULES §5 applied to the most dangerous field on the
+        model.
+        """
+        self.client.force_login(self.author)
+        for attempted in ('published', 'approved', 'under_review'):
+            res = self.client.post('/api/testimonials/', {
+                'title': f'attempt-{attempted}',
+                'language': 'en',
+                'country': 'Iraq',
+                'region': 'Erbil',
+                'summary': 'summary',
+                'narrative': 'narrative',
+                'outcome': 'outcome',
+                'source_visibility': 'hidden',
+                'public_source_label': 'Family member',
+                'location_visibility': 'public_region',
+                'public_location_display': 'Erbil',
+                'status': attempted,
+            }, format='json')
+            self.assertEqual(res.status_code, 201, res.content)
+            # Re-fetch from DB — the create response uses the write
+            # serializer which omits `status`, so it can't tell us
+            # what landed.
+            row = Testimonial.objects.get(pk=res.json()['id'])
+            self.assertEqual(
+                row.status, Testimonial.Status.DRAFT,
+                msg=(
+                    f'Client supplied status={attempted!r} but row '
+                    f'landed at status={row.status!r} — silent drop '
+                    f'failed for {attempted}.'
+                ),
+            )
+
+    def test_patch_ignores_client_supplied_status(self):
+        """Same mass-assignment guard on PATCH — a draft owner cannot
+        self-publish by sneaking `status` into a partial_update.
+        """
+        self.client.force_login(self.author)
+        create = self.client.post('/api/testimonials/', {
+            'title': 't', 'language': 'en',
+            'country': 'Iraq', 'region': 'Erbil',
+            'summary': 'summary', 'narrative': 'narrative',
+            'outcome': 'outcome',
+            'source_visibility': 'hidden',
+            'public_source_label': 'Family member',
+            'location_visibility': 'public_region',
+            'public_location_display': 'Erbil',
+        }, format='json')
+        self.assertEqual(create.status_code, 201, create.content)
+        pk = create.json()['id']
+
+        # Try to PATCH to published — must be ignored.
+        patch = self.client.patch(
+            f'/api/testimonials/{pk}/',
+            {'status': 'published'},
+            format='json',
+        )
+        self.assertEqual(patch.status_code, 200, patch.content)
+        row = Testimonial.objects.get(pk=pk)
+        self.assertEqual(row.status, Testimonial.Status.DRAFT)
+
+    # ---- Retrieve honors the same scoping as list ----
+
+    def test_anonymous_cannot_retrieve_draft(self):
+        """Direct GET on a draft id returns 404 to an anonymous client.
+
+        Without the get_queryset filter, ModelViewSet.retrieve would
+        hand back the draft — the same privacy leak as a list leak,
+        just through a different URL.
+        """
+        draft = self._make_row(status_value=Testimonial.Status.DRAFT)
+        res = self.client.get(f'/api/testimonials/{draft.id}/')
+        self.assertEqual(res.status_code, 404)
+
+    def test_author_can_retrieve_own_draft(self):
+        """The draft owner is the only volunteer who can retrieve a
+        draft via GET — the role/status scoping for retrieve must
+        match the list endpoint.
+        """
+        draft = self._make_row(
+            status_value=Testimonial.Status.DRAFT,
+            created_by=self.author,
+        )
+        self.client.force_login(self.author)
+        res = self.client.get(f'/api/testimonials/{draft.id}/')
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.json()['status'], 'draft')
+
+    def test_other_volunteer_cannot_retrieve_someone_elses_draft(self):
+        """A second volunteer's GET on someone else's draft is 404.
+
+        Without the role-based scoping, this is exactly the cross-user
+        leak `test_volunteer_does_not_see_other_users_drafts` guards
+        against in list — same fix, different endpoint.
+        """
+        draft = self._make_row(
+            status_value=Testimonial.Status.DRAFT,
+            created_by=self.author,
+        )
+        self.client.force_login(self.other_volunteer)
+        res = self.client.get(f'/api/testimonials/{draft.id}/')
+        self.assertEqual(res.status_code, 404)
+
+    def test_anyone_can_retrieve_published(self):
+        """A published row is public — anonymous, the author, another
+        volunteer, and an advocate all get a 200. Pins the read path
+        for the success side of the contract.
+        """
+        published = self._make_row(
+            status_value=Testimonial.Status.PUBLISHED,
+            created_by=self.author,
+        )
+        for who in ('anon', 'author', 'other_volunteer', 'advocate'):
+            if who == 'anon':
+                self.client.logout()
+            elif who == 'author':
+                self.client.force_login(self.author)
+            elif who == 'other_volunteer':
+                self.client.force_login(self.other_volunteer)
+            else:
+                self.client.force_login(self.advocate)
+            res = self.client.get(f'/api/testimonials/{published.id}/')
+            self.assertEqual(
+                res.status_code, 200,
+                msg=(
+                    f'{who!r} should see the published row but got '
+                    f'status {res.status_code} (body: {res.content!r})'
+                ),
+            )
+            self.assertEqual(res.json()['status'], 'published')
+
+    # ---- Explicit ?status=published query filter ----
+
+    def test_status_published_query_param_filters_to_published(self):
+        """`?status=published` returns only published rows regardless
+        of role — for an advocate (who normally sees everything) this
+        proves the explicit filter narrows the result rather than
+        widening it.
+        """
+        # Stage a published + a draft + an under_review row.
+        self._make_row(status_value=Testimonial.Status.PUBLISHED)
+        self._make_row(status_value=Testimonial.Status.DRAFT)
+        self._make_row(status_value=Testimonial.Status.UNDER_REVIEW)
+
+        self.client.force_login(self.advocate)
+        res = self.client.get('/api/testimonials/?status=published')
+        self.assertEqual(res.status_code, 200)
+        statuses = [r['status'] for r in res.json()['results']]
+        self.assertTrue(
+            statuses, '?status=published returned an empty list — '
+                     'the filter probably shadowed the data.'
+        )
+        for s in statuses:
+            self.assertEqual(s, 'published')
+
+
 # Schema-version pinning: bumping the field list / JSON Schema \$id is
 # an atomic, deliberate action — pin the v1 contract today.
 class SchemaVersionPinTests(BaseTestCase):
