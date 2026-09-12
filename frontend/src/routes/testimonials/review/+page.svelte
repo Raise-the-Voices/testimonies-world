@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { z } from 'zod';
 	import { base } from '$app/paths';
 	import { user, isAdvocate } from '$lib/session';
 	import {
@@ -9,7 +10,6 @@
 		testimonialsArchiveCreate,
 		testimonialsSubmitCreate,
 	} from '$lib/api/generated/endpoints';
-	import type { Paginated } from '$lib/types';
 	import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
 	import type { PageData } from './$types';
 
@@ -51,6 +51,37 @@
 	let rejectNotes = $state('');
 	let rejectSaving = $state(false);
 
+	// Zod gate for the rejection reason — the backend requires a
+	// non-empty note, so we mirror that contract here instead of
+	// trusting the (already-disabled-when-empty) submit button.
+	const rejectNotesSchema = z
+		.string()
+		.trim()
+		.min(1, 'Rejection reason is required.');
+	const rejectNotesResult = $derived(rejectNotesSchema.safeParse(rejectNotes));
+
+	// Map of action verb → orval-generated endpoint. Single source of
+	// truth so the dispatch below doesn't repeat the action list or
+	// the request-init shape — adding a new transition is one line.
+	type QueueAction = 'submit' | 'approve' | 'publish' | 'archive';
+	const ACTION_DISPATCH: Record<
+		QueueAction,
+		(id: number, init?: RequestInit) => Promise<unknown>
+	> = {
+		submit: (id, init) => testimonialsSubmitCreate(id, init),
+		approve: (id, init) => testimonialsApproveCreate(id, init),
+		publish: (id, init) => testimonialsPublishCreate(id, init),
+		archive: (id, init) => testimonialsArchiveCreate(id, init),
+	};
+
+	// Human-readable label per action for the success banner.
+	const ACTION_LABEL: Record<QueueAction, string> = {
+		submit: 'Submitted for review',
+		approve: 'Approved',
+		publish: 'Published',
+		archive: 'Archived',
+	};
+
 	async function loadAll() {
 		loading = true;
 		error = null;
@@ -71,8 +102,7 @@
 			const res = await testimonialsList();
 			if (timedOut) return; // timer already settled state
 			clearTimeout(timer);
-			const body = (res as { data?: Paginated<TestimonialPublic> }).data;
-			rows = body?.results ?? [];
+			rows = extractListResults(res);
 		} catch (e) {
 			if (timedOut) return;
 			clearTimeout(timer);
@@ -82,41 +112,16 @@
 		}
 	}
 
-	async function runAction(
-		id: number,
-		action: 'submit' | 'approve' | 'publish' | 'archive',
-		notes?: string
-	) {
+	async function runAction(id: number, action: QueueAction) {
 		if (busyId !== null) return;
 		busyId = id;
 		actionError = null;
 		try {
-			switch (action) {
-				case 'submit':
-					await testimonialsSubmitCreate(id, {});
-					break;
-				case 'approve':
-					await testimonialsApproveCreate(id, {});
-					break;
-				case 'publish':
-					await testimonialsPublishCreate(id, {});
-					break;
-				case 'archive':
-					await testimonialsArchiveCreate(id, {});
-					break;
-			}
+			await ACTION_DISPATCH[action](id);
 			await loadAll();
-			// Map the action verb to a human-readable label for the
-			// confirmation banner. The actionError stays cleared on
-			// success so the error banner renders only on failure.
-			const label = action === 'submit'
-				? 'Submitted for review'
-				: action === 'approve'
-					? 'Approved'
-					: action === 'publish'
-						? 'Published'
-						: 'Archived';
-			actionSuccess = `${label}.`;
+			// The actionError stays cleared on success so the error
+			// banner renders only on failure.
+			actionSuccess = `${ACTION_LABEL[action]}.`;
 			if (actionSuccessTimer) clearTimeout(actionSuccessTimer);
 			actionSuccessTimer = setTimeout(() => {
 				actionSuccess = null;
@@ -128,20 +133,28 @@
 					? `Action ${action} failed: ${e.message}`
 					: `Action ${action} failed.`;
 		} finally {
+			// Always release the row — without this, a network error
+			// would leave busyId stuck and every other action button
+			// disabled.
 			busyId = null;
 		}
 	}
 
 	async function submitReject() {
 		if (rejectTarget === null) return;
-		const notes = rejectNotes.trim();
-		if (!notes) return;
+		const notesCheck = rejectNotesResult;
+		if (!notesCheck.success) {
+			actionError = notesCheck.error.issues[0]?.message ?? 'Rejection reason is required.';
+			return;
+		}
+		const notes = notesCheck.data;
 		rejectSaving = true;
 		actionError = null;
 		try {
 			// orval didn't generate a typed body param for the @action
-			// endpoint (it falls back to RequestInit). Review_notes is
-			// the backend's required field per the transition contract.
+			// endpoint (drf-spectacular doesn't emit a requestBody for
+			// `@action` methods). The backend's transition contract
+			// requires `review_notes`; we hand-build the JSON body.
 			await testimonialsRejectCreate(rejectTarget, {
 				method: 'POST',
 				body: JSON.stringify({ review_notes: notes }),
@@ -197,6 +210,23 @@
 			month: 'short',
 			day: 'numeric',
 		});
+	}
+
+	/**
+	 * DRF's pagination wrapper hands back `{ count, next, previous,
+	 * results }`. orval's generated TypeScript type assumes the same
+	 * shape, but the actual list endpoint returns the paginated
+	 * object directly — accept either envelope and return the
+	 * `results` array. Keeps the cast out of the call site.
+	 */
+	function extractListResults(res: unknown): TestimonialPublic[] {
+		const outer = (res ?? {}) as Record<string, unknown>;
+		const inner =
+			outer.data && typeof outer.data === 'object'
+				? (outer.data as Record<string, unknown>)
+				: outer;
+		const results = inner.results;
+		return Array.isArray(results) ? (results as TestimonialPublic[]) : [];
 	}
 </script>
 

@@ -14,6 +14,19 @@
 	} from '$lib/schemas/testimonialForm';
 	import type { PageData } from './$types';
 
+	// `incident_date_precision` and `incident_types` exist on the model
+	// but aren't in the generated `TestimonialWriteRequest` —
+	// drf-spectacular skipped them during introspection. The backend
+	// still accepts them on POST, so we extend the request type once
+	// at module scope and build a single typed body below. This keeps
+	// the call site from doing post-hoc mutation on an aliased copy
+	// (`body as Foo & Bar`) and keeps the request contract auditable
+	// in one place.
+	type TestimonialWriteRequestWithExtras = TestimonialWriteRequest & {
+		incident_date_precision?: 'exact' | 'approximate' | 'unknown';
+		incident_types?: string[];
+	};
+
 	let { data }: { data: PageData } = $props();
 
 	// SSR-hydrated auth — see +layout.svelte for the rationale.
@@ -123,14 +136,18 @@
 		submitAfter: boolean,
 		data: NewTestimonialInput,
 	): Promise<void> {
-		// The schema has already trimmed every string field, so the
-		// body is built from `data` directly — no extra `.trim()`
-		// calls scattered through here.
-		const body: TestimonialWriteRequest = {
+		// Build ONE body. The schema has already trimmed every string
+		// field, so the request payload is constructed directly from
+		// `data` — no extra `.trim()` calls scattered through here.
+		// `verification_level` accepts an empty string from the form
+		// ("not set"), which the backend treats as null; coerce to
+		// undefined so JSON.stringify drops it from the wire payload.
+		const body: TestimonialWriteRequestWithExtras = {
 			title: data.title,
 			country: data.country,
 			region: data.region,
 			incident_date: data.incidentDate || null,
+			incident_date_precision: incidentDatePrecision,
 			summary: data.summary,
 			narrative: data.narrative,
 			outcome: data.outcome,
@@ -144,85 +161,24 @@
 			family_protected: data.familyProtected,
 			contact_protected: data.contactProtected,
 		};
-		// `incident_date_precision` and `incident_types` exist on the
-		// model but aren't in the generated `TestimonialWriteRequest`
-		// (drf-spectacular skipped them during introspection). The
-		// backend accepts them via raw POST; we lose the round-trip
-		// type safety until the bug is fixed in the schema layer.
-		const bodyWithExtras = body as TestimonialWriteRequest & {
-			incident_date_precision?: string;
-			incident_types?: string[];
-		};
-		bodyWithExtras.incident_date_precision = incidentDatePrecision;
 
-		// Outer try/finally: `saving` resets on every exit so the
-		// button never sticks in 'Submitting…' state.
-		let id: number | null = null;
+		// One create call, regardless of submit/draft — `testimonialsCreate`
+		// always lands the row at status='draft'. The optional submit
+		// transition below is a separate, idempotent call against the
+		// already-saved id; if it fails the row stays a draft on the
+		// server and the user can retry.
+		let id: number;
 		try {
 			const res = await testimonialsCreate(body);
-
-			// Response-shape fix: DRF's ModelViewSet.create returns the
-			// serializer data directly (NOT wrapped in {data, status}),
-			// even though orval's generated TypeScript type assumes
-			// the wrapper. The earlier code read `res.data.id` and
-			// fell through to the 'did not include id' branch on
-			// every successful create — surfacing 'broken cards' and
-			// a frozen form. Read the shape defensively so both the
-			// wrapped (orval spec) and unwrapped (DRF default) work.
-			const record = res as unknown as
-				| { id?: number; data?: { id?: number } }
-				| null
-				| undefined;
-			const unwrapped = record && typeof record === 'object'
-				? (record as Record<string, unknown>)
-				: {};
-			const candidate = unwrapped.data ?? unwrapped;
-			const candidateId =
-				typeof candidate === 'object' && candidate !== null
-					? (candidate as { id?: unknown }).id
-					: undefined;
-			id = typeof candidateId === 'number' ? candidateId : null;
-
-			if (id === null || !Number.isFinite(id)) {
-				throw new Error(
-					'The server accepted the testimonial but its response was missing a valid id. ' +
-						'Please retry — if the problem persists, contact support via the audit log.'
-				);
-			}
-			createdId = id;
+			id = extractCreatedId(res);
 		} catch (e: unknown) {
 			formError =
 				e instanceof Error ? e.message : 'Could not create the testimonial.';
-			return; // finally clears saving
+			return;
 		}
+		createdId = id;
 
-		if (submitAfter) {
-			try {
-				await testimonialsSubmitCreate(id, {});
-			} catch (e: unknown) {
-				// Row was created but the workflow transition failed.
-				// Tell the user both halves of the result so they don't
-				// try to create the same row again.
-				formError =
-					e instanceof Error
-						? `Saved as draft, but submission failed: ${e.message}. ` +
-							'You can retry the submit from the testimonial page.'
-						: 'Saved as draft, but the submit step failed. ' +
-							'You can retry from the testimonial page.';
-				return; // finally clears saving
-			}
-		}
-
-		// Success. Two paths:
-		//   - submitAfter: navigate to the detail page (the page
-		//     itself IS the success confirmation).
-		//   - !submitAfter (save draft): clear the form and show an
-		//     explicit success banner with a link to the new draft,
-		//     so the user gets unambiguous feedback that the click
-		//     landed (no more 'nothing happens' UX).
-		if (submitAfter) {
-			await goto(`${base}/testimonials/${id}`);
-		} else {
+		if (!submitAfter) {
 			formSuccess =
 				'Draft saved. You can keep editing below, or jump to the new draft’s page.';
 			// Reset form so the user can start a new entry without
@@ -241,7 +197,54 @@
 			locationVisibility = 'public_region';
 			familyProtected = true;
 			contactProtected = true;
+			return;
 		}
+
+		// submitAfter === true: transition draft → under_review. If
+		// this fails the row is still a draft on the server; surface
+		// both halves of the result so the user doesn't re-submit and
+		// double-create.
+		try {
+			await testimonialsSubmitCreate(id, {});
+		} catch (e: unknown) {
+			formError =
+				e instanceof Error
+					? `Saved as draft, but submission failed: ${e.message}. ` +
+						'You can retry the submit from the testimonial page.'
+					: 'Saved as draft, but the submit step failed. ' +
+						'You can retry from the testimonial page.';
+			return;
+		}
+		// The detail page IS the success confirmation for the submit
+		// path — no banner needed (and no banner would be visible
+		// anyway after navigation).
+		await goto(`${base}/testimonials/${id}`);
+	}
+
+	/**
+	 * DRF's `ModelViewSet.create` returns the serializer data
+	 * directly — NOT wrapped in `{ data, status }` — even though
+	 * orval's generated TypeScript type assumes the wrapper. Earlier
+	 * code read `res.data.id` and fell through to the
+	 * "did not include id" branch on every successful create,
+	 * surfacing "broken cards" and a frozen form. Accept either
+	 * shape; throw a typed error if the id is missing or wrong-type
+	 * so the caller surfaces a clear, user-friendly message.
+	 */
+	function extractCreatedId(res: unknown): number {
+		const outer = (res ?? {}) as Record<string, unknown>;
+		const candidate =
+			outer.data && typeof outer.data === 'object'
+				? (outer.data as Record<string, unknown>)
+				: outer;
+		const id = candidate.id;
+		if (typeof id !== 'number' || !Number.isFinite(id)) {
+			throw new Error(
+				'The server accepted the testimonial but its response was missing a valid id. ' +
+					'Please retry — if the problem persists, contact support via the audit log.',
+			);
+		}
+		return id;
 	}
 </script>
 
