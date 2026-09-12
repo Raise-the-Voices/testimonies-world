@@ -154,7 +154,14 @@
 		</button>
 
 		<!-- Desktop nav — visible >=768px only. Same items as the
-		     drawer; the drawer is the mobile mirror. -->
+		     drawer; the drawer is the mobile mirror. The bell +
+		     avatar sit OUTSIDE `<nav>` as siblings in `.nav-actions`
+		     so the bell's dropdown panel (position: absolute below
+		     the button) isn't clipped by `.main-navigation ul`'s
+		     `overflow-x: auto` — the CSS spec forces the y-axis to
+		     also clip when overflow-x is non-visible, which is what
+		     made the panel show as a "broken scroll element" on
+		     the navbar edge instead of a clean card. -->
 		<nav class="main-navigation" aria-label="Primary">
 			<ul>
 				{#if currentUser.authenticated}
@@ -173,14 +180,17 @@
 					<li><a href="{base}/contacts" class:active={$page.url.pathname.startsWith(`${base}/contacts`)} aria-current={$page.url.pathname.startsWith(`${base}/contacts`) ? "page" : undefined}>Contacts</a></li>
 				<li><a href="{base}/testimonials/review" class:active={$page.url.pathname.startsWith(`${base}/testimonials/review`)} aria-current={$page.url.pathname.startsWith(`${base}/testimonials/review`) ? "page" : undefined}>Review queue</a></li>
 				{/if}
-				{#if currentUser.authenticated}
-					<li class="nav-bell"><Bell /></li>
-					<li><span class="nav-avatar" title={currentUser.username}>{currentUser.username?.charAt(0).toUpperCase()}</span></li>
-				{:else}
-					<li><a href="{base}/accounts/google/login/?next={base}/">Login</a></li>
-				{/if}
 			</ul>
 		</nav>
+
+		<div class="nav-actions">
+			{#if currentUser.authenticated}
+				<span class="nav-bell-slot"><Bell /></span>
+				<span class="nav-avatar" title={currentUser.username}>{currentUser.username?.charAt(0).toUpperCase()}</span>
+			{:else}
+				<a href="{base}/accounts/google/login/?next={base}/" class="nav-login">Login</a>
+			{/if}
+		</div>
 	</div>
 </header>
 
@@ -526,21 +536,47 @@
 		color: rgba(250, 250, 250, 0.7);
 		font-size: 0.85em;
 	}
-	/* Bell: lift the inline margin Bell.svelte puts on its wrap so
-	   the parent <ul> gap controls spacing consistently. The
-	   selector puts .main-navigation and .nav-bell in the scoped
-	   part (they live in this layout component) and :global(.bell-wrap)
-	   / :global(.bell-btn) on the Bell component's classes. */
-	.nav-bell {
+	/* Nav-actions cluster: holds the bell + avatar (authenticated) or
+	   the Login link (anonymous). Sits as a flex sibling of the
+	   `<nav>` so the bell's dropdown panel — position: absolute
+	   below the button — can render outside the overflow context
+	   created by `.main-navigation ul { overflow-x: auto }`. Without
+	   this lift, the panel is clipped on the y-axis (per CSS spec,
+	   any non-visible overflow-x forces overflow-y to clip) and
+	   shows as a broken strip on the navbar edge. */
+	.nav-actions {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex: 0 0 auto;
+	}
+	.nav-bell-slot {
 		display: inline-flex;
 		align-items: center;
 	}
-	.main-navigation .nav-bell :global(.bell-wrap),
-	.main-navigation .nav-bell :global(.bell-btn) {
+	.nav-bell-slot :global(.bell-wrap),
+	.nav-bell-slot :global(.bell-btn) {
 		margin: 0;
 	}
-	/* Avatar: same diameter as the bell (38px), no horizontal margin
-	   so the parent <ul> gap controls spacing. */
+	.nav-login {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.55rem 1.1rem;
+		border-radius: var(--radius-input);
+		background: rgba(0, 0, 0, 0.18);
+		color: var(--color-text-light);
+		text-decoration: none;
+		font-weight: 700;
+		font-size: 0.82rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06rem;
+	}
+	.nav-login:hover {
+		background: rgba(0, 0, 0, 0.32);
+		text-decoration: none;
+		color: var(--color-text-light);
+	}
+	/* Avatar: same diameter as the bell (38px). */
 	.nav-avatar {
 		display: inline-flex;
 		align-items: center;
