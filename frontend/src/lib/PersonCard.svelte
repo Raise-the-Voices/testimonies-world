@@ -109,6 +109,26 @@
 		display: flex;
 		flex-direction: column;
 		animation: fadeSlideUp 0.4s ease both;
+		/* Perf: scope layout, style, and paint invalidation to this
+		   card. Without `contain`, an image decode, hover, or
+		   animation frame inside ONE card invalidates the entire
+		   list — and on a 20-row listing the mobile profiler
+		   showed 1.5s of Recalculate Style + 2.4s of Paint mostly
+		   attributable to cascading invalidation. `layout` keeps
+		   the card's box from affecting siblings; `style` keeps
+		   counters / `content` etc. from leaking out; `paint`
+		   keeps the card's shadow + image clipped to its own
+		   layer. Browsers without `contain` degrade gracefully. */
+		contain: layout style paint;
+		/* Perf: skip rendering for cards below the fold on first
+		   paint. The browser reserves `contain-intrinsic-size`
+		   space so the layout doesn't shift when a card wakes
+		   up. 320px ≈ image (aspect-ratio 4/3 on a ~280px-wide
+		   card = 210px) + card-body padding + 3-line clamp +
+		   CTA footer. Slight over-estimate is preferable to
+		   jitter when a card suddenly paints. */
+		content-visibility: auto;
+		contain-intrinsic-size: 0 320px;
 	}
 
 	.card-media {
