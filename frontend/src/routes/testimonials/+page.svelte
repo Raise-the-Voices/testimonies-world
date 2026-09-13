@@ -80,13 +80,12 @@
 		mineLoading = true;
 		mineError = null;
 		try {
-			// Narrow to the requester's own drafts on the server. The
-			// backend's `?status=draft` filter intersects with role-
-			// based scoping (Volunteer → own rows at that status;
-			// Advocate+ → all rows at that status). Without this
-			// param the page would receive `(own drafts ∪ all
-			// PUBLISHED)` — the published rows are noise in the
-			// "My drafts" tab.
+			// `?status=draft` now narrows to OWN rows at that status
+			// for any authenticated user (Volunteer or Advocate+).
+			// "My drafts" semantically means "MY drafts" — both roles
+			// get the same scoped view. Advocate+ uses the Review
+			// queue (`?status=under_review`) to see other users'
+			// in-flight rows.
 			const res = await testimonialsList({ status: 'draft' });
 			// Response-shape note: orval's type says `testimonialsList()`
 			// returns {data, status, headers}, but the actual DRF
@@ -97,11 +96,6 @@
 			// in the create form (9b11b51) and detail page (e3c8527).
 			const body = (res as unknown as Paginated<TestimonialWithWorkflow>).results ?? [];
 			mineList = body;
-			// For an Advocate, `mine` would otherwise overlap with
-			// the review queue (they see everything). Empty it for
-			// staff so the tab isn't a duplicate of "Review queue"
-			// until the backend exposes a created_by_username filter.
-			if (canReview) mineList = [];
 		} catch (e) {
 			mineError = e instanceof Error ? e.message : 'Failed to load your drafts.';
 		} finally {
@@ -161,17 +155,28 @@
 	}
 
 	$effect(() => {
-		// Re-fires when auth changes OR tab changes; we only want the
-		// fetch to happen on a real signal (tab activation, not
-		// reactive emptiness), so we read the values but use the
-		// per-tab attempted sentinel as the gate.
+		// Re-fires on auth changes (login/logout) and on tab clicks.
+		// Strategy: kick off ALL applicable tab loaders eagerly on
+		// mount (or whenever auth flips to authenticated) so the
+		// badge counts are populated before the user ever clicks a
+		// tab. Previously this effect only fired the loader for the
+		// currently-active tab — which left `mine`, `review`, and
+		// `rejected` at length 0 until the user clicked them, so the
+		// badges read "0" on first paint.
+		//
+		// The per-tab `attempted` sentinels still gate re-fetches on
+		// subsequent tab clicks (which are now no-ops, since the data
+		// is already in flight or loaded), and `afterNavigate` re-arms
+		// them on cross-route navigation so badges re-sync after, e.g.,
+		// creating a new draft on /testimonials/new and returning here.
 		void currentUser.authenticated;
 		void activeTab;
 
 		// Reset on auth changes so a fresh login refetches. The
-		// 'activeTab' dependency already triggers a re-run when the
-		// user clicks a tab, so resetting only on auth flips is the
-		// minimum needed.
+		// 'activeTab' dependency also re-runs this effect on tab clicks,
+		// but the sentinel gate below makes that a no-op for already-
+		// loaded tabs — the only thing it gives us is re-fetching after
+		// a logout → login cycle in the same SPA session.
 		if (!currentUser.authenticated) {
 			mineAttempted = false;
 			reviewAttempted = false;
@@ -179,30 +184,15 @@
 			return;
 		}
 
-		if (
-			activeTab === 'mine' &&
-			showMineTab &&
-			!mineAttempted &&
-			!mineLoading
-		) {
+		if (showMineTab && !mineAttempted && !mineLoading) {
 			mineAttempted = true;
 			loadMine();
 		}
-		if (
-			activeTab === 'review' &&
-			showReviewTab &&
-			!reviewAttempted &&
-			!reviewLoading
-		) {
+		if (showReviewTab && !reviewAttempted && !reviewLoading) {
 			reviewAttempted = true;
 			loadReview();
 		}
-		if (
-			activeTab === 'rejected' &&
-			showRejectedTab &&
-			!rejectedAttempted &&
-			!rejectedLoading
-		) {
+		if (showRejectedTab && !rejectedAttempted && !rejectedLoading) {
 			rejectedAttempted = true;
 			loadRejected();
 		}
