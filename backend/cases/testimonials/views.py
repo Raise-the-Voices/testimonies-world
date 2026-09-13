@@ -85,11 +85,18 @@ class TestimonialViewSet(viewsets.ModelViewSet):
                 enum=[c for c, _ in Testimonial.Status.choices],
                 location=OpenApiParameter.QUERY,
                 description=(
-                    'Filter by workflow status. Intersected with '
-                    'role-based scoping — anonymous viewers see '
-                    'PUBLISHED-only regardless of this value; '
-                    'Volunteers with a non-PUBLISHED status see '
-                    'only their own rows; Advocate+ see any status. '
+                    'Filter by workflow status. Role-scoped:\n'
+                    ' - `?status=draft` narrows to the requester\'s '
+                    'OWN drafts for any authenticated user ("My drafts" '
+                    'semantic).\n'
+                    ' - `?status=under_review`, `?status=rejected`, '
+                    'and `?status=published` widen for Advocate+ '
+                    'so the Review queue / Rejected tab / Published '
+                    'list surface actually shows the whole org.\n'
+                    ' - Volunteers on any non-DRAFT status get a '
+                    'defensive narrow to their own rows.\n'
+                    ' - Anonymous callers get PUBLISHED-only '
+                    'regardless of the value.\n'
                     'Unknown values fall through to the role-based '
                     'default (no narrowing).'
                 ),
@@ -132,15 +139,34 @@ class TestimonialViewSet(viewsets.ModelViewSet):
         valid_statuses = {choice for choice, _ in Testimonial.Status.choices}
         if status_param and status_param in valid_statuses:
             user = self.request.user
-            if user.is_authenticated and (
-                user.is_staff or user.groups.filter(name='Advocate').exists()
-            ):
-                # Advocate+: explicit status narrows to that status.
-                return qs.filter(status=status_param)
+            # Per-status scope policy. Two distinct cases:
+            #
+            #   DRAFT — narrow to OWN rows for any authenticated user.
+            #     "My drafts" is semantically "MY drafts". Advocate+
+            #     don't get a privileged view of every other user's
+            #     in-flight drafts through this endpoint; they use
+            #     `?status=under_review` (the Review queue) for that.
+            #     Widening this for staff would either show every
+            #     user's drafts mixed in (cluttered) or force the
+            #     front-end to client-side clear (always empty for
+            #     staff, contradicting the principle that "My X"
+            #     means "my X, not the world's").
+            #
+            #   under_review / rejected / published — widen for
+            #     Advocate+ so the Review queue / Rejected tab /
+            #     Published list surface actually shows what's
+            #     in flight across the whole org. Narrow for
+            #     Volunteer (defensive — they shouldn't be able to
+            #     enumerate other users' in-flight rows).
             if user.is_authenticated:
-                # Volunteer: explicit status narrows to OWN rows at
-                # that status (otherwise we'd leak other users'
-                # drafts on a ?status=draft call).
+                is_advocate_plus = user.is_staff or user.groups.filter(
+                    name='Advocate'
+                ).exists()
+                if status_param == Testimonial.Status.DRAFT:
+                    return qs.filter(created_by=user, status=status_param)
+                if is_advocate_plus:
+                    return qs.filter(status=status_param)
+                # Volunteer on a non-DRAFT status: defensive narrow.
                 return qs.filter(created_by=user, status=status_param)
             # Anonymous + explicit status: only PUBLISHED is safe to
             # surface — every other status is private and would leak
