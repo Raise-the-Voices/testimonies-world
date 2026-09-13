@@ -16,6 +16,7 @@
  * client functions are typed at the boundary by the OpenAPI types;
  * after the Zod parse, runtime values are richer than those types claim.
  */
+import { base } from '$app/paths';
 import type { ApiError } from '../api';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
@@ -49,7 +50,19 @@ export async function fetcher<T>(url: string, options: RequestInit = {}): Promis
 
 	let res: Response;
 	try {
-		res = await fetch(url, {
+		// Prepend `base` to every orval-generated URL. The generated
+		// path builder emits bare `/api/...` paths, which is correct
+		// for a deployment at the domain root (cases.raisethevoices.org)
+		// but breaks under the `/testimonies/` sub-path deploy at
+		// demos.linkedtrust.us — the browser resolves `/api/...` to
+		// the domain root, which nginx does NOT proxy to the backend
+		// (only `/testimonies/api/` is proxied there). Prepending
+		// `base` is a no-op when base='' (production) and correctly
+		// rewrites `/api/...` → `/testimonies/api/...` everywhere
+		// else. The legacy manual `api.ts` `request()` already does
+		// the equivalent (`API_BASE = ${base}/api`), so the two
+		// fetch layers now agree on the URL shape.
+		res = await fetch(`${base}${url}`, {
 			credentials: 'include',
 			...options,
 			headers,
