@@ -3155,7 +3155,7 @@ paths:
   /api/testimonials/{id}/approve/:
     post:
       operationId: testimonials_approve_create
-      description: under_review → approved. Notes optional in body.
+      description: under_review → published (single-step approval; sets reviewed_by/at AND published_by/at). Notes optional in body.
       parameters:
       - in: path
         name: id
@@ -3224,7 +3224,7 @@ paths:
   /api/testimonials/{id}/publish/:
     post:
       operationId: testimonials_publish_create
-      description: approved → published. Sets published_by / published_at.
+      description: approved → published (legacy migration path for rows pre-dating the single-step approve). Sets published_by / published_at.
       parameters:
       - in: path
         name: id

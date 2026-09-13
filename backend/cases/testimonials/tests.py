@@ -115,16 +115,17 @@ class TestimonialWorkflowTests(BaseTestCase):
         res = self._post_action(self.volunteer, pk, 'approve')
         self.assertEqual(res.status_code, 403, res.content)
 
-        # Advocate approves.
+        # Advocate approves — single-step, lands the row at
+        # 'published' directly. The 2-step (approve → publish) flow
+        # is gone; legacy approved rows can still be migrated via
+        # /publish/ but new rows never sit at 'approved'.
         res = self._post_action(self.advocate, pk, 'approve',
                                 {'review_notes': 'verified'})
         self.assertEqual(res.status_code, 200, res.content)
-        self.assertEqual(res.json()['status'], 'approved')
-
-        # Advocate publishes.
-        res = self._post_action(self.advocate, pk, 'publish')
-        self.assertEqual(res.status_code, 200, res.content)
         self.assertEqual(res.json()['status'], 'published')
+        # Both stamps land in the same transition.
+        self.assertIsNotNone(res.json().get('reviewed_at'))
+        self.assertIsNotNone(res.json().get('published_at'))
 
         # AuditLog rows exist for create + every transition.
         audit_actions = list(
@@ -133,10 +134,10 @@ class TestimonialWorkflowTests(BaseTestCase):
             .order_by('timestamp')
             .values_list('action', flat=True)
         )
-        # 1 create + 3 transitions (submit, approve, publish) = 4
+        # 1 create + 2 transitions (submit, approve) = 3
         # EDITED rows total. No VIEWED rows in this test — those
         # belong to the encrypted-source endpoint tests.
-        self.assertEqual(len(audit_actions), 4)
+        self.assertEqual(len(audit_actions), 3)
         details = list(
             AuditLog.objects
             .filter(target_type='testimonial', target_id=pk,
@@ -145,8 +146,7 @@ class TestimonialWorkflowTests(BaseTestCase):
         )
         # Each EDITED row carries a transition note.
         self.assertTrue(any('draft' in d and 'under_review' in d for d in details))
-        self.assertTrue(any('under_review' in d and 'approved' in d for d in details))
-        self.assertTrue(any('approved' in d and 'published' in d for d in details))
+        self.assertTrue(any('under_review' in d and 'published' in d for d in details))
 
     def test_reject_requires_review_notes(self):
         pk = self._create(self.volunteer)
