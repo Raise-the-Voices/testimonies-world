@@ -4366,7 +4366,12 @@ page?: number;
  */
 search?: string;
 /**
- * Filter by workflow status. Intersected with role-based scoping — anonymous viewers see PUBLISHED-only regardless of this value; Volunteers with a non-PUBLISHED status see only their own rows; Advocate+ see any status. Unknown values fall through to the role-based default (no narrowing).
+ * Filter by workflow status. Role-scoped:
+ - `?status=draft` narrows to the requester's OWN drafts for any authenticated user ("My drafts" semantic).
+ - `?status=under_review`, `?status=rejected`, and `?status=published` widen for Advocate+ so the Review queue / Rejected tab / Published list surface actually shows the whole org.
+ - Volunteers on any non-DRAFT status get a defensive narrow to their own rows.
+ - Anonymous callers get PUBLISHED-only regardless of the value.
+Unknown values fall through to the role-based default (no narrowing).
  */
 status?: TestimonialsListStatus;
 };
