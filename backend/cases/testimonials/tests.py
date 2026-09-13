@@ -624,6 +624,50 @@ class TestimonialStatusFilterTests(BaseTestCase):
         for r in res.json()['results']:
             self.assertEqual(r['status'], 'draft')
 
+    def test_advocate_status_draft_returns_only_own_drafts(self):
+        """`?status=draft` for an Advocate must ALSO narrow to the
+        Advocate's own drafts. The semantic of "My drafts" is
+        "MY drafts" — Advocate+ don't get a privileged view of
+        every other user's in-flight drafts through this endpoint;
+        they use `?status=under_review` (Review queue) for that.
+
+        Without this narrowing, the front-end "My drafts" tab would
+        either show every staff member's drafts mixed in (cluttered)
+        or be force-cleared client-side for staff (always empty,
+        contradicting the principle that "My X" means "my X").
+
+        Regression test for the bug where `?status=draft` widened to
+        `qs.filter(status='draft')` for Advocate+, leaving staff
+        unable to track their own drafts through the dedicated tab.
+        """
+        # Stage: advocate's own draft, another volunteer's draft,
+        # a published row, an under_review row. Only the first
+        # should appear for the Advocate on `?status=draft`.
+        own_draft = self._make_row(
+            status_value=Testimonial.Status.DRAFT,
+            created_by=self.advocate,
+        )
+        self._make_row(
+            status_value=Testimonial.Status.DRAFT,
+            created_by=self.other_volunteer,
+        )
+        self._make_row(
+            status_value=Testimonial.Status.PUBLISHED,
+            created_by=self.author,
+        )
+        self._make_row(
+            status_value=Testimonial.Status.UNDER_REVIEW,
+            created_by=self.author,
+        )
+
+        self.client.force_login(self.advocate)
+        res = self.client.get('/api/testimonials/?status=draft')
+        self.assertEqual(res.status_code, 200)
+        ids = [r['id'] for r in res.json()['results']]
+        self.assertEqual(ids, [own_draft.id])
+        for r in res.json()['results']:
+            self.assertEqual(r['status'], 'draft')
+
     def test_advocate_status_under_review_narrows_to_under_review(self):
         """`?status=under_review` for an Advocate narrows to that
         status. Without the explicit filter, an Advocate (who
