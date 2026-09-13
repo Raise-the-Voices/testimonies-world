@@ -178,7 +178,6 @@
 				{#if isAdvocate(currentUser)}
 					<li><a href="{base}/casework" class:active={$page.url.pathname.startsWith(`${base}/casework`)} aria-current={$page.url.pathname.startsWith(`${base}/casework`) ? "page" : undefined}>Casework</a></li>
 					<li><a href="{base}/contacts" class:active={$page.url.pathname.startsWith(`${base}/contacts`)} aria-current={$page.url.pathname.startsWith(`${base}/contacts`) ? "page" : undefined}>Contacts</a></li>
-				<li><a href="{base}/testimonials/review" class:active={$page.url.pathname.startsWith(`${base}/testimonials/review`)} aria-current={$page.url.pathname.startsWith(`${base}/testimonials/review`) ? "page" : undefined}>Review queue</a></li>
 				{/if}
 			</ul>
 		</nav>
@@ -229,7 +228,6 @@
 		{#if isAdvocate(currentUser)}
 			<li><a href="{base}/casework" class:active={$page.url.pathname.startsWith(`${base}/casework`)} aria-current={$page.url.pathname.startsWith(`${base}/casework`) ? "page" : undefined} onclick={closeDrawer}>Casework</a></li>
 			<li><a href="{base}/contacts" class:active={$page.url.pathname.startsWith(`${base}/contacts`)} aria-current={$page.url.pathname.startsWith(`${base}/contacts`) ? "page" : undefined} onclick={closeDrawer}>Contacts</a></li>
-			<li><a href="{base}/testimonials/review" class:active={$page.url.pathname.startsWith(`${base}/testimonials/review`)} aria-current={$page.url.pathname.startsWith(`${base}/testimonials/review`) ? "page" : undefined} onclick={closeDrawer}>Review queue</a></li>
 		{/if}
 		{#if currentUser.authenticated}
 			<li class="nav-bell"><Bell /></li>
@@ -386,9 +384,9 @@
 		align-items: center;
 		flex-wrap: nowrap;
 		justify-content: flex-end;
-		/* Tighter gap + smaller font so 11 nav items (Dashboard /
+		/* Tighter gap + smaller font so 10 nav items (Dashboard /
 		   Cases / Statistics / Submit / Reports / Watchdog /
-		   Casework / Contacts / Review queue / Bell / Avatar) stay
+		   Casework / Contacts / Bell / Avatar) stay
 		   visible on a single row at common desktop widths. Items
 		   still overflow-scroll on truly narrow viewports. */
 		gap: 0.1rem;
