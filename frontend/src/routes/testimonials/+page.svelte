@@ -246,17 +246,6 @@
 	</header>
 
 	<nav class="testimonials-tabs" aria-label="Testimonials sections">
-		<button
-			type="button"
-			class="testimonials-tab"
-			class:testimonials-tab-active={activeTab === 'published'}
-			aria-current={activeTab === 'published' ? 'page' : undefined}
-			onclick={() => (activeTab = 'published')}
-		>
-			Published
-			<span class="testimonials-tab-count">{data.count ?? data.testimonials.length}</span>
-		</button>
-
 		{#if showMineTab}
 			<button
 				type="button"
@@ -295,6 +284,17 @@
 				<span class="testimonials-tab-count">{rejectedList.length}</span>
 			</button>
 		{/if}
+
+		<button
+			type="button"
+			class="testimonials-tab"
+			class:testimonials-tab-active={activeTab === 'published'}
+			aria-current={activeTab === 'published' ? 'page' : undefined}
+			onclick={() => (activeTab = 'published')}
+		>
+			Published
+			<span class="testimonials-tab-count">{data.count ?? data.testimonials.length}</span>
+		</button>
 	</nav>
 
 	{#if activeTab === 'published'}

@@ -8,9 +8,10 @@
 	let the backend reject with a typed 400/403 if the row state or
 	ownership doesn't match. Errors surface inline so the user gets
 	unambiguous feedback (the same silent-failure UX the queue page
-	fixes for /testimonials/review).
+	fixes for the Review queue tab on /testimonials).
 
-	The shape is consistent with /testimonials/review/+page.svelte:
+	The shape is consistent with the Review queue tab on
+	/testimonials:
 	  - one in-flight action at a time (`busy` guard)
 	  - 4-second auto-dismiss success banner
 	  - inline reject modal (notes required, same contract as backend)
@@ -500,7 +501,7 @@
 		font-size: 0.9rem;
 	}
 
-	/* Reject modal — same shape as /testimonials/review */
+	/* Reject modal — same shape as the Review queue tab on /testimonials */
 	.modal-backdrop {
 		position: fixed;
 		inset: 0;
