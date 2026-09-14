@@ -30,6 +30,7 @@
 	import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
 	import { isAdvocate } from '$lib/session';
 	import Modal from '$lib/Modal.svelte';
+	import { STATUS_LABEL } from '$lib/statusPresentation';
 	import type { User } from '$lib/types';
 
 	/* Wire-shape extends TestimonialPublic with the workflow metadata
@@ -145,15 +146,14 @@
 	// that user — Advocate+ can always edit drafts in the queue.
 	const canEditDraft = $derived(status === 'draft' && isAuthed);
 
-	// Status pill — friendly label + CSS class for color coding.
-	const STATUS_LABEL: Record<typeof status, string> = {
-		draft: 'Draft',
-		under_review: 'Under review',
-		approved: 'Approved',
-		published: 'Published',
-		rejected: 'Rejected',
-		archived: 'Archived',
-	};
+	// Status pill — uses the centralised label from
+	// $lib/statusPresentation so a new status is added in one place.
+	// `status` is widened to string at the type level because the
+	// public schema types `status` as a string union; STATUS_LABEL
+	// keys by string so any value passes through safely (a typo
+	// would just fall back to status.replace('_', ' ') via the
+	// helper, not break).
+	const pillLabel = $derived(STATUS_LABEL[status] ?? status);
 
 	// Sub-line for the latest workflow timestamp. Pick the most
 	// recent non-null field — they're mutually exclusive in normal
@@ -283,7 +283,7 @@
 	<aside class="workflow-actions" aria-label="Workflow actions">
 		<header class="workflow-header">
 			<span class="status-pill status-pill-{status}">
-				{STATUS_LABEL[status]}
+				{pillLabel}
 			</span>
 			{#if lastTransition}
 				<p class="workflow-subline">
