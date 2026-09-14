@@ -52,15 +52,17 @@
 	type Props = {
 		testimonial: TestimonialPublic & WorkflowFields;
 		currentUser: User;
-		/* Called after a successful transition so the parent can
-		   re-render with the new status. The component also re-
-		   fetches the row internally to keep its own state in sync
-		   (status pill + button set). The callback lets the parent
-		   refresh other UI (e.g. the page header). */
-		onChanged?: () => void;
+		/* Called after a successful transition with the freshly-
+		   fetched row payload, so the parent can re-render with
+		   the new status. The component also re-fetches the row
+		   internally to keep its own state in sync (status pill +
+		   button set). The callback is the documented child-to-
+		   parent state-refresh idiom — using `bind:` would force
+		   the parent to give up its `derived` prop binding. */
+		onUpdated?: (row: TestimonialPublic & WorkflowFields) => void;
 	};
 
-	let { testimonial, currentUser, onChanged }: Props = $props();
+	let { testimonial, currentUser, onUpdated }: Props = $props();
 
 	let id = $derived(testimonial.id);
 	let status = $derived(testimonial.status);
@@ -212,7 +214,6 @@
 			const label =
 				action === 'submit' ? submitSuccessLabel : ACTION_SUCCESS_LABEL[action];
 			flashSuccess(`${label}.`);
-			onChanged?.();
 		} catch (e) {
 			actionError =
 				e instanceof Error
@@ -238,7 +239,6 @@
 			rejectNotes = '';
 			await refreshRow();
 			flashSuccess(`${ACTION_SUCCESS_LABEL.reject}.`);
-			onChanged?.();
 		} catch (e) {
 			actionError =
 				e instanceof Error ? `Reject failed: ${e.message}` : 'Reject failed.';
@@ -253,15 +253,17 @@
 	   (and to pick up server-side stamp changes — submitted_at,
 	   approved_at, etc. — that the response shape might not surface
 	   on every transition). */
-	async function refreshRow() {
+	async function refreshRow(): Promise<TestimonialPublic & WorkflowFields> {
 		const fresh = await testimonialsRetrieve(id);
 		const row = fresh as unknown as TestimonialPublic & WorkflowFields;
-		// Mutate the testimonial in place so the parent's prop
-		// reactivity picks up the new fields. (Svelte 5 props are
-		// reactive at the parent binding; mutating here is the
-		// idiom for child-to-parent state refresh without a callback
-		// explosion.)
-		Object.assign(testimonial, row);
+		// Notify the parent with the refreshed row so its `derived`
+		// binding can re-render with the new fields. Svelte 5 props
+		// are reactive at the parent binding; the child cannot
+		// mutate the parent's source. `bind:testimonial` was the
+		// alternative — see the prop docstring for why we chose a
+		// callback instead.
+		onUpdated?.(row);
+		return row;
 	}
 
 	function flashSuccess(msg: string) {
