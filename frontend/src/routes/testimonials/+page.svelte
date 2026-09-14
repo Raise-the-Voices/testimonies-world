@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { afterNavigate } from '$app/navigation';
+	import { page } from '$app/state';
 	import { base } from '$app/paths';
 	import { testimonialsList } from '$lib/api/generated/endpoints';
 	import {
@@ -19,6 +20,26 @@
 	let currentUser = $derived(data.user ?? $user);
 	let canReview = $derived(isAdvocate(currentUser));
 
+	// Read ?tab=<key> on mount so the post-action redirect from
+	// /testimonials/[id] lands on the matching tab (e.g. after a
+	// Reviewer approves, ?tab=published opens the published surface).
+	// Falls back to 'published' for any invalid value.
+	const VALID_TABS = ['published', 'mine', 'review', 'rejected'] as const;
+	type TabKey = (typeof VALID_TABS)[number];
+	function tabFromUrl(): TabKey {
+		const raw = page.url.searchParams.get('tab');
+		if (raw && (VALID_TABS as readonly string[]).includes(raw)) {
+			return raw as TabKey;
+		}
+		return 'published';
+	}
+	let activeTab = $state<TabKey>(tabFromUrl());
+	// Re-derive on URL change (afterNavigate covers cross-route; this
+	// effect handles in-page ?tab= shifts).
+	$effect(() => {
+		activeTab = tabFromUrl();
+	});
+
 	/* ---------------------------------------------------------------------------
 	   Tab model
 
@@ -31,7 +52,6 @@
 	   and so it doesn't share the client-tab state machine — it has its own
 	   short render branch.
 	   --------------------------------------------------------------------------- */
-	type TabKey = 'published' | 'mine' | 'review' | 'rejected';
 	type ClientTabKey = Exclude<TabKey, 'published'>;
 	type ClientTabStatus =
 		| typeof TestimonialsListStatus.draft
@@ -82,8 +102,6 @@
 			emptyMessage: 'Nothing has been rejected yet.',
 		},
 	]);
-
-	let activeTab = $state<TabKey>('published');
 
 	/* ---------------------------------------------------------------------------
 	   Per-tab fetch state

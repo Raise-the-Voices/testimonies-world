@@ -18,6 +18,7 @@
 	  - error banner stays until user dismisses
 -->
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import {
 		testimonialsSubmitCreate,
@@ -31,6 +32,7 @@
 	import { isAdvocate } from '$lib/session';
 	import Modal from '$lib/Modal.svelte';
 	import { STATUS_LABEL } from '$lib/statusPresentation';
+	import { showToast } from '$lib/toast';
 	import type { User } from '$lib/types';
 
 	/* Wire-shape extends TestimonialPublic with the workflow metadata
@@ -213,7 +215,14 @@
 			await refreshRow();
 			const label =
 				action === 'submit' ? submitSuccessLabel : ACTION_SUCCESS_LABEL[action];
-			flashSuccess(`${label}.`);
+			// Post-action navigation: send the user to the list page
+			// scoped to the destination tab. submit → review queue,
+			// approve (single-step to published) / publish → published,
+			// archive → published. Each redirect fires a toast on
+			// the destination page.
+			const tab = postActionTab(action);
+			showToast(`${label}.`, { variant: 'success' });
+			await goto(`${base}/testimonials?tab=${tab}`);
 		} catch (e) {
 			actionError =
 				e instanceof Error
@@ -238,13 +247,23 @@
 			rejectOpen = false;
 			rejectNotes = '';
 			await refreshRow();
-			flashSuccess(`${ACTION_SUCCESS_LABEL.reject}.`);
+			showToast(`${ACTION_SUCCESS_LABEL.reject}.`, { variant: 'success' });
+			await goto(`${base}/testimonials?tab=rejected`);
 		} catch (e) {
 			actionError =
 				e instanceof Error ? `Reject failed: ${e.message}` : 'Reject failed.';
 		} finally {
 			rejectSaving = false;
 		}
+	}
+
+	/** Map a successful transition to the list-page tab that should
+	 *  receive the post-action redirect. Keeps the navigation
+	 *  decision in one place (rather than scattered across each
+	 *  call site). */
+	function postActionTab(action: TransitionAction): 'review' | 'published' {
+		if (action === 'submit') return 'review';
+		return 'published';
 	}
 
 	/* Re-fetch the row so the status pill + button set reflect the
@@ -329,32 +348,38 @@
 		title={`Reject testimonial #${id}`}
 		onClose={closeRejectModal}
 	>
-		<p>
+		<p class="reject-modal-description">
 			Rejection requires a reason. The submitter will see this note
-			on their draft.
+			on their draft so they can address it before re-submitting.
 		</p>
-		<label class="modal-label" for="reject-notes">Reason</label>
-		<textarea
-			id="reject-notes"
-			rows="4"
-			bind:value={rejectNotes}
-			placeholder="e.g. Source unreliable; needs re-verification."
-		></textarea>
-		<div class="modal-actions">
+		<div class="reject-modal-field">
+			<label class="reject-modal-label" for="reject-notes">
+				Reason <span class="reject-modal-required" aria-hidden="true">*</span>
+			</label>
+			<textarea
+				id="reject-notes"
+				class="reject-modal-textarea"
+				rows="5"
+				bind:value={rejectNotes}
+				placeholder="e.g. Source unreliable; needs re-verification."
+			></textarea>
+		</div>
+		<div class="reject-modal-actions">
 			<button
 				type="button"
-				class="btn btn-secondary"
+				class="reject-btn reject-btn-cancel"
 				onclick={closeRejectModal}
+				disabled={rejectSaving}
 			>
 				Cancel
 			</button>
 			<button
 				type="button"
-				class="btn btn-danger"
+				class="reject-btn reject-btn-confirm"
 				disabled={!rejectNotes.trim() || rejectSaving}
 				onclick={submitReject}
 			>
-				{rejectSaving ? 'Rejecting…' : 'Reject'}
+				{rejectSaving ? 'Rejecting…' : 'Reject testimonial'}
 			</button>
 		</div>
 	</Modal>
@@ -478,6 +503,103 @@
 	}
 	.action-btn-edit:hover {
 		border-color: var(--color-primary);
+	}
+
+	/* Reject modal — clean typography hierarchy, padded textarea with
+	   focus ring, distinct outline (Cancel) and destructive (Reject)
+	   action buttons. Tokens from app.css; no hardcoded values. */
+	.reject-modal-description {
+		margin: 0 0 1rem 0;
+		color: var(--color-text-muted);
+		font-size: 0.92rem;
+		line-height: 1.5;
+	}
+
+	.reject-modal-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
+		margin-bottom: 1.25rem;
+	}
+
+	.reject-modal-label {
+		display: block;
+		font-size: 0.85rem;
+		font-weight: 700;
+		color: var(--color-text);
+	}
+
+	.reject-modal-required {
+		color: var(--color-danger);
+		margin-left: 0.15rem;
+	}
+
+	.reject-modal-textarea {
+		font: inherit;
+		width: 100%;
+		min-height: 6.5em;
+		padding: 0.65rem 0.75rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-input);
+		background: var(--color-bg-white);
+		color: var(--color-text);
+		resize: vertical;
+		box-sizing: border-box;
+		line-height: 1.5;
+	}
+	.reject-modal-textarea:focus-visible {
+		outline: 3px solid var(--focus-ring);
+		outline-offset: 1px;
+		border-color: var(--color-primary);
+	}
+
+	.reject-modal-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.6rem;
+		flex-wrap: wrap;
+	}
+
+	.reject-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.55rem 1.1rem;
+		border-radius: var(--radius-input);
+		font: inherit;
+		font-weight: 700;
+		font-size: 0.92rem;
+		cursor: pointer;
+		transition: background-color 0.15s ease, border-color 0.15s ease,
+			color 0.15s ease;
+		border: 1px solid transparent;
+	}
+	.reject-btn:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+	}
+
+	.reject-btn-cancel {
+		background: var(--color-bg-white);
+		color: var(--color-primary);
+		border-color: var(--color-border);
+	}
+	.reject-btn-cancel:hover:not(:disabled) {
+		border-color: var(--color-primary);
+		background: var(--color-section-bg);
+	}
+
+	.reject-btn-confirm {
+		background: var(--color-danger);
+		color: var(--color-text-light);
+		border-color: var(--color-danger);
+	}
+	.reject-btn-confirm:hover:not(:disabled) {
+		filter: brightness(0.92);
+	}
+	.reject-btn-confirm:focus-visible {
+		outline: 3px solid var(--focus-ring);
+		outline-offset: 2px;
 	}
 
 	.action-error {
