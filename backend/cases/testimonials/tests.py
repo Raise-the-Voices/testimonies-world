@@ -63,6 +63,137 @@ class FernetRoundTripTests(BaseTestCase):
             decrypt_str(ciphertext[:-1] + b'X')
 
 
+# Rotation + production gate — closes the audit gaps.
+class EncryptionRotationAndGateTests(BaseTestCase):
+    """MultiFernet rotation + ImproperlyConfigured + RuntimeWarning.
+
+    No `FERNET_KEY_SETTING` decorator: these tests assert the
+    unconfigured path.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from cases.testimonials import encryption
+        encryption.get_fernet.cache_clear()
+
+    def tearDown(self):
+        from cases.testimonials import encryption
+        encryption.get_fernet.cache_clear()
+        super().tearDown()
+
+    def test_multifernet_decrypts_old_key_after_rotation(self):
+        """Old ciphertext, encrypted under key A, decrypts successfully
+        when the runtime is configured with [B, A] — the rotation
+        path. Without this, every prod rotation 500s every existing
+        row.
+        """
+        import warnings
+        from cryptography.fernet import Fernet
+        from django.test import override_settings
+        key_a = Fernet.generate_key()
+        key_b = Fernet.generate_key()
+        with override_settings(TESTIMONIALS_FERNET_KEYS=[key_b, key_a]):
+            from cases.testimonials import encryption
+            encryption.get_fernet.cache_clear()
+            # Encrypt under key_a (we construct the Fernet directly
+            # to simulate data written by a previous version).
+            ct = Fernet(key_a).encrypt(b'legacy plaintext')
+            # Decrypt via the running config — should succeed.
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', RuntimeWarning)
+                self.assertEqual(
+                    encryption.decrypt_str(ct),
+                    'legacy plaintext',
+                )
+
+    def test_multifernet_uses_first_key_for_encrypt(self):
+        """Encrypt under a [B, A] config yields ciphertext that B can
+        decrypt — A cannot. First-key-wins for writes; all-keys-tried
+        for reads.
+        """
+        from cryptography.fernet import Fernet, InvalidToken
+        from django.test import override_settings
+        key_a = Fernet.generate_key()
+        key_b = Fernet.generate_key()
+        with override_settings(TESTIMONIALS_FERNET_KEYS=[key_b, key_a]):
+            from cases.testimonials import encryption
+            encryption.get_fernet.cache_clear()
+            ct = encryption.encrypt_str('hello')
+            self.assertEqual(
+                Fernet(key_b).decrypt(bytes(ct)),
+                b'hello',
+            )
+            with self.assertRaises(InvalidToken):
+                Fernet(key_a).decrypt(bytes(ct))
+
+    def test_single_key_setting_still_works(self):
+        """Backward-compat: TESTIMONIALS_FERNET_KEY (single) still
+        encrypts + decrypts as before. Pin the legacy config.
+        """
+        from cryptography.fernet import Fernet
+        from django.test import override_settings
+        key = Fernet.generate_key()
+        with override_settings(TESTIMONIALS_FERNET_KEY=key):
+            from cases.testimonials import encryption
+            encryption.get_fernet.cache_clear()
+            ct = encryption.encrypt_str('legacy single-key mode')
+            self.assertEqual(
+                encryption.decrypt_str(ct),
+                'legacy single-key mode',
+            )
+
+    def test_improperly_configured_when_debug_false_and_no_key(self):
+        """DEBUG=False + no TESTIMONIALS_FERNET_KEY[S] + ALLOW_DEV_FALLBACK_KEY
+        default (False in prod) → ImproperlyConfigured on first call.
+
+        The audit's gap: this fired only at first decrypt, but a
+        startup that never touches encryption would silently boot
+        and 500 on the first /source/ hit. The first-call behavior is
+        what we pin here — pinning it at startup is a follow-up.
+        """
+        from django.core.exceptions import ImproperlyConfigured
+        from django.test import override_settings
+        with override_settings(
+            DEBUG=False,
+            TESTIMONIALS_FERNET_KEY=None,
+            TESTIMONIALS_FERNET_KEYS=None,
+            ALLOW_DEV_FALLBACK_KEY=False,
+        ):
+            from cases.testimonials import encryption
+            encryption.get_fernet.cache_clear()
+            with self.assertRaises(ImproperlyConfigured):
+                encryption.get_fernet()
+
+    def test_runtime_warning_when_debug_true_and_no_key(self):
+        """DEBUG=True + no key + ALLOW_DEV_FALLBACK_KEY default (True)
+        → RuntimeWarning fires once per process (lru_cache). The
+        warning is the cue that production data isn't protected.
+        """
+        import warnings
+        from django.test import override_settings
+        with override_settings(
+            DEBUG=True,
+            TESTIMONIALS_FERNET_KEY=None,
+            TESTIMONIALS_FERNET_KEYS=None,
+        ):
+            from cases.testimonials import encryption
+            encryption.get_fernet.cache_clear()
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter('always')
+                encryption.get_fernet()
+                runtime_warnings = [
+                    w for w in caught
+                    if issubclass(w.category, RuntimeWarning)
+                ]
+                self.assertTrue(
+                    runtime_warnings,
+                    'expected RuntimeWarning when no key is configured '
+                    'and DEBUG=True',
+                )
+                msg = str(runtime_warnings[0].message)
+                self.assertIn('DEV fallback key', msg)
+
+
 # Workflow transitions + AuditLog.
 @FERNET_KEY_SETTING
 class TestimonialWorkflowTests(BaseTestCase):
