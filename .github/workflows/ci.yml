@@ -90,6 +90,20 @@ jobs:
           DJANGO_SECRET_KEY: ci-placeholder-not-secret
           USE_SQLITE: 'True'
 
+      # Coverage gate on the testimonials subpackage (the area the
+      # audit flagged as critical). Fails under 80% — pin tighter as
+      # the suite grows. coverage.py is installed inline to avoid
+      # adding it as a project dep just for CI.
+      - name: Coverage gate (cases.testimonials + cases.tests)
+        run: |
+          cd backend
+          pip install --quiet coverage
+          coverage run --source=cases.testimonials,cases.tests manage.py test --noinput --keepdb cases.testimonials cases.tests
+          coverage report --fail-under=80
+        env:
+          DJANGO_SECRET_KEY: ci-placeholder-not-secret
+          USE_SQLITE: 'True'
+
       # ---- API drift gate (regenerate + diff committed) ----
       # drf-spectacular's BigIntegerField bounds are DB-bound: Postgres
       # emits ±2^63, SQLite emits ±2^31. CI uses SQLite (above); this
