@@ -10,9 +10,10 @@ forced through one well-tested path rather than scattered across
 serializer field validations:
 
   POST /api/testimonials/{id}/submit/      draft → under_review
-  POST /api/testimonials/{id}/approve/     under_review → approved
+  POST /api/testimonials/{id}/approve/     under_review → published
+                                              (single-step; stamps reviewed_*
+                                               AND published_* together)
   POST /api/testimonials/{id}/reject/      under_review → rejected
-  POST /api/testimonials/{id}/publish/     approved → published
   POST /api/testimonials/{id}/archive/     published → archived
 
 The encrypted-source endpoints are routed via dedicated routes
@@ -295,10 +296,9 @@ class TestimonialViewSet(viewsets.ModelViewSet):
         reviewer to also call /publish/ as a separate action —
         but the published surface is the only thing reviewers
         actually want to act on, so the steps were collapsed into
-        one. The `approved` state is preserved as a valid status
-        only for legacy rows that pre-date this change; new rows
-        never land there. The /publish/ endpoint still accepts
-        `from_states=[approved]` to migrate legacy rows forward.
+        one. The legacy `/publish/` endpoint was removed in the
+        same change (commit 5): no code path creates rows at the
+        dead `approved` status anymore.
 
         Stamps reviewed_by / reviewed_at (the review decision) AND
         published_by / published_at (the publication stamp) in the
@@ -337,29 +337,6 @@ class TestimonialViewSet(viewsets.ModelViewSet):
             action_name='reject',
             extra_fields={'review_notes': notes, 'reviewed_by': request.user,
                           'reviewed_at': timezone.now()},
-        )
-
-    @action(
-        detail=True, methods=['post'],
-        permission_classes=[CanPublishTestimonial],
-    )
-    def publish(self, request, pk=None):
-        """approved → published (legacy migration path only).
-
-        New rows never reach `approved` — /approve/ now transitions
-        under_review straight to published. This endpoint remains
-        only so Advocate+ can forward rows that pre-date the
-        collapse of the 2-step workflow (approve → publish) into a
-        single approve action. New clients should use /approve/
-        directly.
-        """
-        return self._transition(
-            request, pk,
-            from_states=[Testimonial.Status.APPROVED],
-            to_state=Testimonial.Status.PUBLISHED,
-            action_name='publish',
-            extra_fields={'published_by': request.user,
-                          'published_at': timezone.now()},
         )
 
     @action(

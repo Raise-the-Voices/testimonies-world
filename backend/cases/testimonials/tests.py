@@ -159,17 +159,17 @@ class TestimonialWorkflowTests(BaseTestCase):
 
     def test_invalid_transition_rejected(self):
         pk = self._create(self.volunteer)
-        # Cannot publish a draft directly.
-        res = self._post_action(self.advocate, pk, 'publish')
+        # Cannot archive a draft directly (archive requires PUBLISHED).
+        res = self._post_action(self.advocate, pk, 'archive')
         self.assertEqual(res.status_code, 400)
         body = res.content.decode()
         # DRF JSON-escapes inner quotes in error bodies; assert on
         # the structural tokens rather than the exact rendered
         # message to keep the test stable across quote-escaping
         # behaviour.
-        self.assertIn('Cannot publish from', body)
+        self.assertIn('Cannot archive from', body)
         self.assertIn('draft', body)
-        self.assertIn('approved', body)
+        self.assertIn('published', body)
 
 
 # Role boundary + encryption endpoint.
@@ -674,7 +674,7 @@ class TestimonialStatusFilterTests(BaseTestCase):
         """
         pending = self._make_row(status_value=Testimonial.Status.UNDER_REVIEW)
         self._make_row(status_value=Testimonial.Status.DRAFT)
-        self._make_row(status_value=Testimonial.Status.APPROVED)
+        self._make_row(status_value=Testimonial.Status.REJECTED)
         self._make_row(status_value=Testimonial.Status.PUBLISHED)
 
         self.client.force_login(self.advocate)
