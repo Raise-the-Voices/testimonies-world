@@ -6,6 +6,7 @@
 		TestimonialsListStatus,
 		type TestimonialPublic,
 	} from '$lib/api/generated/endpoints.schemas';
+	import { asPaginated } from '$lib/api/drfCompat';
 	import { isAdvocate, user } from '$lib/session';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import TestimonialCard from '$lib/TestimonialCard.svelte';
@@ -121,14 +122,10 @@
 		s.loading = true;
 		s.error = null;
 		try {
-			// orval-vs-DRF shape mismatch: `testimonialsList()` is typed as
-			// returning {data, status, headers} but DRF sends the paginated
-			// body directly. Reading `res.data` is always undefined; treat
-			// the response as the paginated body. Same pattern in
-			// testimonials/new and [id]/+page.svelte.
+			// orval-vs-DRF shape mismatch handled in drfCompat —
+			// see $lib/api/drfCompat.ts for the rationale.
 			const res = await testimonialsList({ status: tab.status });
-			const body =
-				(res as unknown as Paginated<TestimonialWithWorkflow>).results ?? [];
+			const body = asPaginated<TestimonialWithWorkflow>(res).results ?? [];
 			s.list = body;
 		} catch (e) {
 			s.error = e instanceof Error ? e.message : `${tab.errorMessage}.`;
@@ -248,7 +245,10 @@
 					type="button"
 					class="testimonials-tab"
 					class:testimonials-tab-active={activeTab === tab.key}
-					aria-current={activeTab === tab.key ? 'page' : undefined}
+					role="tab"
+					aria-selected={activeTab === tab.key}
+					aria-controls="testimonials-panel"
+					id="testimonials-tab-{tab.key}"
 					onclick={() => (activeTab = tab.key)}
 				>
 					{tab.label}
@@ -261,7 +261,10 @@
 			type="button"
 			class="testimonials-tab"
 			class:testimonials-tab-active={activeTab === 'published'}
-			aria-current={activeTab === 'published' ? 'page' : undefined}
+			role="tab"
+			aria-selected={activeTab === 'published'}
+			aria-controls="testimonials-panel"
+			id="testimonials-tab-published"
 			onclick={() => (activeTab = 'published')}
 		>
 			Published
@@ -269,6 +272,12 @@
 		</button>
 	</nav>
 
+	<div
+		class="testimonials-panel"
+		role="tabpanel"
+		id="testimonials-panel"
+		aria-labelledby={`testimonials-tab-${activeTab}`}
+	>
 	{#if activeTab === 'published'}
 		{#if data.error}
 			<div class="error-state" role="alert">
@@ -277,6 +286,15 @@
 		{:else if data.testimonials.length === 0}
 			<div class="empty-state">
 				<p>No published testimonials yet.</p>
+				{#if currentUser.authenticated}
+					<a class="btn btn-primary" href="{base}/testimonials/new">
+						Submit the first testimonial →
+					</a>
+				{:else}
+					<a class="btn btn-primary" href="{base}/accounts/google/login/?next={base}/testimonials/new">
+						Sign in to contribute
+					</a>
+				{/if}
 			</div>
 		{:else}
 			{@render cardGrid(data.testimonials, false)}
@@ -298,6 +316,16 @@
 			{:else if state.error}
 				<div class="error-state" role="alert">
 					<p>{tab.errorMessage}: {state.error}</p>
+					<button
+						type="button"
+						class="btn btn-secondary"
+						onclick={() => {
+							state.attempted = false;
+							loadTab(tab.key);
+						}}
+					>
+						Retry
+					</button>
 				</div>
 			{:else if state.list.length === 0}
 				<div class="empty-state">
@@ -319,6 +347,7 @@
 			{/if}
 		{/if}
 	{/if}
+	</div>
 </div>
 
 <style>
@@ -367,6 +396,7 @@
 		display: flex;
 		gap: 0.4rem;
 		flex-wrap: wrap;
+		overflow-x: auto;
 		border-bottom: 1px solid var(--color-border-light);
 		padding-bottom: 0.4rem;
 	}

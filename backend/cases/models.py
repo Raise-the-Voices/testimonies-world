@@ -1137,10 +1137,17 @@ class Testimonial(models.Model):
     class Status(models.TextChoices):
         DRAFT = 'draft', 'Draft'
         UNDER_REVIEW = 'under_review', 'Under review'
-        APPROVED = 'approved', 'Approved'
         PUBLISHED = 'published', 'Published'
         REJECTED = 'rejected', 'Rejected'
         ARCHIVED = 'archived', 'Archived'
+        # NOTE: 'approved' is intentionally NOT a current Status. The
+        # 2-step workflow (under_review → approved → published) was
+        # collapsed into a single /approve/ action that lands at
+        # PUBLISHED directly. The 'approved' string may still exist
+        # in the database column for legacy rows pre-dating the
+        # collapse; the model does not enumerate it, and no code path
+        # creates new rows at this status. The approved_by /
+        # approved_at columns are likewise legacy-only.
 
     # ----- Reference to source casework (soft FK) -----
     person = models.ForeignKey(

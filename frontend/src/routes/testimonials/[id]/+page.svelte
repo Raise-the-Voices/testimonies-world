@@ -9,14 +9,9 @@
 	let { data }: { data: PageData } = $props();
 	let currentUser = $derived(data.user ?? $user);
 
-	// The backend's `get_serializer_class` returns
-	// `TestimonialInternalSerializer` for authenticated GETs — that
-	// payload is a superset of TestimonialPublic with workflow
-	// metadata (submitted_at, reviewed_at, created_by, …). Widen the
-	// cast so the WorkflowActions card can read those fields without
-	// a second fetch. Anonymous GETs use TestimonialPublic and don't
-	// carry the workflow fields — WorkflowActions hides itself in
-	// that case, so the wider type is safe.
+	// Live testimonial state — seeded from SSR but mutable so
+	// WorkflowActions can hand back a refreshed row via onUpdated().
+	// The derived `t` mirrors this state for the rest of the page.
 	type WorkflowFields = {
 		readonly created_by?: number | null;
 		readonly submitted_at?: string | null;
@@ -25,7 +20,15 @@
 		readonly archived_at?: string | null;
 	};
 	type TestimonialWithWorkflow = TestimonialPublic & WorkflowFields;
-	const t = $derived(data.testimonial as TestimonialWithWorkflow | null | undefined);
+	let liveTestimonial = $state(
+		data.testimonial as unknown as TestimonialWithWorkflow | null,
+	);
+	$effect(() => {
+		// Re-sync if SSR re-runs (cross-route nav back to this id).
+		liveTestimonial = data.testimonial as unknown as TestimonialWithWorkflow | null;
+	});
+
+	const t = $derived(liveTestimonial);
 
 	// Sanitise every text field at the boundary. A row whose
 	// `title` is literal git conflict text would otherwise render
@@ -155,7 +158,13 @@
 			     controls. Rendered just above the privacy aside per
 			     the design proposal. The component self-hides when
 			     there's nothing actionable for the current viewer. -->
-			<WorkflowActions testimonial={t} currentUser={currentUser} />
+			<WorkflowActions
+				testimonial={t}
+				currentUser={currentUser}
+				onUpdated={(row) => {
+					liveTestimonial = row;
+				}}
+			/>
 
 			{#if t.family_protected || t.contact_protected}
 				<aside class="testimonial-privacy" aria-label="Privacy protections in effect">
