@@ -28,50 +28,73 @@ If either is false (the prod posture), the missing key raises
 import warnings
 from functools import lru_cache
 
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
 
+def _key_to_fernet(raw) -> Fernet:
+    """Coerce a single key (str or bytes) to a Fernet instance."""
+    if isinstance(raw, str):
+        raw = raw.encode()
+    return Fernet(raw)
+
+
 @lru_cache(maxsize=1)
-def get_fernet() -> Fernet:
-    """Return the configured Fernet instance.
+def get_fernet() -> Fernet | MultiFernet:
+    """Return the configured Fernet (or MultiFernet for rotation).
+
+    Resolution order:
+      1. `settings.TESTIMONIALS_FERNET_KEYS` — a list of keys. The
+         first key is used for ENCRYPTION; all keys are tried for
+         DECRYPTION in order. This is the rotation path: ship the
+         new key at index 0, keep the old key at index 1 until all
+         rows have been re-encrypted, then drop the old key. Use
+         `MultiFernet` under the hood — same encrypt/decrypt API.
+      2. `settings.TESTIMONIALS_FERNET_KEY` — single key (legacy).
+         Equivalent to a one-element KEYS list.
+      3. Dev fallback (DEBUG=True + ALLOW_DEV_FALLBACK_KEY) — a
+         single key from cases.testimonials.dev_key, with a loud
+         RuntimeWarning.
+      4. Otherwise: ImproperlyConfigured.
 
     Cached so the warning fires once per process, not once per field
-    read. Tests that explicitly swap keys should call
-    `get_fernet.cache_clear()` or override `settings.TESTIMONIALS_FERNET_KEY`.
+    read. Tests that swap keys should call `get_fernet.cache_clear()`
+    or override settings.
     """
+    keys_raw = getattr(settings, 'TESTIMONIALS_FERNET_KEYS', None)
+    if keys_raw:
+        fernets = [_key_to_fernet(k) for k in keys_raw]
+        if len(fernets) == 1:
+            return fernets[0]
+        return MultiFernet(fernets)
+
     raw = getattr(settings, 'TESTIMONIALS_FERNET_KEY', None)
     if raw:
-        key = raw.encode() if isinstance(raw, str) else raw
-        return Fernet(key)
+        return _key_to_fernet(raw)
 
     debug = bool(getattr(settings, 'DEBUG', False))
-    allow_dev = getattr(settings, 'ALLOW_DEV_FALLBACK_KEY',
-                        None)  # default: see below
-    # Default policy: allow in DEBUG, deny in prod. Explicit override
-    # via settings.ALLOW_DEV_FALLBACK_KEY wins either way.
+    allow_dev = getattr(settings, 'ALLOW_DEV_FALLBACK_KEY', None)
     if allow_dev is None:
         allow_dev = debug
 
     if debug and allow_dev:
-        # Imported lazily so the DEV-only key value never appears in
-        # the module-load trace for a production process — only when
-        # the warning fires AND the call path actually needs it.
         from .dev_key import TESTIMONIALS_DEV_FALLBACK_KEY
         warnings.warn(
             'TESTIMONIALS_FERNET_KEY is not configured; using the '
             'DEV fallback key from cases.testimonials.dev_key. '
             'Encrypted source identities in this DB are NOT protected '
-            'by real cryptography. Set TESTIMONIALS_FERNET_KEY in '
-            'production via the env file.',
+            'by real cryptography. Set TESTIMONIALS_FERNET_KEY (or '
+            'TESTIMONIALS_FERNET_KEYS for rotation) in production via '
+            'the env file.',
             RuntimeWarning, stacklevel=2,
         )
-        return Fernet(TESTIMONIALS_DEV_FALLBACK_KEY)
+        return _key_to_fernet(TESTIMONIALS_DEV_FALLBACK_KEY)
 
     raise ImproperlyConfigured(
-        'TESTIMONIALS_FERNET_KEY is required when DEBUG=False (or '
-        'when ALLOW_DEV_FALLBACK_KEY is explicitly disabled). '
+        'TESTIMONIALS_FERNET_KEY (or TESTIMONIALS_FERNET_KEYS) is '
+        'required when DEBUG=False (or when ALLOW_DEV_FALLBACK_KEY '
+        'is explicitly disabled). '
         "Generate one with: python -c \"from cryptography.fernet "
         "import Fernet; print(Fernet.generate_key().decode())\""
     )
