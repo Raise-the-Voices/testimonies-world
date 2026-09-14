@@ -44,6 +44,7 @@ class TestimonialExportSerializer(serializers.ModelSerializer):
             'schema_version',
             'slug',
             'language',
+            'status',
             'title',
             'summary',
             'narrative',
@@ -90,6 +91,13 @@ EXPORT_SCHEMA = {
         "schema_version": {"type": "integer", "minimum": 1},
         "slug": {"type": "string"},
         "language": {"type": "string", "pattern": "^[a-z]{2}(-[A-Z]{2})?$"},
+        "status": {
+            "type": "string",
+            "enum": [
+                "draft", "under_review", "approved",
+                "published", "rejected", "archived",
+            ],
+        },
         "title": {"type": "string"},
         "summary": {"type": "string"},
         "narrative": {"type": "string"},
