@@ -29,6 +29,7 @@
 	} from '$lib/api/generated/endpoints';
 	import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
 	import { isAdvocate } from '$lib/session';
+	import Modal from '$lib/Modal.svelte';
 	import type { User } from '$lib/types';
 
 	/* Wire-shape extends TestimonialPublic with the workflow metadata
@@ -321,44 +322,40 @@
 {/if}
 
 {#if rejectOpen}
-	<div
-		class="modal-backdrop"
-		role="dialog"
-		aria-modal="true"
-		aria-labelledby="reject-title"
+	<Modal
+		open={rejectOpen}
+		title={`Reject testimonial #${id}`}
+		onClose={closeRejectModal}
 	>
-		<div class="modal">
-			<h2 id="reject-title">Reject testimonial #{id}</h2>
-			<p>
-				Rejection requires a reason. The submitter will see this note
-				on their draft.
-			</p>
-			<label class="modal-label" for="reject-notes">Reason</label>
-			<textarea
-				id="reject-notes"
-				rows="4"
-				bind:value={rejectNotes}
-				placeholder="e.g. Source unreliable; needs re-verification."
-			></textarea>
-			<div class="modal-actions">
-				<button
-					type="button"
-					class="btn btn-secondary"
-					onclick={closeRejectModal}
-				>
-					Cancel
-				</button>
-				<button
-					type="button"
-					class="btn btn-danger"
-					disabled={!rejectNotes.trim() || rejectSaving}
-					onclick={submitReject}
-				>
-					{rejectSaving ? 'Rejecting…' : 'Reject'}
-				</button>
-			</div>
+		<p>
+			Rejection requires a reason. The submitter will see this note
+			on their draft.
+		</p>
+		<label class="modal-label" for="reject-notes">Reason</label>
+		<textarea
+			id="reject-notes"
+			rows="4"
+			bind:value={rejectNotes}
+			placeholder="e.g. Source unreliable; needs re-verification."
+		></textarea>
+		<div class="modal-actions">
+			<button
+				type="button"
+				class="btn btn-secondary"
+				onclick={closeRejectModal}
+			>
+				Cancel
+			</button>
+			<button
+				type="button"
+				class="btn btn-danger"
+				disabled={!rejectNotes.trim() || rejectSaving}
+				onclick={submitReject}
+			>
+				{rejectSaving ? 'Rejecting…' : 'Reject'}
+			</button>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <style>
