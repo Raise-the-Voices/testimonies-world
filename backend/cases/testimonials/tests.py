@@ -870,6 +870,32 @@ class SchemaVersionPinTests(BaseTestCase):
             set(EXPORT_SCHEMA['required']),
         )
 
+    def test_export_serializer_output_validates_against_schema(self):
+        """The real contract test: serialize a fixture row and run
+        jsonschema.validate against EXPORT_SCHEMA. Catches the
+        serializer ↔ schema drift the original
+        test_export_serializer_required_fields missed (it asserted
+        only a partial subset).
+        """
+        import jsonschema
+        row = Testimonial.objects.create(
+            title='export-fixture',
+            slug='export-fixture-1',
+            language='en',
+            country='Iraq',
+            region='Erbil',
+            summary='summary',
+            narrative='narrative',
+            outcome='outcome',
+            source_visibility='hidden',
+            public_source_label='Family member',
+            location_visibility='public_region',
+            public_location_display='Erbil',
+            status=Testimonial.Status.PUBLISHED,
+        )
+        data = TestimonialExportSerializer(row).data
+        jsonschema.validate(data, EXPORT_SCHEMA)
+
 
 # Per-action permission gating — closes the destroy + cross-user PATCH
 # holes the audit found (class-level permission_classes was too coarse).
@@ -1232,6 +1258,78 @@ class AuditActorPinningTests(BaseTestCase):
         for a in update_audits:
             self.assertEqual(a.user, self.author,
                              'audit row attributed to spoofed actor')
+
+
+@FERNET_KEY_SETTING
+class StaffAdvocateGateTests(BaseTestCase):
+    """Pin _is_staff_or_advocate: is_staff=True OR Advocate group is
+    enough; a non-staff non-Advocate is denied.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Group
+        User = get_user_model()
+        # A user with is_staff=True but NOT in Advocate group.
+        self.staff_only = User.objects.create_user(
+            username='staff-only', is_staff=True, is_active=True,
+            email='staff-only@test.local',
+        )
+        # A user in Advocate group but is_staff=False.
+        advocate_group, _ = Group.objects.get_or_create(name='Advocate')
+        self.advocate_only = User.objects.create_user(
+            username='advocate-only', is_active=True,
+            email='advocate-only@test.local',
+        )
+        self.advocate_only.groups.add(advocate_group)
+        # A user with neither.
+        self.plebe = make_user('plebe', in_group='Volunteer')
+        self.client = APIClient()
+
+    def test_staff_can_approve(self):
+        """is_staff=True alone satisfies _is_staff_or_advocate — the
+        helper is group-OR-staff, not group-AND-staff."""
+        pk = Testimonial.objects.create(
+            title='t', slug='s-staff-1', language='en',
+            country='Iraq', region='Erbil',
+            summary='s', narrative='n', outcome='o',
+            source_visibility='hidden', public_source_label='x',
+            location_visibility='public_region',
+            public_location_display='Erbil',
+            status=Testimonial.Status.UNDER_REVIEW,
+        ).pk
+        self.client.force_login(self.staff_only)
+        res = self.client.post(f'/api/testimonials/{pk}/approve/')
+        self.assertEqual(res.status_code, 200, res.content)
+
+    def test_advocate_group_can_approve(self):
+        pk = Testimonial.objects.create(
+            title='t', slug='s-advgr-1', language='en',
+            country='Iraq', region='Erbil',
+            summary='s', narrative='n', outcome='o',
+            source_visibility='hidden', public_source_label='x',
+            location_visibility='public_region',
+            public_location_display='Erbil',
+            status=Testimonial.Status.UNDER_REVIEW,
+        ).pk
+        self.client.force_login(self.advocate_only)
+        res = self.client.post(f'/api/testimonials/{pk}/approve/')
+        self.assertEqual(res.status_code, 200, res.content)
+
+    def test_volunteer_cannot_approve(self):
+        pk = Testimonial.objects.create(
+            title='t', slug='s-volno-1', language='en',
+            country='Iraq', region='Erbil',
+            summary='s', narrative='n', outcome='o',
+            source_visibility='hidden', public_source_label='x',
+            location_visibility='public_region',
+            public_location_display='Erbil',
+            status=Testimonial.Status.UNDER_REVIEW,
+        ).pk
+        self.client.force_login(self.plebe)
+        res = self.client.post(f'/api/testimonials/{pk}/approve/')
+        self.assertEqual(res.status_code, 403)
 
 
 @FERNET_KEY_SETTING
