@@ -11,15 +11,18 @@ The key is read from `settings.TESTIMONIALS_FERNET_KEY` (env var on
 prod via systemd EnvironmentFile). The key is `urlsafe-base64(32
 bytes)` per Fernet.
 
-Production must set the env var. Local dev with `DEBUG=True` falls
-back to `TESTIMONIALS_DEV_FALLBACK_KEY` (below) and emits a loud
-RuntimeWarning at first access — the warning is cached per-process
-(`lru_cache`) so it fires once, not on every field read.
+Production must set the env var. Local dev with `DEBUG=True` and
+`ALLOW_DEV_FALLBACK_KEY=True` (the default in DEBUG) falls back to
+the key in `dev_key.py` (a separate, clearly-marked module) and
+emits a loud RuntimeWarning at first access. The hardcoded key is
+no longer in this module — review tooling can grep one file for
+crypto algorithm and another for the DEV-ONLY marker.
 
-The fallback key is checked in intentionally: dev DBs don't carry
-real casework, the warning signals that something's off, and the
-alternative (require env-var setup before `runserver`) blocked new
-contributors too aggressively during prototyping.
+Both gates must be true for the dev fallback to fire:
+  DEBUG=True AND settings.ALLOW_DEV_FALLBACK_KEY != False
+
+If either is false (the prod posture), the missing key raises
+`ImproperlyConfigured`.
 """
 
 import warnings
@@ -28,16 +31,6 @@ from functools import lru_cache
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-
-
-# Generated once via:
-#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-# This is a *test* key. Encrypted columns in dev DBs have no real
-# protection; the warning at use-time is the cue. Production data
-# never lives in this database.
-TESTIMONIALS_DEV_FALLBACK_KEY = (
-    b'hqMeZwk7bLZku5x5flLKUDPKaZvbk0aTPW3PO8Y_-vk='
-)
 
 
 @lru_cache(maxsize=1)
@@ -53,19 +46,32 @@ def get_fernet() -> Fernet:
         key = raw.encode() if isinstance(raw, str) else raw
         return Fernet(key)
 
-    if getattr(settings, 'DEBUG', False):
+    debug = bool(getattr(settings, 'DEBUG', False))
+    allow_dev = getattr(settings, 'ALLOW_DEV_FALLBACK_KEY',
+                        None)  # default: see below
+    # Default policy: allow in DEBUG, deny in prod. Explicit override
+    # via settings.ALLOW_DEV_FALLBACK_KEY wins either way.
+    if allow_dev is None:
+        allow_dev = debug
+
+    if debug and allow_dev:
+        # Imported lazily so the DEV-only key value never appears in
+        # the module-load trace for a production process — only when
+        # the warning fires AND the call path actually needs it.
+        from .dev_key import TESTIMONIALS_DEV_FALLBACK_KEY
         warnings.warn(
             'TESTIMONIALS_FERNET_KEY is not configured; using the '
-            'hardcoded DEV fallback key. Encrypted source identities '
-            'in this DB are NOT protected by real cryptography. Set '
-            'TESTIMONIALS_FERNET_KEY in production via the env file '
-            '(see README "Testimonials encryption" section).',
+            'DEV fallback key from cases.testimonials.dev_key. '
+            'Encrypted source identities in this DB are NOT protected '
+            'by real cryptography. Set TESTIMONIALS_FERNET_KEY in '
+            'production via the env file.',
             RuntimeWarning, stacklevel=2,
         )
         return Fernet(TESTIMONIALS_DEV_FALLBACK_KEY)
 
     raise ImproperlyConfigured(
-        'TESTIMONIALS_FERNET_KEY is required when DEBUG=False. '
+        'TESTIMONIALS_FERNET_KEY is required when DEBUG=False (or '
+        'when ALLOW_DEV_FALLBACK_KEY is explicitly disabled). '
         "Generate one with: python -c \"from cryptography.fernet "
         "import Fernet; print(Fernet.generate_key().decode())\""
     )

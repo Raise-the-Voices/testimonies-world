@@ -26,22 +26,19 @@ from rest_framework.test import APIClient
 
 from cases.models import AuditLog, Testimonial, TestimonialTag
 from cases.testimonials.encryption import (
-    TESTIMONIALS_DEV_FALLBACK_KEY,
     decrypt_str, encrypt_str,
 )
+# Generate a fresh key per test process — never load the hardcoded
+# dev key from cases.testimonials.dev_key. The hardcoded key's
+# existence is acceptable (it's a clearly-marked DEV-ONLY constant)
+# but tests should not be load-bearing on its value.
+from cryptography.fernet import Fernet as _Fernet
+_TEST_FERNET_KEY = _Fernet.generate_key()
+
+FERNET_KEY_SETTING = override_settings(TESTIMONIALS_FERNET_KEY=_TEST_FERNET_KEY)
 from cases.testimonials.export import EXPORT_SCHEMA, TestimonialExportSerializer
 from cases.tests import make_user
 from testimonies.test_base import BaseTestCase
-
-
-# Helper: every test that touches encryption needs a key configured.
-# Django's test runner runs with DEBUG=False regardless of the dev
-# env, so the dev fallback in encryption.py doesn't fire — we have
-# to set the env var explicitly. Use the same hardcoded DEV key so
-# tests stay hermetic.
-FERNET_KEY_SETTING = override_settings(
-    TESTIMONIALS_FERNET_KEY=TESTIMONIALS_DEV_FALLBACK_KEY
-)
 
 
 # AES-128-CBC + HMAC round-trip via Fernet.
