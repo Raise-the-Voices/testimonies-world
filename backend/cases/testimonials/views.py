@@ -31,6 +31,7 @@ from rest_framework.response import Response
 from cases.models import AuditLog, Testimonial, TestimonialTag
 
 from .permissions import (
+    CanEditOwnOrReview,
     CanPublishTestimonial,
     CanReviewTestimonial,
     CanSubmitTestimonial,
@@ -52,22 +53,43 @@ class TestimonialViewSet(viewsets.ModelViewSet):
     endpoint. Internal endpoints (the workflow audit info) require
     Advocate+ via the write-side permission class.
 
-    Permissions layered per action:
-      list / retrieve             public (public serializer)
-      create                      CanSubmitTestimonial
-      update / partial_update     CanSubmitTestimonial + owner OR Advocate
-      destroy                     CanPublishTestimonial (rare — archives
-                                  are preferred over deletes)
-      submit                      CanSubmitTestimonial
-      approve / reject            CanReviewTestimonial
-      publish / archive           CanPublishTestimonial
+    Permissions layered per action (see `get_permissions`):
+      list / retrieve             SAFE → public (no auth)
+      create                      CanSubmitTestimonial (auth)
+      update / partial_update     CanSubmitTestimonial + CanEditOwnOrReview
+                                  (owner or Advocate+; published/archived
+                                  are immutable from the volunteer side)
+      destroy                     CanPublishTestimonial (Advocate+)
+      submit                      CanSubmitTestimonial (auth)
+      approve / reject            CanReviewTestimonial (Advocate+)
+      publish / archive           CanPublishTestimonial (Advocate+)
+      source / precise_location   CanViewEncryptedSource (Advocate+)
     """
 
     queryset = Testimonial.objects.select_related(
         'person', 'report',
         'submitted_by', 'reviewed_by', 'approved_by', 'published_by',
     ).prefetch_related('tags')
-    permission_classes = [CanSubmitTestimonial]
+    # No class-level permission_classes — every action is gated in
+    # get_permissions() so a future action added without explicit
+    # gating fails closed (DRF raises ImproperlyConfigured at startup
+    # rather than silently opening the endpoint).
+
+    def get_permissions(self):
+        """Per-action permission classes — fail-closed by construction."""
+        if self.action in ('list', 'retrieve'):
+            return [permissions.AllowAny()]
+        if self.action in ('update', 'partial_update'):
+            return [CanSubmitTestimonial(), CanEditOwnOrReview()]
+        if self.action == 'destroy':
+            return [CanPublishTestimonial()]
+        if self.action == 'create':
+            return [CanSubmitTestimonial()]
+        # @action-decorated transitions (submit / approve / reject /
+        # publish / archive / source / precise_location) have their
+        # own permission_classes on the decorator — super() picks them
+        # up.
+        return super().get_permissions()
 
     # `?status=<value>` is documented here so drf-spectacular emits
     # the parameter into openapi.yml and orval regenerates

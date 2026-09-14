@@ -741,3 +741,114 @@ class SchemaVersionPinTests(BaseTestCase):
             set(on_disk['required']),
             set(EXPORT_SCHEMA['required']),
         )
+
+
+# Per-action permission gating — closes the destroy + cross-user PATCH
+# holes the audit found (class-level permission_classes was too coarse).
+@FERNET_KEY_SETTING
+class PermissionBoundaryTests(BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.author = make_user('author', in_group='Volunteer')
+        self.other_volunteer = make_user('other-vol', in_group='Volunteer')
+        self.advocate = make_user('adv', in_group='Advocate')
+        self.client = APIClient()
+
+    def _make(self, *, status_value, created_by=None):
+        return Testimonial.objects.create(
+            title='t', slug=f's-perm-{Testimonial.objects.count()+1}',
+            language='en', country='Iraq', region='Erbil',
+            summary='s', narrative='n', outcome='o',
+            source_visibility='hidden',
+            public_source_label='Family member',
+            location_visibility='public_region',
+            public_location_display='Erbil',
+            status=status_value, created_by=created_by,
+        )
+
+    def test_volunteer_cannot_destroy_any_testimonial(self):
+        for st in (Testimonial.Status.DRAFT, Testimonial.Status.PUBLISHED):
+            row = self._make(status_value=st, created_by=self.author)
+            self.client.force_login(self.other_volunteer)
+            res = self.client.delete(f'/api/testimonials/{row.id}/')
+            self.assertEqual(
+                res.status_code, 403,
+                msg=f'delete of {st} by other-volunteer should 403',
+            )
+            self.assertTrue(
+                Testimonial.objects.filter(pk=row.id).exists(),
+                f'delete of {st} row actually removed — RBAC hole!',
+            )
+
+    def test_anonymous_cannot_destroy(self):
+        row = self._make(status_value=Testimonial.Status.PUBLISHED)
+        res = self.client.delete(f'/api/testimonials/{row.id}/')
+        self.assertEqual(res.status_code, 403)
+        self.assertTrue(Testimonial.objects.filter(pk=row.id).exists())
+
+    def test_advocate_can_destroy_published(self):
+        row = self._make(status_value=Testimonial.Status.PUBLISHED)
+        self.client.force_login(self.advocate)
+        res = self.client.delete(f'/api/testimonials/{row.id}/')
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(Testimonial.objects.filter(pk=row.id).exists())
+
+    def test_volunteer_cannot_patch_other_volunteers_draft(self):
+        draft = self._make(
+            status_value=Testimonial.Status.DRAFT,
+            created_by=self.author,
+        )
+        self.client.force_login(self.other_volunteer)
+        res = self.client.patch(
+            f'/api/testimonials/{draft.id}/',
+            {'title': 'hijacked'}, format='json',
+        )
+        # 403 if the queryset exposes the row but the object
+        # permission denies; 404 if the queryset scopes the row out
+        # entirely (which is what get_queryset does for non-owner
+        # volunteers). Either response is acceptable as long as
+        # the row is not modified.
+        self.assertIn(res.status_code, (403, 404),
+                      f'unexpected status {res.status_code}')
+        draft.refresh_from_db()
+        self.assertEqual(draft.title, 't')
+
+    def test_owner_can_patch_own_draft(self):
+        draft = self._make(
+            status_value=Testimonial.Status.DRAFT,
+            created_by=self.author,
+        )
+        self.client.force_login(self.author)
+        res = self.client.patch(
+            f'/api/testimonials/{draft.id}/',
+            {'title': 'updated by owner'}, format='json',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        draft.refresh_from_db()
+        self.assertEqual(draft.title, 'updated by owner')
+
+    def test_owner_cannot_patch_own_published_row(self):
+        row = self._make(
+            status_value=Testimonial.Status.PUBLISHED,
+            created_by=self.author,
+        )
+        self.client.force_login(self.author)
+        res = self.client.patch(
+            f'/api/testimonials/{row.id}/',
+            {'title': 'tampered'}, format='json',
+        )
+        self.assertEqual(res.status_code, 403)
+        row.refresh_from_db()
+        self.assertEqual(row.title, 't')
+
+    def test_advocate_can_patch_any_draft(self):
+        draft = self._make(
+            status_value=Testimonial.Status.DRAFT,
+            created_by=self.author,
+        )
+        self.client.force_login(self.advocate)
+        res = self.client.patch(
+            f'/api/testimonials/{draft.id}/',
+            {'title': 'advocate edit'}, format='json',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
