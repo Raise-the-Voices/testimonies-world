@@ -5,6 +5,7 @@
 // CanEditOwnOrReview gate enforces ownership; the page itself does
 // no client-side authorization (DRF is the boundary).
 import { base } from '$app/paths';
+import { asTestimonialBody } from '$lib/api/drfCompat';
 import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
 
 export async function load({ fetch, params, url }) {
@@ -20,7 +21,11 @@ export async function load({ fetch, params, url }) {
 		if (!res.ok) {
 			return { testimonial: null, error: `HTTP ${res.status}`, anonHref: null };
 		}
-		const data = (await res.json()) as TestimonialPublic;
+		const data = asTestimonialBody(await res.json()) as unknown as (TestimonialPublic & {
+			readonly status?: string;
+			readonly source_visibility?: string;
+			readonly location_visibility?: string;
+		}) | null;
 		return {
 			testimonial: data,
 			error: null,

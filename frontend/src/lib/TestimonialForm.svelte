@@ -23,13 +23,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
-	import { user } from '$lib/session';
-	import type { User } from '$lib/types';
+	import { extractCreatedId } from '$lib/api/drfCompat';
 	import {
 		testimonialsCreate,
 		testimonialsSubmitCreate,
 		testimonialsUpdate,
 	} from '$lib/api/generated/endpoints';
+	import { user } from '$lib/session';
+	import type { User } from '$lib/types';
 	import type { TestimonialWriteRequest } from '$lib/api/generated/endpoints.schemas';
 	import {
 		newTestimonialSchema,
@@ -187,16 +188,7 @@
 			// Create mode.
 			let id: number;
 			try {
-				const res = await testimonialsCreate(buildBody());
-				const outer = (res ?? {}) as Record<string, unknown>;
-				const candidate =
-					outer.data && typeof outer.data === 'object'
-						? (outer.data as Record<string, unknown>)
-						: outer;
-				if (typeof candidate.id !== 'number') {
-					throw new Error('Server response missing a valid id.');
-				}
-				id = candidate.id;
+				id = extractCreatedId(await testimonialsCreate(buildBody()));
 			} catch (e: unknown) {
 				formError =
 					e instanceof Error ? e.message : 'Could not create the testimonial.';
