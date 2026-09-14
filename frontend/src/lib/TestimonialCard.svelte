@@ -2,6 +2,7 @@
 	import { base } from '$app/paths';
 	import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
 	import { isEmptyAfterSanitization, safeText, safeTextOr } from '$lib/testimonial-sanitize';
+	import { statusLabel } from '$lib/statusPresentation';
 
 	/**
 	 * One-testimonial card for the public list and the "My drafts"
@@ -118,7 +119,7 @@
 			{/if}
 			{#if showStatus}
 				<span class="testimonial-card-status testimonial-card-status-{testimonial.status}">
-					{testimonial.status.replace('_', ' ')}
+					{statusLabel(testimonial.status)}
 				</span>
 			{/if}
 		</footer>
