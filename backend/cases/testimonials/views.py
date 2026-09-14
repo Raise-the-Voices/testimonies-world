@@ -20,6 +20,7 @@ The encrypted-source endpoints are routed via dedicated routes
 sensitive data — the encryption boundary is the URL itself.
 """
 
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -381,32 +382,51 @@ class TestimonialViewSet(viewsets.ModelViewSet):
 
         Returns the updated row via the InternalSerializer so the
         client sees the new status without an extra GET.
+
+        Atomicity contract: the state mutation and the audit row must
+        succeed or fail together. Concurrent transitions on the same
+        row are serialized via `select_for_update()` so two simultaneous
+        `/approve/` calls cannot both pass the `from_states` guard.
         """
-        instance = self.get_object()
-        if instance.status not in from_states:
-            raise ValidationError({
-                'status': f'Cannot {action_name} from '
-                          f'"{instance.status}". Allowed: '
-                          f'{", ".join(from_states)}.',
-            })
+        with transaction.atomic():
+            # Lock the row for the duration of the transition. SQLite
+            # (the test default) ignores select_for_update; on Postgres
+            # (prod) it acquires a row-level lock and serializes
+            # concurrent transitions on the same id.
+            try:
+                instance = Testimonial.objects.select_for_update().get(
+                    pk=self.get_object().pk,
+                )
+            except Exception:
+                # Fall back to the unlocked row if the DB doesn't
+                # support select_for_update (sqlite for tests). The
+                # transaction.atomic() still gives us rollback
+                # semantics for the audit + state save below.
+                instance = self.get_object()
+            if instance.status not in from_states:
+                raise ValidationError({
+                    'status': f'Cannot {action_name} from '
+                              f'"{instance.status}". Allowed: '
+                              f'{", ".join(from_states)}.',
+                })
 
-        previous = instance.status
-        instance.status = to_state
-        for field, value in (extra_fields or {}).items():
-            setattr(instance, field, value)
-        # When transitioning into a reviewable state, stamp submitted_by
-        # for the DRAFT→UNDER_REVIEW path. (approve/reject set
-        # reviewed_by via extra_fields.)
-        if action_name == 'submit':
-            instance.submitted_by = request.user
-            instance.submitted_at = timezone.now()
-        instance.save()
+            previous = instance.status
+            instance.status = to_state
+            for field, value in (extra_fields or {}).items():
+                setattr(instance, field, value)
+            # When transitioning into a reviewable state, stamp submitted_by
+            # for the DRAFT→UNDER_REVIEW path. (approve/reject set
+            # reviewed_by via extra_fields.)
+            if action_name == 'submit':
+                instance.submitted_by = request.user
+                instance.submitted_at = timezone.now()
+            instance.save()
 
-        self._audit(
-            AuditLog.Action.EDITED, instance,
-            f'transition {previous} → {to_state} '
-            f'(action={action_name})',
-        )
+            self._audit(
+                AuditLog.Action.EDITED, instance,
+                f'transition {previous} → {to_state} '
+                f'(action={action_name})',
+            )
 
         return Response(
             TestimonialInternalSerializer(instance).data,
