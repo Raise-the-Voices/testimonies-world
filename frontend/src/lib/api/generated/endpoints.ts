@@ -3357,7 +3357,21 @@ export const testimonialsDestroy = async (id: number, options?: RequestInit): Pr
 
 
 /**
- * under_review → approved. Notes optional in body.
+ * under_review → published (single-step approval).
+
+Notes optional in body. The previous 2-step workflow
+(under_review → approved → published) required the
+reviewer to also call /publish/ as a separate action —
+but the published surface is the only thing reviewers
+actually want to act on, so the steps were collapsed into
+one. The `approved` state is preserved as a valid status
+only for legacy rows that pre-date this change; new rows
+never land there. The /publish/ endpoint still accepts
+`from_states=[approved]` to migrate legacy rows forward.
+
+Stamps reviewed_by / reviewed_at (the review decision) AND
+published_by / published_at (the publication stamp) in the
+same transition so the audit trail records both.
  */
 export type testimonialsApproveCreateResponse200 = {
   data: TestimonialPublic
@@ -3467,7 +3481,14 @@ export const testimonialsPreciseLocationRetrieve = async (id: number, options?: 
 
 
 /**
- * approved → published. Sets published_by / published_at.
+ * approved → published (legacy migration path only).
+
+New rows never reach `approved` — /approve/ now transitions
+under_review straight to published. This endpoint remains
+only so Advocate+ can forward rows that pre-date the
+collapse of the 2-step workflow (approve → publish) into a
+single approve action. New clients should use /approve/
+directly.
  */
 export type testimonialsPublishCreateResponse200 = {
   data: TestimonialPublic
