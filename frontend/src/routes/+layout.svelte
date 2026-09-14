@@ -3,6 +3,7 @@
 	import { user, ready, loadSession, isVolunteer, isAdvocate } from '$lib/session';
 	import { clearDraft } from '$lib/submitDraft';
 	import Bell from '$lib/Bell.svelte';
+	import Toast from '$lib/Toast.svelte';
 	import '../app.css';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -237,6 +238,8 @@
 		{/if}
 	</ul>
 </nav>
+
+<Toast />
 
 <main id="main-content" class="page" tabindex="-1">
 	<div class="container-app">
