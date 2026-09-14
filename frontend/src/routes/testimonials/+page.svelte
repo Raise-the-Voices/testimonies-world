@@ -6,6 +6,7 @@
 		TestimonialsListStatus,
 		type TestimonialPublic,
 	} from '$lib/api/generated/endpoints.schemas';
+	import { asPaginated } from '$lib/api/drfCompat';
 	import { isAdvocate, user } from '$lib/session';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import TestimonialCard from '$lib/TestimonialCard.svelte';
@@ -121,14 +122,10 @@
 		s.loading = true;
 		s.error = null;
 		try {
-			// orval-vs-DRF shape mismatch: `testimonialsList()` is typed as
-			// returning {data, status, headers} but DRF sends the paginated
-			// body directly. Reading `res.data` is always undefined; treat
-			// the response as the paginated body. Same pattern in
-			// testimonials/new and [id]/+page.svelte.
+			// orval-vs-DRF shape mismatch handled in drfCompat —
+			// see $lib/api/drfCompat.ts for the rationale.
 			const res = await testimonialsList({ status: tab.status });
-			const body =
-				(res as unknown as Paginated<TestimonialWithWorkflow>).results ?? [];
+			const body = asPaginated<TestimonialWithWorkflow>(res).results ?? [];
 			s.list = body;
 		} catch (e) {
 			s.error = e instanceof Error ? e.message : `${tab.errorMessage}.`;
