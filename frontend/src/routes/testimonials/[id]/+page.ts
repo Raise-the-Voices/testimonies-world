@@ -5,7 +5,7 @@
 // lookup field on the ViewSet; slug-based URLs can be added later
 // (would require a `lookup_field = 'slug'` change on the backend).
 import { base } from '$app/paths';
-import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
+import { asTestimonialBody } from '$lib/api/drfCompat';
 
 export async function load({ fetch, params }) {
 	const id = Number(params.id);
@@ -22,13 +22,11 @@ export async function load({ fetch, params }) {
 		}
 		// DRF returns the serializer data DIRECTLY (not wrapped in
 		// {data, status} the way the orval-generated TS type assumes).
-		// Reading `data.data` returns undefined on every real response
-		// and the page falls into the 'not available' branch. The fix
-		// is to treat the response body as the testimonial directly.
-		// (Same response-shape mismatch I fixed in the create form
-		// earlier — this file just never got the same treatment.)
-		const data = (await res.json()) as TestimonialPublic;
-		return { testimonial: data ?? null, error: null };
+		// asTestimonialBody() in $lib/api/drfCompat.ts handles the
+		// shape assumption in one place — see that module for the
+		// full rationale.
+		const data = asTestimonialBody(await res.json());
+		return { testimonial: data, error: null };
 	} catch (e) {
 		return {
 			testimonial: null,

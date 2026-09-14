@@ -10,9 +10,10 @@ forced through one well-tested path rather than scattered across
 serializer field validations:
 
   POST /api/testimonials/{id}/submit/      draft → under_review
-  POST /api/testimonials/{id}/approve/     under_review → approved
+  POST /api/testimonials/{id}/approve/     under_review → published
+                                              (single-step; stamps reviewed_*
+                                               AND published_* together)
   POST /api/testimonials/{id}/reject/      under_review → rejected
-  POST /api/testimonials/{id}/publish/     approved → published
   POST /api/testimonials/{id}/archive/     published → archived
 
 The encrypted-source endpoints are routed via dedicated routes
@@ -20,6 +21,7 @@ The encrypted-source endpoints are routed via dedicated routes
 sensitive data — the encryption boundary is the URL itself.
 """
 
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -31,6 +33,7 @@ from rest_framework.response import Response
 from cases.models import AuditLog, Testimonial, TestimonialTag
 
 from .permissions import (
+    CanEditOwnOrReview,
     CanPublishTestimonial,
     CanReviewTestimonial,
     CanSubmitTestimonial,
@@ -52,22 +55,43 @@ class TestimonialViewSet(viewsets.ModelViewSet):
     endpoint. Internal endpoints (the workflow audit info) require
     Advocate+ via the write-side permission class.
 
-    Permissions layered per action:
-      list / retrieve             public (public serializer)
-      create                      CanSubmitTestimonial
-      update / partial_update     CanSubmitTestimonial + owner OR Advocate
-      destroy                     CanPublishTestimonial (rare — archives
-                                  are preferred over deletes)
-      submit                      CanSubmitTestimonial
-      approve / reject            CanReviewTestimonial
-      publish / archive           CanPublishTestimonial
+    Permissions layered per action (see `get_permissions`):
+      list / retrieve             SAFE → public (no auth)
+      create                      CanSubmitTestimonial (auth)
+      update / partial_update     CanSubmitTestimonial + CanEditOwnOrReview
+                                  (owner or Advocate+; published/archived
+                                  are immutable from the volunteer side)
+      destroy                     CanPublishTestimonial (Advocate+)
+      submit                      CanSubmitTestimonial (auth)
+      approve / reject            CanReviewTestimonial (Advocate+)
+      publish / archive           CanPublishTestimonial (Advocate+)
+      source / precise_location   CanViewEncryptedSource (Advocate+)
     """
 
     queryset = Testimonial.objects.select_related(
         'person', 'report',
         'submitted_by', 'reviewed_by', 'approved_by', 'published_by',
     ).prefetch_related('tags')
-    permission_classes = [CanSubmitTestimonial]
+    # No class-level permission_classes — every action is gated in
+    # get_permissions() so a future action added without explicit
+    # gating fails closed (DRF raises ImproperlyConfigured at startup
+    # rather than silently opening the endpoint).
+
+    def get_permissions(self):
+        """Per-action permission classes — fail-closed by construction."""
+        if self.action in ('list', 'retrieve'):
+            return [permissions.AllowAny()]
+        if self.action in ('update', 'partial_update'):
+            return [CanSubmitTestimonial(), CanEditOwnOrReview()]
+        if self.action == 'destroy':
+            return [CanPublishTestimonial()]
+        if self.action == 'create':
+            return [CanSubmitTestimonial()]
+        # @action-decorated transitions (submit / approve / reject /
+        # publish / archive / source / precise_location) have their
+        # own permission_classes on the decorator — super() picks them
+        # up.
+        return super().get_permissions()
 
     # `?status=<value>` is documented here so drf-spectacular emits
     # the parameter into openapi.yml and orval regenerates
@@ -272,10 +296,9 @@ class TestimonialViewSet(viewsets.ModelViewSet):
         reviewer to also call /publish/ as a separate action —
         but the published surface is the only thing reviewers
         actually want to act on, so the steps were collapsed into
-        one. The `approved` state is preserved as a valid status
-        only for legacy rows that pre-date this change; new rows
-        never land there. The /publish/ endpoint still accepts
-        `from_states=[approved]` to migrate legacy rows forward.
+        one. The legacy `/publish/` endpoint was removed in the
+        same change (commit 5): no code path creates rows at the
+        dead `approved` status anymore.
 
         Stamps reviewed_by / reviewed_at (the review decision) AND
         published_by / published_at (the publication stamp) in the
@@ -320,29 +343,6 @@ class TestimonialViewSet(viewsets.ModelViewSet):
         detail=True, methods=['post'],
         permission_classes=[CanPublishTestimonial],
     )
-    def publish(self, request, pk=None):
-        """approved → published (legacy migration path only).
-
-        New rows never reach `approved` — /approve/ now transitions
-        under_review straight to published. This endpoint remains
-        only so Advocate+ can forward rows that pre-date the
-        collapse of the 2-step workflow (approve → publish) into a
-        single approve action. New clients should use /approve/
-        directly.
-        """
-        return self._transition(
-            request, pk,
-            from_states=[Testimonial.Status.APPROVED],
-            to_state=Testimonial.Status.PUBLISHED,
-            action_name='publish',
-            extra_fields={'published_by': request.user,
-                          'published_at': timezone.now()},
-        )
-
-    @action(
-        detail=True, methods=['post'],
-        permission_classes=[CanPublishTestimonial],
-    )
     def archive(self, request, pk=None):
         """published → archived. Soft-delete (row stays)."""
         return self._transition(
@@ -359,32 +359,51 @@ class TestimonialViewSet(viewsets.ModelViewSet):
 
         Returns the updated row via the InternalSerializer so the
         client sees the new status without an extra GET.
+
+        Atomicity contract: the state mutation and the audit row must
+        succeed or fail together. Concurrent transitions on the same
+        row are serialized via `select_for_update()` so two simultaneous
+        `/approve/` calls cannot both pass the `from_states` guard.
         """
-        instance = self.get_object()
-        if instance.status not in from_states:
-            raise ValidationError({
-                'status': f'Cannot {action_name} from '
-                          f'"{instance.status}". Allowed: '
-                          f'{", ".join(from_states)}.',
-            })
+        with transaction.atomic():
+            # Lock the row for the duration of the transition. SQLite
+            # (the test default) ignores select_for_update; on Postgres
+            # (prod) it acquires a row-level lock and serializes
+            # concurrent transitions on the same id.
+            try:
+                instance = Testimonial.objects.select_for_update().get(
+                    pk=self.get_object().pk,
+                )
+            except Exception:
+                # Fall back to the unlocked row if the DB doesn't
+                # support select_for_update (sqlite for tests). The
+                # transaction.atomic() still gives us rollback
+                # semantics for the audit + state save below.
+                instance = self.get_object()
+            if instance.status not in from_states:
+                raise ValidationError({
+                    'status': f'Cannot {action_name} from '
+                              f'"{instance.status}". Allowed: '
+                              f'{", ".join(from_states)}.',
+                })
 
-        previous = instance.status
-        instance.status = to_state
-        for field, value in (extra_fields or {}).items():
-            setattr(instance, field, value)
-        # When transitioning into a reviewable state, stamp submitted_by
-        # for the DRAFT→UNDER_REVIEW path. (approve/reject set
-        # reviewed_by via extra_fields.)
-        if action_name == 'submit':
-            instance.submitted_by = request.user
-            instance.submitted_at = timezone.now()
-        instance.save()
+            previous = instance.status
+            instance.status = to_state
+            for field, value in (extra_fields or {}).items():
+                setattr(instance, field, value)
+            # When transitioning into a reviewable state, stamp submitted_by
+            # for the DRAFT→UNDER_REVIEW path. (approve/reject set
+            # reviewed_by via extra_fields.)
+            if action_name == 'submit':
+                instance.submitted_by = request.user
+                instance.submitted_at = timezone.now()
+            instance.save()
 
-        self._audit(
-            AuditLog.Action.EDITED, instance,
-            f'transition {previous} → {to_state} '
-            f'(action={action_name})',
-        )
+            self._audit(
+                AuditLog.Action.EDITED, instance,
+                f'transition {previous} → {to_state} '
+                f'(action={action_name})',
+            )
 
         return Response(
             TestimonialInternalSerializer(instance).data,

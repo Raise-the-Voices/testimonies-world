@@ -29,6 +29,8 @@
 	} from '$lib/api/generated/endpoints';
 	import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
 	import { isAdvocate } from '$lib/session';
+	import Modal from '$lib/Modal.svelte';
+	import { STATUS_LABEL } from '$lib/statusPresentation';
 	import type { User } from '$lib/types';
 
 	/* Wire-shape extends TestimonialPublic with the workflow metadata
@@ -50,15 +52,17 @@
 	type Props = {
 		testimonial: TestimonialPublic & WorkflowFields;
 		currentUser: User;
-		/* Called after a successful transition so the parent can
-		   re-render with the new status. The component also re-
-		   fetches the row internally to keep its own state in sync
-		   (status pill + button set). The callback lets the parent
-		   refresh other UI (e.g. the page header). */
-		onChanged?: () => void;
+		/* Called after a successful transition with the freshly-
+		   fetched row payload, so the parent can re-render with
+		   the new status. The component also re-fetches the row
+		   internally to keep its own state in sync (status pill +
+		   button set). The callback is the documented child-to-
+		   parent state-refresh idiom — using `bind:` would force
+		   the parent to give up its `derived` prop binding. */
+		onUpdated?: (row: TestimonialPublic & WorkflowFields) => void;
 	};
 
-	let { testimonial, currentUser, onChanged }: Props = $props();
+	let { testimonial, currentUser, onUpdated }: Props = $props();
 
 	let id = $derived(testimonial.id);
 	let status = $derived(testimonial.status);
@@ -144,15 +148,14 @@
 	// that user — Advocate+ can always edit drafts in the queue.
 	const canEditDraft = $derived(status === 'draft' && isAuthed);
 
-	// Status pill — friendly label + CSS class for color coding.
-	const STATUS_LABEL: Record<typeof status, string> = {
-		draft: 'Draft',
-		under_review: 'Under review',
-		approved: 'Approved',
-		published: 'Published',
-		rejected: 'Rejected',
-		archived: 'Archived',
-	};
+	// Status pill — uses the centralised label from
+	// $lib/statusPresentation so a new status is added in one place.
+	// `status` is widened to string at the type level because the
+	// public schema types `status` as a string union; STATUS_LABEL
+	// keys by string so any value passes through safely (a typo
+	// would just fall back to status.replace('_', ' ') via the
+	// helper, not break).
+	const pillLabel = $derived(STATUS_LABEL[status] ?? status);
 
 	// Sub-line for the latest workflow timestamp. Pick the most
 	// recent non-null field — they're mutually exclusive in normal
@@ -211,7 +214,6 @@
 			const label =
 				action === 'submit' ? submitSuccessLabel : ACTION_SUCCESS_LABEL[action];
 			flashSuccess(`${label}.`);
-			onChanged?.();
 		} catch (e) {
 			actionError =
 				e instanceof Error
@@ -237,7 +239,6 @@
 			rejectNotes = '';
 			await refreshRow();
 			flashSuccess(`${ACTION_SUCCESS_LABEL.reject}.`);
-			onChanged?.();
 		} catch (e) {
 			actionError =
 				e instanceof Error ? `Reject failed: ${e.message}` : 'Reject failed.';
@@ -252,15 +253,17 @@
 	   (and to pick up server-side stamp changes — submitted_at,
 	   approved_at, etc. — that the response shape might not surface
 	   on every transition). */
-	async function refreshRow() {
+	async function refreshRow(): Promise<TestimonialPublic & WorkflowFields> {
 		const fresh = await testimonialsRetrieve(id);
 		const row = fresh as unknown as TestimonialPublic & WorkflowFields;
-		// Mutate the testimonial in place so the parent's prop
-		// reactivity picks up the new fields. (Svelte 5 props are
-		// reactive at the parent binding; mutating here is the
-		// idiom for child-to-parent state refresh without a callback
-		// explosion.)
-		Object.assign(testimonial, row);
+		// Notify the parent with the refreshed row so its `derived`
+		// binding can re-render with the new fields. Svelte 5 props
+		// are reactive at the parent binding; the child cannot
+		// mutate the parent's source. `bind:testimonial` was the
+		// alternative — see the prop docstring for why we chose a
+		// callback instead.
+		onUpdated?.(row);
+		return row;
 	}
 
 	function flashSuccess(msg: string) {
@@ -282,7 +285,7 @@
 	<aside class="workflow-actions" aria-label="Workflow actions">
 		<header class="workflow-header">
 			<span class="status-pill status-pill-{status}">
-				{STATUS_LABEL[status]}
+				{pillLabel}
 			</span>
 			{#if lastTransition}
 				<p class="workflow-subline">
@@ -321,44 +324,40 @@
 {/if}
 
 {#if rejectOpen}
-	<div
-		class="modal-backdrop"
-		role="dialog"
-		aria-modal="true"
-		aria-labelledby="reject-title"
+	<Modal
+		open={rejectOpen}
+		title={`Reject testimonial #${id}`}
+		onClose={closeRejectModal}
 	>
-		<div class="modal">
-			<h2 id="reject-title">Reject testimonial #{id}</h2>
-			<p>
-				Rejection requires a reason. The submitter will see this note
-				on their draft.
-			</p>
-			<label class="modal-label" for="reject-notes">Reason</label>
-			<textarea
-				id="reject-notes"
-				rows="4"
-				bind:value={rejectNotes}
-				placeholder="e.g. Source unreliable; needs re-verification."
-			></textarea>
-			<div class="modal-actions">
-				<button
-					type="button"
-					class="btn btn-secondary"
-					onclick={closeRejectModal}
-				>
-					Cancel
-				</button>
-				<button
-					type="button"
-					class="btn btn-danger"
-					disabled={!rejectNotes.trim() || rejectSaving}
-					onclick={submitReject}
-				>
-					{rejectSaving ? 'Rejecting…' : 'Reject'}
-				</button>
-			</div>
+		<p>
+			Rejection requires a reason. The submitter will see this note
+			on their draft.
+		</p>
+		<label class="modal-label" for="reject-notes">Reason</label>
+		<textarea
+			id="reject-notes"
+			rows="4"
+			bind:value={rejectNotes}
+			placeholder="e.g. Source unreliable; needs re-verification."
+		></textarea>
+		<div class="modal-actions">
+			<button
+				type="button"
+				class="btn btn-secondary"
+				onclick={closeRejectModal}
+			>
+				Cancel
+			</button>
+			<button
+				type="button"
+				class="btn btn-danger"
+				disabled={!rejectNotes.trim() || rejectSaving}
+				onclick={submitReject}
+			>
+				{rejectSaving ? 'Rejecting…' : 'Reject'}
+			</button>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <style>

@@ -26,22 +26,19 @@ from rest_framework.test import APIClient
 
 from cases.models import AuditLog, Testimonial, TestimonialTag
 from cases.testimonials.encryption import (
-    TESTIMONIALS_DEV_FALLBACK_KEY,
     decrypt_str, encrypt_str,
 )
+# Generate a fresh key per test process — never load the hardcoded
+# dev key from cases.testimonials.dev_key. The hardcoded key's
+# existence is acceptable (it's a clearly-marked DEV-ONLY constant)
+# but tests should not be load-bearing on its value.
+from cryptography.fernet import Fernet as _Fernet
+_TEST_FERNET_KEY = _Fernet.generate_key()
+
+FERNET_KEY_SETTING = override_settings(TESTIMONIALS_FERNET_KEY=_TEST_FERNET_KEY)
 from cases.testimonials.export import EXPORT_SCHEMA, TestimonialExportSerializer
 from cases.tests import make_user
 from testimonies.test_base import BaseTestCase
-
-
-# Helper: every test that touches encryption needs a key configured.
-# Django's test runner runs with DEBUG=False regardless of the dev
-# env, so the dev fallback in encryption.py doesn't fire — we have
-# to set the env var explicitly. Use the same hardcoded DEV key so
-# tests stay hermetic.
-FERNET_KEY_SETTING = override_settings(
-    TESTIMONIALS_FERNET_KEY=TESTIMONIALS_DEV_FALLBACK_KEY
-)
 
 
 # AES-128-CBC + HMAC round-trip via Fernet.
@@ -64,6 +61,137 @@ class FernetRoundTripTests(BaseTestCase):
         ciphertext = encrypt_str('real')
         with self.assertRaises(InvalidToken):
             decrypt_str(ciphertext[:-1] + b'X')
+
+
+# Rotation + production gate — closes the audit gaps.
+class EncryptionRotationAndGateTests(BaseTestCase):
+    """MultiFernet rotation + ImproperlyConfigured + RuntimeWarning.
+
+    No `FERNET_KEY_SETTING` decorator: these tests assert the
+    unconfigured path.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from cases.testimonials import encryption
+        encryption.get_fernet.cache_clear()
+
+    def tearDown(self):
+        from cases.testimonials import encryption
+        encryption.get_fernet.cache_clear()
+        super().tearDown()
+
+    def test_multifernet_decrypts_old_key_after_rotation(self):
+        """Old ciphertext, encrypted under key A, decrypts successfully
+        when the runtime is configured with [B, A] — the rotation
+        path. Without this, every prod rotation 500s every existing
+        row.
+        """
+        import warnings
+        from cryptography.fernet import Fernet
+        from django.test import override_settings
+        key_a = Fernet.generate_key()
+        key_b = Fernet.generate_key()
+        with override_settings(TESTIMONIALS_FERNET_KEYS=[key_b, key_a]):
+            from cases.testimonials import encryption
+            encryption.get_fernet.cache_clear()
+            # Encrypt under key_a (we construct the Fernet directly
+            # to simulate data written by a previous version).
+            ct = Fernet(key_a).encrypt(b'legacy plaintext')
+            # Decrypt via the running config — should succeed.
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', RuntimeWarning)
+                self.assertEqual(
+                    encryption.decrypt_str(ct),
+                    'legacy plaintext',
+                )
+
+    def test_multifernet_uses_first_key_for_encrypt(self):
+        """Encrypt under a [B, A] config yields ciphertext that B can
+        decrypt — A cannot. First-key-wins for writes; all-keys-tried
+        for reads.
+        """
+        from cryptography.fernet import Fernet, InvalidToken
+        from django.test import override_settings
+        key_a = Fernet.generate_key()
+        key_b = Fernet.generate_key()
+        with override_settings(TESTIMONIALS_FERNET_KEYS=[key_b, key_a]):
+            from cases.testimonials import encryption
+            encryption.get_fernet.cache_clear()
+            ct = encryption.encrypt_str('hello')
+            self.assertEqual(
+                Fernet(key_b).decrypt(bytes(ct)),
+                b'hello',
+            )
+            with self.assertRaises(InvalidToken):
+                Fernet(key_a).decrypt(bytes(ct))
+
+    def test_single_key_setting_still_works(self):
+        """Backward-compat: TESTIMONIALS_FERNET_KEY (single) still
+        encrypts + decrypts as before. Pin the legacy config.
+        """
+        from cryptography.fernet import Fernet
+        from django.test import override_settings
+        key = Fernet.generate_key()
+        with override_settings(TESTIMONIALS_FERNET_KEY=key):
+            from cases.testimonials import encryption
+            encryption.get_fernet.cache_clear()
+            ct = encryption.encrypt_str('legacy single-key mode')
+            self.assertEqual(
+                encryption.decrypt_str(ct),
+                'legacy single-key mode',
+            )
+
+    def test_improperly_configured_when_debug_false_and_no_key(self):
+        """DEBUG=False + no TESTIMONIALS_FERNET_KEY[S] + ALLOW_DEV_FALLBACK_KEY
+        default (False in prod) → ImproperlyConfigured on first call.
+
+        The audit's gap: this fired only at first decrypt, but a
+        startup that never touches encryption would silently boot
+        and 500 on the first /source/ hit. The first-call behavior is
+        what we pin here — pinning it at startup is a follow-up.
+        """
+        from django.core.exceptions import ImproperlyConfigured
+        from django.test import override_settings
+        with override_settings(
+            DEBUG=False,
+            TESTIMONIALS_FERNET_KEY=None,
+            TESTIMONIALS_FERNET_KEYS=None,
+            ALLOW_DEV_FALLBACK_KEY=False,
+        ):
+            from cases.testimonials import encryption
+            encryption.get_fernet.cache_clear()
+            with self.assertRaises(ImproperlyConfigured):
+                encryption.get_fernet()
+
+    def test_runtime_warning_when_debug_true_and_no_key(self):
+        """DEBUG=True + no key + ALLOW_DEV_FALLBACK_KEY default (True)
+        → RuntimeWarning fires once per process (lru_cache). The
+        warning is the cue that production data isn't protected.
+        """
+        import warnings
+        from django.test import override_settings
+        with override_settings(
+            DEBUG=True,
+            TESTIMONIALS_FERNET_KEY=None,
+            TESTIMONIALS_FERNET_KEYS=None,
+        ):
+            from cases.testimonials import encryption
+            encryption.get_fernet.cache_clear()
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter('always')
+                encryption.get_fernet()
+                runtime_warnings = [
+                    w for w in caught
+                    if issubclass(w.category, RuntimeWarning)
+                ]
+                self.assertTrue(
+                    runtime_warnings,
+                    'expected RuntimeWarning when no key is configured '
+                    'and DEBUG=True',
+                )
+                msg = str(runtime_warnings[0].message)
+                self.assertIn('DEV fallback key', msg)
 
 
 # Workflow transitions + AuditLog.
@@ -162,17 +290,17 @@ class TestimonialWorkflowTests(BaseTestCase):
 
     def test_invalid_transition_rejected(self):
         pk = self._create(self.volunteer)
-        # Cannot publish a draft directly.
-        res = self._post_action(self.advocate, pk, 'publish')
+        # Cannot archive a draft directly (archive requires PUBLISHED).
+        res = self._post_action(self.advocate, pk, 'archive')
         self.assertEqual(res.status_code, 400)
         body = res.content.decode()
         # DRF JSON-escapes inner quotes in error bodies; assert on
         # the structural tokens rather than the exact rendered
         # message to keep the test stable across quote-escaping
         # behaviour.
-        self.assertIn('Cannot publish from', body)
+        self.assertIn('Cannot archive from', body)
         self.assertIn('draft', body)
-        self.assertIn('approved', body)
+        self.assertIn('published', body)
 
 
 # Role boundary + encryption endpoint.
@@ -677,7 +805,7 @@ class TestimonialStatusFilterTests(BaseTestCase):
         """
         pending = self._make_row(status_value=Testimonial.Status.UNDER_REVIEW)
         self._make_row(status_value=Testimonial.Status.DRAFT)
-        self._make_row(status_value=Testimonial.Status.APPROVED)
+        self._make_row(status_value=Testimonial.Status.REJECTED)
         self._make_row(status_value=Testimonial.Status.PUBLISHED)
 
         self.client.force_login(self.advocate)
@@ -741,3 +869,502 @@ class SchemaVersionPinTests(BaseTestCase):
             set(on_disk['required']),
             set(EXPORT_SCHEMA['required']),
         )
+
+    def test_export_serializer_output_validates_against_schema(self):
+        """The real contract test: serialize a fixture row and run
+        jsonschema.validate against EXPORT_SCHEMA. Catches the
+        serializer ↔ schema drift the original
+        test_export_serializer_required_fields missed (it asserted
+        only a partial subset).
+        """
+        import jsonschema
+        row = Testimonial.objects.create(
+            title='export-fixture',
+            slug='export-fixture-1',
+            language='en',
+            country='Iraq',
+            region='Erbil',
+            summary='summary',
+            narrative='narrative',
+            outcome='outcome',
+            source_visibility='hidden',
+            public_source_label='Family member',
+            location_visibility='public_region',
+            public_location_display='Erbil',
+            status=Testimonial.Status.PUBLISHED,
+        )
+        data = TestimonialExportSerializer(row).data
+        jsonschema.validate(data, EXPORT_SCHEMA)
+
+
+# Per-action permission gating — closes the destroy + cross-user PATCH
+# holes the audit found (class-level permission_classes was too coarse).
+@FERNET_KEY_SETTING
+class PermissionBoundaryTests(BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.author = make_user('author', in_group='Volunteer')
+        self.other_volunteer = make_user('other-vol', in_group='Volunteer')
+        self.advocate = make_user('adv', in_group='Advocate')
+        self.client = APIClient()
+
+    def _make(self, *, status_value, created_by=None):
+        return Testimonial.objects.create(
+            title='t', slug=f's-perm-{Testimonial.objects.count()+1}',
+            language='en', country='Iraq', region='Erbil',
+            summary='s', narrative='n', outcome='o',
+            source_visibility='hidden',
+            public_source_label='Family member',
+            location_visibility='public_region',
+            public_location_display='Erbil',
+            status=status_value, created_by=created_by,
+        )
+
+    def test_volunteer_cannot_destroy_any_testimonial(self):
+        for st in (Testimonial.Status.DRAFT, Testimonial.Status.PUBLISHED):
+            row = self._make(status_value=st, created_by=self.author)
+            self.client.force_login(self.other_volunteer)
+            res = self.client.delete(f'/api/testimonials/{row.id}/')
+            self.assertEqual(
+                res.status_code, 403,
+                msg=f'delete of {st} by other-volunteer should 403',
+            )
+            self.assertTrue(
+                Testimonial.objects.filter(pk=row.id).exists(),
+                f'delete of {st} row actually removed — RBAC hole!',
+            )
+
+    def test_anonymous_cannot_destroy(self):
+        row = self._make(status_value=Testimonial.Status.PUBLISHED)
+        res = self.client.delete(f'/api/testimonials/{row.id}/')
+        self.assertEqual(res.status_code, 403)
+        self.assertTrue(Testimonial.objects.filter(pk=row.id).exists())
+
+    def test_advocate_can_destroy_published(self):
+        row = self._make(status_value=Testimonial.Status.PUBLISHED)
+        self.client.force_login(self.advocate)
+        res = self.client.delete(f'/api/testimonials/{row.id}/')
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(Testimonial.objects.filter(pk=row.id).exists())
+
+    def test_volunteer_cannot_patch_other_volunteers_draft(self):
+        draft = self._make(
+            status_value=Testimonial.Status.DRAFT,
+            created_by=self.author,
+        )
+        self.client.force_login(self.other_volunteer)
+        res = self.client.patch(
+            f'/api/testimonials/{draft.id}/',
+            {'title': 'hijacked'}, format='json',
+        )
+        # 403 if the queryset exposes the row but the object
+        # permission denies; 404 if the queryset scopes the row out
+        # entirely (which is what get_queryset does for non-owner
+        # volunteers). Either response is acceptable as long as
+        # the row is not modified.
+        self.assertIn(res.status_code, (403, 404),
+                      f'unexpected status {res.status_code}')
+        draft.refresh_from_db()
+        self.assertEqual(draft.title, 't')
+
+    def test_owner_can_patch_own_draft(self):
+        draft = self._make(
+            status_value=Testimonial.Status.DRAFT,
+            created_by=self.author,
+        )
+        self.client.force_login(self.author)
+        res = self.client.patch(
+            f'/api/testimonials/{draft.id}/',
+            {'title': 'updated by owner'}, format='json',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        draft.refresh_from_db()
+        self.assertEqual(draft.title, 'updated by owner')
+
+    def test_owner_cannot_patch_own_published_row(self):
+        row = self._make(
+            status_value=Testimonial.Status.PUBLISHED,
+            created_by=self.author,
+        )
+        self.client.force_login(self.author)
+        res = self.client.patch(
+            f'/api/testimonials/{row.id}/',
+            {'title': 'tampered'}, format='json',
+        )
+        self.assertEqual(res.status_code, 403)
+        row.refresh_from_db()
+        self.assertEqual(row.title, 't')
+
+    def test_advocate_can_patch_any_draft(self):
+        draft = self._make(
+            status_value=Testimonial.Status.DRAFT,
+            created_by=self.author,
+        )
+        self.client.force_login(self.advocate)
+        res = self.client.patch(
+            f'/api/testimonials/{draft.id}/',
+            {'title': 'advocate edit'}, format='json',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+
+
+# Endpoints the audit found untested: /precise_location/ audit row,
+# archive transition, IDOR on under_review/rejected, audit-actor
+# server-side pinning, internal serializer ciphertext exclusion.
+@FERNET_KEY_SETTING
+class PreciseLocationEndpointTests(BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.volunteer = make_user('vol', in_group='Volunteer')
+        self.advocate = make_user('adv', in_group='Advocate')
+        self.client = APIClient()
+
+    def _make(self, *, precise_loc=''):
+        t = Testimonial.objects.create(
+            title='x', slug=f's-ploc-{Testimonial.objects.count()+1}',
+            language='en', country='x', region='y',
+            source_visibility='hidden',
+            public_source_label='Family member',
+            location_visibility='hidden',
+            public_location_display='Erbil',
+            summary='s', narrative='n', outcome='o',
+        )
+        if precise_loc:
+            t.set_precise_location(precise_loc)
+        t.save()
+        return t
+
+    def test_volunteer_decrypt_precise_location_is_403(self):
+        t = self._make(precise_loc='Erbil, 36.19, 44.01')
+        self.client.force_login(self.volunteer)
+        res = self.client.get(
+            f'/api/testimonials/{t.id}/precise_location/',
+        )
+        self.assertEqual(res.status_code, 403)
+        self.assertNotIn(b'36.19', res.content)
+
+    def test_advocate_decrypt_precise_location_works_and_audits(self):
+        t = self._make(precise_loc='Erbil, 36.19, 44.01')
+        self.client.force_login(self.advocate)
+        res = self.client.get(
+            f'/api/testimonials/{t.id}/precise_location/',
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(
+            res.json()['precise_location'], 'Erbil, 36.19, 44.01',
+        )
+        log = AuditLog.objects.filter(
+            target_type='testimonial', target_id=t.id,
+            action=AuditLog.Action.VIEWED,
+        ).first()
+        self.assertIsNotNone(log)
+        self.assertIn('decrypted precise location', log.details)
+
+    def test_anonymous_cannot_decrypt_precise_location(self):
+        t = self._make(precise_loc='secret')
+        res = self.client.get(
+            f'/api/testimonials/{t.id}/precise_location/',
+        )
+        self.assertEqual(res.status_code, 403)
+
+
+@FERNET_KEY_SETTING
+class ArchiveTransitionTests(BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.author = make_user('author', in_group='Volunteer')
+        self.advocate = make_user('adv', in_group='Advocate')
+        self.client = APIClient()
+
+    def _create_via_api(self, user):
+        self.client.force_login(user)
+        res = self.client.post('/api/testimonials/', {
+            'title': 't', 'language': 'en',
+            'country': 'Iraq', 'region': 'Erbil',
+            'summary': 's', 'narrative': 'n', 'outcome': 'o',
+            'source_visibility': 'hidden',
+            'public_source_label': 'Family member',
+            'location_visibility': 'public_region',
+            'public_location_display': 'Erbil',
+        }, format='json')
+        return res.json()['id']
+
+    def _submit_and_approve(self, pk):
+        self.client.force_login(self.author)
+        self.client.post(f'/api/testimonials/{pk}/submit/')
+        self.client.force_login(self.advocate)
+        self.client.post(f'/api/testimonials/{pk}/approve/', {})
+
+    def test_archive_published_creates_audit_and_stamps_archived_at(self):
+        pk = self._create_via_api(self.author)
+        self._submit_and_approve(pk)
+        row = Testimonial.objects.get(pk=pk)
+        self.assertEqual(row.status, Testimonial.Status.PUBLISHED)
+        # Archive.
+        self.client.force_login(self.advocate)
+        res = self.client.post(f'/api/testimonials/{pk}/archive/')
+        self.assertEqual(res.status_code, 200, res.content)
+        row.refresh_from_db()
+        self.assertEqual(row.status, Testimonial.Status.ARCHIVED)
+        self.assertIsNotNone(row.archived_at)
+        # Audit row.
+        audit = AuditLog.objects.filter(
+            target_type='testimonial', target_id=pk,
+            action=AuditLog.Action.EDITED,
+        )
+        self.assertTrue(
+            any('published' in a.details and 'archived' in a.details
+                for a in audit),
+            'no audit row for the published → archived transition',
+        )
+
+    def test_volunteer_cannot_archive(self):
+        pk = self._create_via_api(self.author)
+        self._submit_and_approve(pk)
+        self.client.force_login(self.author)
+        res = self.client.post(f'/api/testimonials/{pk}/archive/')
+        self.assertEqual(res.status_code, 403)
+        row = Testimonial.objects.get(pk=pk)
+        self.assertEqual(row.status, Testimonial.Status.PUBLISHED)
+
+
+@FERNET_KEY_SETTING
+class IDORNonDraftTests(BaseTestCase):
+    """The audit found that IDOR was only pinned for DRAFT — the
+    same scoping must apply to under_review, rejected, and archived
+    rows for non-owner non-Advocate users.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.author = make_user('author', in_group='Volunteer')
+        self.other = make_user('other-vol', in_group='Volunteer')
+        self.advocate = make_user('adv', in_group='Advocate')
+        self.client = APIClient()
+
+    def _make(self, *, status_value, created_by=None):
+        return Testimonial.objects.create(
+            title='t', slug=f's-idor-{Testimonial.objects.count()+1}',
+            language='en', country='Iraq', region='Erbil',
+            summary='s', narrative='n', outcome='o',
+            source_visibility='hidden',
+            public_source_label='Family member',
+            location_visibility='public_region',
+            public_location_display='Erbil',
+            status=status_value, created_by=created_by,
+        )
+
+    def _get(self, row):
+        self.client.force_login(self.other)
+        return self.client.get(f'/api/testimonials/{row.id}/')
+
+    def test_other_volunteer_cannot_retrieve_someone_elses_under_review(self):
+        row = self._make(
+            status_value=Testimonial.Status.UNDER_REVIEW,
+            created_by=self.author,
+        )
+        res = self._get(row)
+        # Under the role-based scoping, another volunteer cannot see
+        # someone else's in-flight row — 404 is the correct response.
+        self.assertIn(res.status_code, (403, 404))
+
+    def test_other_volunteer_cannot_retrieve_someone_elses_rejected(self):
+        row = self._make(
+            status_value=Testimonial.Status.REJECTED,
+            created_by=self.author,
+        )
+        res = self._get(row)
+        self.assertIn(res.status_code, (403, 404))
+
+    def test_other_volunteer_cannot_retrieve_someone_elses_archived(self):
+        row = self._make(
+            status_value=Testimonial.Status.ARCHIVED,
+            created_by=self.author,
+        )
+        res = self._get(row)
+        self.assertIn(res.status_code, (403, 404))
+
+    def test_owner_can_retrieve_own_under_review(self):
+        row = self._make(
+            status_value=Testimonial.Status.UNDER_REVIEW,
+            created_by=self.author,
+        )
+        self.client.force_login(self.author)
+        res = self.client.get(f'/api/testimonials/{row.id}/')
+        self.assertEqual(res.status_code, 200)
+
+    def test_advocate_can_retrieve_any_status(self):
+        for st in (Testimonial.Status.UNDER_REVIEW,
+                   Testimonial.Status.REJECTED,
+                   Testimonial.Status.ARCHIVED):
+            row = self._make(
+                status_value=st, created_by=self.author,
+            )
+            self.client.force_login(self.advocate)
+            res = self.client.get(f'/api/testimonials/{row.id}/')
+            self.assertEqual(
+                res.status_code, 200,
+                f'advocate should retrieve {st}, got {res.status_code}',
+            )
+
+
+@FERNET_KEY_SETTING
+class AuditActorPinningTests(BaseTestCase):
+    """Server-side pinning: AuditLog.user is always request.user,
+    even if a client tries to spoof by sending `user` or `actor` in
+    the request body. The audit row's `user` reflects the real
+    requester; the request body's value is silently dropped.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.author = make_user('author', in_group='Volunteer')
+        self.advocate = make_user('adv', in_group='Advocate')
+        self.client = APIClient()
+
+    def test_patch_with_user_field_does_not_spoof_audit_actor(self):
+        """A malicious client sends `user=42` in a PATCH body. The
+        audit row must attribute the change to request.user, not 42.
+        """
+        self.client.force_login(self.author)
+        create = self.client.post('/api/testimonials/', {
+            'title': 't', 'language': 'en',
+            'country': 'Iraq', 'region': 'Erbil',
+            'summary': 's', 'narrative': 'n', 'outcome': 'o',
+            'source_visibility': 'hidden',
+            'public_source_label': 'Family member',
+            'location_visibility': 'public_region',
+            'public_location_display': 'Erbil',
+        }, format='json')
+        pk = create.json()['id']
+        # Try to spoof the actor.
+        patch = self.client.patch(
+            f'/api/testimonials/{pk}/',
+            {'title': 'spoofed', 'user': 99999, 'created_by': 99999},
+            format='json',
+        )
+        self.assertEqual(patch.status_code, 200, patch.content)
+        # Audit row was written for the UPDATE — user must be self.author.
+        audit = AuditLog.objects.filter(
+            target_type='testimonial', target_id=pk,
+            action=AuditLog.Action.EDITED,
+        )
+        self.assertTrue(audit.exists())
+        # The 'updated' audit row (not 'created') is the one we're
+        # interested in.
+        update_audits = [a for a in audit if 'updated' in a.details]
+        self.assertTrue(update_audits,
+                        'no UPDATE audit row found')
+        for a in update_audits:
+            self.assertEqual(a.user, self.author,
+                             'audit row attributed to spoofed actor')
+
+
+@FERNET_KEY_SETTING
+class StaffAdvocateGateTests(BaseTestCase):
+    """Pin _is_staff_or_advocate: is_staff=True OR Advocate group is
+    enough; a non-staff non-Advocate is denied.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Group
+        User = get_user_model()
+        # A user with is_staff=True but NOT in Advocate group.
+        self.staff_only = User.objects.create_user(
+            username='staff-only', is_staff=True, is_active=True,
+            email='staff-only@test.local',
+        )
+        # A user in Advocate group but is_staff=False.
+        advocate_group, _ = Group.objects.get_or_create(name='Advocate')
+        self.advocate_only = User.objects.create_user(
+            username='advocate-only', is_active=True,
+            email='advocate-only@test.local',
+        )
+        self.advocate_only.groups.add(advocate_group)
+        # A user with neither.
+        self.plebe = make_user('plebe', in_group='Volunteer')
+        self.client = APIClient()
+
+    def test_staff_can_approve(self):
+        """is_staff=True alone satisfies _is_staff_or_advocate — the
+        helper is group-OR-staff, not group-AND-staff."""
+        pk = Testimonial.objects.create(
+            title='t', slug='s-staff-1', language='en',
+            country='Iraq', region='Erbil',
+            summary='s', narrative='n', outcome='o',
+            source_visibility='hidden', public_source_label='x',
+            location_visibility='public_region',
+            public_location_display='Erbil',
+            status=Testimonial.Status.UNDER_REVIEW,
+        ).pk
+        self.client.force_login(self.staff_only)
+        res = self.client.post(f'/api/testimonials/{pk}/approve/')
+        self.assertEqual(res.status_code, 200, res.content)
+
+    def test_advocate_group_can_approve(self):
+        pk = Testimonial.objects.create(
+            title='t', slug='s-advgr-1', language='en',
+            country='Iraq', region='Erbil',
+            summary='s', narrative='n', outcome='o',
+            source_visibility='hidden', public_source_label='x',
+            location_visibility='public_region',
+            public_location_display='Erbil',
+            status=Testimonial.Status.UNDER_REVIEW,
+        ).pk
+        self.client.force_login(self.advocate_only)
+        res = self.client.post(f'/api/testimonials/{pk}/approve/')
+        self.assertEqual(res.status_code, 200, res.content)
+
+    def test_volunteer_cannot_approve(self):
+        pk = Testimonial.objects.create(
+            title='t', slug='s-volno-1', language='en',
+            country='Iraq', region='Erbil',
+            summary='s', narrative='n', outcome='o',
+            source_visibility='hidden', public_source_label='x',
+            location_visibility='public_region',
+            public_location_display='Erbil',
+            status=Testimonial.Status.UNDER_REVIEW,
+        ).pk
+        self.client.force_login(self.plebe)
+        res = self.client.post(f'/api/testimonials/{pk}/approve/')
+        self.assertEqual(res.status_code, 403)
+
+
+@FERNET_KEY_SETTING
+class InternalSerializerCiphertextExclusionTests(BaseTestCase):
+    """Even an authenticated Advocate's GET on /api/testimonials/{id}/
+    must not include source_encrypted / precise_location_encrypted.
+    Decrypted plaintext flows only through the dedicated endpoints.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.advocate = make_user('adv', in_group='Advocate')
+        self.client = APIClient()
+
+    def test_internal_serializer_excludes_ciphertext_columns(self):
+        t = Testimonial.objects.create(
+            title='t', slug='s-cipher-1',
+            language='en', country='Iraq', region='Erbil',
+            summary='s', narrative='n', outcome='o',
+            source_visibility='hidden',
+            public_source_label='Family member',
+            location_visibility='public_region',
+            public_location_display='Erbil',
+            status=Testimonial.Status.PUBLISHED,
+        )
+        t.set_source('real-secret')
+        t.set_precise_location('Erbil precise')
+        t.save()
+        self.client.force_login(self.advocate)
+        res = self.client.get(f'/api/testimonials/{t.id}/')
+        self.assertEqual(res.status_code, 200)
+        body = res.content.decode()
+        self.assertNotIn('source_encrypted', body)
+        self.assertNotIn('precise_location_encrypted', body)
+        self.assertNotIn('real-secret', body,
+                         'plaintext source leaked into internal serializer')
+        self.assertNotIn('Erbil precise', body,
+                         'plaintext location leaked into internal serializer')

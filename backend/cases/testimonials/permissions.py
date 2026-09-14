@@ -102,3 +102,44 @@ class CanViewEncryptedSource(permissions.BasePermission):
 
     def has_permission(self, request, view) -> bool:
         return _is_staff_or_advocate(request.user)
+
+
+class CanEditOwnOrReview(permissions.BasePermission):
+    """Object-level: edit a testimonial only if you own it (created_by)
+    OR you are Advocate+.
+
+    Layered on top of `CanSubmitTestimonial` for `update` and
+    `partial_update`. Without this, any authenticated user could PATCH
+    any testimonial — including ones they didn't author. The
+    chain-of-custody principle is that published rows are not editable
+    by their original author (use a workflow transition or contact an
+    advocate); for drafts and in-flight rows, the author retains edit
+    rights until the row is published.
+
+    Note: this class does NOT have `has_permission`. It's only checked
+    at object level (DRF calls it after `get_object()` returns the row).
+    The view-level gate (any authenticated user) is still
+    `CanSubmitTestimonial.has_permission`.
+    """
+
+    message = (
+        'You can only edit testimonials you authored. '
+        'Ask an Advocate to edit other rows.'
+    )
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if _is_staff_or_advocate(user):
+            return True
+        if obj.created_by_id != user.id:
+            return False
+        # Local import: avoid circular at module load.
+        from cases.models import Testimonial
+        if obj.status in (Testimonial.Status.PUBLISHED,
+                          Testimonial.Status.ARCHIVED):
+            return False
+        return True
