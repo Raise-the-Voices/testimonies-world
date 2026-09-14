@@ -277,6 +277,15 @@
 		{:else if data.testimonials.length === 0}
 			<div class="empty-state">
 				<p>No published testimonials yet.</p>
+				{#if currentUser.authenticated}
+					<a class="btn btn-primary" href="{base}/testimonials/new">
+						Submit the first testimonial →
+					</a>
+				{:else}
+					<a class="btn btn-primary" href="{base}/accounts/google/login/?next={base}/testimonials/new">
+						Sign in to contribute
+					</a>
+				{/if}
 			</div>
 		{:else}
 			{@render cardGrid(data.testimonials, false)}
@@ -298,6 +307,16 @@
 			{:else if state.error}
 				<div class="error-state" role="alert">
 					<p>{tab.errorMessage}: {state.error}</p>
+					<button
+						type="button"
+						class="btn btn-secondary"
+						onclick={() => {
+							state.attempted = false;
+							loadTab(tab.key);
+						}}
+					>
+						Retry
+					</button>
 				</div>
 			{:else if state.list.length === 0}
 				<div class="empty-state">
@@ -367,6 +386,7 @@
 		display: flex;
 		gap: 0.4rem;
 		flex-wrap: wrap;
+		overflow-x: auto;
 		border-bottom: 1px solid var(--color-border-light);
 		padding-bottom: 0.4rem;
 	}
