@@ -344,6 +344,10 @@
 						<option value="public_named">Public — named (requires Advocate role)</option>
 					{/if}
 				</select>
+				<span class="encrypted-badge" aria-label="Field-level encrypted on the server">
+					<span class="encrypted-icon" aria-hidden="true">🔒</span>
+					<span class="encrypted-label">Encrypted</span>
+				</span>
 			</div>
 
 			<div class="form-row">
@@ -364,6 +368,10 @@
 					<option value="public_region">Public — region only</option>
 					<option value="public_precise">Public — precise</option>
 				</select>
+				<span class="encrypted-badge" aria-label="Field-level encrypted on the server">
+					<span class="encrypted-icon" aria-hidden="true">🔒</span>
+					<span class="encrypted-label">Encrypted</span>
+				</span>
 			</div>
 		</fieldset>
 
@@ -484,6 +492,22 @@
 	input[aria-invalid='true'], textarea[aria-invalid='true'] {
 		border-color: var(--color-danger);
 	}
+	.encrypted-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin-top: 0.25rem;
+		padding: 0.15rem 0.5rem;
+		border-radius: 999px;
+		background: #ecfeff;
+		color: #0e7490;
+		font-size: 0.72rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04rem;
+		align-self: flex-start;
+	}
+	.encrypted-icon { font-size: 0.85rem; }
 	.form-actions { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
 	.form-saved-link {
 		color: var(--color-primary);
