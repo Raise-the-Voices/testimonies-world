@@ -248,7 +248,10 @@
 					type="button"
 					class="testimonials-tab"
 					class:testimonials-tab-active={activeTab === tab.key}
-					aria-current={activeTab === tab.key ? 'page' : undefined}
+					role="tab"
+					aria-selected={activeTab === tab.key}
+					aria-controls="testimonials-panel"
+					id="testimonials-tab-{tab.key}"
 					onclick={() => (activeTab = tab.key)}
 				>
 					{tab.label}
@@ -261,7 +264,10 @@
 			type="button"
 			class="testimonials-tab"
 			class:testimonials-tab-active={activeTab === 'published'}
-			aria-current={activeTab === 'published' ? 'page' : undefined}
+			role="tab"
+			aria-selected={activeTab === 'published'}
+			aria-controls="testimonials-panel"
+			id="testimonials-tab-published"
 			onclick={() => (activeTab = 'published')}
 		>
 			Published
@@ -269,6 +275,12 @@
 		</button>
 	</nav>
 
+	<div
+		class="testimonials-panel"
+		role="tabpanel"
+		id="testimonials-panel"
+		aria-labelledby={`testimonials-tab-${activeTab}`}
+	>
 	{#if activeTab === 'published'}
 		{#if data.error}
 			<div class="error-state" role="alert">
@@ -338,6 +350,7 @@
 			{/if}
 		{/if}
 	{/if}
+	</div>
 </div>
 
 <style>
