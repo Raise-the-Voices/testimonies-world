@@ -345,43 +345,76 @@
 {#if rejectOpen}
 	<Modal
 		open={rejectOpen}
-		title={`Reject testimonial #${id}`}
 		onClose={closeRejectModal}
 	>
-		<p class="reject-modal-description">
-			Rejection requires a reason. The submitter will see this note
-			on their draft so they can address it before re-submitting.
-		</p>
-		<div class="reject-modal-field">
-			<label class="reject-modal-label" for="reject-notes">
-				Reason <span class="reject-modal-required" aria-hidden="true">*</span>
-			</label>
-			<textarea
-				id="reject-notes"
-				class="reject-modal-textarea"
-				rows="5"
-				bind:value={rejectNotes}
-				placeholder="e.g. Source unreliable; needs re-verification."
-			></textarea>
+		{#snippet header()}
+			<div class="reject-modal-header">
+				<div class="reject-modal-icon" aria-hidden="true">
+					<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M12 9v4" />
+						<path d="M12 17h.01" />
+						<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+					</svg>
+				</div>
+				<div class="reject-modal-title-block">
+					<h2 id={undefined} class="reject-modal-title">
+						Reject testimonial <span class="reject-modal-id">#{id}</span>
+					</h2>
+					<p class="reject-modal-subtitle">
+						This action sends the draft back to the submitter.
+					</p>
+				</div>
+			</div>
+		{/snippet}
+
+		<div class="reject-modal-body">
+			<p class="reject-modal-description">
+				Rejection requires a reason. The submitter will see this
+				note on their draft so they can address it before
+				re-submitting.
+			</p>
+
+			<div class="reject-modal-field">
+				<div class="reject-modal-label-row">
+					<label class="reject-modal-label" for="reject-notes">
+						Reason
+						<span class="reject-modal-required" aria-hidden="true">*</span>
+					</label>
+					<span class="reject-modal-count" aria-live="polite">
+						{rejectNotes.trim().length} characters
+					</span>
+				</div>
+				<textarea
+					id="reject-notes"
+					class="reject-modal-textarea"
+					rows="6"
+					maxlength="2000"
+					bind:value={rejectNotes}
+					placeholder="e.g. Source unreliable; needs re-verification."
+				></textarea>
+			</div>
 		</div>
-		<div class="reject-modal-actions">
-			<button
-				type="button"
-				class="reject-btn reject-btn-cancel"
-				onclick={closeRejectModal}
-				disabled={rejectSaving}
-			>
-				Cancel
-			</button>
-			<button
-				type="button"
-				class="reject-btn reject-btn-confirm"
-				disabled={!rejectNotes.trim() || rejectSaving}
-				onclick={submitReject}
-			>
-				{rejectSaving ? 'Rejecting…' : 'Reject testimonial'}
-			</button>
-		</div>
+
+		{#snippet footer()}
+			<div class="reject-modal-actions">
+				<button
+					type="button"
+					class="reject-btn reject-btn-cancel"
+					onclick={closeRejectModal}
+					disabled={rejectSaving}
+				>
+					Cancel
+				</button>
+				<button
+					type="button"
+					class="reject-btn reject-btn-confirm"
+					disabled={!rejectNotes.trim() || rejectSaving}
+					onclick={submitReject}
+				>
+					{rejectSaving ? 'Rejecting…' : 'Reject testimonial'}
+				</button>
+			</div>
+		{/snippet}
 	</Modal>
 {/if}
 
@@ -508,18 +541,83 @@
 	/* Reject modal — clean typography hierarchy, padded textarea with
 	   focus ring, distinct outline (Cancel) and destructive (Reject)
 	   action buttons. Tokens from app.css; no hardcoded values. */
+
+	/* Header bar — warning glyph + title + subtitle on a tinted
+	   background. Distinct from the body so the destructive action
+	   reads as "two sections: explain what this is, do the action". */
+	.reject-modal-header {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.85rem;
+		padding: 1.25rem 1.5rem;
+		background: var(--color-danger-bg);
+		border-bottom: 1px solid var(--color-danger-border);
+		border-top-left-radius: var(--radius-card-lg);
+		border-top-right-radius: var(--radius-card-lg);
+	}
+
+	.reject-modal-icon {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 999px;
+		background: var(--color-danger-icon-bg);
+		color: var(--color-danger-text-strong);
+	}
+
+	.reject-modal-title-block {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		min-width: 0;
+	}
+
+	.reject-modal-title {
+		margin: 0;
+		font-size: 1.15rem;
+		font-weight: 700;
+		color: var(--color-danger-text-strong);
+		letter-spacing: -0.01em;
+	}
+
+	.reject-modal-id {
+		font-weight: 700;
+		color: var(--color-danger);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.reject-modal-subtitle {
+		margin: 0;
+		font-size: 0.82rem;
+		color: var(--color-danger-text);
+		line-height: 1.4;
+	}
+
+	.reject-modal-body {
+		padding: 1.25rem 1.5rem 0.5rem;
+	}
+
 	.reject-modal-description {
-		margin: 0 0 1rem 0;
+		margin: 0 0 1.15rem 0;
 		color: var(--color-text-muted);
 		font-size: 0.92rem;
-		line-height: 1.5;
+		line-height: 1.55;
 	}
 
 	.reject-modal-field {
 		display: flex;
 		flex-direction: column;
-		gap: 0.45rem;
-		margin-bottom: 1.25rem;
+		gap: 0.5rem;
+	}
+
+	.reject-modal-label-row {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.5rem;
 	}
 
 	.reject-modal-label {
@@ -527,79 +625,107 @@
 		font-size: 0.85rem;
 		font-weight: 700;
 		color: var(--color-text);
+		letter-spacing: 0.01em;
 	}
 
 	.reject-modal-required {
 		color: var(--color-danger);
 		margin-left: 0.15rem;
+		font-weight: 700;
+	}
+
+	.reject-modal-count {
+		font-size: 0.72rem;
+		color: var(--color-text-muted);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.reject-modal-textarea {
 		font: inherit;
 		width: 100%;
-		min-height: 6.5em;
-		padding: 0.65rem 0.75rem;
+		min-height: 7.5em;
+		padding: 0.75rem 0.85rem;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-input);
 		background: var(--color-bg-white);
 		color: var(--color-text);
 		resize: vertical;
 		box-sizing: border-box;
-		line-height: 1.5;
+		line-height: 1.55;
+		font-size: 0.92rem;
+		transition: border-color 0.15s ease, box-shadow 0.15s ease;
+	}
+	.reject-modal-textarea:hover:not(:disabled) {
+		border-color: var(--color-text-muted);
 	}
 	.reject-modal-textarea:focus-visible {
-		outline: 3px solid var(--focus-ring);
-		outline-offset: 1px;
-		border-color: var(--color-primary);
+		outline: none;
+		border-color: var(--color-danger);
+		box-shadow: 0 0 0 3px var(--color-danger-icon-bg);
 	}
 
 	.reject-modal-actions {
 		display: flex;
 		justify-content: flex-end;
-		gap: 0.6rem;
+		gap: 0.65rem;
 		flex-wrap: wrap;
+		padding: 0.85rem 1.5rem 1.25rem;
+		border-top: 1px solid var(--color-border-light);
+		background: var(--color-bg);
+		border-bottom-left-radius: var(--radius-card-lg);
+		border-bottom-right-radius: var(--radius-card-lg);
+		margin: 1rem -0 0 0;
 	}
 
 	.reject-btn {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		padding: 0.55rem 1.1rem;
+		padding: 0.6rem 1.25rem;
 		border-radius: var(--radius-input);
 		font: inherit;
 		font-weight: 700;
 		font-size: 0.92rem;
+		line-height: 1.2;
 		cursor: pointer;
 		transition: background-color 0.15s ease, border-color 0.15s ease,
-			color 0.15s ease;
+			color 0.15s ease, box-shadow 0.15s ease;
 		border: 1px solid transparent;
+		min-width: 6.5rem;
 	}
 	.reject-btn:disabled {
-		opacity: 0.55;
+		opacity: 0.5;
 		cursor: not-allowed;
+	}
+	.reject-btn:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px var(--focus-ring);
 	}
 
 	.reject-btn-cancel {
 		background: var(--color-bg-white);
-		color: var(--color-primary);
+		color: var(--color-text);
 		border-color: var(--color-border);
 	}
 	.reject-btn-cancel:hover:not(:disabled) {
-		border-color: var(--color-primary);
 		background: var(--color-section-bg);
+		border-color: var(--color-text-muted);
 	}
 
 	.reject-btn-confirm {
 		background: var(--color-danger);
 		color: var(--color-text-light);
 		border-color: var(--color-danger);
+		box-shadow: 0 1px 2px rgba(217, 22, 22, 0.18);
 	}
 	.reject-btn-confirm:hover:not(:disabled) {
-		filter: brightness(0.92);
+		background: var(--color-danger-text-strong);
+		border-color: var(--color-danger-text-strong);
+		box-shadow: 0 2px 6px rgba(217, 22, 22, 0.28);
 	}
 	.reject-btn-confirm:focus-visible {
-		outline: 3px solid var(--focus-ring);
-		outline-offset: 2px;
+		outline: none;
+		box-shadow: 0 0 0 3px var(--color-danger-icon-bg);
 	}
 
 	.action-error {
