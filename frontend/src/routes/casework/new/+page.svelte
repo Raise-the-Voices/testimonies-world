@@ -7,10 +7,10 @@
 		createCasework,
 		getCaseworkRecord,
 		updateCasework,
-		getPersons,
 		ApiError,
 	} from '$lib/api';
 	import Skeleton from '$lib/Skeleton.svelte';
+	import PersonMultiPicker from '$lib/PersonMultiPicker.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -24,7 +24,6 @@
 	let formError = $state('');
 	let formErrorKind = $state<'auth' | 'server' | 'other'>('other');
 	let errors = $state<Record<string, string>>({});
-	let persons: any[] = $state([]);
 	let selectedPersons: number[] = $state([]);
 
 	// Edit mode: when ?id=X is present, we load and PATCH instead of POST.
@@ -75,8 +74,6 @@
 			notes = '';
 			selectedPersons = [];
 			loading = false;
-			// Still need the persons picker.
-			void loadPersonsList(token);
 			return;
 		}
 		loading = true;
@@ -102,17 +99,6 @@
 		} finally {
 			if (token === loadToken) loading = false;
 		}
-		void loadPersonsList(token);
-	}
-
-	async function loadPersonsList(tok: number = loadToken) {
-		try {
-			const data = await getPersons({ page_size: '1000' });
-			if (tok !== loadToken) return;
-			persons = data.results;
-		} catch (e) {
-			console.error(e);
-		}
 	}
 
 	// Re-fetch whenever the route or its ?id= param changes. $effect
@@ -121,14 +107,6 @@
 		void recordId;
 		void load();
 	});
-
-	function togglePerson(id: number) {
-		if (selectedPersons.includes(id)) {
-			selectedPersons = selectedPersons.filter((p) => p !== id);
-		} else {
-			selectedPersons = [...selectedPersons, id];
-		}
-	}
 
 	/** Remove a field's error — fires on every input so users see instant feedback when they fix it. */
 	function clearError(field: string) {
@@ -537,53 +515,22 @@
 			</section>
 
 			<!-- ============== Section 4: Linked Persons ============== -->
-			{#if persons.length > 0}
-				<section class="form-section" aria-labelledby="sec-persons">
-					<h2 id="sec-persons" class="form-section-title">
-						<span class="title-bar" aria-hidden="true"></span>
-						Linked Persons
-					</h2>
-					<p class="form-section-desc">
-						Select the case file(s) this action relates to. Skip if not yet linked to a person.
-					</p>
+			<section class="form-section" aria-labelledby="sec-persons">
+				<h2 id="sec-persons" class="form-section-title">
+					<span class="title-bar" aria-hidden="true"></span>
+					Linked Persons
+				</h2>
+				<p class="form-section-desc">
+					Select the case file(s) this action relates to. Skip if not yet linked to a person.
+				</p>
 
-					{#if selectedPersons.length > 0}
-						<p class="linked-summary" aria-live="polite">
-							{selectedPersons.length}
-							{selectedPersons.length === 1 ? 'person' : 'people'} linked
-							<button
-								type="button"
-								class="link-button"
-								onclick={() => (selectedPersons = [])}
-								aria-label="Clear all linked persons"
-							>Clear</button>
-						</p>
-					{/if}
-
-					<div class="persons-grid" role="group" aria-label="Linked persons">
-						{#each persons as person (person.id)}
-							<label class="person-pill" class:is-selected={selectedPersons.includes(person.id)}>
-								<span class="person-check" aria-hidden="true">
-									{#if selectedPersons.includes(person.id)}
-										<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-											<polyline points="20 6 9 17 4 12" />
-										</svg>
-									{/if}
-								</span>
-								<input
-									type="checkbox"
-									checked={selectedPersons.includes(person.id)}
-									onchange={() => togglePerson(person.id)}
-								/>
-								<span class="person-name">{person.name}</span>
-								{#if person.country}
-									<span class="person-country">({person.country})</span>
-								{/if}
-							</label>
-						{/each}
-					</div>
-				</section>
-			{/if}
+				<PersonMultiPicker
+					value={selectedPersons}
+					onChange={(ids) => (selectedPersons = ids)}
+					inputId="casework-persons"
+					label="Linked Persons"
+				/>
+			</section>
 
 			<!-- Submit -->
 			<div class="form-actions">
@@ -938,120 +885,6 @@
 		color: var(--color-danger);
 	}
 
-	/* === Linked persons as interactive pills with visible check mark === */
-	.persons-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-		gap: 0.5rem;
-	}
-	.person-pill {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.6rem;
-		padding: 0.55rem 0.9rem 0.55rem 0.7rem;
-		border: 1px solid var(--color-border-light);
-		border-radius: var(--radius-input);
-		background: var(--color-bg-white);
-		color: var(--color-text);
-		font-size: 0.88rem;
-		font-weight: 500;
-		cursor: pointer;
-		user-select: none;
-		transition:
-			background 0.15s ease,
-			border-color 0.15s ease,
-			color 0.15s ease,
-			box-shadow 0.15s ease;
-	}
-	.person-pill:hover {
-		border-color: var(--color-primary-light);
-		background: var(--color-surface);
-	}
-	.person-pill.is-selected {
-		background: var(--color-primary-tint);
-		border-color: var(--color-primary);
-		color: var(--color-primary);
-		font-weight: 600;
-	}
-	.person-country {
-		color: var(--color-text-muted);
-		font-weight: 400;
-		font-size: 0.82rem;
-	}
-	.person-pill.is-selected .person-country {
-		color: var(--color-primary-light);
-	}
-
-	/* Visible check indicator — empty box that fills with primary
-	   color and a white check when selected. */
-	.person-check {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 18px;
-		height: 18px;
-		border: 1.5px solid var(--color-border-light);
-		border-radius: 4px;
-		background: var(--color-bg-white);
-		color: transparent;
-		flex: 0 0 18px;
-		transition:
-			background 0.15s ease,
-			border-color 0.15s ease,
-			color 0.15s ease;
-	}
-	.person-pill.is-selected .person-check {
-		background: var(--color-primary);
-		border-color: var(--color-primary);
-		color: white;
-	}
-	.person-pill:hover .person-check {
-		border-color: var(--color-primary-light);
-	}
-
-	/* Native checkbox hidden but accessible */
-	.person-pill input[type='checkbox'] {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		margin: -1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
-		border: 0;
-	}
-	.person-pill input[type='checkbox']:focus-visible + .person-check,
-	.person-pill:focus-within .person-check {
-		outline: none;
-		box-shadow: 0 0 0 3px var(--color-primary-tint);
-	}
-
-	/* === Linked persons summary + clear link === */
-	.linked-summary {
-		margin: 0 0 0.75rem;
-		font-size: 0.85rem;
-		color: var(--color-primary);
-		font-weight: 600;
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
-	}
-	.link-button {
-		background: transparent;
-		border: 0;
-		color: var(--color-primary-light);
-		font-size: 0.85rem;
-		font-weight: 500;
-		text-decoration: underline;
-		text-underline-offset: 2px;
-		cursor: pointer;
-		padding: 0;
-	}
-	.link-button:hover {
-		color: var(--color-primary);
-	}
-
 	/* === Submit actions === */
 	.form-actions {
 		display: flex;
@@ -1102,9 +935,6 @@
 		.form-grid {
 			grid-template-columns: 1fr;
 			gap: 1rem;
-		}
-		.persons-grid {
-			grid-template-columns: 1fr;
 		}
 		.form-actions {
 			padding: 1.25rem;
