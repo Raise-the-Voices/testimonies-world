@@ -534,3 +534,54 @@ CACHES = configure_cache(redis_url=REDIS_URL)
 # human-rights PII and we don't ship that to a third-party
 # service unless an operator explicitly opts in via env.
 init_sentry(dsn=config('SENTRY_DSN', default=''))
+
+# --- E2E test-only auth bootstrap ------------------------------------
+# Two knobs work together to enable the Playwright auth bootstrap.
+#
+#   ENABLE_E2E_TEST_AUTH  master switch (bool, default False).
+#                         Off in every environment by default. When
+#                         True, registers /__test__/login/ AND
+#                         relaxes cookie/SSL settings below for
+#                         plain-HTTP local + CI use.
+#
+#   TESTIMONIAL_E2E_AUTH_TOKEN
+#                         Per-deploy random secret. Even with
+#                         ENABLE_E2E_TEST_AUTH=True, the URL is
+#                         not registered unless this is a non-empty
+#                         string. Generate with:
+#                           python -c "import secrets; print(secrets.token_urlsafe(32))"
+#
+# Defense in depth: production should have BOTH off. A prod deploy
+# with ENABLE_E2E_TEST_AUTH accidentally True is still safe as
+# long as the token is unset. A prod deploy with the token set but
+# the master switch off is also safe. Only when BOTH are set does
+# the surface exist.
+ENABLE_E2E_TEST_AUTH = config('ENABLE_E2E_TEST_AUTH', default=False, cast=bool)
+TESTIMONIAL_E2E_AUTH_TOKEN = config('TESTIMONIAL_E2E_AUTH_TOKEN', default='')
+
+if ENABLE_E2E_TEST_AUTH:
+    # E2E bootstrap runs over plain HTTP (the local dev server +
+    # most CI runners). Cookies marked Secure would be dropped.
+    # The token gate above keeps this from mattering in prod —
+    # ENABLE_E2E_TEST_AUTH is False there.
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SECURE_SSL_REDIRECT = False
+    # CSRF_COOKIE_HTTPONLY stays False — the SvelteKit API mutator
+    # reads the csrftoken cookie via document.cookie to populate
+    # X-CSRFToken on state-changing requests. (Already False in
+    # the base config; pinned here so a future refactor can't
+    # silently break the test surface.)
+
+    # The browser-driven E2E spec hits the backend from
+    # http://127.0.0.1:3040 / http://localhost:3040 — Django's
+    # CSRF middleware rejects state-changing requests whose Origin
+    # header isn't in CSRF_TRUSTED_ORIGINS. The .env on a real
+    # deploy typically overrides CSRF_TRUSTED_ORIGINS to the prod
+    # hostname only (no dev origins); we union the dev origins in
+    # here so the spec works without polluting the prod .env.
+    # Production deploys leave ENABLE_E2E_TEST_AUTH unset, so this
+    # block is a no-op there.
+    for origin in ('http://localhost:3040', 'http://127.0.0.1:3040'):
+        if origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(origin)
