@@ -2,12 +2,38 @@
 {% load i18n %}
 {% load allauth %}
 
-{% block head_title %}{% trans "Complete Sign Up" %}{% endblock head_title %}
+{#
+  Override of allauth's socialaccount/signup.html.
+
+  Why this exists:
+    allauth's default copy says "Sign Up" and frames the form as a
+    new-account creation step. In our deployment the same view is
+    used for the "connect your OAuth account to an existing local
+    account" flow (when a Google user's email matches a pre-existing
+    User without a linked SocialAccount — see
+    SOCIALACCOUNT_CONNECT_EXISTING_ACCOUNTS in settings.py, which
+    defaults to False for security reasons: email ownership isn't
+    proof of Google-account ownership, so we always require explicit
+    user confirmation before linking).
+
+    Users hitting this form via the Login nav button were confused:
+    they expected Google's OAuth consent screen and instead saw
+    "Sign Up". This template reframes the same form as "connect",
+    with copy explaining what just happened, without changing the
+    auth behavior (same CSRF, same fields, same redirect handling).
+
+  Reverting: delete this file; allauth's default will resume.
+#}
+
+{% block head_title %}{% trans "Connect your account" %}{% endblock head_title %}
 
 {% block content %}
-    <h1>{% trans "One more step" %}</h1>
+    <h1>{% trans "Connect your account" %}</h1>
     <p class="auth-subtitle">
-        {% trans "Confirm your details to finish creating your account." %}
+        {% blocktrans with provider_name=account.get_provider.name %}You're signing in with {{ provider_name }}. We found an
+existing account that uses the same email address. To finish signing
+in, please confirm you'd like to connect {{ provider_name }} to that
+account.{% endblocktrans %}
     </p>
 
     <form class="auth-form" method="post" action="{% url 'socialaccount_signup' %}">
@@ -38,6 +64,12 @@
             <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}" />
         {% endif %}
 
-        <button type="submit" class="auth-submit">{% trans "Complete sign-up" %}</button>
+        <button type="submit" class="auth-submit">{% trans "Connect account" %}</button>
     </form>
+
+    <p class="auth-footnote">
+        {% blocktrans with provider_name=account.get_provider.name %}If this isn't your account, sign out of {{ provider_name }}
+and try again with a different account — or contact us if you
+believe this is an error.{% endblocktrans %}
+    </p>
 {% endblock content %}
