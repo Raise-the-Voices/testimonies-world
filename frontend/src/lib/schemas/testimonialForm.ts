@@ -107,6 +107,11 @@ export const newTestimonialSchema = z
 		locationVisibility: locationVisibilityEnum,
 		familyProtected: z.boolean(),
 		contactProtected: z.boolean(),
+		// Linked Person FK — optional. Validated as a nullable positive
+		// integer so the picker can clear it (null) without failing
+		// the schema, and so a stale id (>0) is still rejected by
+		// the backend's Person existence check on write.
+		person: z.number().int().positive().nullable().optional(),
 	})
 	.superRefine((data, ctx) => {
 		// Cross-field rule: when the source is shown to readers (i.e.
