@@ -1,5 +1,6 @@
 from urllib.parse import urljoin
 
+from django.conf import settings
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -117,14 +118,24 @@ def _absolute_media_url(relative_url: str, request=None) -> str:
     '/media/profiles/foo.jpg') to a fully-qualified absolute URL.
 
     Order of preference:
-      1. request.build_absolute_uri() — uses the request's Host header.
+      1. settings.SITE_URL — the *public* URL the user sees in their
+         browser bar, including any base-path prefix (/testimonies
+         on the demo + production deploy). Built first so the result
+         is independent of the SCRIPT_NAME asymmetry between the
+         frontend (which sets it via PUBLIC_BASE_PATH) and the backend
+         (which intentionally runs at root behind nginx — see
+         scripts/nginx/rtv-cases and docker/nginx.conf). An operator
+         who sets SCRIPT_NAME=/testimonies on the backend in an
+         attempt to "match" the frontend will trip the bug this
+         prefers SITE_URL to avoid: build_absolute_uri() doesn't add
+         SCRIPT_NAME, so generated URLs would point at
+         https://host/media/... and break under nginx's
+         location /media/ matching on the prefixed path.
+      2. request.build_absolute_uri() — falls back when SITE_URL is
+         unset (e.g. local dev that never touched the env var).
          Correct behind a correctly-configured nginx proxy (Host and
          X-Forwarded-Host both forwarded), and the only path that
-         produces the right scheme on the live deployment.
-      2. settings.SITE_URL — for background paths (management commands,
-         email rendering, scheduled tasks) where no request is in
-         scope. Set explicitly via the SITE_URL env var; default in
-         settings.py points at the public dev URL.
+         produces the right scheme on a same-origin deploy.
       3. Raise. A relative URL silently rendered into a page is a
          foot-gun: it works on the page's host but breaks the moment
          the same JSON is consumed from a different origin (an admin
@@ -132,16 +143,18 @@ def _absolute_media_url(relative_url: str, request=None) -> str:
     """
     if not relative_url:
         return relative_url
-    if request is not None:
-        return request.build_absolute_uri(relative_url)
     site_url = getattr(settings, 'SITE_URL', '') or ''
     if site_url:
         # urljoin treats the second arg as relative-to-base when the
         # first arg lacks a scheme; with the trailing-slash guard on
         # SITE_URL this composes '/media/...' onto 'https://host/' as
-        # expected.
+        # expected. This works for both site-root deploys (SITE_URL
+        # = 'https://cases.raisethevoices.org') and sub-path deploys
+        # (SITE_URL = 'https://cases.raisethevoices.org/testimonies').
         base = site_url if site_url.endswith('/') else site_url + '/'
         return urljoin(base, relative_url.lstrip('/'))
+    if request is not None:
+        return request.build_absolute_uri(relative_url)
     raise RuntimeError(
         '_absolute_media_url: no request and no SITE_URL configured — '
         'cannot produce an absolute URL for '
