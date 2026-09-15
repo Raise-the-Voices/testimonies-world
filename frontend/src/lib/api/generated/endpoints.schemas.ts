@@ -224,7 +224,6 @@ export const TestimonialSourceVisibilityEnum = {
 export const TestimonialStatusEnum = {
   draft: 'draft',
   under_review: 'under_review',
-  approved: 'approved',
   published: 'published',
   rejected: 'rejected',
   archived: 'archived',
@@ -256,14 +255,14 @@ export const YesNoUnknownEnum = {
   unknown: 'unknown',
 } as const;
 
-export const AuditLogsListAction = {
+export const ApiAuditLogsListAction = {
   deleted: 'deleted',
   downloaded: 'downloaded',
   edited: 'edited',
   viewed: 'viewed',
 } as const;
 
-export const CaseworkListActionType = {
+export const ApiCaseworkListActionType = {
   advocacy: 'advocacy',
   investigation: 'investigation',
   legal_filing: 'legal_filing',
@@ -272,13 +271,13 @@ export const CaseworkListActionType = {
   outreach: 'outreach',
 } as const;
 
-export const CaseworkListStatus = {
+export const ApiCaseworkListStatus = {
   done: 'done',
   in_progress: 'in_progress',
   open: 'open',
 } as const;
 
-export const ContactsListRole = {
+export const ApiContactsListRole = {
   advocate: 'advocate',
   family: 'family',
   journalist: 'journalist',
@@ -288,27 +287,27 @@ export const ContactsListRole = {
   reporter: 'reporter',
 } as const;
 
-export const MediaListMediaType = {
+export const ApiMediaListMediaType = {
   document: 'document',
   link: 'link',
   photo: 'photo',
   video: 'video',
 } as const;
 
-export const MediaListVisibility = {
+export const ApiMediaListVisibility = {
   public: 'public',
   restricted: 'restricted',
   sensitive: 'sensitive',
 } as const;
 
-export const NotificationsListKind = {
+export const ApiNotificationsListKind = {
   record_created: 'record_created',
   record_seen: 'record_seen',
   record_updated: 'record_updated',
   status_done: 'status_done',
 } as const;
 
-export const PersonsListCurrentStatus = {
+export const ApiPersonsListCurrentStatus = {
   case_closed: 'case_closed',
   deceased: 'deceased',
   detained: 'detained',
@@ -324,14 +323,14 @@ export const PersonsListCurrentStatus = {
   unknown: 'unknown',
 } as const;
 
-export const PersonsListGender = {
+export const ApiPersonsListGender = {
   F: 'F',
   M: 'M',
   O: 'O',
   U: 'U',
 } as const;
 
-export const PersonsListMedicalStatus = {
+export const ApiPersonsListMedicalStatus = {
   critical: 'critical',
   deceased: 'deceased',
   health_concerns: 'health_concerns',
@@ -339,13 +338,13 @@ export const PersonsListMedicalStatus = {
   unknown: 'unknown',
 } as const;
 
-export const PersonsListQualityTier = {
+export const ApiPersonsListQualityTier = {
   NUMBER_1: 1,
   NUMBER_2: 2,
   NUMBER_3: 3,
 } as const;
 
-export const PersonsCountriesListCurrentStatus = {
+export const ApiPersonsCountriesListCurrentStatus = {
   case_closed: 'case_closed',
   deceased: 'deceased',
   detained: 'detained',
@@ -361,14 +360,14 @@ export const PersonsCountriesListCurrentStatus = {
   unknown: 'unknown',
 } as const;
 
-export const PersonsCountriesListGender = {
+export const ApiPersonsCountriesListGender = {
   F: 'F',
   M: 'M',
   O: 'O',
   U: 'U',
 } as const;
 
-export const PersonsCountriesListMedicalStatus = {
+export const ApiPersonsCountriesListMedicalStatus = {
   critical: 'critical',
   deceased: 'deceased',
   health_concerns: 'health_concerns',
@@ -376,13 +375,13 @@ export const PersonsCountriesListMedicalStatus = {
   unknown: 'unknown',
 } as const;
 
-export const PersonsCountriesListQualityTier = {
+export const ApiPersonsCountriesListQualityTier = {
   NUMBER_1: 1,
   NUMBER_2: 2,
   NUMBER_3: 3,
 } as const;
 
-export const PersonsWatchdogListCurrentStatus = {
+export const ApiPersonsWatchdogListCurrentStatus = {
   case_closed: 'case_closed',
   deceased: 'deceased',
   detained: 'detained',
@@ -398,14 +397,14 @@ export const PersonsWatchdogListCurrentStatus = {
   unknown: 'unknown',
 } as const;
 
-export const PersonsWatchdogListGender = {
+export const ApiPersonsWatchdogListGender = {
   F: 'F',
   M: 'M',
   O: 'O',
   U: 'U',
 } as const;
 
-export const PersonsWatchdogListMedicalStatus = {
+export const ApiPersonsWatchdogListMedicalStatus = {
   critical: 'critical',
   deceased: 'deceased',
   health_concerns: 'health_concerns',
@@ -413,13 +412,13 @@ export const PersonsWatchdogListMedicalStatus = {
   unknown: 'unknown',
 } as const;
 
-export const PersonsWatchdogListQualityTier = {
+export const ApiPersonsWatchdogListQualityTier = {
   NUMBER_1: 1,
   NUMBER_2: 2,
   NUMBER_3: 3,
 } as const;
 
-export const RelationshipsListRelationshipType = {
+export const ApiRelationshipsListRelationshipType = {
   child: 'child',
   other: 'other',
   parent: 'parent',
@@ -427,15 +426,14 @@ export const RelationshipsListRelationshipType = {
   spouse: 'spouse',
 } as const;
 
-export const ReportsListSourceType = {
+export const ApiReportsListSourceType = {
   document: 'document',
   firsthand: 'firsthand',
   news: 'news',
   secondhand: 'secondhand',
 } as const;
 
-export const TestimonialsListStatus = {
-  approved: 'approved',
+export const ApiTestimonialsListStatus = {
   archived: 'archived',
   draft: 'draft',
   published: 'published',
@@ -3630,7 +3628,6 @@ export type TestimonialSourceVisibilityEnum = typeof TestimonialSourceVisibility
 /**
  * * `draft` - Draft
 * `under_review` - Under review
-* `approved` - Approved
 * `published` - Published
 * `rejected` - Rejected
 * `archived` - Archived
@@ -3837,14 +3834,14 @@ export type YesNoUnknownEnum = typeof YesNoUnknownEnum[keyof typeof YesNoUnknown
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type AuditLogsListParams = {
+export type ApiAuditLogsListParams = {
 /**
  * * `viewed` - Viewed
 * `downloaded` - Downloaded
 * `edited` - Edited
 * `deleted` - Deleted
  */
-action?: AuditLogsListAction;
+action?: ApiAuditLogsListAction;
 /**
  * Which field to use when ordering the results.
  */
@@ -3863,11 +3860,11 @@ timestamp_before?: string;
 user__username?: string;
 };
 
-export type AuditLogsListAction = typeof AuditLogsListAction[keyof typeof AuditLogsListAction];
+export type ApiAuditLogsListAction = typeof ApiAuditLogsListAction[keyof typeof ApiAuditLogsListAction];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type CaseworkListParams = {
+export type ApiCaseworkListParams = {
 /**
  * * `outreach` - Outreach
 * `legal_filing` - Legal filing
@@ -3876,7 +3873,7 @@ export type CaseworkListParams = {
 * `investigation` - Investigation
 * `other` - Other
  */
-action_type?: CaseworkListActionType;
+action_type?: ApiCaseworkListActionType;
 /**
  * Which field to use when ordering the results.
  */
@@ -3895,18 +3892,18 @@ search?: string;
 * `in_progress` - In progress
 * `done` - Done
  */
-status?: CaseworkListStatus;
+status?: ApiCaseworkListStatus;
 };
 
-export type CaseworkListActionType = typeof CaseworkListActionType[keyof typeof CaseworkListActionType];
+export type ApiCaseworkListActionType = typeof ApiCaseworkListActionType[keyof typeof ApiCaseworkListActionType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type CaseworkListStatus = typeof CaseworkListStatus[keyof typeof CaseworkListStatus];
+export type ApiCaseworkListStatus = typeof ApiCaseworkListStatus[keyof typeof ApiCaseworkListStatus];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type CategoriesListParams = {
+export type ApiCategoriesListParams = {
 /**
  * Which field to use when ordering the results.
  */
@@ -3921,7 +3918,7 @@ page?: number;
 search?: string;
 };
 
-export type ContactsListParams = {
+export type ApiContactsListParams = {
 /**
  * Which field to use when ordering the results.
  */
@@ -3939,18 +3936,18 @@ page?: number;
 * `reporter` - Reporter/witness
 * `other` - Other
  */
-role?: ContactsListRole;
+role?: ApiContactsListRole;
 /**
  * A search term.
  */
 search?: string;
 };
 
-export type ContactsListRole = typeof ContactsListRole[keyof typeof ContactsListRole];
+export type ApiContactsListRole = typeof ApiContactsListRole[keyof typeof ApiContactsListRole];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type DashboardListParams = {
+export type ApiDashboardListParams = {
 /**
  * Which field to use when ordering the results.
  */
@@ -3965,14 +3962,14 @@ page?: number;
 search?: string;
 };
 
-export type MediaListParams = {
+export type ApiMediaListParams = {
 /**
  * * `photo` - Photo
 * `document` - Document
 * `video` - Video
 * `link` - External link
  */
-media_type?: MediaListMediaType;
+media_type?: ApiMediaListMediaType;
 /**
  * Which field to use when ordering the results.
  */
@@ -3992,18 +3989,18 @@ search?: string;
 * `restricted` - Restricted — authenticated users only
 * `sensitive` - Sensitive — advocates/admin only
  */
-visibility?: MediaListVisibility;
+visibility?: ApiMediaListVisibility;
 };
 
-export type MediaListMediaType = typeof MediaListMediaType[keyof typeof MediaListMediaType];
+export type ApiMediaListMediaType = typeof ApiMediaListMediaType[keyof typeof ApiMediaListMediaType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type MediaListVisibility = typeof MediaListVisibility[keyof typeof MediaListVisibility];
+export type ApiMediaListVisibility = typeof ApiMediaListVisibility[keyof typeof ApiMediaListVisibility];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type NotificationsListParams = {
+export type ApiNotificationsListParams = {
 is_read?: boolean;
 /**
  * * `record_created` - New casework record
@@ -4011,7 +4008,7 @@ is_read?: boolean;
 * `status_done` - Casework marked done
 * `record_seen` - A peer opened this record
  */
-kind?: NotificationsListKind;
+kind?: ApiNotificationsListKind;
 /**
  * Which field to use when ordering the results.
  */
@@ -4026,11 +4023,11 @@ page?: number;
 search?: string;
 };
 
-export type NotificationsListKind = typeof NotificationsListKind[keyof typeof NotificationsListKind];
+export type ApiNotificationsListKind = typeof ApiNotificationsListKind[keyof typeof ApiNotificationsListKind];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type PersonsListParams = {
+export type ApiPersonsListParams = {
 category?: number[];
 country?: string;
 /**
@@ -4048,14 +4045,14 @@ country?: string;
 * `case_closed` - Case closed
 * `other` - Other
  */
-current_status?: PersonsListCurrentStatus;
+current_status?: ApiPersonsListCurrentStatus;
 /**
  * * `M` - Male
 * `F` - Female
 * `O` - Other
 * `U` - Unknown
  */
-gender?: PersonsListGender;
+gender?: ApiPersonsListGender;
 is_published?: boolean;
 /**
  * * `unknown` - Unknown
@@ -4064,7 +4061,7 @@ is_published?: boolean;
 * `critical` - Critical
 * `deceased` - Deceased
  */
-medical_status?: PersonsListMedicalStatus;
+medical_status?: ApiPersonsListMedicalStatus;
 name?: string;
 /**
  * Which field to use when ordering the results.
@@ -4081,7 +4078,7 @@ quality?: number;
 * `3` - Tier 3 — Weak evidence
  * @nullable
  */
-quality_tier?: PersonsListQualityTier;
+quality_tier?: ApiPersonsListQualityTier;
 /**
  * A search term.
  */
@@ -4092,23 +4089,23 @@ updated_after?: string;
 updated_before?: string;
 };
 
-export type PersonsListCurrentStatus = typeof PersonsListCurrentStatus[keyof typeof PersonsListCurrentStatus];
+export type ApiPersonsListCurrentStatus = typeof ApiPersonsListCurrentStatus[keyof typeof ApiPersonsListCurrentStatus];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type PersonsListGender = typeof PersonsListGender[keyof typeof PersonsListGender];
+export type ApiPersonsListGender = typeof ApiPersonsListGender[keyof typeof ApiPersonsListGender];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type PersonsListMedicalStatus = typeof PersonsListMedicalStatus[keyof typeof PersonsListMedicalStatus];
+export type ApiPersonsListMedicalStatus = typeof ApiPersonsListMedicalStatus[keyof typeof ApiPersonsListMedicalStatus];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type PersonsListQualityTier = typeof PersonsListQualityTier[keyof typeof PersonsListQualityTier] | null;
+export type ApiPersonsListQualityTier = typeof ApiPersonsListQualityTier[keyof typeof ApiPersonsListQualityTier] | null;
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type PersonsCountriesListParams = {
+export type ApiPersonsCountriesListParams = {
 category?: number[];
 country?: string;
 /**
@@ -4126,14 +4123,14 @@ country?: string;
 * `case_closed` - Case closed
 * `other` - Other
  */
-current_status?: PersonsCountriesListCurrentStatus;
+current_status?: ApiPersonsCountriesListCurrentStatus;
 /**
  * * `M` - Male
 * `F` - Female
 * `O` - Other
 * `U` - Unknown
  */
-gender?: PersonsCountriesListGender;
+gender?: ApiPersonsCountriesListGender;
 is_published?: boolean;
 /**
  * * `unknown` - Unknown
@@ -4142,7 +4139,7 @@ is_published?: boolean;
 * `critical` - Critical
 * `deceased` - Deceased
  */
-medical_status?: PersonsCountriesListMedicalStatus;
+medical_status?: ApiPersonsCountriesListMedicalStatus;
 name?: string;
 /**
  * Which field to use when ordering the results.
@@ -4159,7 +4156,7 @@ quality?: number;
 * `3` - Tier 3 — Weak evidence
  * @nullable
  */
-quality_tier?: PersonsCountriesListQualityTier;
+quality_tier?: ApiPersonsCountriesListQualityTier;
 /**
  * A search term.
  */
@@ -4170,23 +4167,23 @@ updated_after?: string;
 updated_before?: string;
 };
 
-export type PersonsCountriesListCurrentStatus = typeof PersonsCountriesListCurrentStatus[keyof typeof PersonsCountriesListCurrentStatus];
+export type ApiPersonsCountriesListCurrentStatus = typeof ApiPersonsCountriesListCurrentStatus[keyof typeof ApiPersonsCountriesListCurrentStatus];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type PersonsCountriesListGender = typeof PersonsCountriesListGender[keyof typeof PersonsCountriesListGender];
+export type ApiPersonsCountriesListGender = typeof ApiPersonsCountriesListGender[keyof typeof ApiPersonsCountriesListGender];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type PersonsCountriesListMedicalStatus = typeof PersonsCountriesListMedicalStatus[keyof typeof PersonsCountriesListMedicalStatus];
+export type ApiPersonsCountriesListMedicalStatus = typeof ApiPersonsCountriesListMedicalStatus[keyof typeof ApiPersonsCountriesListMedicalStatus];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type PersonsCountriesListQualityTier = typeof PersonsCountriesListQualityTier[keyof typeof PersonsCountriesListQualityTier] | null;
+export type ApiPersonsCountriesListQualityTier = typeof ApiPersonsCountriesListQualityTier[keyof typeof ApiPersonsCountriesListQualityTier] | null;
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type PersonsWatchdogListParams = {
+export type ApiPersonsWatchdogListParams = {
 category?: number[];
 country?: string;
 /**
@@ -4204,14 +4201,14 @@ country?: string;
 * `case_closed` - Case closed
 * `other` - Other
  */
-current_status?: PersonsWatchdogListCurrentStatus;
+current_status?: ApiPersonsWatchdogListCurrentStatus;
 /**
  * * `M` - Male
 * `F` - Female
 * `O` - Other
 * `U` - Unknown
  */
-gender?: PersonsWatchdogListGender;
+gender?: ApiPersonsWatchdogListGender;
 is_published?: boolean;
 /**
  * * `unknown` - Unknown
@@ -4220,7 +4217,7 @@ is_published?: boolean;
 * `critical` - Critical
 * `deceased` - Deceased
  */
-medical_status?: PersonsWatchdogListMedicalStatus;
+medical_status?: ApiPersonsWatchdogListMedicalStatus;
 name?: string;
 /**
  * Which field to use when ordering the results.
@@ -4237,7 +4234,7 @@ quality?: number;
 * `3` - Tier 3 — Weak evidence
  * @nullable
  */
-quality_tier?: PersonsWatchdogListQualityTier;
+quality_tier?: ApiPersonsWatchdogListQualityTier;
 /**
  * A search term.
  */
@@ -4248,23 +4245,23 @@ updated_after?: string;
 updated_before?: string;
 };
 
-export type PersonsWatchdogListCurrentStatus = typeof PersonsWatchdogListCurrentStatus[keyof typeof PersonsWatchdogListCurrentStatus];
+export type ApiPersonsWatchdogListCurrentStatus = typeof ApiPersonsWatchdogListCurrentStatus[keyof typeof ApiPersonsWatchdogListCurrentStatus];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type PersonsWatchdogListGender = typeof PersonsWatchdogListGender[keyof typeof PersonsWatchdogListGender];
+export type ApiPersonsWatchdogListGender = typeof ApiPersonsWatchdogListGender[keyof typeof ApiPersonsWatchdogListGender];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type PersonsWatchdogListMedicalStatus = typeof PersonsWatchdogListMedicalStatus[keyof typeof PersonsWatchdogListMedicalStatus];
+export type ApiPersonsWatchdogListMedicalStatus = typeof ApiPersonsWatchdogListMedicalStatus[keyof typeof ApiPersonsWatchdogListMedicalStatus];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type PersonsWatchdogListQualityTier = typeof PersonsWatchdogListQualityTier[keyof typeof PersonsWatchdogListQualityTier] | null;
+export type ApiPersonsWatchdogListQualityTier = typeof ApiPersonsWatchdogListQualityTier[keyof typeof ApiPersonsWatchdogListQualityTier] | null;
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type PreferencesListParams = {
+export type ApiPreferencesListParams = {
 /**
  * Which field to use when ordering the results.
  */
@@ -4279,7 +4276,7 @@ page?: number;
 search?: string;
 };
 
-export type RelationshipsListParams = {
+export type ApiRelationshipsListParams = {
 /**
  * Which field to use when ordering the results.
  */
@@ -4296,18 +4293,18 @@ person?: number;
 * `spouse` - Spouse
 * `other` - Other relative
  */
-relationship_type?: RelationshipsListRelationshipType;
+relationship_type?: ApiRelationshipsListRelationshipType;
 /**
  * A search term.
  */
 search?: string;
 };
 
-export type RelationshipsListRelationshipType = typeof RelationshipsListRelationshipType[keyof typeof RelationshipsListRelationshipType];
+export type ApiRelationshipsListRelationshipType = typeof ApiRelationshipsListRelationshipType[keyof typeof ApiRelationshipsListRelationshipType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type ReportsListParams = {
+export type ApiReportsListParams = {
 date_from?: string;
 date_to?: string;
 is_private?: boolean;
@@ -4330,14 +4327,14 @@ search?: string;
 * `news` - News report
 * `document` - Document
  */
-source_type?: ReportsListSourceType;
+source_type?: ApiReportsListSourceType;
 };
 
-export type ReportsListSourceType = typeof ReportsListSourceType[keyof typeof ReportsListSourceType];
+export type ApiReportsListSourceType = typeof ApiReportsListSourceType[keyof typeof ApiReportsListSourceType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-export type TestimonialTagsListParams = {
+export type ApiTestimonialTagsListParams = {
 /**
  * Which field to use when ordering the results.
  */
@@ -4352,7 +4349,7 @@ page?: number;
 search?: string;
 };
 
-export type TestimonialsListParams = {
+export type ApiTestimonialsListParams = {
 /**
  * Which field to use when ordering the results.
  */
@@ -4373,10 +4370,10 @@ search?: string;
  - Anonymous callers get PUBLISHED-only regardless of the value.
 Unknown values fall through to the role-based default (no narrowing).
  */
-status?: TestimonialsListStatus;
+status?: ApiTestimonialsListStatus;
 };
 
-export type TestimonialsListStatus = typeof TestimonialsListStatus[keyof typeof TestimonialsListStatus];
+export type ApiTestimonialsListStatus = typeof ApiTestimonialsListStatus[keyof typeof ApiTestimonialsListStatus];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 

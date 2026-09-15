@@ -21,12 +21,11 @@
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import {
-		testimonialsSubmitCreate,
-		testimonialsApproveCreate,
-		testimonialsRejectCreate,
-		testimonialsPublishCreate,
-		testimonialsArchiveCreate,
-		testimonialsRetrieve,
+		apiTestimonialsSubmitCreate,
+		apiTestimonialsApproveCreate,
+		apiTestimonialsRejectCreate,
+		apiTestimonialsArchiveCreate,
+		apiTestimonialsRetrieve,
 	} from '$lib/api/generated/endpoints';
 	import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
 	import { isAdvocate } from '$lib/session';
@@ -100,8 +99,6 @@
 				return ['submit'];
 			case 'under_review':
 				return canReviewPublish ? ['approve', 'reject'] : [];
-			case 'approved':
-				return canReviewPublish ? ['publish'] : [];
 			case 'published':
 				return canReviewPublish ? ['archive'] : [];
 			case 'rejected':
@@ -200,16 +197,13 @@
 		try {
 			switch (action) {
 				case 'submit':
-					await testimonialsSubmitCreate(id, {});
+					await apiTestimonialsSubmitCreate(id, {});
 					break;
 				case 'approve':
-					await testimonialsApproveCreate(id, {});
-					break;
-				case 'publish':
-					await testimonialsPublishCreate(id, {});
+					await apiTestimonialsApproveCreate(id, {});
 					break;
 				case 'archive':
-					await testimonialsArchiveCreate(id, {});
+					await apiTestimonialsArchiveCreate(id, {});
 					break;
 			}
 			await refreshRow();
@@ -239,7 +233,7 @@
 		rejectSaving = true;
 		actionError = null;
 		try {
-			await testimonialsRejectCreate(id, {
+			await apiTestimonialsRejectCreate(id, {
 				method: 'POST',
 				body: JSON.stringify({ review_notes: notes }),
 				headers: { 'Content-Type': 'application/json' },
@@ -273,7 +267,7 @@
 	   approved_at, etc. — that the response shape might not surface
 	   on every transition). */
 	async function refreshRow(): Promise<TestimonialPublic & WorkflowFields> {
-		const fresh = await testimonialsRetrieve(id);
+		const fresh = await apiTestimonialsRetrieve(id);
 		const row = fresh as unknown as TestimonialPublic & WorkflowFields;
 		// Notify the parent with the refreshed row so its `derived`
 		// binding can re-render with the new fields. Svelte 5 props
