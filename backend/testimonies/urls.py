@@ -126,6 +126,28 @@ if settings.DEBUG:
     # static() URLs only run when DEBUG=True (i.e. local dev).
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
+# E2E test-only routes. See cases/test_auth.py for the security
+# model and settings.py for the gating env vars
+# (ENABLE_E2E_TEST_AUTH + TESTIMONIAL_E2E_AUTH_TOKEN).
+#
+# The URL is registered ONLY when both are set to truthy values.
+# In any other configuration (production, or local without a
+# token), the URL pattern is not added and requests fall through
+# to Django's 404 — refusing to disclose the endpoint's existence.
+#
+# This block is intentionally OUTSIDE the `if settings.DEBUG:`
+# branch above: we want this surface to be reachable on local
+# + CI runners that run DEBUG=False for prod parity, as long as
+# the dedicated E2E gate is on.
+if (
+    getattr(settings, 'ENABLE_E2E_TEST_AUTH', False)
+    and getattr(settings, 'TESTIMONIAL_E2E_AUTH_TOKEN', '')
+):
+    from cases.test_auth import TestLoginView
+    urlpatterns += [
+        path('__test__/login/', TestLoginView.as_view(), name='test-login'),
+    ]
+
 admin.site.site_header = 'Raise the Voices — Admin'
 admin.site.site_title = 'Raise the Voices'
 admin.site.index_title = 'Case Management'
