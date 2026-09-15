@@ -171,7 +171,11 @@ class PersonViewSet(viewsets.ModelViewSet):
       ?updated_before=   updated_at <= YYYY-MM-DD
       ?ordering=         any of: name, country, current_status,
                           updated_at, created_at (prefix with '-' for
-                          descending). Default: -created_at.
+                          descending). Default: deceased cases last,
+                          then newest-submitted first. An explicit
+                          ?ordering= replaces both keys — a caller who
+                          asks for `name` gets a pure A-Z list with
+                          deceased cases interleaved.
       ?page=N            paginated, PAGE_SIZE=10
     """
 
@@ -180,6 +184,20 @@ class PersonViewSet(viewsets.ModelViewSet):
                      'summary_narrative']
     ordering_fields = ['name', 'country', 'current_status',
                        'updated_at', 'created_at']
+    # Default ordering for the catalog. `deceased_rank` (annotated in
+    # get_queryset for the list action) sorts deceased cases to the end:
+    # the catalog is a call to action, and there is nothing a volunteer
+    # can do for someone already confirmed dead, so those rows shouldn't
+    # occupy the first page ahead of people who are still detained or
+    # disappeared. Within each of the two groups the previous default —
+    # newest submitted first — is preserved.
+    #
+    # Not listed in `ordering_fields`: that list is the allow-list for
+    # caller-supplied ?ordering=, and `deceased_rank` is an internal
+    # annotation, not a documented sort key. DRF only validates
+    # caller-supplied values against it, so the default below is
+    # unaffected.
+    ordering = ['deceased_rank', '-created_at']
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
     # Per-action throttles. `create` is the /submit Person POST — the
     # highest-friction, highest-spam-risk surface; cap at 10/hour.
@@ -275,7 +293,28 @@ class PersonViewSet(viewsets.ModelViewSet):
                 )
         if not self.request.user.is_authenticated:
             qs = qs.filter(is_published=True)
-        return qs
+
+        # Sort key backing the `ordering` attribute above. Annotated for
+        # EVERY action, not just `list`: GenericAPIView.get_object() runs
+        # `filter_queryset(get_queryset())` too, so `retrieve`, `update`,
+        # `partial_update` and `destroy` all push the default ordering
+        # through OrderingFilter. Scoping this to `self.action == 'list'`
+        # raises FieldError on every detail route — the annotation has to
+        # exist anywhere the ordering might be applied.
+        #
+        # A CASE expression adds no GROUP BY of its own, so unlike the
+        # Count() annotation discussed above it does not break the
+        # prefetch batching. Where `watchdog` / `related` layer their own
+        # aggregates on top, Django folds this column into their GROUP BY
+        # harmlessly — it is functionally dependent on current_status, and
+        # the primary key is already in the grouping.
+        return qs.annotate(
+            deceased_rank=Case(
+                When(current_status=Person.Status.DECEASED, then=1),
+                default=0,
+                output_field=IntegerField(),
+            ),
+        )
 
     # --- Audit log helpers (mirror ReportViewSet) -------------------------
 

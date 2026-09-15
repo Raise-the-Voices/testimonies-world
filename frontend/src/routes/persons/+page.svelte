@@ -34,6 +34,11 @@
 	const PAGE_SIZE = 12;
 	const SKELETON_CARD_COUNT = 12;
 
+	// The API's default ordering, which the catalog sends as "no
+	// ?ordering= at all" rather than spelling it out — see
+	// currentFilterParams().
+	const DEFAULT_SORT = '-created_at';
+
 	const sorts = [
 		{ value: '-created_at', label: 'Newest submitted' },
 		{ value: 'created_at', label: 'Oldest submitted' },
@@ -65,7 +70,7 @@
 		filterCountry = sp.get('country') ?? '';
 		filterStatus = sp.get('current_status') ?? '';
 		filterCategory = sp.get('category') ?? '';
-		sort = sp.get('ordering') ?? '-created_at';
+		sort = sp.get('ordering') ?? DEFAULT_SORT;
 		stale = sp.get('stale') ?? '';
 	}
 
@@ -74,7 +79,7 @@
 	let filterCountry = $state('');
 	let filterStatus = $state('');
 	let filterCategory = $state('');
-	let sort = $state('-created_at');
+	let sort = $state(DEFAULT_SORT);
 	// Recency / staleness quick-filter. `''` means "All"; a positive
 	// integer is the "inactive N+ days" threshold. Empty string is
 	// the URL-default and is what makes the segmented control
@@ -104,7 +109,7 @@
 		if (filterStatus) sp.set('current_status', filterStatus);
 		if (filterCategory) sp.set('category', filterCategory);
 		if (stale) sp.set('stale', stale);
-		if (sort && sort !== '-created_at') sp.set('ordering', sort);
+		if (sort && sort !== DEFAULT_SORT) sp.set('ordering', sort);
 		const qs = sp.toString();
 		const target = qs ? `?${qs}` : page.url.pathname;
 		// Only navigate if the URL would actually change — avoids
@@ -155,7 +160,7 @@
 	let canPrev = $derived(currentPage > 1);
 	let canNext = $derived(currentPage < totalPages);
 	let hasActiveFilters = $derived(
-		Boolean(search || filterCountry || filterStatus || filterCategory || stale || sort !== '-created_at'),
+		Boolean(search || filterCountry || filterStatus || filterCategory || stale || sort !== DEFAULT_SORT),
 	);
 
 	// Memoized signature for the countries-dropdown query — refetches only
@@ -201,7 +206,12 @@
 		if (filterStatus) params.current_status = filterStatus;
 		if (filterCategory) params.category = filterCategory;
 		if (stale) params.stale = stale;
-		if (sort) params.ordering = sort;
+		// Omit the default so the API applies its own default ordering
+		// (deceased cases last, then newest first). Sending
+		// `ordering=-created_at` explicitly would replace both keys and
+		// pull deceased cases back onto the first page. Mirrors the same
+		// omission in syncUrl().
+		if (sort && sort !== DEFAULT_SORT) params.ordering = sort;
 		return params;
 	}
 
@@ -239,7 +249,7 @@
 		filterStatus = '';
 		filterCategory = '';
 		stale = '';
-		sort = '-created_at';
+		sort = DEFAULT_SORT;
 		applyFilters();
 	}
 

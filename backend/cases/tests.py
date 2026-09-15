@@ -1914,12 +1914,81 @@ class PersonFilterTests(BaseTestCase):
     # --- ordering ---------------------------------------------------------
 
     def test_ordering_by_creation_desc_default(self):
-        """No ?ordering= → default -created_at."""
+        """No ?ordering= → default -created_at (after deceased_rank).
+
+        Before PersonViewSet declared an `ordering`, this fell through to
+        Person.Meta.ordering (-updated_at) and the assertion below read
+        'Fresh' — the most recently *updated* row — despite the docstring
+        claiming created_at. Now that the viewset sets the default the
+        docstring always described, the newest *created* row wins, which
+        is six_month (created last in setUp).
+        """
         res = self.client.get(self.URL)
         names = [p['name'] for p in res.json()['results']]
-        # Newest first: insertion order was fresh, week_old, year_old,
-        # six_month, so fresh should be first by created_at desc.
-        self.assertEqual(names[0], 'Fresh')
+        self.assertEqual(names[0], 'SixMonth')
+
+    # --- deceased sort last -----------------------------------------------
+
+    def test_deceased_sorted_last_by_default(self):
+        """Deceased cases go to the end regardless of recency.
+
+        The catalog is a call to action; there is nothing a volunteer can
+        do for someone already confirmed dead, so those rows must not
+        occupy the top of page 1 ahead of people still detained or
+        disappeared.
+        """
+        # Created last, so it would otherwise be first under -created_at.
+        Person.objects.create(
+            name='Deceased', country='X', is_published=True,
+            current_status='deceased',
+        )
+        names = [p['name'] for p in self.client.get(self.URL).json()['results']]
+        self.assertEqual(names[-1], 'Deceased')
+        self.assertEqual(names[0], 'SixMonth')
+
+    def test_deceased_group_keeps_recency_order_internally(self):
+        """Within the deceased group the -created_at tiebreak still runs."""
+        Person.objects.create(
+            name='DeadFirst', country='X', is_published=True,
+            current_status='deceased',
+        )
+        Person.objects.create(
+            name='DeadSecond', country='X', is_published=True,
+            current_status='deceased',
+        )
+        names = [p['name'] for p in self.client.get(self.URL).json()['results']]
+        # Both at the end, newest-created of the two first.
+        self.assertEqual(names[-2:], ['DeadSecond', 'DeadFirst'])
+
+    def test_explicit_ordering_overrides_deceased_last(self):
+        """An explicit ?ordering= replaces the default entirely.
+
+        A caller who asks for name A-Z gets a pure alphabetical list —
+        deceased cases interleave rather than sinking to the bottom.
+        """
+        Person.objects.create(
+            name='AAA Deceased', country='X', is_published=True,
+            current_status='deceased',
+        )
+        names = [
+            p['name']
+            for p in self.client.get(self.URL, {'ordering': 'name'}).json()['results']
+        ]
+        self.assertEqual(names, sorted(names))
+        self.assertEqual(names[0], 'AAA Deceased')
+
+    def test_deceased_rank_is_not_a_public_sort_key(self):
+        """`deceased_rank` is an internal annotation, not a documented
+        sort key — OrderingFilter must ignore a caller asking for it and
+        fall back to the default rather than erroring or exposing it."""
+        Person.objects.create(
+            name='Deceased', country='X', is_published=True,
+            current_status='deceased',
+        )
+        res = self.client.get(self.URL, {'ordering': 'deceased_rank'})
+        self.assertEqual(res.status_code, 200, res.content)
+        names = [p['name'] for p in res.json()['results']]
+        self.assertEqual(names[-1], 'Deceased')
 
     def test_ordering_name_ascending(self):
         """?ordering=name → alphabetical asc. SixMonth > WeekOld > YearOld."""
