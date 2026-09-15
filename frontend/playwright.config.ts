@@ -40,7 +40,33 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
 
-  reporter: process.env.CI ? 'list' : 'html',
+  // Multi-reporter output:
+  //   - 'html'   → interactive HTML viewer (playwright-report/) for
+  //                humans; `open: 'never'` so the dev server isn't
+  //                auto-launched on local runs.
+  //   - 'list'   → terminal output during the run; mirrors the test
+  //                order and keeps CI logs scannable.
+  //   - 'junit'  → machine-readable XML (test-results/junit.xml)
+  //                for downstream tooling (CI dashboards, flaky-test
+  //                tracking, PR-comment summaries). Always emitted so
+  //                both local and CI runs produce a stable artifact.
+  reporter: process.env.CI
+    ? [
+        ['list'],
+        ['junit', { outputFile: 'test-results/junit.xml' }],
+      ]
+    : [
+        [
+          'html',
+          {
+            outputFolder: 'playwright-report',
+            title: 'Testimonies.world E2E',
+            open: 'never',
+          },
+        ],
+        ['list'],
+        ['junit', { outputFile: 'test-results/junit.xml' }],
+      ],
 
   use: {
     // baseURL is the origin only — Playwright replaces the path
