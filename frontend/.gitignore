@@ -21,3 +21,12 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Playwright — auth state MUST stay untracked (RBAC tokens on disk
+# are a leak vector if ever pushed). Reports + artefacts are local
+# only.
+/playwright/.auth/*.json
+/playwright-report/
+/test-results/
+/blob-report/
+playwright/.cache/
