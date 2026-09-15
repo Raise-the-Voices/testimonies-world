@@ -137,7 +137,21 @@ source .venv/bin/activate
 pip install -r requirements.txt --quiet
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput
+
+# Move any profile images still sitting under the auth-gated MEDIA_ROOT
+# into PUBLIC_MEDIA_ROOT, where nginx serves them off disk. Idempotent —
+# on a host that has already been migrated this reports 'already public'
+# and changes nothing, so it is safe on every deploy. Needed on each host
+# separately because backend/media/ is gitignored: the file move can't
+# travel in a commit the way the migration does.
+python manage.py publish_profile_images
 deactivate
+
+# nginx (running as www-data) reads the public media tree directly, so it
+# needs traverse + read on the directory. Files written by gunicorn land
+# with the backend user's umask; normalize them here rather than relying
+# on whatever umask the service happened to start with.
+sudo chmod -R u+rwX,g+rX,o+rX "$PROJECT_ROOT/backend/public_media"
 
 # Frontend
 cd ../frontend
@@ -385,17 +399,31 @@ for attempt in 1 2 3 4 5 6 7 8 9 10; do
         # 401 (no session) on a fresh deploy. Anything else means the
         # /media/ block didn't get rewritten by the new nginx config.
         media=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/media/" || true)
+        # The mirror-image check for the public tree: pull a profile image
+        # URL out of the catalog API and confirm it loads with no session.
+        # 401 here means the /public-media/ block is missing and every
+        # profile photo on /persons is a broken image — the exact bug this
+        # split was introduced to fix. Empty (no persons with photos, e.g.
+        # a fresh DB) is not a failure, so it defaults to 200.
+        pub_url=$(curl -fsS --max-time 15 "$SITE/api/persons/" \
+            | grep -o 'https://[^"]*/public-media/profiles/[^"]*' | head -1 || true)
+        if [ -n "$pub_url" ]; then
+            pub=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$pub_url" || true)
+        else
+            pub=200
+        fi
         if [ "$code" = 200 ] && [ "$api" = 200 ] \
            && { [ "$accounts" = 200 ] || [ "$accounts" = 302 ]; } \
-           && [ "$media" = 401 ]; then
+           && [ "$media" = 401 ] && [ "$pub" = 200 ]; then
             echo "  entry asset OK: $asset_url"
             echo "  api OK"
             echo "  /accounts/google/login/ OK ($accounts)"
             echo "  /media/ routed to Django (401 unauthenticated)"
+            echo "  /public-media/ served off disk (${pub} unauthenticated)"
             ok=1
             break
         fi
-        echo "  attempt $attempt: assets=$code api=$api accounts=$accounts media=$media"
+        echo "  attempt $attempt: assets=$code api=$api accounts=$accounts media=$media public-media=$pub"
     fi
     echo "  attempt $attempt: not ready yet"
     sleep 3

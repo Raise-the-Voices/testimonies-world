@@ -1150,7 +1150,8 @@ class ProtectedMediaViewTests(BaseTestCase):
     nginx's old direct-from-disk alias. The view handles three buckets:
 
       1. /media/uploads/*  — backed by a Media row, visibility tier check.
-      2. /media/profiles/* — Person.profile_image, published-only for anon.
+      2. /media/profiles/* — legacy; 301 to /public-media/profiles/*,
+                             which nginx serves off disk with no auth.
       3. /media/<other>    — default-deny (404).
 
     Each test uses real SimpleUploadedFile content (no actual disk write
@@ -1260,9 +1261,36 @@ class ProtectedMediaViewTests(BaseTestCase):
         res = self.client.get('/media/uploads/totally-fake-file.jpg')
         self.assertEqual(res.status_code, 404)
 
-    # --- profile image bucket ------------------------------------------
+    # --- profile image bucket (legacy redirect) -------------------------
 
-    def test_profile_image_served_to_authenticated_user(self):
+    def test_legacy_profile_url_redirects_anonymous(self):
+        # The whole point of the media split: an anonymous visitor
+        # following an old /media/profiles/ link must land on the public
+        # copy, not a 401. This is the regression that broke every image
+        # on /persons when profile photos sat behind the auth gate.
+        res = self.client.get('/media/profiles/face.jpg')
+        self.assertEqual(res.status_code, 301)
+        self.assertEqual(res['Location'], '/public-media/profiles/face.jpg')
+
+    def test_legacy_profile_url_redirects_authenticated_user(self):
+        self.client.force_login(self.volunteer)
+        res = self.client.get('/media/profiles/face.jpg')
+        self.assertEqual(res.status_code, 301)
+        self.assertEqual(res['Location'], '/public-media/profiles/face.jpg')
+
+    def test_legacy_profile_redirect_does_not_need_a_person_row(self):
+        # The redirect is a pure path rewrite — no DB lookup. A stale
+        # link to a deleted person redirects and then 404s at nginx,
+        # rather than costing a query on every hit.
+        res = self.client.get('/media/profiles/never-existed.jpg')
+        self.assertEqual(res.status_code, 301)
+
+    def test_profile_image_saves_into_public_media_root(self):
+        # Person.profile_image is bound to public_media_storage, so the
+        # bytes must land under PUBLIC_MEDIA_ROOT and the generated URL
+        # must point at the unauthenticated /public-media/ prefix.
+        from pathlib import Path
+        from django.conf import settings
         from django.core.files.uploadedfile import SimpleUploadedFile
         person = Person.objects.create(
             name='Has Photo',
@@ -1274,29 +1302,15 @@ class ProtectedMediaViewTests(BaseTestCase):
             SimpleUploadedFile('face.jpg', b'jpeg', 'image/jpeg'),
             save=True,
         )
-        self.client.force_login(self.volunteer)
-        res = self.client.get(f'/media/profiles/{person.profile_image.name.split("/")[-1]}')
-        self.assertEqual(res.status_code, 200)
+        self.addCleanup(person.profile_image.delete, save=False)
 
-    def test_profile_image_served_to_authenticated_user_for_unpublished_person(self):
-        # Profile images follow the same visibility rule as the parent
-        # Person: anonymous → 401 (whole site gate); authenticated →
-        # 200 (matches PersonViewSet.get_queryset). Volunteers can
-        # see unpublished persons; advocates can too.
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        person = Person.objects.create(
-            name='Unpublished',
-            country='Pakistan',
-            is_published=False,
+        self.assertTrue(person.profile_image.url.startswith('/public-media/'))
+        on_disk = Path(settings.PUBLIC_MEDIA_ROOT) / person.profile_image.name
+        self.assertTrue(on_disk.exists(), f'{on_disk} was not written')
+        # And emphatically NOT in the auth-gated tree.
+        self.assertFalse(
+            (Path(settings.MEDIA_ROOT) / person.profile_image.name).exists()
         )
-        person.profile_image.save(
-            'face.jpg',
-            SimpleUploadedFile('face.jpg', b'jpeg', 'image/jpeg'),
-            save=True,
-        )
-        self.client.force_login(self.volunteer)
-        res = self.client.get(f'/media/profiles/{person.profile_image.name.split("/")[-1]}')
-        self.assertEqual(res.status_code, 200)
 
 
 class DashboardTests(BaseTestCase):

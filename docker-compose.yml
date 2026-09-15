@@ -55,6 +55,10 @@ services:
     volumes:
       - media-data:/app/media
       - sensitive-data:/app/sensitive_media
+      # Public tree — shared read-only with nginx, which serves it off
+      # disk at /public-media/ without an auth hop. See PUBLIC_MEDIA_ROOT
+      # in backend/testimonies/settings.py.
+      - public-media-data:/app/public_media
     depends_on:
       redis:
         condition: service_healthy
@@ -98,8 +102,12 @@ services:
         condition: service_healthy
     volumes:
       - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Read-only: nginx serves these bytes but never writes them —
+      # uploads go through Django on the backend container.
+      - public-media-data:/app/public_media:ro
 
 volumes:
   pgdata: {}
   media-data: {}
   sensitive-data: {}
+  public-media-data: {}
