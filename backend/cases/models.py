@@ -4,6 +4,8 @@ from django.conf import settings
 from django.core.validators import FileExtensionValidator
 from django.db import models
 
+from cases.storage import public_media_storage
+
 
 # Centralized allow-list for uploaded evidence files. Photos, PDFs, and
 # short videos — what the platform actually accepts. Rejecting
@@ -292,8 +294,15 @@ class Person(models.Model):
 
     # Narrative
     summary_narrative = models.TextField(blank=True, default='')
+    # Public by definition — a person's face on a published case page.
+    # Lives under PUBLIC_MEDIA_ROOT and is served by nginx off disk at
+    # /public-media/profiles/<file>, with no auth gate. Evidence files
+    # (Media.file) stay under MEDIA_ROOT behind serve_protected_media().
+    # The stored value is still 'profiles/<file>'; only the root and the
+    # generated .url differ.
     profile_image = models.ImageField(
-        upload_to='profiles/', null=True, blank=True
+        upload_to='profiles/', null=True, blank=True,
+        storage=public_media_storage,
     )
 
     # Source attribution — for cases imported from external databases

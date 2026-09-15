@@ -217,6 +217,27 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # Sensitive media stored separately
 SENSITIVE_MEDIA_ROOT = BASE_DIR / 'sensitive_media'
 
+# --- Public media -----------------------------------------------------
+# A second media root that nginx serves straight off disk, with no auth
+# gate in front of it. MEDIA_ROOT stays behind serve_protected_media()
+# (401/403 per Media.visibility) so evidence documents keep their access
+# control; PUBLIC_MEDIA_ROOT holds only files meant to be world-readable,
+# which today means Person.profile_image.
+#
+# Why two roots rather than one root and a smarter view: the auth gate is
+# then the default. A file placed under MEDIA_ROOT is protected whether or
+# not anyone remembered to classify it, and the only way to publish
+# something is to move it into a directory whose entire purpose is
+# public-by-definition. Getting that wrong fails closed (a public file
+# 401s) instead of open (a sensitive file leaks). It also keeps the hot
+# path for profile photos off gunicorn entirely.
+#
+# Adding another public file type later: point its FileField at
+# cases.storage.public_media_storage and add an AlterField migration.
+# Do NOT widen the /media/ gate to accommodate it.
+PUBLIC_MEDIA_URL = f'{SCRIPT_NAME}/public-media/' if SCRIPT_NAME else '/public-media/'
+PUBLIC_MEDIA_ROOT = BASE_DIR / 'public_media'
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Sites framework (required by allauth)
@@ -523,6 +544,7 @@ LOGGING = get_logging_config(debug=DEBUG)
 init_logging(debug=DEBUG, base_dir=BASE_DIR)
 
 os.makedirs(SENSITIVE_MEDIA_ROOT, exist_ok=True)
+os.makedirs(PUBLIC_MEDIA_ROOT, exist_ok=True)
 
 # Caches — Redis when REDIS_URL is set, LocMem otherwise.
 # LocMem is per-process, which means with gunicorn -w 2 the

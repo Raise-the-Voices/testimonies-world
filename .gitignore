@@ -9,6 +9,7 @@ backend/test_db.sqlite3
 backend/staticfiles/
 backend/media/
 backend/sensitive_media/
+backend/public_media/
 backend/logs/
 
 # Node

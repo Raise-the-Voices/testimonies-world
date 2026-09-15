@@ -95,6 +95,40 @@ server {
         proxy_buffering off;
     }
 
+    # ---- public media (served straight off disk, no auth) ----
+    # The other half of the media split: PUBLIC_MEDIA_ROOT holds files
+    # that are public by definition — today only Person.profile_image.
+    # These are the images on the public /persons catalog, so they must
+    # load for anonymous visitors; routing them through the /media/ gate
+    # is what made every profile photo 401 and render as a broken image.
+    #
+    # Served by alias rather than proxied: no gunicorn hop, and nginx
+    # does conditional GETs and ranges for free. `alias` (not `root`)
+    # because the URL prefix (/public-media/) and the directory name
+    # (public_media) differ — with `root` nginx would look for
+    # .../public_media/public-media/profiles/x.jpg.
+    #
+    # Nothing sensitive may be written here. The auth-gated tree is
+    # /media/ above; see PUBLIC_MEDIA_ROOT in backend/testimonies/
+    # settings.py for the reasoning behind two roots.
+    location /public-media/ {
+        alias /opt/rtv-cases/backend/public_media/;
+        access_log off;
+
+        # Filenames carry a Django-generated hash suffix on collision,
+        # but a re-upload can reuse a name, so this is a moderate TTL
+        # rather than the immutable year used for /_app/.
+        expires 7d;
+        add_header Cache-Control "public";
+
+        # Never hand back a directory index — a listing here would
+        # re-create the filename-enumeration problem the /media/ gate
+        # was introduced to close, even though these files are public.
+        autoindex off;
+
+        try_files $uri =404;
+    }
+
     # ---- static assets served directly off disk (no upstream hop) ----
     # `_app/` is where SvelteKit's immutable client bundle lives; rsync'd
     # here by deploy.sh from /opt/rtv-cases/frontend/build/client/_app/.
