@@ -5,11 +5,11 @@
 	(/testimonials/[id]/edit) can reuse the exact same validation,
 	sanitization, and submit lifecycle. Two modes:
 
-	  - `mode="create"` — POSTs testimonialsCreate(), optionally
-	    transitions draft → under_review via testimonialsSubmitCreate.
+	  - `mode="create"` — POSTs apiTestimonialsCreate(), optionally
+	    transitions draft → under_review via apiTestimonialsSubmitCreate.
 	    After a successful create the form resets to a fresh blank
 	    entry (the create flow's "save another" affordance).
-	  - `mode="edit"`   — PATCHes testimonialsUpdate(id, body). Only
+	  - `mode="edit"`   — PATCHes apiTestimonialsUpdate(id, body). Only
 	    callable on rows where the current viewer can edit (the
 	    backend's CanEditOwnOrReview gate). Published/archived rows
 	    are immutable from the volunteer side — the edit page should
@@ -25,9 +25,9 @@
 	import { base } from '$app/paths';
 	import { extractCreatedId } from '$lib/api/drfCompat';
 	import {
-		testimonialsCreate,
-		testimonialsSubmitCreate,
-		testimonialsUpdate,
+		apiTestimonialsCreate,
+		apiTestimonialsSubmitCreate,
+		apiTestimonialsUpdate,
 	} from '$lib/api/generated/endpoints';
 	import { user } from '$lib/session';
 	import type { User } from '$lib/types';
@@ -185,7 +185,7 @@
 
 		try {
 			if (mode === 'edit' && testimonial) {
-				await testimonialsUpdate(
+				await apiTestimonialsUpdate(
 					testimonial.id,
 					buildBody() as TestimonialWriteRequest,
 					{ method: 'PATCH' },
@@ -198,7 +198,7 @@
 			// Create mode.
 			let id: number;
 			try {
-				id = extractCreatedId(await testimonialsCreate(buildBody()));
+				id = extractCreatedId(await apiTestimonialsCreate(buildBody()));
 			} catch (e: unknown) {
 				formError =
 					e instanceof Error ? e.message : 'Could not create the testimonial.';
@@ -223,7 +223,7 @@
 				return;
 			}
 			try {
-				await testimonialsSubmitCreate(id, {});
+				await apiTestimonialsSubmitCreate(id, {});
 			} catch (e: unknown) {
 				formError =
 					e instanceof Error

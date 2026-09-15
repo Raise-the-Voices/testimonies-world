@@ -2,7 +2,7 @@
  * Universal load for /dashboard/audit-logs/.
  *
  * Reads URL search params (deep-linking + reload preserves filters),
- * calls `auditLogsList()` from the generated client, and returns the
+ * calls `apiAuditLogsList()` from the generated client, and returns the
  * paginated response plus a normalized filters object the page uses
  * to keep the form state in sync with the URL.
  *
@@ -12,7 +12,7 @@
  * default error page.
  */
 import type { PageLoad } from './$types';
-import { auditLogsList } from '$lib/api/generated/endpoints';
+import { apiAuditLogsList } from '$lib/api/generated/endpoints';
 import { ApiError } from '$lib/api';
 
 export const load: PageLoad = async ({ url }) => {
@@ -24,7 +24,7 @@ export const load: PageLoad = async ({ url }) => {
 	}
 
 	try {
-		const response = await auditLogsList(params);
+		const response = await apiAuditLogsList(params);
 		return {
 			logs: response.data,
 			appliedFilters: params,
