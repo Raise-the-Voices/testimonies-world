@@ -20,6 +20,7 @@
 	import Skeleton from '$lib/Skeleton.svelte';
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import MediaUploadModal from '$lib/MediaUploadModal.svelte';
+	import MediaImage from '$lib/MediaImage.svelte';
 	import RelatedCases from '$lib/RelatedCases.svelte';
 	import type { FamilyRelationshipRow, Media, Person, Report } from '$lib/types';
 	import type { PageData } from './$types';
@@ -826,9 +827,10 @@
 					{#each mediaList as media (media.id)}
 						<div class="media-item-card">
 							{#if media.media_type === 'photo' && media.file}
-								<img
+								<MediaImage
 									src={media.file}
 									alt={media.description || 'Photo'}
+									description={media.description}
 									class="media-item-thumb"
 									loading="lazy"
 									decoding="async"
