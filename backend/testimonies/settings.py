@@ -54,8 +54,14 @@ SESSION_COOKIE_SECURE = _PROD_HARDEN
 CSRF_COOKIE_SECURE = _PROD_HARDEN
 SESSION_COOKIE_HTTPONLY = True  # not a default in older Django versions
 CSRF_COOKIE_HTTPONLY = False     # JS needs to read the CSRF cookie
-SESSION_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'None' if _PROD_HARDEN else 'Lax'
+# SameSite=None in prod lets cross-origin subresource requests
+# (mobile/demo → prod media path) carry the sessionid, so
+# serve_protected_media() doesn't 401 the browser. Browsers require
+# HTTPS for None-cookies; dev keeps Lax on HTTP via _PROD_HARDEN.
+# CSRF protection unaffected — CsrfViewMiddleware still validates
+# Origin/Referer on state-changing requests.
+CSRF_COOKIE_SAMESITE = 'None' if _PROD_HARDEN else 'Lax'
 
 # HSTS — once a browser has seen the header, all subsequent
 # requests to the domain must be HTTPS for the configured lifetime.
