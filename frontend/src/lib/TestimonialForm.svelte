@@ -32,6 +32,7 @@
 	import { user } from '$lib/session';
 	import type { User } from '$lib/types';
 	import type { TestimonialWriteRequest } from '$lib/api/generated/endpoints.schemas';
+	import PersonPicker from '$lib/PersonPicker.svelte';
 	import {
 		newTestimonialSchema,
 		zodToFieldErrors,
@@ -105,6 +106,13 @@
 	let familyProtected = $state(testimonial?.family_protected ?? true);
 	let contactProtected = $state(testimonial?.contact_protected ?? true);
 
+	// Linked person (FK on Testimonial.person). The picker component
+	// is self-contained — it fetches the display info on its own when
+	// this value is non-null, so the form just needs to round-trip the id.
+	let personId = $state<number | null>(
+		(testimonial?.linked_person_id as number | null | undefined) ?? null,
+	);
+
 	let saving = $state(false);
 	let errors = $state<Record<string, string>>({});
 	let formError = $state('');
@@ -127,6 +135,7 @@
 			locationVisibility,
 			familyProtected,
 			contactProtected,
+			person: personId,
 		};
 	}
 
@@ -149,6 +158,7 @@
 			location_visibility: locationVisibility,
 			family_protected: familyProtected,
 			contact_protected: contactProtected,
+			person: personId,
 		};
 	}
 
@@ -270,6 +280,14 @@
 						<option value="exact">Exact</option>
 					</select>
 				</div>
+			</div>
+
+			<div class="form-row">
+				<PersonPicker
+					value={personId}
+					onChange={(id) => (personId = id)}
+					inputId="testimonial-person"
+				/>
 			</div>
 
 			<div class="form-row">
