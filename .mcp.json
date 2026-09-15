@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/home/aya/testimonies-world/frontend/src",
+        "/home/aya/testimonies-world/frontend/tests",
+        "/home/aya/testimonies-world/frontend/playwright.config.ts",
+        "/home/aya/testimonies-world/frontend/vite.config.ts",
+        "/home/aya/testimonies-world/frontend/svelte.config.js",
+        "/home/aya/testimonies-world/frontend/package.json",
+        "/home/aya/testimonies-world/frontend/tsconfig.json",
+        "/home/aya/testimonies-world/backend/cases",
+        "/home/aya/testimonies-world/backend/testimonies",
+        "/home/aya/testimonies-world/backend/casework",
+        "/home/aya/testimonies-world/backend/contacts",
+        "/home/aya/testimonies-world/backend/management"
+      ]
+    },
+    "git": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-git",
+        "--repository",
+        "/home/aya/testimonies-world"
+      ]
+    }
+  }
+}
