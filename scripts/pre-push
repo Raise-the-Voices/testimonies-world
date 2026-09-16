@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# scripts/pre-push
+#
+# Pre-push gate for Testimonies.world. Runs the same checks CI does,
+# locally, before the push reaches the remote. Catches regressions
+# before round-tripping through CI for ~30–90 s of local feedback.
+#
+# Install once per clone:
+#     cp scripts/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+# (Or add a `make install-hooks` target later.)
+#
+# Bypass for WIP:
+#     git push --no-verify
+#
+# Skip individual steps via env:
+#     SKIP_PRE_PUSH_TYPECHECK=1     SKIP_PRE_PUSH_TEST=1
+#     SKIP_PRE_PUSH_CHECK=1         SKIP_PRE_PUSH_MIGRATIONS=1
+#     SKIP_PRE_PUSH_DRIFT=1
+
+set -eo pipefail
+
+RED=$'\033[31m'; GRN=$'\033[32m'; CYN=$'\033[36m'; OFF=$'\033[0m'
+step() { printf '\n%s== %s ==%s\n' "$CYN" "$1" "$OFF"; }
+ok()   { printf '%s ✓ %s%s\n' "$GRN" "$1" "$OFF"; }
+fail() { printf '%s ✗ %s%s\n' "$RED" "$1" "$OFF"; FAILED=1; }
+
+FAILED=0
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+if [ -z "${SKIP_PRE_PUSH_TYPECHECK:-}" ]; then
+    step "frontend: svelte-check (npm run check)"
+    if (cd frontend && npm run check); then
+        ok "svelte-check passed"
+    else
+        fail "svelte-check failed — fix TypeScript errors before pushing"
+    fi
+fi
+
+if [ -z "${SKIP_PRE_PUSH_TEST:-}" ]; then
+    step "frontend: vitest (npm run test)"
+    if (cd frontend && npm run test); then
+        ok "vitest passed"
+    else
+        fail "vitest failed — fix failing tests before pushing"
+    fi
+fi
+
+if [ -z "${SKIP_PRE_PUSH_CHECK:-}" ]; then
+    step "backend: manage.py check"
+    if USE_SQLITE=True DJANGO_SECRET_KEY=pre-push-not-secret \
+        backend/.venv/bin/python backend/manage.py check >/dev/null 2>&1; then
+        ok "Django check passed"
+    else
+        fail "Django check failed — re-run with output:"
+        printf '%s   USE_SQLITE=True DJANGO_SECRET_KEY=pre-push-not-secret \\\n     backend/.venv/bin/python backend/manage.py check%s\n' "$RED" "$OFF" >&2
+    fi
+fi
+
+if [ -z "${SKIP_PRE_PUSH_MIGRATIONS:-}" ]; then
+    step "backend: makemigrations --check --dry-run"
+    if USE_SQLITE=True DJANGO_SECRET_KEY=pre-push-not-secret \
+        backend/.venv/bin/python backend/manage.py makemigrations --check --dry-run >/dev/null 2>&1; then
+        ok "no missing migrations"
+    else
+        fail "missing migrations — run"
+        printf '%s     backend/.venv/bin/python backend/manage.py makemigrations <app>%s\n' "$RED" "$OFF" >&2
+        printf '%s   and commit before pushing.%s\n' "$RED" "$OFF" >&2
+    fi
+fi
+
+if [ -z "${SKIP_PRE_PUSH_DRIFT:-}" ]; then
+    step "api: npm run gen:api:check"
+    if (cd frontend && unset USE_SQLITE DJANGO_SECRET_KEY && npm run gen:api:check); then
+        ok "openapi.yml + generated/ in sync"
+    else
+        fail "API drift — run"
+        printf '%s     cd frontend && npm run gen:api%s\n' "$RED" "$OFF" >&2
+        printf '%s   and commit the result before pushing.%s\n' "$RED" "$OFF" >&2
+    fi
+fi
+
+if [ "$FAILED" = "1" ]; then
+    printf '\n%sPre-push FAILED. Bypass with: git push --no-verify%s\n' "$RED" "$OFF"
+    exit 1
+fi
+
+printf '\n%sAll pre-push checks passed.%s\n' "$GRN" "$OFF"

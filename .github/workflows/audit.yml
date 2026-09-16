@@ -1,0 +1,57 @@
+name: Audit (Lighthouse CI on PR preview)
+
+# Dedicated Lighthouse CI workflow for PRs targeting main. Kept separate
+# from ci.yml so a perf-score regression fails the PR on its own merit
+# (with branch protection wiring) instead of being silently green.
+#
+# The Lighthouse-CI thresholds here MUST match scripts/audit-lighthouse.sh
+# so local and CI runs are equivalent. Source of truth for the numbers:
+# frontend/.lighthouserc.json.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write        # treosh/lighthouse-ci-action posts PR comments
+
+jobs:
+  lighthouse:
+    name: Lighthouse CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      # Build the production bundle exactly as ci.yml does. Keeping
+      # PUBLIC_BASE_PATH identical to the production deploy means
+      # Lighthouse sees the same asset URLs that demos.linkedtrust.us
+      # serves — i.e., a regression here is a regression there.
+      - name: Install + build
+        env:
+          PUBLIC_BASE_PATH: /testimonies
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      # Lighthouse-CI starts the preview server itself when given
+      # `startServerCommand` in .lighthouserc.json. port 4173 matches
+      # Vite preview defaults. We intentionally do NOT need a backend:
+      # the homepage loads with a skeleton + auth check; if it 5xx's,
+      # performance scores catch it. Real audits against seeded data
+      # happen in scripts/audit-lighthouse.sh against a staging URL.
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: frontend/.lighthouserc.json
+          uploadArtifacts: true
+          temporaryPublicStorage: true
