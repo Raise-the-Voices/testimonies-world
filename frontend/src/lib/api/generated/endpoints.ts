@@ -1246,7 +1246,11 @@ Filtering (django-filter):
   ?updated_before=   updated_at <= YYYY-MM-DD
   ?ordering=         any of: name, country, current_status,
                       updated_at, created_at (prefix with '-' for
-                      descending). Default: -created_at.
+                      descending). Default: deceased cases last,
+                      then newest-submitted first. An explicit
+                      ?ordering= replaces both keys — a caller who
+                      asks for `name` gets a pure A-Z list with
+                      deceased cases interleaved.
   ?page=N            paginated, PAGE_SIZE=10
  */
 export type apiPersonsListResponse200 = {
@@ -1337,7 +1341,11 @@ Filtering (django-filter):
   ?updated_before=   updated_at <= YYYY-MM-DD
   ?ordering=         any of: name, country, current_status,
                       updated_at, created_at (prefix with '-' for
-                      descending). Default: -created_at.
+                      descending). Default: deceased cases last,
+                      then newest-submitted first. An explicit
+                      ?ordering= replaces both keys — a caller who
+                      asks for `name` gets a pure A-Z list with
+                      deceased cases interleaved.
   ?page=N            paginated, PAGE_SIZE=10
  */
 export type apiPersonsCreateResponse201 = {
@@ -1414,7 +1422,11 @@ Filtering (django-filter):
   ?updated_before=   updated_at <= YYYY-MM-DD
   ?ordering=         any of: name, country, current_status,
                       updated_at, created_at (prefix with '-' for
-                      descending). Default: -created_at.
+                      descending). Default: deceased cases last,
+                      then newest-submitted first. An explicit
+                      ?ordering= replaces both keys — a caller who
+                      asks for `name` gets a pure A-Z list with
+                      deceased cases interleaved.
   ?page=N            paginated, PAGE_SIZE=10
  */
 export type apiPersonsRetrieveResponse200 = {
@@ -1490,7 +1502,11 @@ Filtering (django-filter):
   ?updated_before=   updated_at <= YYYY-MM-DD
   ?ordering=         any of: name, country, current_status,
                       updated_at, created_at (prefix with '-' for
-                      descending). Default: -created_at.
+                      descending). Default: deceased cases last,
+                      then newest-submitted first. An explicit
+                      ?ordering= replaces both keys — a caller who
+                      asks for `name` gets a pure A-Z list with
+                      deceased cases interleaved.
   ?page=N            paginated, PAGE_SIZE=10
  */
 export type apiPersonsUpdateResponse200 = {
@@ -1568,7 +1584,11 @@ Filtering (django-filter):
   ?updated_before=   updated_at <= YYYY-MM-DD
   ?ordering=         any of: name, country, current_status,
                       updated_at, created_at (prefix with '-' for
-                      descending). Default: -created_at.
+                      descending). Default: deceased cases last,
+                      then newest-submitted first. An explicit
+                      ?ordering= replaces both keys — a caller who
+                      asks for `name` gets a pure A-Z list with
+                      deceased cases interleaved.
   ?page=N            paginated, PAGE_SIZE=10
  */
 export type apiPersonsPartialUpdateResponse200 = {
@@ -1646,7 +1666,11 @@ Filtering (django-filter):
   ?updated_before=   updated_at <= YYYY-MM-DD
   ?ordering=         any of: name, country, current_status,
                       updated_at, created_at (prefix with '-' for
-                      descending). Default: -created_at.
+                      descending). Default: deceased cases last,
+                      then newest-submitted first. An explicit
+                      ?ordering= replaces both keys — a caller who
+                      asks for `name` gets a pure A-Z list with
+                      deceased cases interleaved.
   ?page=N            paginated, PAGE_SIZE=10
  */
 export type apiPersonsDestroyResponse204 = {
