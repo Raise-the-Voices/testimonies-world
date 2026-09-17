@@ -99,7 +99,4 @@
 		flex-shrink: 0;
 	}
 
-	.card-body {
-		/* Children get to define their own grid / spacing. */
-	}
-</style>
+	</style>

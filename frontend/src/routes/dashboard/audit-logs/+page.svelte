@@ -331,11 +331,4 @@
 		cursor: not-allowed;
 	}
 
-	@media (prefers-reduced-motion: reduce) {
-		.activity-feed *,
-		.activity-feed *::before,
-		.activity-feed *::after {
-			transition: none;
-		}
-	}
-</style>
+	</style>

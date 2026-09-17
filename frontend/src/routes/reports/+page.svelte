@@ -511,11 +511,6 @@
 		gap: 0.5rem;
 		margin: 0 0 0.5rem 0;
 	}
-	.error-header h2 {
-		margin: 0;
-		font-size: 1rem;
-		font-weight: 700;
-	}
 	.error-icon {
 		display: inline-flex;
 		align-items: center;

@@ -943,7 +943,6 @@ import Skeleton from '$lib/Skeleton.svelte';
 		font-weight: 500;
 	}
 	.field.has-error input,
-	.field.has-error select,
 	.field.has-error textarea {
 		border-color: var(--color-danger);
 		background: rgba(217, 22, 22, 0.03);

@@ -607,13 +607,6 @@
 	.contacts-error {
 		border-left: 3px solid var(--color-danger);
 	}
-	.contacts-error .error-header {
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
-		margin-bottom: 0.6rem;
-		color: var(--color-danger);
-	}
 	.error-icon {
 		display: inline-flex;
 		align-items: center;
@@ -625,12 +618,6 @@
 		color: var(--color-danger);
 		font-weight: 700;
 		font-size: 1rem;
-	}
-	.contacts-error h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		font-weight: 700;
-		color: var(--color-text);
 	}
 	.error-message {
 		margin: 0 0 1rem 0;
