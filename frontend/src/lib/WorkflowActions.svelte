@@ -766,30 +766,9 @@
 		gap: 0.75rem;
 	}
 
-	.modal h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		color: var(--color-primary);
-	}
-
-	.modal p {
-		margin: 0;
-		color: var(--color-text-muted);
-		font-size: 0.9rem;
-	}
-
 	.modal-label {
 		font-size: 0.85rem;
 		font-weight: 700;
-	}
-
-	.modal textarea {
-		font: inherit;
-		padding: 0.5rem 0.65rem;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-input);
-		resize: vertical;
-		min-height: 5em;
 	}
 
 	.modal-actions {
