@@ -507,7 +507,15 @@ LOGIN_REDIRECT_URL = f'{SCRIPT_NAME}/' if SCRIPT_NAME else '/'
 LOGOUT_REDIRECT_URL = f'{SCRIPT_NAME}/' if SCRIPT_NAME else '/'
 ACCOUNT_LOGIN_ON_GET = True
 SOCIALACCOUNT_LOGIN_ON_GET = True
-ACCOUNT_EMAIL_VERIFICATION = 'none'
+# 'none' = no verification, AND (in allauth 0.63.x) suppresses EmailAddress
+# row creation on signup. That orphans users in allauth's email-keyed
+# OAuth lookup and produces the "An account already exists" / "user with
+# that username already exists" dead end on Google login for any user
+# whose row predates this fix. 'optional' = still no verification
+# required, but the EmailAddress row IS created — so a future custom
+# SocialAccountAdapter (see cases.adapters.CustomSocialAccountAdapter)
+# can find them by email and complete the link.
+ACCOUNT_EMAIL_VERIFICATION = 'optional'
 ACCOUNT_LOGOUT_ON_GET = True
 SOCIALACCOUNT_AUTO_SIGNUP = True
 
