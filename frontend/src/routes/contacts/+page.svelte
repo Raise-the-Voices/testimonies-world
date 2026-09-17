@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { replaceState } from '$app/navigation';
 	import { user, isAdvocate } from '$lib/session';
@@ -21,9 +21,9 @@
 	// flash). If the SSR load returned an error (e.g. anonymous user
 	// hitting the endpoint before the layout's session is hydrated),
 	// `onMount` retries once via loadContacts().
-	let contacts = $state<Contact[]>(data.contacts ?? []);
+	let contacts = $state<Contact[]>(untrack(() => data.contacts ?? []));
 	let loading = $state(false);
-	let error: string | null = $state<string | null>(data.error ?? null);
+	let error: string | null = $state<string | null>(untrack(() => data.error ?? null));
 	let filterRole = $state<'' | ContactRole>('');
 
 	// Human-readable labels per role — kept here (not in app.css) so the

@@ -32,6 +32,8 @@
     - Fetch + chip rendering only — no full catalog list.
 -->
 <script lang="ts">
+	import { untrack } from 'svelte';
+
 	interface Person {
 		id: number;
 		name: string;
@@ -74,7 +76,7 @@
 	let selectedById = $state<Map<number, Person>>(new Map());
 
 	// Preserve insertion order so chips are stable (not sorted by id).
-	let selectedIds = $state<number[]>([...value]);
+	let selectedIds = $state<number[]>(untrack(() => [...value]));
 
 	// Debounce + race-free fetch plumbing.
 	let debounceTimer: ReturnType<typeof setTimeout> | null = null;

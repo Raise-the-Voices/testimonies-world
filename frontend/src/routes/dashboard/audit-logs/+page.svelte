@@ -35,6 +35,7 @@
 </script>
 
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { base } from '$app/paths';
@@ -57,12 +58,12 @@
 		return iso.slice(0, 16);
 	}
 
-	let username = $state(data.requestParams.user__username ?? '');
-	let action = $state(data.requestParams.action ?? '');
-	let targetType = $state(data.requestParams.target_type ?? '');
-	let search = $state(data.requestParams.search ?? '');
-	let timestampAfter = $state(convertIsoToLocal(data.requestParams.timestamp_after ?? ''));
-	let timestampBefore = $state(convertIsoToLocal(data.requestParams.timestamp_before ?? ''));
+	let username = $state(untrack(() => data.requestParams.user__username ?? ''));
+	let action = $state(untrack(() => data.requestParams.action ?? ''));
+	let targetType = $state(untrack(() => data.requestParams.target_type ?? ''));
+	let search = $state(untrack(() => data.requestParams.search ?? ''));
+	let timestampAfter = $state(untrack(() => convertIsoToLocal(data.requestParams.timestamp_after ?? '')));
+	let timestampBefore = $state(untrack(() => convertIsoToLocal(data.requestParams.timestamp_before ?? '')));
 
 	function currentPageFromUrl(): number {
 		const p = $page.url.searchParams.get('page');
