@@ -532,11 +532,6 @@
 		}
 	}
 
-	.nav-user {
-		padding: 20px;
-		color: rgba(250, 250, 250, 0.7);
-		font-size: 0.85em;
-	}
 	/* Nav-actions cluster: holds the bell + avatar (authenticated) or
 	   the Login link (anonymous). Sits as a flex sibling of the
 	   `<nav>` so the bell's dropdown panel — position: absolute

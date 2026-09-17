@@ -1350,13 +1350,11 @@
 
 	/* Error state on a field — red border + light red wash */
 	.field.has-error input,
-	.field.has-error select,
 	.field.has-error textarea {
 		border-color: var(--color-danger);
 		background: rgba(217, 22, 22, 0.03);
 	}
 	.field.has-error input:focus,
-	.field.has-error select:focus,
 	.field.has-error textarea:focus {
 		border-color: var(--color-danger);
 		box-shadow: 0 0 0 3px rgba(217, 22, 22, 0.15);
@@ -1652,7 +1650,6 @@
 		white-space: nowrap;
 		border: 0;
 	}
-	.category-pill input[type='checkbox']:focus-visible + .category-check,
 	.category-pill:focus-within .category-check {
 		outline: none;
 		box-shadow: 0 0 0 3px var(--color-primary-tint);

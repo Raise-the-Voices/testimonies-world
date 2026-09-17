@@ -404,12 +404,6 @@ import ErrorCard from '$lib/ErrorCard.svelte';
 		font-weight: 700;
 		font-size: 1rem;
 	}
-	.error-header h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		font-weight: 700;
-		color: var(--color-text);
-	}
 	.error-message {
 		margin: 0 0 1rem 0;
 		color: var(--color-text-muted);
