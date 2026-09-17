@@ -14,7 +14,7 @@
 	 * "report lists" isn't a stated need for an authenticated advocacy
 	 * dashboard.
 	 */
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { base } from '$app/paths';
 	import { getReports } from '$lib/api';
 	import { user, isVolunteer } from '$lib/session';
@@ -44,10 +44,10 @@
 	// false (no skeleton flash). If the SSR load returned an error
 	// (e.g. anonymous user hitting the endpoint before the layout's
 	// session is hydrated), `onMount` retries once via loadReports().
-	let reports = $state<Report[]>(data.reports ?? []);
-	let totalCount = $state(data.reportCount ?? 0);
+	let reports = $state<Report[]>(untrack(() => data.reports ?? []));
+	let totalCount = $state(untrack(() => data.reportCount ?? 0));
 	let loading = $state(false);
-	let error: string | null = $state<string | null>(data.error ?? null);
+	let error: string | null = $state<string | null>(untrack(() => data.error ?? null));
 
 	// Source type labels — mirror backend `Report.SourceType.choices`.
 	// Kept here (not in api.ts) so the source-of-truth for display stays

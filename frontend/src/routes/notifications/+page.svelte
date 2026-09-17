@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import {
@@ -17,8 +17,8 @@
 	// SSR has populated `items` (or set `error`). `loading` starts
 	// false so there is no skeleton flash on the first paint.
 	let loading = $state(false);
-	let error = $state<string>(data.error ?? '');
-	let items = $state<Notification[]>(data.notifications ?? []);
+	let error = $state<string>(untrack(() => data.error ?? ''));
+	let items = $state<Notification[]>(untrack(() => data.notifications ?? []));
 
 	async function load() {
 		loading = true;
