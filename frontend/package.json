@@ -14,7 +14,9 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"gen:api": "node scripts/run-spectacular.js && orval --config ./orval.config.ts",
-		"gen:api:check": "node scripts/run-spectacular.js && orval --config ./orval.config.ts && cd .. && git diff --exit-code -- frontend/src/lib/api/generated/ openapi.yml"
+		"gen:api:check": "node scripts/run-spectacular.js && orval --config ./orval.config.ts && cd .. && git diff --exit-code -- frontend/src/lib/api/generated/ openapi.yml",
+		"audit:lh": "bash ../scripts/audit-lighthouse.sh http://localhost:3040/testimonies/",
+		"audit:lh:build": "PUBLIC_BASE_PATH=/testimonies npm run build && bash ../scripts/audit-lighthouse.sh http://localhost:4173/testimonies/"
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.63.0",
