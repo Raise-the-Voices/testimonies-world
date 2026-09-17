@@ -595,6 +595,13 @@ if ENABLE_E2E_TEST_AUTH:
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
     SECURE_SSL_REDIRECT = False
+    # SameSite=None requires Secure=True; the overrides above disabled
+    # Secure, so we must also relax SameSite to 'Lax' or browsers (per
+    # RFC 6265bis) silently drop the cookie. CSRF protection unaffected
+    # — CsrfViewMiddleware still validates Origin/Referer on
+    # state-changing requests.
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    CSRF_COOKIE_SAMESITE = 'Lax'
     # CSRF_COOKIE_HTTPONLY stays False — the SvelteKit API mutator
     # reads the csrftoken cookie via document.cookie to populate
     # X-CSRFToken on state-changing requests. (Already False in
