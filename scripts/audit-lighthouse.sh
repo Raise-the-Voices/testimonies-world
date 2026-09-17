@@ -64,6 +64,39 @@ EOF
     exit 2
 fi
 
+# Resolve Playwright's bundled Chromium when CHROME_PATH isn't
+# already set. Lighthouse's chrome-launcher has no system Chrome
+# to find on most dev/CI runners, and the failure mode is opaque
+# ("No usable Chrome!" / "CHROME_PATH must be set" depending on
+# the lighthouse version). The glob + sort -V tolerates Playwright
+# version bumps (1243 → 1244 → …) without editing this script.
+# PLAYWRIGHT_BROWSERS_PATH overrides the default cache location
+# (defaults to ~/.cache/ms-playwright on Linux,
+# ~/Library/Cache/ms-playwright on macOS).
+if [ -z "${CHROME_PATH:-}" ]; then
+    _pw_browsers="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
+    if [ -d "$_pw_browsers" ]; then
+        # `|| true` guards the empty-glob exit (set -eo pipefail
+        # would otherwise abort the script on a fresh runner).
+        _chrome_bin="$(ls -1d "$_pw_browsers"/chromium-*/chrome-linux/chrome 2>/dev/null | sort -V | tail -1 || true)"
+        if [ -n "$_chrome_bin" ] && [ -x "$_chrome_bin" ]; then
+            export CHROME_PATH="$_chrome_bin"
+            echo "Using Chromium: $CHROME_PATH"
+        fi
+    fi
+    if [ -z "${CHROME_PATH:-}" ]; then
+        cat >&2 <<EOF
+ERROR: CHROME_PATH not set and no Playwright Chromium found.
+
+Searched: $_pw_browsers (override via PLAYWRIGHT_BROWSERS_PATH)
+Install Playwright's browser bundle:
+    cd frontend && npx playwright install chromium
+Or set CHROME_PATH to your system Chrome binary.
+EOF
+        exit 2
+    fi
+fi
+
 echo "Running Lighthouse against $URL (perf>=${THRESH_PERF} a11y>=${THRESH_A11Y} bp>=${THRESH_BP} seo>=${THRESH_SEO}) …"
 npx -y -p "lighthouse@^12" lighthouse \
     "$URL" \
