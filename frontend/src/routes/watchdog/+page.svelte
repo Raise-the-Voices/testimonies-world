@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { base } from '$app/paths';
 	import { getWatchdog } from '$lib/api';
 	import StatusBadge from '$lib/StatusBadge.svelte';
@@ -11,9 +12,9 @@ import ErrorCard from '$lib/ErrorCard.svelte';
 
 	// Initial paint from +page.ts universal load. Client-side refetch
 	// is not exposed (the watchdog view is read-only).
-	let persons: Person[] = $state(data.persons ?? []);
+	let persons: Person[] = $state(untrack(() => data.persons ?? []));
 	let loading = $state(false);
-	let error: string | null = $state(data.error);
+	let error: string | null = $state(untrack(() => data.error));
 
 	async function loadWatchdog() {
 		loading = true;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { base } from '$app/paths';
 	import { user } from '$lib/session';
 	import { safeText, isEmptyAfterSanitization } from '$lib/testimonial-sanitize';
@@ -20,9 +21,9 @@
 		readonly archived_at?: string | null;
 	};
 	type TestimonialWithWorkflow = TestimonialPublic & WorkflowFields;
-	let liveTestimonial = $state(
+	let liveTestimonial = $state(untrack(() =>
 		data.testimonial as unknown as TestimonialWithWorkflow | null,
-	);
+	));
 	$effect(() => {
 		// Re-sync if SSR re-runs (cross-route nav back to this id).
 		liveTestimonial = data.testimonial as unknown as TestimonialWithWorkflow | null;

@@ -12,7 +12,7 @@
 	 * links render with results instead of a skeleton. Client-side
 	 * filter changes still call applyFilters() (no re-run of load()).
 	 */
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import { afterNavigate, goto, replaceState } from '$app/navigation';
@@ -52,12 +52,12 @@
 	// data.categories / data.personsCount come back filled if the load
 	// succeeded; on failure they're empty and the client refetches via
 	// applyFilters() on mount.
-	let persons: Person[] = $state(data.persons ?? []);
-	let countries: { country: string; count: number }[] = $state(data.countries ?? []);
-	let categories: PersonCategory[] = $state(data.categories ?? []);
+	let persons: Person[] = $state(untrack(() => data.persons ?? []));
+	let countries: { country: string; count: number }[] = $state(untrack(() => data.countries ?? []));
+	let categories: PersonCategory[] = $state(untrack(() => data.categories ?? []));
 	let loading = $state(false);
-	let error: string | null = $state(data.error);
-	let totalCount = $state(data.personsCount ?? 0);
+	let error: string | null = $state(untrack(() => data.error));
+	let totalCount = $state(untrack(() => data.personsCount ?? 0));
 	let currentPage = $state(1);
 
 	// Initialize filter state from URL so the controls reflect the deep
