@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { getStatistics } from '$lib/api';
 	import { statusLabels } from '$lib/StatusBadge.svelte';
 	import StatCard from '$lib/StatCard.svelte';
@@ -12,9 +13,9 @@
 	// Initialize from server-side data; if the load() returned null
 	// (error or empty), the client may refetch via getStatistics() on
 	// user-initiated actions (currently none — this page is read-only).
-	let stats = $state<StatisticsT | null>(data.statistics);
+	let stats = $state<StatisticsT | null>(untrack(() => data.statistics));
 	let loading = $state(false);
-	let error: string | null = $state(data.error);
+	let error: string | null = $state(untrack(() => data.error));
 
 	const medicalLabels: Record<string, string> = {
 		unknown: 'Unknown',

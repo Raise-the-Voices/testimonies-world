@@ -26,7 +26,7 @@
 -->
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { replaceState } from '$app/navigation';
 	import { fade } from 'svelte/transition';
@@ -54,9 +54,9 @@
 	// `loading` only flips to true during CLIENT-side loads (filter
 	// change, retry after SSR error). It's distinct from SSR-load
 	// errors, which surface via `loadError` and the ErrorCard path.
-	let records = $state<CaseworkRecord[]>(data.records ?? []);
+	let records = $state<CaseworkRecord[]>(untrack(() => data.records ?? []));
 	let loading = $state(false);
-	let loadError = $state<string>(data.error ?? '');
+	let loadError = $state<string>(untrack(() => data.error ?? ''));
 	let filterStatus = $state('');
 	let filterAction = $state('');
 

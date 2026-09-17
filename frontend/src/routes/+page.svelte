@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { base } from '$app/paths';
 	import { getStatistics } from '$lib/api';
 	import Icon from '$lib/Icon.svelte';
@@ -9,9 +10,9 @@
 	let { data }: { data: PageData } = $props();
 
 	// Initial paint comes from +page.ts universal load.
-	let stats: Statistics | null = $state(data.statistics);
+	let stats: Statistics | null = $state(untrack(() => data.statistics));
 	let statsLoading = $state(false);
-	let statsError: string | null = $state(data.error);
+	let statsError: string | null = $state(untrack(() => data.error));
 
 	// Stat counters, defined as data so the markup is one {#each} loop.
 	// `value` is a thunk so we evaluate stats.* lazily (the page must

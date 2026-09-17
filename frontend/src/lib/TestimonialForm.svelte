@@ -21,6 +21,7 @@
 	places.
 -->
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { extractCreatedId } from '$lib/api/drfCompat';
@@ -77,40 +78,40 @@
 	);
 
 	// Form state — pre-populated from `testimonial` in edit mode.
-	let title = $state(testimonial?.title ?? '');
-	let country = $state(testimonial?.country ?? '');
-	let region = $state(testimonial?.region ?? '');
-	let incidentDate = $state(testimonial?.incident_date ?? '');
+	let title = $state(untrack(() => testimonial?.title ?? ''));
+	let country = $state(untrack(() => testimonial?.country ?? ''));
+	let region = $state(untrack(() => testimonial?.region ?? ''));
+	let incidentDate = $state(untrack(() => testimonial?.incident_date ?? ''));
 	let incidentDatePrecision = $state<'exact' | 'approximate' | 'unknown'>(
 		'unknown',
 	);
-	let summary = $state(testimonial?.summary ?? '');
-	let narrative = $state(testimonial?.narrative ?? '');
-	let outcome = $state(testimonial?.outcome ?? '');
-	let language = $state(testimonial?.language ?? 'en');
-	let verificationLevel = $state(testimonial?.verification_level ?? '');
+	let summary = $state(untrack(() => testimonial?.summary ?? ''));
+	let narrative = $state(untrack(() => testimonial?.narrative ?? ''));
+	let outcome = $state(untrack(() => testimonial?.outcome ?? ''));
+	let language = $state(untrack(() => testimonial?.language ?? 'en'));
+	let verificationLevel = $state(untrack(() => testimonial?.verification_level ?? ''));
 	let sourceVisibility = $state<
 		'hidden' | 'public_anonymous' | 'public_named'
 	>(
-		(testimonial?.source_visibility as
-			| 'hidden' | 'public_anonymous' | 'public_named' | undefined) ?? 'hidden',
+		untrack(() => (testimonial?.source_visibility as
+			| 'hidden' | 'public_anonymous' | 'public_named' | undefined) ?? 'hidden'),
 	);
-	let publicSourceLabel = $state(testimonial?.public_source_label ?? '');
+	let publicSourceLabel = $state(untrack(() => testimonial?.public_source_label ?? ''));
 	let locationVisibility = $state<
 		'public_precise' | 'public_region' | 'public_country' | 'hidden'
 	>(
-		(testimonial?.location_visibility as
+		untrack(() => (testimonial?.location_visibility as
 			| 'public_precise' | 'public_region' | 'public_country' | 'hidden'
-			| undefined) ?? 'public_region',
+			| undefined) ?? 'public_region'),
 	);
-	let familyProtected = $state(testimonial?.family_protected ?? true);
-	let contactProtected = $state(testimonial?.contact_protected ?? true);
+	let familyProtected = $state(untrack(() => testimonial?.family_protected ?? true));
+	let contactProtected = $state(untrack(() => testimonial?.contact_protected ?? true));
 
 	// Linked person (FK on Testimonial.person). The picker component
 	// is self-contained — it fetches the display info on its own when
 	// this value is non-null, so the form just needs to round-trip the id.
 	let personId = $state<number | null>(
-		(testimonial?.linked_person_id as number | null | undefined) ?? null,
+		untrack(() => (testimonial?.linked_person_id as number | null | undefined) ?? null),
 	);
 
 	let saving = $state(false);
