@@ -41,7 +41,14 @@ test.describe('Testimonial workflow — Reject', () => {
           { type: 'owner', description: 'advocacy-team' },
         ],
       },
-      async ({ page }) => {
+      async ({ page }, testInfo) => {
+        // Per-project skip — the 'anon' project intentionally has no
+        // storageState, so this advocate-only workflow can't run there.
+        // Skipping inside the test body (rather than at describe time)
+        // gives us access to testInfo, the only reliable way to
+        // detect the current project at collection time in Playwright
+        // 1.63.x.
+        test.skip(testInfo.project.name === 'anon', 'requires advocate session');
         // 1. Open the UI on the Review queue tab directly. The page reads
         //    ?tab= on mount (see tabFromUrl() in +page.svelte) and the
         //    post-action redirect from WorkflowActions lands back on a
