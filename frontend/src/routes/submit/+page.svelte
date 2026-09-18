@@ -1251,8 +1251,8 @@
 		display: flex;
 		align-items: flex-start;
 		gap: 0.75rem;
-		padding: 0.9rem 1rem;
-		margin-bottom: 1.5rem;
+		padding: var(--card-padding);
+		margin-bottom: 0; /* page wrapper gap handles vertical rhythm */
 		background: var(--color-bg-white);
 		border: 1px solid var(--color-danger);
 		border-left: 4px solid var(--color-danger);
@@ -1363,9 +1363,21 @@
 		color: var(--color-danger);
 	}
 
+	/* === Page outer wrapper ===
+	   Standardized rhythm — see /dashboard, /casework, /persons. */
+	.container {
+		width: 100%;
+		max-width: var(--max-w-page);
+		padding: 0 var(--page-px);
+		margin: 0 auto;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-section);
+	}
+
 	/* === Page header === */
 	.form-header {
-		margin-bottom: 1.75rem;
+		margin-bottom: var(--space-section);
 	}
 	.form-header h1 {
 		margin: 0 0 0.5rem 0;
@@ -1397,8 +1409,8 @@
 		border-left: 3px solid var(--color-primary);
 		border-radius: var(--radius-card-lg);
 		box-shadow: var(--shadow-card);
-		padding: 1.5rem 1.75rem 1.75rem;
-		margin-bottom: 1.5rem;
+		padding: var(--card-padding-lg);
+		margin-bottom: 0; /* page wrapper gap handles vertical rhythm */
 	}
 	.form-section-title {
 		display: flex;
@@ -1429,12 +1441,12 @@
 	.form-grid {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 1.25rem 1.5rem;
+		gap: var(--space-card) var(--space-section);
 	}
 	.field-stack {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: var(--space-card);
 	}
 
 	/* === Field === */

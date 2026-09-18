@@ -9,7 +9,10 @@
               text-muted / text-light / border / border-light / border-subtle /
               danger / success / section-bg / sidebar-header
    LAYOUT     max-width (1140px), max-w-page (1100px), max-w-prose (720px),
-              gap-card (1rem), card-padding (1.25rem 1.5rem)
+              gap-card (1rem), card-padding (1.25rem 1.5rem),
+              card-padding-lg (1.5rem 1.75rem),
+              space-section (1.5rem), space-card (1rem), space-tight (0.5rem),
+              page-px (1.5rem)
    SURFACE    radius-card (8px), radius-card-lg (16px), radius-input (10px),
               shadow-card, shadow-card-hover, shadow-toolbar, shadow-card-lg,
               focus-ring, transition-card (0.2s ease)
@@ -65,6 +68,23 @@
 	--max-w-prose: 720px; /* readable line length for hero/body copy */
 	--gap-card: 1rem; /* standard gap between cards / grid items */
 
+	/* === Spacing rhythm (4-step scale) ===
+	   Outer → section → card → inner. Apply consistently across all
+	   pages so headers, filters, and cards align along the same
+	   vertical grid lines.
+	     --space-section : gap between page sections (header → filters
+	                       → records, etc.). Used as the page's outer
+	                       flex gap AND as header bottom-margin.
+	     --space-card    : gap between sibling cards in a list / grid.
+	                       Replaces ad-hoc 0.85rem / 1.25rem values.
+	     --space-tight   : gap between label + input, badge + badge.
+	     --page-px       : horizontal gutter on the page wrapper so
+	                       cards line up flush with the title. */
+	--space-section: 1.5rem;
+	--space-card: 1rem;
+	--space-tight: 0.5rem;
+	--page-px: 1.5rem;
+
 	/* Surface */
 	--radius-card: 8px;
 	--radius-card-lg: 16px; /* the rounded-2xl analog; cards + toolbar */
@@ -76,6 +96,7 @@
 	--focus-ring: 0 0 0 3px var(--color-primary-tint);
 	--transition-card: 0.2s ease;
 	--card-padding: 1.25rem 1.5rem;
+	--card-padding-lg: 1.5rem 1.75rem; /* form sections, hero cards — anything with more vertical density */
 }
 
 /* normalize basics */

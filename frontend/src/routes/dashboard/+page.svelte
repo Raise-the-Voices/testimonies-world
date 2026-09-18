@@ -457,10 +457,11 @@
 	.dashboard-page {
 		width: 100%;
 		max-width: var(--max-w-page);
+		padding: 0 var(--page-px);
 		margin: 0 auto;
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
+		gap: var(--space-section);
 	}
 
 	/* Each section gets a fixed min-height matching its real content.

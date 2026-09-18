@@ -185,7 +185,7 @@
 		border: 1px solid var(--color-border-light);
 		border-radius: var(--radius-card);
 		box-shadow: var(--shadow-card);
-		padding: 1.1rem 1.5rem;
+		padding: var(--card-padding);
 		display: flex;
 		align-items: baseline;
 		justify-content: space-around;
@@ -287,7 +287,7 @@
 	/* === 3. How to help — prose paragraphs separated by hairline rules === */
 	.section-header {
 		text-align: center;
-		margin-bottom: 1.5rem;
+		margin-bottom: var(--space-section);
 	}
 	.section-title {
 		font-size: 1.4rem;
@@ -305,7 +305,7 @@
 		border: 1px solid var(--color-border-light);
 		border-radius: var(--radius-card);
 		box-shadow: var(--shadow-card);
-		padding: 1.25rem 1.75rem;
+		padding: var(--card-padding-lg);
 		max-width: var(--max-w-prose);
 		margin: 0 auto;
 	}

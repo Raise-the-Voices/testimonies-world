@@ -235,7 +235,7 @@
 	<meta name="twitter:description" content="Track advocacy actions and follow-ups across cases — calls, filings, meetings. Log every action so the next advocate can pick up where you left off." />
 </svelte:head>
 
-<div class="container">
+<div class="casework-page">
 	{#if !isAdvocate(currentUser)}
 		<p class="muted">
 			You must be logged in as an advocate to view casework.
@@ -438,12 +438,28 @@
 </div>
 
 <style>
+	/* === Page outer wrapper ===
+	   Standardized rhythm: full-width up to --max-w-page (1100px) with
+	   --page-px horizontal gutter, --space-section between sections.
+	   Replaces the legacy global .container (85% width, 1140px max)
+	   so all authenticated pages share the same vertical / horizontal
+	   grid lines. */
+	.casework-page {
+		width: 100%;
+		max-width: var(--max-w-page);
+		padding: 0 var(--page-px);
+		margin: 0 auto;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-section);
+	}
+
 	.page-header {
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
 		gap: 1rem;
-		margin-bottom: 1.75rem;
+		margin-bottom: var(--space-section);
 		flex-wrap: wrap;
 	}
 	.page-title {
@@ -489,8 +505,8 @@
 		gap: 1rem;
 		align-items: flex-end;
 		flex-wrap: wrap;
-		margin-bottom: 1.25rem;
-		padding: 0.9rem 1.1rem;
+		margin-bottom: var(--space-section);
+		padding: var(--card-padding);
 		background: var(--color-bg-white);
 		border: 1px solid var(--color-border-subtle);
 		border-radius: var(--radius-card-lg);
@@ -548,14 +564,14 @@
 	.records-list {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: var(--space-card);
 	}
 	.record-card {
 		background: var(--color-bg-white);
 		border: 1px solid var(--color-border-subtle);
 		border-radius: var(--radius-card-lg);
 		box-shadow: var(--shadow-card);
-		padding: 1rem 1.25rem 1.1rem;
+		padding: var(--card-padding);
 		/* Smooth hover lift — shadow + border tint together so the card
 		   feels responsive without being noisy. */
 		transition:
