@@ -7,7 +7,7 @@ from django.http import (
 )
 from django_filters import rest_framework as filters
 from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
-from rest_framework import permissions, serializers, viewsets
+from rest_framework import generics, permissions, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
@@ -1256,3 +1256,35 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     )
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
+
+
+# === Self-audit / debug endpoints =====================================
+# These are deliberately scoped to staff — they're for the operator
+# running smoke tests on the data lifecycle, not for the public UI.
+# Keep them small and read-only.
+
+
+class DebugRecentPersonsView(generics.ListAPIView):
+    """GET /api/debug/recent-persons/ — last 5 created persons, staff-only.
+
+    Self-audit endpoint for smoke-testing the create → DB → retrieve
+    lifecycle: after a POST /api/persons/ with a unique name, hit this
+    endpoint to confirm the row landed in PostgreSQL without scanning
+    the full /api/persons/ list. Returns the 5 most recent persons
+    (newest first) using PersonListSerializer so the response shape
+    matches the public list endpoint.
+
+    Permission: IsAdminUser (staff). Non-staff get 403. The path lives
+    under /api/debug/ to make the operator-facing intent obvious and
+    to keep it visually separate from production routes.
+
+    Not paginated — the slice is hard-capped at 5 so the response
+    payload is bounded regardless of caller intent.
+    """
+
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = PersonListSerializer
+    pagination_class = None  # we hand-pick 5; pagination_class=None disables DRF pagination
+
+    def get_queryset(self):
+        return Person.objects.order_by('-created_at')[:5]
