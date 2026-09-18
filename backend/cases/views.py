@@ -1288,3 +1288,28 @@ class DebugRecentPersonsView(generics.ListAPIView):
 
     def get_queryset(self):
         return Person.objects.order_by('-created_at')[:5]
+
+
+# === Logout success / done screen =====================================
+# Rendered as a plain Django view so the auth chrome (header, card,
+# footer) lives in `account/logged_out.html` and matches the rest of
+# /accounts/*. allauth redirects here via ACCOUNT_LOGOUT_REDIRECT_URL
+# after the logout cookie is cleared.
+from urllib.parse import urlparse as _urlparse
+from django.shortcuts import render as _render
+
+
+def logout_done(request):
+    """GET /logout/done/ — success screen after the volunteer signs out.
+
+    Reads `next` from the query string so the "Return to" button can
+    take the user back where they were (e.g. `/persons/123/`). Falls
+    back to the landing page if no `next` is present. The same-origin
+    check is an open-redirect guard — without it, an attacker could
+    craft `/logout/done/?next=https://evil.example` and use the
+    success screen as a redirector.
+    """
+    raw_next = request.GET.get('next', '/')
+    parsed = _urlparse(raw_next)
+    safe_next = raw_next if (not parsed.netloc or parsed.netloc == request.get_host()) else '/'
+    return _render(request, 'account/logged_out.html', {'next': safe_next})
