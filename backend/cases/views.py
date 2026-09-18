@@ -1001,7 +1001,14 @@ class FamilyRelationshipViewSet(viewsets.ModelViewSet):
     )
     serializer_class = FamilyRelationshipSerializer
     filterset_class = FamilyRelationshipFilter
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
+    # (C6 + M1) Family relationships name relatives of a victim —
+    # PII-adjacent and a real-world danger if leaked (targeted
+    # harassment, doxxing). The previous default of
+    # IsAuthenticatedOrReadOnly let ANY anonymous browser session
+    # list every family row via GET /api/relationships/. Tighten to
+    # IsAuthenticated so only logged-in volunteers see this data.
+    # IsVolunteer still gates writes on top of that.
+    permission_classes = [permissions.IsAuthenticated, IsVolunteer]
     # Family-relationship writes are uncommon (1-2 per case); keep
     # them under the generic mutation cap.
     throttle_classes = [ActionScopedThrottle]
