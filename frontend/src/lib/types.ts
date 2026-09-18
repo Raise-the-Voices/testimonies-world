@@ -109,6 +109,18 @@ export interface Report {
 	created_at: string;
 	updated_at: string;
 	media_files?: Media[];
+	sources?: ReportSource[];
+}
+
+/** Source nested under a Report. Mirrors backend SourceSerializer fields. */
+export interface ReportSource {
+	id: number;
+	source_type: SourceType;
+	source_attribution?: string;
+	date_start?: string | null;
+	narrative?: string;
+	is_private?: boolean;
+	created_at: string;
 }
 
 /* ============================================================================
