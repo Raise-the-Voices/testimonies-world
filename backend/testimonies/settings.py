@@ -16,9 +16,66 @@ _IS_TEST_RUNNER = 'test' in sys.argv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config('SECRET_KEY', default='dev-insecure-change-in-production')
-DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',')
+# === Critical security defaults (C3 + M4) ===========================
+# These three settings previously defaulted to insecure values, which
+# meant a missing-or-typo'd ``.env`` file on any future deploy would
+# silently run Django with DEBUG=True and a hard-coded dev SECRET_KEY.
+# The defaults are now fail-closed:
+#
+#   * ``DEBUG`` defaults to ``False``. Local dev sets it via .env.
+#   * ``SECRET_KEY`` raises ``ImproperlyConfigured`` if missing or
+#     empty in production (DEBUG=False). Local dev uses the explicit
+#     dev fallback to keep ``manage.py`` and ``runserver`` working
+#     out of the box.
+#   * ``ALLOWED_HOSTS`` defaults to a specific list of our known
+#     production hosts (not ``*``). Local dev uses the wildcard
+#     default by setting ``ALLOWED_HOSTS=*`` in .env.
+#
+# The dev fallback is intentionally the SAME string as the previous
+# (insecure) default — operators upgrading from the old version see
+# no behavior change in development. A real production deploy is
+# expected to set ``SECRET_KEY`` and ``ALLOWED_HOSTS`` explicitly.
+
+DEFAULT_PROD_HOSTS = ','.join([
+    'cases.raisethevoices.org',
+    'www.cases.raisethevoices.org',
+])
+
+DEBUG = config('DEBUG', default=False, cast=bool)
+
+# Read SECRET_KEY without a default first so we can raise on the
+# production path. If we passed ``default='something'`` the failure
+# mode would be 'silently use the weak fallback' — the opposite of
+# fail-closed.
+_raw_secret = config('SECRET_KEY', default='')
+if _raw_secret:
+    SECRET_KEY = _raw_secret
+elif DEBUG:
+    # Local dev (runserver, manage.py shell) — keep the historical
+    # weak fallback so existing developer workflows don't break.
+    # NEVER reachable in production (DEBUG=False above).
+    SECRET_KEY = 'dev-insecure-change-in-production'
+else:
+    # Production deploy without a SECRET_KEY → refuse to start.
+    # The error message tells the operator exactly what to do.
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        'SECRET_KEY is not set in the environment. Refusing to start. '
+        'Generate one with `python -c "from django.core.management.utils '
+        "import get_random_secret_key; print(get_random_secret_key())\"` "
+        'and add it to /etc/systemd/system/rtv-cases-backend.service.d/'
+        'override.conf (Environment=) or backend/.env.'
+    )
+
+if DEBUG:
+    # Local dev: explicit wildcard keeps the previous dev behaviour.
+    ALLOWED_HOSTS = ['*']
+else:
+    # Production: parse the operator-supplied list, fall back to the
+    # known prod hosts. If neither is set we end up with the prod
+    # defaults — no ``*`` ever leaks into production.
+    _raw_hosts = config('ALLOWED_HOSTS', default='')
+    ALLOWED_HOSTS = [h.strip() for h in _raw_hosts.split(',') if h.strip()] or DEFAULT_PROD_HOSTS.split(',')
 
 SCRIPT_NAME = config('SCRIPT_NAME', default='')
 FORCE_SCRIPT_NAME = SCRIPT_NAME or None
