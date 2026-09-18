@@ -16,11 +16,14 @@
 	 */
 	import { onMount, untrack } from 'svelte';
 	import { base } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { getReports } from '$lib/api';
 	import { user, isVolunteer } from '$lib/session';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import StatusBadge from '$lib/StatusBadge.svelte';
 	import ErrorCard from '$lib/ErrorCard.svelte';
+	import Modal from '$lib/Modal.svelte';
+	import PersonPicker from '$lib/PersonPicker.svelte';
 	import type { PageData } from './$types';
 	import type { Paginated, Report } from '$lib/types';
 
@@ -48,6 +51,32 @@
 	let totalCount = $state(untrack(() => data.reportCount ?? 0));
 	let loading = $state(false);
 	let error: string | null = $state<string | null>(untrack(() => data.error ?? null));
+
+	// "Add Report" modal — picks a Person, then navigates to the
+	// existing per-case form. We can't go straight to /report because
+	// every report must be tied to a Person (Report.person is a
+	// non-nullable FK on the backend, see models.py:524-526).
+	let addPickerOpen = $state(false);
+	let pickedPersonId = $state<number | null>(null);
+
+	function openAddPicker() {
+		pickedPersonId = null;
+		addPickerOpen = true;
+	}
+	function closeAddPicker() {
+		addPickerOpen = false;
+		pickedPersonId = null;
+	}
+	function onPersonPicked(id: number | null) {
+		pickedPersonId = id;
+		if (id === null) return;
+		// Snapshot + close before navigating so the modal unmounts
+		// immediately (otherwise the user sees it linger until the
+		// /persons/{id}/report page finishes rendering).
+		const next = id;
+		addPickerOpen = false;
+		void goto(`${base}/persons/${next}/report`);
+	}
 
 	// Source type labels — mirror backend `Report.SourceType.choices`.
 	// Kept here (not in api.ts) so the source-of-truth for display stays
@@ -188,6 +217,13 @@
 					to narrow by source, date, or free-text search.
 				</p>
 			</div>
+			{#if isVolunteer(currentUser)}
+				<button
+					type="button"
+					class="btn btn-primary reports-header-action"
+					onclick={openAddPicker}
+				>Add Report</button>
+			{/if}
 		</header>
 
 		<!-- Filter row: search + source dropdown + date range + clear -->
@@ -380,6 +416,27 @@
 			{/if}
 		</section>
 	{/if}
+
+	<!-- "Add Report" picker modal — gated to volunteers+ (matches the
+	     case-page button). The modal's own onClose handles Escape/backdrop;
+	     onPersonPicked navigates away with a fresh per-case form. -->
+	<Modal
+		open={addPickerOpen}
+		title="Add a report"
+		onClose={closeAddPicker}
+	>
+		<div class="picker-body">
+			<p class="picker-hint">
+				Pick the case this report belongs to. You'll add the report
+				narrative on the next screen.
+			</p>
+			<PersonPicker
+				inputId="reports-add-picker"
+				value={pickedPersonId}
+				onChange={onPersonPicked}
+			/>
+		</div>
+	</Modal>
 </div>
 
 <style>
@@ -400,6 +457,13 @@
 		gap: 1rem;
 	}
 	.reports-header-text { flex: 1 1 auto; min-width: 0; }
+	.reports-header-action {
+		flex: 0 0 auto;
+		align-self: flex-start;
+		padding: 0.55rem 1rem;
+		font-size: 0.82rem;
+		min-height: 0;
+	}
 	.reports-header h1 {
 		margin: 0 0 0.4rem 0;
 		color: var(--color-primary);
@@ -783,5 +847,19 @@
 		.reports-table td.cell-title::before {
 			content: none;
 		}
+	}
+
+	/* "Add Report" picker modal — body chrome */
+	.picker-body {
+		padding: 1.25rem 1.5rem 1.5rem 1.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+	.picker-hint {
+		margin: 0;
+		font-size: 0.92rem;
+		color: var(--color-text-muted);
+		line-height: 1.5;
 	}
 </style>
