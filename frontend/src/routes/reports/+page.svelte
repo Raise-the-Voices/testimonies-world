@@ -28,6 +28,7 @@
 	import ErrorCard from '$lib/ErrorCard.svelte';
 	import Modal from '$lib/Modal.svelte';
 	import ReportForm from '$lib/ReportForm.svelte';
+	import { showToast } from '$lib/toast';
 	import type { PageData } from './$types';
 	import type { Paginated, Report } from '$lib/types';
 
@@ -75,10 +76,17 @@
 
 	// After a successful save, close the modal, reset to page 1, and
 	// re-fetch so the new report shows up at the top (newest-first).
+	// Also fires a success toast carrying the full server response so
+	// the operator sees the new id, FK to the case, and created_at
+	// timestamp — visual confirmation that the row landed.
 	function onFormSuccess(detail: { report: Report; mediaFailures: string[] }) {
 		formOpen = false;
 		mediaFailures = detail.mediaFailures;
 		currentPage = 1;
+		showToast('Report saved.', {
+			variant: 'success',
+			details: detail.report as unknown as Record<string, unknown>,
+		});
 		void loadReports();
 	}
 

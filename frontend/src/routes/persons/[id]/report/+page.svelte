@@ -25,6 +25,7 @@
 	import { getPerson, ApiError } from '$lib/api';
 	import ReportForm from '$lib/ReportForm.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
+	import { showToast } from '$lib/toast';
 	import type { Report } from '$lib/types';
 	import type { PageData } from './$types';
 
@@ -73,6 +74,19 @@
 	let isEdit = $derived(reportId !== null);
 
 	function onSuccess(detail: { report: Report; mediaFailures: string[] }) {
+		// Fire the success toast BEFORE the navigation. The toast
+		// store lives in module scope (see $lib/toast.ts) so it
+		// persists across SvelteKit's goto() and renders on the
+		// destination page. The toast carries the full server response
+		// so the operator sees the new id + case FK + created_at — the
+		// JSON viewer button reveals the full payload for debugging.
+		showToast(
+			isEdit ? 'Report updated.' : 'Report saved.',
+			{
+				variant: 'success',
+				details: detail.report as unknown as Record<string, unknown>,
+			},
+		);
 		// replaceState so Back from the case page doesn't return to a
 		// stale form with the report we just saved. We surface the
 		// media-partial-failures via a query param so the destination
