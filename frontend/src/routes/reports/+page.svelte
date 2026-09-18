@@ -378,87 +378,74 @@
 						{@const snippet = narrativeSnippet(r)}
 						{@const mc = mediaCount(r)}
 						{@const sc = sourceCount(r)}
-						<li class="report-card" class:report-card--private={r.is_private}>
+						<li class="report-row" class:report-row--private={r.is_private}>
 							<a
-								class="report-card-link"
+								class="report-row-link"
 								href="{base}/persons/{r.person}"
 								aria-label="Open case {r.person} — {title}"
 							>
-								<header class="report-card-header">
-									<div class="report-card-date">
-										{#if r.date_start}
-											<time datetime={r.date_start}>{formatDate(r.date_start)}</time>
-											{#if r.date_end && r.date_end !== r.date_start}
-												<span class="report-card-date-sep" aria-hidden="true">→</span>
-												<time datetime={r.date_end}>{formatDate(r.date_end)}</time>
-											{/if}
-										{:else}
-											<time datetime={r.created_at} class="muted">
-												{new Date(r.created_at).toLocaleDateString()}
+								<!-- Date column — fixed width, aligns across rows -->
+								<div class="report-row-date">
+									{#if r.date_start}
+										<time class="report-row-date-primary" datetime={r.date_start}>
+											{formatDate(r.date_start)}
+										</time>
+										{#if r.date_end && r.date_end !== r.date_start}
+											<time class="report-row-date-secondary" datetime={r.date_end}>
+												— {formatDate(r.date_end)}
 											</time>
 										{/if}
-									</div>
-									<div class="report-card-badges">
-										<span class="source-pill source-pill-{r.source_type}" title="Source type">
-											{sourceTypeLabels[r.source_type] ?? r.source_type}
-										</span>
-										{#if r.is_private}
-											<span class="visibility-pill visibility-private" title="Private — only volunteers+">
-												🔒 Private
-											</span>
-										{:else}
-											<span class="visibility-pill visibility-public" title="Public">
-												Public
-											</span>
-										{/if}
-									</div>
-								</header>
+									{:else}
+										<time class="report-row-date-primary report-row-date-primary--fallback" datetime={r.created_at}>
+											{new Date(r.created_at).toLocaleDateString()}
+										</time>
+									{/if}
+								</div>
 
-								<h3 class="report-card-title" title={title}>
-									{title}
-								</h3>
+								<!-- Pills column — source type + privacy, vertical stack -->
+								<div class="report-row-pills">
+									<span class="source-pill source-pill-{r.source_type}">
+										{sourceTypeLabels[r.source_type] ?? r.source_type}
+									</span>
+									{#if r.is_private}
+										<span class="visibility-pill visibility-private">🔒 Private</span>
+									{:else}
+										<span class="visibility-pill visibility-public">Public</span>
+									{/if}
+								</div>
 
-								{#if snippet.text}
-									<p class="report-card-snippet">
-										{snippet.text}
-									</p>
-								{/if}
+								<!-- Content column — title + snippet + stats -->
+								<div class="report-row-content">
+									<h3 class="report-row-title">{title}</h3>
+									{#if snippet.text}
+										<p class="report-row-snippet">{snippet.text}</p>
+									{/if}
+									{#if mc > 0 || sc > 0 || r.rough_location}
+										<div class="report-row-stats">
+											{#if mc > 0}
+												<span class="report-stat">
+													<span class="report-stat-icon" aria-hidden="true">📎</span>
+													{mc} media{mc === 1 ? '' : 's'}
+												</span>
+											{/if}
+											{#if sc > 0}
+												<span class="report-stat">
+													<span class="report-stat-icon" aria-hidden="true">⚲</span>
+													{sc} {sc === 1 ? 'source' : 'sources'}
+												</span>
+											{/if}
+											{#if r.rough_location}
+												<span class="report-stat">
+													<span class="report-stat-icon" aria-hidden="true">📍</span>
+													{r.rough_location}
+												</span>
+											{/if}
+										</div>
+									{/if}
+								</div>
 
-								<footer class="report-card-meta">
-									<div class="report-card-meta-stats">
-										{#if mc > 0}
-											<span class="meta-stat" title="{mc} media item{mc === 1 ? '' : 's'} attached">
-												<span class="meta-stat-icon" aria-hidden="true">📎</span>
-												<span class="meta-stat-value">{mc}</span>
-												<span class="meta-stat-label">media</span>
-											</span>
-										{:else}
-											<span class="meta-stat meta-stat--empty" title="No media attached">
-												<span class="meta-stat-icon" aria-hidden="true">📎</span>
-												<span class="meta-stat-label">none</span>
-											</span>
-										{/if}
-										{#if sc > 0}
-											<span class="meta-stat" title="{sc} additional source{sc === 1 ? '' : 's'}">
-												<span class="meta-stat-icon" aria-hidden="true">⚲</span>
-												<span class="meta-stat-value">{sc}</span>
-												<span class="meta-stat-label">source{sc === 1 ? '' : 's'}</span>
-											</span>
-										{:else}
-											<span class="meta-stat meta-stat--empty" title="No additional sources">
-												<span class="meta-stat-icon" aria-hidden="true">⚲</span>
-												<span class="meta-stat-label">none</span>
-											</span>
-										{/if}
-										{#if r.rough_location}
-											<span class="meta-stat" title="Location: {r.rough_location}">
-												<span class="meta-stat-icon" aria-hidden="true">📍</span>
-												<span class="meta-stat-value meta-stat-value--text">{r.rough_location}</span>
-											</span>
-										{/if}
-									</div>
-									<span class="report-card-arrow" aria-hidden="true">→</span>
-								</footer>
+								<!-- Arrow column — visual affordance for "click me" -->
+								<div class="report-row-arrow" aria-hidden="true">→</div>
 							</a>
 						</li>
 					{/each}
@@ -671,18 +658,20 @@
 		line-height: 1.6;
 	}
 
-	/* === Report cards ===
-	   Card-based list. Each card links to the case page; the entire
-	   card surface is clickable (the <a> wraps all content). */
+	/* === Report rows ===
+	   A clean, table-like list using CSS Grid for column alignment.
+	   Four columns: date | pills | content | arrow. The content column
+	   flexes to fill; the others are auto-sized so dates align across
+	   rows. The whole row is one clickable <a>. */
 	.reports-list {
 		list-style: none;
 		margin: 0;
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.85rem;
+		gap: 0.65rem;
 	}
-	.report-card {
+	.report-row {
 		background: var(--color-bg-white);
 		border: 1px solid var(--color-border-subtle);
 		border-left: 3px solid var(--color-primary);
@@ -692,66 +681,72 @@
 			transform 0.15s ease,
 			box-shadow 0.15s ease,
 			border-color 0.15s ease;
-		overflow: hidden;
 	}
-	.report-card:hover {
+	.report-row:hover {
 		transform: translateY(-1px);
 		box-shadow: var(--shadow-card-lg);
 		border-left-color: var(--color-primary-light);
 	}
-	.report-card:focus-within {
+	.report-row:focus-within {
 		outline: 2px solid var(--color-primary);
 		outline-offset: 2px;
 	}
-	.report-card--private {
+	.report-row--private {
 		border-left-color: var(--color-danger, #c53030);
 	}
-	.report-card-link {
-		display: block;
-		padding: 1rem 1.25rem 1.1rem 1.25rem;
+	.report-row-link {
+		display: grid;
+		grid-template-columns: 9rem auto 1fr 1.5rem;
+		gap: 1.25rem;
+		align-items: start;
+		padding: 1.05rem 1.4rem;
 		color: inherit;
 		text-decoration: none;
+	}
+
+	/* Date column — fixed-width, dates align across rows */
+	.report-row-date {
 		display: flex;
 		flex-direction: column;
-		gap: 0.6rem;
-	}
-
-	/* Card header: date range + badges */
-	.report-card-header {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
-	.report-card-date {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-		font-size: 0.85rem;
+		gap: 0.1rem;
+		padding-top: 0.15rem;
 		font-variant-numeric: tabular-nums;
-		color: var(--color-text-muted);
-		font-weight: 600;
 	}
-	.report-card-date time {
+	.report-row-date-primary {
+		font-size: 0.88rem;
+		font-weight: 700;
 		color: var(--color-text);
+		letter-spacing: -0.01em;
 	}
-	.report-card-date-sep {
+	.report-row-date-primary--fallback {
 		color: var(--color-text-muted);
-		font-weight: 400;
+		font-weight: 500;
 	}
-	.report-card-badges {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-		flex-wrap: wrap;
-		justify-content: flex-end;
+	.report-row-date-secondary {
+		font-size: 0.78rem;
+		color: var(--color-text-muted);
+		font-weight: 500;
 	}
 
-	/* Card title — bigger, bold, ellipsized */
-	.report-card-title {
+	/* Pills column — source type + privacy, vertical stack */
+	.report-row-pills {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		align-items: flex-start;
+		padding-top: 0.05rem;
+	}
+
+	/* Content column — title + snippet + stats, takes remaining width */
+	.report-row-content {
+		min-width: 0; /* allow text wrap inside grid item */
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
+	}
+	.report-row-title {
 		margin: 0;
-		font-size: 1.05rem;
+		font-size: 1.02rem;
 		font-weight: 700;
 		color: var(--color-text);
 		line-height: 1.35;
@@ -763,82 +758,79 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
-
-	/* Narrative snippet — 3 lines max, soft muted color */
-	.report-card-snippet {
+	.report-row-snippet {
 		margin: 0;
-		font-size: 0.92rem;
-		color: var(--color-text);
+		font-size: 0.9rem;
+		color: var(--color-text-muted);
 		line-height: 1.5;
 		display: -webkit-box;
-		-webkit-line-clamp: 3;
-		line-clamp: 3;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
-
-	/* Card footer: stats + arrow */
-	.report-card-meta {
+	.report-row-stats {
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.85rem;
-		padding-top: 0.4rem;
-		border-top: 1px solid var(--color-border-subtle);
-	}
-	.report-card-meta-stats {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.85rem;
+		gap: 1rem;
 		flex-wrap: wrap;
+		margin-top: 0.15rem;
 	}
-	.meta-stat {
+	.report-stat {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.3rem;
+		gap: 0.35rem;
 		font-size: 0.82rem;
-		color: var(--color-text);
-		font-weight: 600;
-	}
-	.meta-stat-icon {
-		font-size: 0.92rem;
-	}
-	.meta-stat-value {
-		font-variant-numeric: tabular-nums;
-		color: var(--color-primary);
-	}
-	.meta-stat-value--text {
-		color: var(--color-text);
-		font-weight: 500;
-		max-width: 18rem;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.meta-stat-label {
 		color: var(--color-text-muted);
 		font-weight: 500;
-		font-size: 0.78rem;
 	}
-	.meta-stat--empty {
-		opacity: 0.5;
+	.report-stat-icon {
+		font-size: 0.95rem;
+		opacity: 0.85;
 	}
-	.meta-stat--empty .meta-stat-label {
-		text-transform: uppercase;
-		letter-spacing: 0.05rem;
-		font-size: 0.68rem;
-	}
-	.report-card-arrow {
-		flex: 0 0 auto;
+
+	/* Arrow column — visual affordance for "click me" */
+	.report-row-arrow {
+		font-size: 1.15rem;
 		color: var(--color-text-muted);
-		font-size: 1.2rem;
+		align-self: center;
 		line-height: 1;
 		transition: transform 0.15s ease, color 0.15s ease;
 	}
-	.report-card:hover .report-card-arrow {
+	.report-row:hover .report-row-arrow {
 		color: var(--color-primary);
 		transform: translateX(3px);
+	}
+
+	/* Mobile — collapse the date column inline with title; pills sit
+	   above the snippet. Three-column layout (pills / content / arrow)
+	   with date as a meta line above the content. */
+	@media (max-width: 720px) {
+		.report-row-link {
+			grid-template-columns: auto 1fr 1.5rem;
+			grid-template-areas:
+				"pills  content  arrow"
+				"date   content  arrow";
+			gap: 0.6rem 1rem;
+			padding: 1rem 1.15rem;
+		}
+		.report-row-date {
+			grid-area: date;
+			flex-direction: row;
+			gap: 0.4rem;
+		}
+		.report-row-date-secondary { font-size: 0.82rem; }
+		.report-row-pills {
+			grid-area: pills;
+			flex-direction: row;
+			gap: 0.4rem;
+		}
+		.report-row-content {
+			grid-area: content;
+		}
+		.report-row-arrow {
+			grid-area: arrow;
+		}
 	}
 
 	/* Source pill — colored by source type for the "🟢/🟡" feel.
@@ -1025,25 +1017,6 @@
 		.toolbar-select {
 			min-width: 0;
 			width: 100%;
-		}
-	}
-
-	/* Mobile — cards stack stats vertically below ~640px so the row
-	   doesn't crowd the date / arrow. */
-	@media (max-width: 640px) {
-		.report-card-meta {
-			flex-direction: column;
-			align-items: stretch;
-			gap: 0.5rem;
-		}
-		.report-card-arrow {
-			display: none;
-		}
-		.report-card-meta-stats {
-			justify-content: flex-start;
-		}
-		.meta-stat-value--text {
-			max-width: 12rem;
 		}
 	}
 </style>
