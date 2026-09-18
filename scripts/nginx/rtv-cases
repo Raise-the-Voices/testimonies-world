@@ -55,6 +55,33 @@ server {
                application/x-javascript text/javascript image/svg+xml;
     gzip_min_length 1024;
 
+    # ---- Security headers (M6, 2026-09-18) -----------------------------
+    # `always` so headers are emitted on 4xx/5xx responses too.
+    # HSTS duplicated here vs Django's SECURE_HSTS_SECONDS — harmless
+    # (browsers take the longest max-age); belt-and-braces so a future
+    # Django refactor can't silently regress HSTS.
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Frame-Options            "DENY" always;
+    add_header X-Content-Type-Options     "nosniff" always;
+    # X-XSS-Protection is deprecated; MDN/OWASP recommend explicitly
+    # DISABLING it — old UAs used it to introduce XSS via the filter
+    # bypass.
+    add_header X-XSS-Protection           "0" always;
+    add_header Referrer-Policy            "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy         "geolocation=(), microphone=(), camera=()" always;
+
+    # CSP — conservative starter. You WILL need to widen this in prod:
+    #   * SvelteKit injects inline <style> blocks → 'unsafe-inline' for
+    #     style-src. The production fix is a nonce (Django 5.0+
+    #     SECURE_CSP_NONCE_HMAC or SvelteKit's CSP plugin); the inline
+    #     gap is a known follow-up.
+    #   * Allauth Google OAuth popup → allow accounts.google.com in
+    #     frame-src and form-action.
+    #   * Person profile images load from arbitrary https: origins via
+    #     the public-media path — allow https: in img-src.
+    # Verify with: curl -sI https://cases.raisethevoices.org/ | grep -i security
+    add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' https://accounts.google.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://accounts.google.com; frame-src https://accounts.google.com; frame-ancestors 'none'; form-action 'self' https://accounts.google.com; base-uri 'self'; object-src 'none'" always;
+
     # Common reverse-proxy headers — inherited by every proxy_pass below.
     # Preserve the public hostname and scheme so Django generates correct
     # absolute URLs for OAuth redirects (Google's redirect_uri must match
@@ -138,6 +165,15 @@ server {
         access_log off;
         expires 1y;
         add_header Cache-Control "public, immutable";
+        # Repeat security headers — nginx drops parent add_header when
+        # a child block declares its own.
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header X-Frame-Options            "DENY" always;
+        add_header X-Content-Type-Options     "nosniff" always;
+        add_header X-XSS-Protection           "0" always;
+        add_header Referrer-Policy            "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy         "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy   "default-src 'self'; img-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' https://accounts.google.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://accounts.google.com; frame-src https://accounts.google.com; frame-ancestors 'none'; form-action 'self' https://accounts.google.com; base-uri 'self'; object-src 'none'" always;
         try_files $uri =404;
     }
 
