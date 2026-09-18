@@ -4,8 +4,8 @@
 	import { goto } from '$app/navigation';
 	import { fly, fade } from 'svelte/transition';
 	import { user, isVolunteer } from '$lib/session';
-	import { getPerson, createReport, getReport, updateReport, ApiError } from '$lib/api';
-	import type { Report } from '$lib/types';
+	import { getPerson, createReport, getReport, updateReport, ApiError, request } from '$lib/api';
+	import type { Media, MediaType, Report, Visibility } from '$lib/types';
 import Skeleton from '$lib/Skeleton.svelte';
 	import type { PageData } from './$types';
 
@@ -42,6 +42,75 @@ import Skeleton from '$lib/Skeleton.svelte';
 	let suspectedReason = $state('');
 	let officialReason = $state('');
 	let isPrivate = $state(false);
+
+	// --- Repeating Sources (witnesses / news / docs) -------------------
+	// Mirrors the Sources section on the /reports modal. Created via the
+	// writable nested `sources` slot on POST /reports/ — one POST carries
+	// the report + all its sources. Empty entries (no attribution, no
+	// narrative) are dropped on submit.
+	interface SourceEntry {
+		uid: number;
+		source_type: Report['source_type'];
+		source_attribution: string;
+		date_start: string;
+		narrative: string;
+		is_private: boolean;
+	}
+	let sourceEntries = $state<SourceEntry[]>([]);
+
+	// --- Repeating Media (photos / docs / videos / links) --------------
+	// ReportSerializer.media_files is read-only nested, so each media
+	// row is POSTed separately to /media/ with report=<newId> after the
+	// report creates. Multi-step on purpose (see modal for the rationale).
+	interface MediaEntry {
+		uid: number;
+		media_type: MediaType;
+		visibility: Visibility;
+		description: string;
+		url: string;
+	}
+	let mediaEntries = $state<MediaEntry[]>([]);
+
+	// Monotonic local id for keyed each. Not the backend id.
+	let nextEntryUid = 1;
+	function makeSourceEntry(): SourceEntry {
+		return {
+			uid: nextEntryUid++,
+			source_type: 'firsthand',
+			source_attribution: '',
+			date_start: '',
+			narrative: '',
+			is_private: false,
+		};
+	}
+	function makeMediaEntry(): MediaEntry {
+		return {
+			uid: nextEntryUid++,
+			media_type: 'photo',
+			visibility: 'public',
+			description: '',
+			url: '',
+		};
+	}
+	function addSource() {
+		sourceEntries = [...sourceEntries, makeSourceEntry()];
+	}
+	function removeSource(idx: number) {
+		sourceEntries = sourceEntries.filter((_, i) => i !== idx);
+	}
+	function addMedia() {
+		mediaEntries = [...mediaEntries, makeMediaEntry()];
+	}
+	function removeMedia(idx: number) {
+		mediaEntries = mediaEntries.filter((_, i) => i !== idx);
+	}
+
+	// Partial-failure tracking — the page-level banner shows after a
+	// successful Report create if any media item failed to attach.
+	let mediaFailures = $state<string[]>([]);
+	function dismissMediaFailures() {
+		mediaFailures = [];
+	}
 
 	const MAX_NARRATIVE = 5000;
 	const MAX_SHORT = 500;
@@ -102,6 +171,8 @@ import Skeleton from '$lib/Skeleton.svelte';
 				suspectedReason = '';
 				officialReason = '';
 				isPrivate = false;
+				sourceEntries = [];
+				mediaEntries = [];
 			}
 		} catch (e: unknown) {
 			if (token !== loadToken) return;
@@ -142,6 +213,20 @@ import Skeleton from '$lib/Skeleton.svelte';
 		errorMsg = '';
 		errorKind = 'generic';
 		fieldErrors = {};
+		mediaFailures = [];
+
+		// Drop empty source entries — a user who clicked "Add another"
+		// by mistake shouldn't create a blank row.
+		const sources = sourceEntries
+			.filter((s) => s.source_attribution.trim() || s.narrative.trim())
+			.map((s) => ({
+				source_type: s.source_type,
+				source_attribution: s.source_attribution,
+				date_start: s.date_start || null,
+				narrative: s.narrative,
+				is_private: s.is_private,
+			}));
+
 		const payload = {
 			person: person.id,
 			source_type: sourceType,
@@ -155,15 +240,53 @@ import Skeleton from '$lib/Skeleton.svelte';
 			suspected_reason: suspectedReason,
 			official_reason: officialReason,
 			is_private: isPrivate,
+			// Only include nested sources on CREATE — DRF's nested writable
+			// serializer REPLACES the collection on update, which would
+			// silently delete any sources the volunteer already attached.
+			// Edit-mode source management lives on /sources/ instead.
+			...(isEdit ? {} : { sources }),
 		};
 		try {
+			let createdId: number | null = null;
 			if (isEdit && reportId !== null) {
 				await updateReport(reportId, payload);
 			} else {
-				await createReport(payload);
+				const created = await createReport(payload);
+				createdId = created.id;
 			}
-			// replaceState: true so Back from the case page doesn't return
-			// to a stale form with the report we just saved.
+
+			// Attach each media item separately. ReportSerializer has
+			// media_files as read-only nested, so a second POST per item
+			// is required. Track failures but don't fail the whole flow —
+			// the report itself is saved.
+			const failures: string[] = [];
+			if (createdId !== null) {
+				for (let i = 0; i < mediaEntries.length; i++) {
+					const m = mediaEntries[i];
+					if (!m.url.trim() && !m.description.trim()) continue; // skip empty
+					try {
+						await request<Media>('/media/', {
+							method: 'POST',
+							body: JSON.stringify({
+								report: createdId,
+								media_type: m.media_type,
+								visibility: m.visibility,
+								description: m.description,
+								url: m.url,
+							}),
+						});
+					} catch (mErr: unknown) {
+						const msg = mErr instanceof Error ? mErr.message : 'unknown error';
+						failures.push(`Media #${i + 1}: ${msg}`);
+					}
+				}
+			}
+
+			// Success — replaceState so Back from the case page doesn't
+			// return to a stale form.
+			if (failures.length > 0) {
+				mediaFailures = failures;
+			}
 			await goto(`${base}/persons/${person.id}`, { replaceState: true });
 		} catch (err: unknown) {
 			// DRF returns per-field errors on 400 — surface them inline.
@@ -473,6 +596,224 @@ import Skeleton from '$lib/Skeleton.svelte';
 				</div>
 			</div>
 		</fieldset>
+
+		<!-- Sources (repeating) -->
+		{#if !isEdit}
+			<fieldset class="form-section">
+				<legend class="section-legend">
+					<span class="section-icon" aria-hidden="true">⚲</span>
+					Sources
+					<span class="legend-count">{sourceEntries.length}</span>
+				</legend>
+				<p class="section-hint">
+					Add additional sources backing this report — each witness,
+					news article, or supporting document gets its own entry
+					with its own attribution, narrative, and privacy flag.
+				</p>
+
+				{#each sourceEntries as entry, i (entry.uid)}
+					<div class="repeatable-entry" data-index={i}>
+						<div class="repeatable-entry-header">
+							<h4 class="repeatable-entry-title">Source #{i + 1}</h4>
+							<button
+								type="button"
+								class="repeatable-entry-remove"
+								aria-label="Remove source {i + 1}"
+								onclick={() => removeSource(i)}
+								disabled={saving}
+							>✕ Remove</button>
+						</div>
+
+						<div class="grid-2">
+							<div class="field">
+								<label for="src-{entry.uid}-type">Source type</label>
+								<select
+									id="src-{entry.uid}-type"
+									class="input--search"
+									bind:value={entry.source_type}
+									disabled={saving}
+								>
+									{#each Object.entries(sourceTypeLabels) as [value, label] (value)}
+										<option {value}>{label}</option>
+									{/each}
+								</select>
+								<p class="field-hint">{sourceTypeHelp[entry.source_type]}</p>
+							</div>
+
+							<div class="field">
+								<label for="src-{entry.uid}-attr">
+									Source attribution
+									<span class="badge-public" title="Shown publicly">public</span>
+								</label>
+								<input
+									id="src-{entry.uid}-attr"
+									type="text"
+									class="input--search"
+									bind:value={entry.source_attribution}
+									placeholder='e.g. "family member", "BBC article"'
+									maxlength={MAX_SHORT}
+									autocomplete="off"
+									disabled={saving}
+								/>
+							</div>
+
+							<div class="field">
+								<label for="src-{entry.uid}-date">Date start</label>
+								<input
+									id="src-{entry.uid}-date"
+									type="date"
+									class="input--search"
+									bind:value={entry.date_start}
+									disabled={saving}
+								/>
+							</div>
+
+							<div class="field">
+								<label class="field-checkbox">
+									<input
+										type="checkbox"
+										bind:checked={entry.is_private}
+										disabled={saving}
+									/>
+									<span>Mark this source as private</span>
+								</label>
+								<p class="field-hint">
+									Private sources are hidden from public reads,
+									even on a public report.
+								</p>
+							</div>
+						</div>
+
+						<div class="field field-full">
+							<label for="src-{entry.uid}-narrative">Narrative</label>
+							<textarea
+								id="src-{entry.uid}-narrative"
+								class="input--search"
+								bind:value={entry.narrative}
+								maxlength={MAX_NARRATIVE}
+								placeholder="What does this source say happened? Dates, places, context."
+								disabled={saving}
+							></textarea>
+							<div class="field-counter" aria-live="polite">
+								{entry.narrative.length} / {MAX_NARRATIVE}
+							</div>
+						</div>
+					</div>
+				{/each}
+
+				<button
+					type="button"
+					class="repeatable-add"
+					onclick={addSource}
+					disabled={saving}
+				>+ Add another</button>
+			</fieldset>
+		{/if}
+
+		<!-- Media (repeating) -->
+		{#if !isEdit}
+			<fieldset class="form-section">
+				<legend class="section-legend">
+					<span class="section-icon" aria-hidden="true">▣</span>
+					Media
+					<span class="legend-count">{mediaEntries.length}</span>
+				</legend>
+				<p class="section-hint">
+					Attach supporting evidence — photos, documents, videos,
+					or external links. Each item gets its own visibility
+					tier; "Sensitive" requires Advocate/Admin role.
+				</p>
+
+				{#each mediaEntries as entry, i (entry.uid)}
+					<div class="repeatable-entry" data-index={i}>
+						<div class="repeatable-entry-header">
+							<h4 class="repeatable-entry-title">Media #{i + 1}</h4>
+							<button
+								type="button"
+								class="repeatable-entry-remove"
+								aria-label="Remove media {i + 1}"
+								onclick={() => removeMedia(i)}
+								disabled={saving}
+							>✕ Remove</button>
+						</div>
+
+						<div class="grid-2">
+							<div class="field">
+								<label for="med-{entry.uid}-type">Media type</label>
+								<select
+									id="med-{entry.uid}-type"
+									class="input--search"
+									bind:value={entry.media_type}
+									disabled={saving}
+								>
+									<option value="photo">Photo</option>
+									<option value="document">Document</option>
+									<option value="video">Video</option>
+									<option value="link">External link</option>
+								</select>
+							</div>
+
+							<div class="field">
+								<label for="med-{entry.uid}-vis">Visibility</label>
+								<select
+									id="med-{entry.uid}-vis"
+									class="input--search"
+									bind:value={entry.visibility}
+									disabled={saving}
+								>
+									<option value="public">Public — anyone can view</option>
+									<option value="restricted">Restricted — authenticated users only</option>
+									<option value="sensitive">Sensitive — advocates/admin only</option>
+								</select>
+							</div>
+
+							<div class="field field-full">
+								<label for="med-{entry.uid}-desc">
+									Description <span class="optional-mark">(optional)</span>
+								</label>
+								<input
+									id="med-{entry.uid}-desc"
+									type="text"
+									class="input--search"
+									bind:value={entry.description}
+									placeholder="What's in this media? Alt text for images."
+									maxlength={500}
+									autocomplete="off"
+									disabled={saving}
+								/>
+							</div>
+
+							<div class="field field-full">
+								<label for="med-{entry.uid}-url">
+									File URL <span class="optional-mark">(URL or upload via Media gallery)</span>
+								</label>
+								<input
+									id="med-{entry.uid}-url"
+									type="url"
+									class="input--search"
+									bind:value={entry.url}
+									placeholder="https://… (paste a link, or upload via the case page)"
+									maxlength={1000}
+									autocomplete="off"
+									disabled={saving}
+								/>
+								<p class="field-hint">
+									File uploads (multipart) happen on the case page
+									media gallery — this form accepts external links.
+								</p>
+							</div>
+						</div>
+					</div>
+				{/each}
+
+				<button
+					type="button"
+					class="repeatable-add"
+					onclick={addMedia}
+					disabled={saving}
+				>+ Add another Media</button>
+			</fieldset>
+		{/if}
 
 		<!-- ============================================================
 		     Privacy — controls whether the report is publicly visible
@@ -901,5 +1242,90 @@ import Skeleton from '$lib/Skeleton.svelte';
 		gap: 0.8rem;
 		max-width: 640px;
 		margin: 2rem auto;
+	}
+
+	/* === Repeating Sources / Media entries ============================
+	   Mirrors the .report-form--modal .repeatable-* styles for visual
+	   parity between the per-case form and the /reports modal. */
+	.repeatable-entry {
+		display: flex;
+		flex-direction: column;
+		gap: 0.85rem;
+		padding: 1rem 1.1rem;
+		border: 1px solid var(--color-border-light);
+		border-left: 3px solid var(--color-primary-light, #aac0ff);
+		border-radius: var(--radius-card);
+		background: var(--color-surface, #f7f7f9);
+	}
+	.repeatable-entry + .repeatable-entry {
+		margin-top: 0.75rem;
+	}
+	.repeatable-entry-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin-bottom: 0.1rem;
+	}
+	.repeatable-entry-title {
+		margin: 0;
+		font-size: 0.92rem;
+		font-weight: 700;
+		color: var(--color-text);
+	}
+	.repeatable-entry-remove {
+		background: transparent;
+		border: 1px solid var(--color-border-light);
+		color: var(--color-danger, #c53030);
+		font-size: 0.78rem;
+		padding: 0.25rem 0.65rem;
+		border-radius: var(--radius-card);
+		cursor: pointer;
+		font-weight: 600;
+		min-height: 0;
+	}
+	.repeatable-entry-remove:hover:not(:disabled) {
+		background: #fed7d7;
+		border-color: #feb2b2;
+	}
+	.repeatable-entry-remove:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+	}
+	.repeatable-add {
+		width: 100%;
+		margin-top: 0.85rem;
+		padding: 0.6rem 0.85rem;
+		background: var(--color-bg-white);
+		border: 1px dashed var(--color-border-light);
+		color: var(--color-primary);
+		font-size: 0.9rem;
+		font-weight: 600;
+		border-radius: var(--radius-card);
+		cursor: pointer;
+		min-height: 0;
+	}
+	.repeatable-add:hover:not(:disabled) {
+		background: var(--color-surface, #f7f7f9);
+		border-style: solid;
+		border-color: var(--color-primary-light);
+	}
+	.repeatable-add:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+	}
+	.legend-count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 24px;
+		padding: 0.05rem 0.55rem;
+		margin-left: 0.5rem;
+		background: var(--color-primary-tint, #e6efff);
+		color: var(--color-primary);
+		font-size: 0.75rem;
+		font-weight: 700;
+		border-radius: 999px;
+		vertical-align: middle;
 	}
 </style>
