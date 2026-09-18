@@ -125,7 +125,7 @@ function getCsrfToken(): string {
 	return match ? decodeURIComponent(match[1]) : '';
 }
 
-async function request<T>(
+export async function request<T>(
 	path: string,
 	options: RequestInit & { fetch?: typeof globalThis.fetch } = {},
 ): Promise<T> {

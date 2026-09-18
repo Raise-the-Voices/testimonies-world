@@ -21,6 +21,7 @@ from cases.views import (
     MediaViewSet,
     PersonViewSet,
     ReportViewSet,
+    SourceViewSet,
     serve_protected_media,
 )
 from cases.dashboard import DashboardViewSet
@@ -36,6 +37,10 @@ router = DefaultRouter()
 router.register(r'persons', PersonViewSet, basename='person')
 router.register(r'reports', ReportViewSet, basename='report')
 router.register(r'media', MediaViewSet, basename='media')
+# /api/sources/ — sources attached to a Report. Most are created via
+# the nested ReportSerializer.sources slot, but this endpoint supports
+# standalone CRUD for editing/listing.
+router.register(r'sources', SourceViewSet, basename='source')
 router.register(r'categories', CaseCategoryViewSet, basename='category')
 router.register(r'relationships', FamilyRelationshipViewSet, basename='relationship')
 router.register(r'casework', CaseworkRecordViewSet, basename='casework')

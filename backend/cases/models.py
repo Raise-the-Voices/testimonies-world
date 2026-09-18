@@ -809,6 +809,51 @@ class Report(models.Model):
         return f'Report on {self.person.name} ({self.get_source_type_display()})'
 
 
+class Source(models.Model):
+    """A single source backing a Report.
+
+    Reports are the canonical narrative; a Report can have multiple
+    Sources attached (one per witness / news article / document). Each
+    Source carries its own attribution, narrative, and privacy flag,
+    so a public Report can still cite private sources without exposing
+    them in the public read.
+
+    Field shape mirrors Report.source_* intentionally — that lets a
+    volunteer copy/paste between the primary-report fields and an
+    additional-source entry without re-learning the form.
+    """
+
+    class SourceType(models.TextChoices):
+        FIRSTHAND = 'firsthand', 'Firsthand'
+        SECONDHAND = 'secondhand', 'Secondhand'
+        NEWS = 'news', 'News report'
+        DOCUMENT = 'document', 'Document'
+
+    report = models.ForeignKey(
+        Report, on_delete=models.CASCADE, related_name='sources',
+    )
+    source_type = models.CharField(
+        max_length=20, choices=SourceType.choices, default=SourceType.FIRSTHAND,
+    )
+    source_attribution = models.CharField(
+        max_length=500, blank=True, default='',
+        help_text='Public attribution — e.g. "family member", "BBC report"',
+    )
+    date_start = models.DateField(null=True, blank=True)
+    narrative = models.TextField(blank=True, default='')
+    is_private = models.BooleanField(
+        default=False,
+        help_text='Hide this source from public reads.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f'Source for report {self.report_id} ({self.get_source_type_display()})'
+
+
 class Media(models.Model):
     class MediaType(models.TextChoices):
         PHOTO = 'photo', 'Photo'
