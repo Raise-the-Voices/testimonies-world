@@ -1204,8 +1204,12 @@ class ProtectedMediaViewTests(BaseTestCase):
             media_type=Media.MediaType.PHOTO,
             visibility=Media.Visibility.PUBLIC,
         )
+        # After the visibility-routed storage rollout, public files
+        # live under PUBLIC_MEDIA_ROOT and are served at /public-media/
+        # (no auth, no gate). The basename-only lookup in the legacy
+        # /media/uploads/<basename> path no longer finds them.
         self.client.force_login(self.volunteer)
-        res = self.client.get(f'/media/uploads/{media.file.name.split("/")[-1]}')
+        res = self.client.get(media.file.url)
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res['Content-Type'], 'image/jpeg')
 
@@ -1217,22 +1221,25 @@ class ProtectedMediaViewTests(BaseTestCase):
             media_type=Media.MediaType.PHOTO,
             visibility=Media.Visibility.SENSITIVE,
         )
+        # Sensitive files now land under sensitive/<filename> per the
+        # routing storage, so the URL is /media/sensitive/<basename>.
         filename = sensitive.file.name.split('/')[-1]
+        sensitive_url = f'/media/sensitive/{filename}'
 
         # Outsider: 403.
         self.client.force_login(self.outsider)
         self.assertEqual(
-            self.client.get(f'/media/uploads/{filename}').status_code, 403,
+            self.client.get(sensitive_url).status_code, 403,
         )
         # Volunteer (no Advocate group): 403.
         self.client.force_login(self.volunteer)
         self.assertEqual(
-            self.client.get(f'/media/uploads/{filename}').status_code, 403,
+            self.client.get(sensitive_url).status_code, 403,
         )
         # Advocate: 200 + audit row.
         self.client.force_login(self.advocate)
         self.assertEqual(
-            self.client.get(f'/media/uploads/{filename}').status_code, 200,
+            self.client.get(sensitive_url).status_code, 200,
         )
         rows = AuditLog.objects.filter(
             target_type='media', target_id=sensitive.pk,
@@ -1250,6 +1257,7 @@ class ProtectedMediaViewTests(BaseTestCase):
             media_type=Media.MediaType.PHOTO,
             visibility=Media.Visibility.RESTRICTED,
         )
+        # Restricted files stay under uploads/<filename>.
         filename = restricted.file.name.split('/')[-1]
         self.client.force_login(self.volunteer)
         res = self.client.get(f'/media/uploads/{filename}')

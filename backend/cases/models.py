@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.validators import FileExtensionValidator
 from django.db import models
 
-from cases.storage import public_media_storage
+from cases.storage import media_storage_router, public_media_storage
 
 
 # Centralized allow-list for uploaded evidence files. Photos, PDFs, and
@@ -51,6 +51,35 @@ def _upload_size_validator(file_obj):
             f'(max {MAX_UPLOAD_BYTES} = {MAX_UPLOAD_BYTES // 1024 // 1024} MB).',
             code='file_too_large',
         )
+
+
+def _media_upload_path(instance, filename):
+    """Compute the relative upload path for a ``Media.file`` upload.
+
+    Prefixes the filename with the instance's visibility so the
+    routing storage (``cases.storage.media_storage_router``) can
+    dispatch the write to the correct on-disk tree:
+
+        sensitive/<filename>  → SENSITIVE_MEDIA_ROOT/
+        public/<filename>     → PUBLIC_MEDIA_ROOT/
+        uploads/<filename>    → MEDIA_ROOT/   (default / restricted)
+
+    New uploads land in the right tree on first save. Visibility
+    CHANGES after upload are handled separately by the ``pre_save``
+    signal in ``cases.signals`` — that one moves the existing file
+    between buckets and rewrites ``instance.file.name`` to the new
+    prefix. This callable is only invoked on first upload (or when
+    the field's file is replaced entirely).
+    """
+    # `instance.visibility` defaults to PUBLIC on the model; fall back
+    # defensively in case the field is being populated before the
+    # visibility has been set (e.g. some test fixtures).
+    vis = getattr(instance, "visibility", None) or Media.Visibility.RESTRICTED
+    if vis == Media.Visibility.SENSITIVE:
+        return f"sensitive/{filename}"
+    if vis == Media.Visibility.PUBLIC:
+        return f"public/{filename}"
+    return f"uploads/{filename}"
 
 
 # --------------------------------------------------------------------------
@@ -875,7 +904,8 @@ class Media(models.Model):
         null=True, blank=True, related_name='media_files'
     )
     file = models.FileField(
-        upload_to='uploads/',
+        upload_to=_media_upload_path,
+        storage=media_storage_router,
         null=True, blank=True,
         validators=[upload_extension_validator, _upload_size_validator],
     )
