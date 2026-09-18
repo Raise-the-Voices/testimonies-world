@@ -190,6 +190,31 @@
 		return iso;
 	}
 
+	// Narrative snippet: first ~200 chars of the narrative, collapsed
+	// on whitespace so we don't cut mid-word. Returns a structured
+	// { snippet, hasMore } so the template can render a "Show more"
+	// affordance when the full text would overflow.
+	const SNIPPET_MAX = 200;
+	function narrativeSnippet(r: Report): { text: string; hasMore: boolean } {
+		const full = (r.narrative ?? '').trim().replace(/\s+/g, ' ');
+		if (full.length <= SNIPPET_MAX) return { text: full, hasMore: false };
+		// Find a word boundary at or before SNIPPET_MAX.
+		const cut = full.lastIndexOf(' ', SNIPPET_MAX);
+		const idx = cut > 80 ? cut : SNIPPET_MAX;
+		return { text: full.slice(0, idx) + '…', hasMore: true };
+	}
+
+	// Media count: media_files is included on the list response via
+	// ReportSerializer.media_files (prefetched on the queryset).
+	function mediaCount(r: Report): number {
+		return r.media_files?.length ?? 0;
+	}
+	// Source count: sources is included on the list response via
+	// ReportSerializer.sources (prefetched on the queryset).
+	function sourceCount(r: Report): number {
+		return r.sources?.length ?? 0;
+	}
+
 	onMount(() => {
 		// The SSR load has already populated `reports` / `totalCount`
 		// (or set `error`). Only retry if the SSR fetch failed —
@@ -347,70 +372,97 @@
 					</p>
 				</div>
 			{:else}
-				<div class="reports-table-wrap">
-					<table class="reports-table">
-						<thead>
-							<tr>
-								<th scope="col">Date</th>
-								<th scope="col">Case</th>
-								<th scope="col">Source</th>
-								<th scope="col">Title</th>
-								<th scope="col" class="th-status">Status</th>
-								<th scope="col" class="th-private">Visibility</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each reports as r (r.id)}
-								{@const title = titleFor(r)}
-								<tr>
-									<td data-label="Date" class="cell-date">
+				<ul class="reports-list" aria-label="Reports">
+					{#each reports as r (r.id)}
+						{@const title = titleFor(r)}
+						{@const snippet = narrativeSnippet(r)}
+						{@const mc = mediaCount(r)}
+						{@const sc = sourceCount(r)}
+						<li class="report-card" class:report-card--private={r.is_private}>
+							<a
+								class="report-card-link"
+								href="{base}/persons/{r.person}"
+								aria-label="Open case {r.person} — {title}"
+							>
+								<header class="report-card-header">
+									<div class="report-card-date">
 										{#if r.date_start}
-											{formatDate(r.date_start)}
+											<time datetime={r.date_start}>{formatDate(r.date_start)}</time>
 											{#if r.date_end && r.date_end !== r.date_start}
-												<span class="muted">— {formatDate(r.date_end)}</span>
+												<span class="report-card-date-sep" aria-hidden="true">→</span>
+												<time datetime={r.date_end}>{formatDate(r.date_end)}</time>
 											{/if}
 										{:else}
-											<span class="muted small">{new Date(r.created_at).toLocaleDateString()}</span>
+											<time datetime={r.created_at} class="muted">
+												{new Date(r.created_at).toLocaleDateString()}
+											</time>
 										{/if}
-									</td>
-									<td data-label="Case" class="cell-case">
-										<a href="{base}/persons/{r.person}" class="case-link">
-											{r.person}
-										</a>
-									</td>
-									<td data-label="Source">
-										<span class="source-pill source-pill-{r.source_type}">
+									</div>
+									<div class="report-card-badges">
+										<span class="source-pill source-pill-{r.source_type}" title="Source type">
 											{sourceTypeLabels[r.source_type] ?? r.source_type}
 										</span>
-									</td>
-									<td data-label="Title" class="cell-title">
-										<a href="{base}/persons/{r.person}" class="title-link" title={title}>
-											{title}
-										</a>
-									</td>
-									<td data-label="Status">
-										{#if r.person}
-											<!-- Person current_status isn't included in the
-											     reports serializer — keep the status cell muted
-											     for now; could be added by extending the
-											     serializer to nest a Person field. -->
-											<span class="muted small">—</span>
-										{/if}
-									</td>
-									<td data-label="Visibility" class="cell-private">
 										{#if r.is_private}
 											<span class="visibility-pill visibility-private" title="Private — only volunteers+">
 												🔒 Private
 											</span>
 										{:else}
-											<span class="visibility-pill visibility-public">Public</span>
+											<span class="visibility-pill visibility-public" title="Public">
+												Public
+											</span>
 										{/if}
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
+									</div>
+								</header>
+
+								<h3 class="report-card-title" title={title}>
+									{title}
+								</h3>
+
+								{#if snippet.text}
+									<p class="report-card-snippet">
+										{snippet.text}
+									</p>
+								{/if}
+
+								<footer class="report-card-meta">
+									<div class="report-card-meta-stats">
+										{#if mc > 0}
+											<span class="meta-stat" title="{mc} media item{mc === 1 ? '' : 's'} attached">
+												<span class="meta-stat-icon" aria-hidden="true">📎</span>
+												<span class="meta-stat-value">{mc}</span>
+												<span class="meta-stat-label">media</span>
+											</span>
+										{:else}
+											<span class="meta-stat meta-stat--empty" title="No media attached">
+												<span class="meta-stat-icon" aria-hidden="true">📎</span>
+												<span class="meta-stat-label">none</span>
+											</span>
+										{/if}
+										{#if sc > 0}
+											<span class="meta-stat" title="{sc} additional source{sc === 1 ? '' : 's'}">
+												<span class="meta-stat-icon" aria-hidden="true">⚲</span>
+												<span class="meta-stat-value">{sc}</span>
+												<span class="meta-stat-label">source{sc === 1 ? '' : 's'}</span>
+											</span>
+										{:else}
+											<span class="meta-stat meta-stat--empty" title="No additional sources">
+												<span class="meta-stat-icon" aria-hidden="true">⚲</span>
+												<span class="meta-stat-label">none</span>
+											</span>
+										{/if}
+										{#if r.rough_location}
+											<span class="meta-stat" title="Location: {r.rough_location}">
+												<span class="meta-stat-icon" aria-hidden="true">📍</span>
+												<span class="meta-stat-value meta-stat-value--text">{r.rough_location}</span>
+											</span>
+										{/if}
+									</div>
+									<span class="report-card-arrow" aria-hidden="true">→</span>
+								</footer>
+							</a>
+						</li>
+					{/each}
+				</ul>
 
 				{#if totalPages > 1}
 					<nav class="reports-pagination" aria-label="Pagination">
@@ -619,77 +671,174 @@
 		line-height: 1.6;
 	}
 
-	/* Table */
-	.reports-table-wrap {
-		overflow-x: auto;
-		-webkit-overflow-scrolling: touch;
+	/* === Report cards ===
+	   Card-based list. Each card links to the case page; the entire
+	   card surface is clickable (the <a> wraps all content). */
+	.reports-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.85rem;
 	}
-	.reports-table {
-		width: 100%;
-		min-width: 760px;
-		border-collapse: collapse;
+	.report-card {
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-subtle);
+		border-left: 3px solid var(--color-primary);
+		border-radius: var(--radius-card-lg);
+		box-shadow: var(--shadow-card);
+		transition:
+			transform 0.15s ease,
+			box-shadow 0.15s ease,
+			border-color 0.15s ease;
+		overflow: hidden;
 	}
-	.reports-table th,
-	.reports-table td {
-		padding: 0.75rem 0.85rem;
-		text-align: left;
-		border-bottom: 1px solid var(--color-border-subtle);
-		vertical-align: middle;
+	.report-card:hover {
+		transform: translateY(-1px);
+		box-shadow: var(--shadow-card-lg);
+		border-left-color: var(--color-primary-light);
 	}
-	.reports-table th {
-		font-size: 0.72rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.06rem;
-		color: var(--color-text-muted);
-		background: transparent;
-		border-bottom: 1px solid var(--color-border-light);
-		white-space: nowrap;
+	.report-card:focus-within {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
 	}
-	.th-status { width: 1%; }
-	.th-private { width: 1%; }
+	.report-card--private {
+		border-left-color: var(--color-danger, #c53030);
+	}
+	.report-card-link {
+		display: block;
+		padding: 1rem 1.25rem 1.1rem 1.25rem;
+		color: inherit;
+		text-decoration: none;
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+	}
 
-	.reports-table tbody tr {
-		transition: background 0.15s ease;
+	/* Card header: date range + badges */
+	.report-card-header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 0.75rem;
+		flex-wrap: wrap;
 	}
-	.reports-table tbody tr:hover {
-		background: var(--color-surface);
-	}
-	.reports-table tbody tr:last-child td {
-		border-bottom: none;
-	}
-
-	.cell-date {
+	.report-card-date {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 0.85rem;
 		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
-		color: var(--color-text);
-		font-size: 0.92rem;
-	}
-	.cell-case {
+		color: var(--color-text-muted);
 		font-weight: 600;
 	}
-	.case-link,
-	.title-link {
+	.report-card-date time {
+		color: var(--color-text);
+	}
+	.report-card-date-sep {
+		color: var(--color-text-muted);
+		font-weight: 400;
+	}
+	.report-card-badges {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+	}
+
+	/* Card title — bigger, bold, ellipsized */
+	.report-card-title {
+		margin: 0;
+		font-size: 1.05rem;
+		font-weight: 700;
+		color: var(--color-text);
+		line-height: 1.35;
+		letter-spacing: -0.005em;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	/* Narrative snippet — 3 lines max, soft muted color */
+	.report-card-snippet {
+		margin: 0;
+		font-size: 0.92rem;
+		color: var(--color-text);
+		line-height: 1.5;
+		display: -webkit-box;
+		-webkit-line-clamp: 3;
+		line-clamp: 3;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	/* Card footer: stats + arrow */
+	.report-card-meta {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.85rem;
+		padding-top: 0.4rem;
+		border-top: 1px solid var(--color-border-subtle);
+	}
+	.report-card-meta-stats {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.85rem;
+		flex-wrap: wrap;
+	}
+	.meta-stat {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		font-size: 0.82rem;
+		color: var(--color-text);
+		font-weight: 600;
+	}
+	.meta-stat-icon {
+		font-size: 0.92rem;
+	}
+	.meta-stat-value {
+		font-variant-numeric: tabular-nums;
 		color: var(--color-primary);
-		text-decoration: none;
 	}
-	.case-link:hover,
-	.title-link:hover {
-		text-decoration: underline;
-	}
-	.cell-title {
-		max-width: 28rem;
-	}
-	.title-link {
-		display: inline-block;
-		max-width: 100%;
+	.meta-stat-value--text {
+		color: var(--color-text);
+		font-weight: 500;
+		max-width: 18rem;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		vertical-align: bottom;
 	}
-	.cell-private {
-		white-space: nowrap;
+	.meta-stat-label {
+		color: var(--color-text-muted);
+		font-weight: 500;
+		font-size: 0.78rem;
+	}
+	.meta-stat--empty {
+		opacity: 0.5;
+	}
+	.meta-stat--empty .meta-stat-label {
+		text-transform: uppercase;
+		letter-spacing: 0.05rem;
+		font-size: 0.68rem;
+	}
+	.report-card-arrow {
+		flex: 0 0 auto;
+		color: var(--color-text-muted);
+		font-size: 1.2rem;
+		line-height: 1;
+		transition: transform 0.15s ease, color 0.15s ease;
+	}
+	.report-card:hover .report-card-arrow {
+		color: var(--color-primary);
+		transform: translateX(3px);
 	}
 
 	/* Source pill — colored by source type for the "🟢/🟡" feel.
@@ -879,61 +1028,22 @@
 		}
 	}
 
-	/* Mobile card reflow — same pattern as /watchdog + /contacts.
-	   At <768px the table re-flows into stacked cards using
-	   data-label pseudo-elements; horizontal scroll remains the
-	   fallback at very narrow widths. */
-	@media (max-width: 768px) {
-		.reports-table,
-		.reports-table thead,
-		.reports-table tbody,
-		.reports-table tr,
-		.reports-table td {
-			display: block;
-			width: 100%;
+	/* Mobile — cards stack stats vertically below ~640px so the row
+	   doesn't crowd the date / arrow. */
+	@media (max-width: 640px) {
+		.report-card-meta {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 0.5rem;
 		}
-		.reports-table thead {
+		.report-card-arrow {
 			display: none;
 		}
-		.reports-table tbody tr {
-			background: var(--color-bg-white);
-			border: 1px solid var(--color-border-light);
-			border-left: 3px solid var(--color-primary-light);
-			border-radius: var(--radius-card);
-			margin-bottom: 0.75rem;
-			padding: 0.65rem 0.85rem;
+		.report-card-meta-stats {
+			justify-content: flex-start;
 		}
-		.reports-table td {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			gap: 0.75rem;
-			padding: 0.4rem 0;
-			border-bottom: 1px solid var(--color-border-subtle);
-		}
-		.reports-table td:last-child {
-			border-bottom: none;
-		}
-		.reports-table td::before {
-			content: attr(data-label);
-			flex: 0 0 auto;
-			font-size: 0.72rem;
-			text-transform: uppercase;
-			letter-spacing: 0.06rem;
-			color: var(--color-text-muted);
-			font-weight: 700;
-		}
-		/* Title is the card "headline" — full width, larger, no label. */
-		.reports-table td.cell-title {
-			flex-direction: column;
-			align-items: flex-start;
-			gap: 0.15rem;
-			padding-bottom: 0.55rem;
-			margin-bottom: 0.25rem;
-			border-bottom: 1px solid var(--color-border-light);
-		}
-		.reports-table td.cell-title::before {
-			content: none;
+		.meta-stat-value--text {
+			max-width: 12rem;
 		}
 	}
 </style>

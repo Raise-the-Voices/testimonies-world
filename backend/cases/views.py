@@ -668,13 +668,18 @@ class ReportViewSet(viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
-        # media_files reverse-FK is iterated by ReportSerializer.media_files
-        # (nested serializer) — without prefetch_related this is N+1 over
-        # every report in the list. select_related('person') covers the FK
-        # lookup in ReportSerializer's Person field; `created_by` is
-        # rendered by the same serializer (read-only but still in the
-        # response) so we add it to the same JOIN.
-        qs = Report.objects.select_related('person', 'created_by').prefetch_related('media_files')
+        # media_files + sources reverse-FKs are iterated by their
+        # nested serializers (ReportSerializer.media_files / .sources)
+        # — without prefetch_related this is N+1 over every report in
+        # the list. select_related('person') covers the FK lookup in
+        # ReportSerializer's Person field; `created_by` is rendered by
+        # the same serializer (read-only but still in the response) so
+        # we add it to the same JOIN.
+        qs = (
+            Report.objects
+            .select_related('person', 'created_by')
+            .prefetch_related('media_files', 'sources')
+        )
         if not self.request.user.is_authenticated:
             qs = qs.filter(is_private=False, person__is_published=True)
         return qs
