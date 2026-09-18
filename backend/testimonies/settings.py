@@ -107,18 +107,27 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 _IS_TEST_RUNNER = 'test' in sys.argv
 _PROD_HARDEN = not DEBUG and not _IS_TEST_RUNNER
 
-SESSION_COOKIE_SECURE = _PROD_HARDEN
-CSRF_COOKIE_SECURE = _PROD_HARDEN
+# M3 (2026-09-18): pinned SESSION_COOKIE_SECURE / CSRF_COOKIE_SECURE
+# to True unconditionally. Was previously gated by _PROD_HARDEN;
+# the literal makes the security posture greppable and survives a
+# future refactor of _PROD_HARDEN. The test-runner override further
+# down disables Secure on the plain-HTTP test client — that path
+# is the only exception to the unconditional True.
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True  # not a default in older Django versions
 CSRF_COOKIE_HTTPONLY = False     # JS needs to read the CSRF cookie
-SESSION_COOKIE_SAMESITE = 'None' if _PROD_HARDEN else 'Lax'
-# SameSite=None in prod lets cross-origin subresource requests
-# (mobile/demo → prod media path) carry the sessionid, so
-# serve_protected_media() doesn't 401 the browser. Browsers require
-# HTTPS for None-cookies; dev keeps Lax on HTTP via _PROD_HARDEN.
+# M3 (2026-09-18): tightened SameSite from 'None' to 'Lax'. The 'None'
+# was previously load-bearing for cross-origin downloads through
+# serve_protected_media(); those clients must now switch to a
+# signed-URL flow (see cases/views.py serve_protected_media) or the
+# request will 401. Dev keeps 'Lax' unconditionally — browsers
+# require HTTPS for SameSite=None anyway.
 # CSRF protection unaffected — CsrfViewMiddleware still validates
 # Origin/Referer on state-changing requests.
-CSRF_COOKIE_SAMESITE = 'None' if _PROD_HARDEN else 'Lax'
+# Reference: https://owasp.org/www-community/SameSite
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
 
 # HSTS — once a browser has seen the header, all subsequent
 # requests to the domain must be HTTPS for the configured lifetime.
@@ -430,6 +439,14 @@ REST_FRAMEWORK = {
 # real rates via the non-test branch below.
 if _IS_TEST_RUNNER:
     REST_FRAMEWORK['DEFAULT_THROTTLE_CLASSES'] = []
+    # The plain-HTTP test client can't `Set-Cookie: Secure` and can't
+    # follow SECURE_SSL_REDIRECT. M3 (2026-09-18) pinned the prod
+    # defaults to True unconditionally; this block is the documented
+    # exception. SameSite stays at 'Lax' (already the unconditional
+    # default above) — no override needed here.
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SECURE_SSL_REDIRECT = False
 
 # --- OpenAPI schema (drf-spectacular) -----------------------------------
 # The frontend's `gen:api` script (see frontend/package.json) calls
