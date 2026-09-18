@@ -1090,6 +1090,8 @@ class FamilyRelationshipViewSet(viewsets.ModelViewSet):
 import os
 import posixpath
 
+from django.views import View
+
 
 def _can_view_media(user, media: Media) -> bool:
     """Mirror MediaViewSet.get_queryset: anonymous sees only public;
@@ -1107,15 +1109,25 @@ def _can_view_media(user, media: Media) -> bool:
     return user.is_staff or user.groups.filter(name='Advocate').exists()
 
 
-def serve_protected_media(request, path):
-    """Serve a file from `MEDIA_ROOT` after an auth + visibility check.
+class MediaDownloadView(View):
+    """Authenticated media download gate at ``/media/<path>``.
+
+    Replaces the previous function-based ``serve_protected_media`` so
+    the security-critical "download a file off disk" path is a named
+    class with explicit methods (``get`` only — POST/PUT/DELETE are
+    405 by ``View``'s default dispatch). The previous implementation
+    was a function that accepted ``(request, path)``; the URL config
+    in ``testimonies/urls.py`` still passes the captured path as the
+    second kwarg, which ``View.get(request, *args, **kwargs)``
+    receives unchanged.
 
     Three buckets:
-      1. `/media/uploads/<file>` — backed by a Media row. Visibility
-         tier must permit the requester, per _can_view_media.
-      2. `/media/profiles/<file>` — legacy. Profile images now live
+
+      1. ``/media/uploads/<file>`` — backed by a Media row. Visibility
+         tier must permit the requester, per ``_can_view_media``.
+      2. ``/media/profiles/<file>`` — legacy. Profile images now live
          under PUBLIC_MEDIA_ROOT and are served by nginx at
-         `/public-media/profiles/<file>` with no auth gate, so this
+         ``/public-media/profiles/<file>`` with no auth gate, so this
          branch only redirects old links (indexed pages, bookmarks,
          copied image URLs) to their new home. The redirect is issued
          before the auth check below, because the target is public.
@@ -1126,59 +1138,82 @@ def serve_protected_media(request, path):
     All branches audit-log sensitive downloads (matching the VIEWED
     rule for MediaViewSet / PersonViewSet).
     """
-    safe_path = posixpath.normpath(path).lstrip('/')
-    if safe_path.startswith('..') or safe_path.startswith('/'):
-        return HttpResponseNotFound()
-    basename = os.path.basename(safe_path)
 
-    # Legacy profile-image URLs. These moved to the public tree, which
-    # has no auth gate, so redirect before the login check — otherwise
-    # an anonymous visitor following an old link gets a 401 for a file
-    # that is deliberately public. 301 so caches and crawlers update.
-    if safe_path.startswith('profiles/'):
-        return HttpResponsePermanentRedirect(
-            f'{settings.PUBLIC_MEDIA_URL}{safe_path}'
-        )
+    http_method_names = ["get", "head", "options"]
 
-    if not request.user.is_authenticated:
-        # Login required for everything still served from MEDIA_ROOT —
-        # evidence files, case documents, and anything an admin dropped
-        # in by hand. Even a `public` Media row goes through the audit
-        # log so we know who looked; this also blocks URL enumeration.
-        return HttpResponse('Authentication required.', status=401)
+    def get(self, request, *args, **kwargs):
+        # The URL pattern is ``re_path(r'^media/(?P<path>.*)$', ...)``
+        # so the captured path lands in kwargs. Fall back to positional
+        # args for callers that pass ``path`` positionally.
+        path = kwargs.get("path") or (args[0] if args else "")
 
-    # ---- Media row (uploads/) -------------------------------------------
-    if safe_path.startswith('uploads/'):
-        try:
-            media = Media.objects.get(file__iendswith=basename)
-        except Media.DoesNotExist:
-            return HttpResponseNotFound('Not found.')
+        safe_path = posixpath.normpath(path).lstrip("/")
+        if safe_path.startswith("..") or safe_path.startswith("/"):
+            return HttpResponseNotFound()
+        basename = os.path.basename(safe_path)
 
-        if not _can_view_media(request.user, media):
-            return HttpResponseForbidden(
-                'You do not have permission to view this media.',
+        # Legacy profile-image URLs. These moved to the public tree,
+        # which has no auth gate, so redirect before the login check —
+        # otherwise an anonymous visitor following an old link gets a
+        # 401 for a file that is deliberately public. 301 so caches
+        # and crawlers update.
+        if safe_path.startswith("profiles/"):
+            return HttpResponsePermanentRedirect(
+                f"{settings.PUBLIC_MEDIA_URL}{safe_path}"
             )
 
-        if media.visibility == Media.Visibility.SENSITIVE:
-            AuditLog.objects.create(
-                user=request.user,
-                action=AuditLog.Action.VIEWED,
-                target_type='media',
-                target_id=media.pk,
-                details='sensitive file download',
-                ip_address=(
-                    request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
-                    or request.META.get('REMOTE_ADDR')
-                ),
-            )
+        # Anything served from /media/ requires login. The auth gate
+        # is the default — public files are served by nginx directly
+        # at /public-media/ and never touch this view.
+        if not request.user.is_authenticated:
+            return HttpResponse("Authentication required.", status=401)
 
-        try:
-            return FileResponse(media.file.open('rb'), filename=basename)
-        except FileNotFoundError:
-            return HttpResponseNotFound('File missing on disk.')
+        # ---- Protected tiers: uploads/ (restricted) + sensitive/ ----
+        # Public files live under PUBLIC_MEDIA_ROOT and are reached via
+        # /public-media/ — see nginx config. They deliberately do NOT
+        # pass through this gate, so an attacker with a guessed URL for
+        # /media/public/<file> still gets a 404 (file not present at
+        # that path) rather than an unauthenticated read.
+        if safe_path.startswith("uploads/") or safe_path.startswith(
+            "sensitive/"
+        ):
+            try:
+                media = Media.objects.get(file__iendswith=basename)
+            except Media.DoesNotExist:
+                return HttpResponseNotFound("Not found.")
 
-    # ---- Anything else: default-deny -----------------------------------
-    return HttpResponseNotFound('Not found.')
+            if not _can_view_media(request.user, media):
+                return HttpResponseForbidden(
+                    "You do not have permission to view this media.",
+                )
+
+            if media.visibility == Media.Visibility.SENSITIVE:
+                AuditLog.objects.create(
+                    user=request.user,
+                    action=AuditLog.Action.VIEWED,
+                    target_type="media",
+                    target_id=media.pk,
+                    details="sensitive file download",
+                    ip_address=(
+                        request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
+                        or request.META.get("REMOTE_ADDR")
+                    ),
+                )
+
+            try:
+                return FileResponse(media.file.open("rb"), filename=basename)
+            except FileNotFoundError:
+                return HttpResponseNotFound("File missing on disk.")
+
+        # ---- Anything else: default-deny -----------------------------
+        return HttpResponseNotFound("Not found.")
+
+
+# Backwards-compat alias — ``testimonies.urls`` still names the
+# function. Kept so a search for the old name returns a hit, and so
+# any third-party code that imported it from this module keeps
+# working until we cut over the URL config.
+serve_protected_media = MediaDownloadView.as_view()
 
 
 # ---------------------------------------------------------------------------

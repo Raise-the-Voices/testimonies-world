@@ -3,6 +3,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import include, path, re_path
+from django.views.static import serve as static_serve
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -207,6 +208,23 @@ if settings.DEBUG:
     # convenience. The protected view is still authoritative — these
     # static() URLs only run when DEBUG=True (i.e. local dev).
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# /public-media/ is served by nginx DIRECTLY off disk in production
+# (no auth gate, no gunicorn hop). For non-nginx paths — the Django
+# test client, an admin poking at the backend container, etc. — Django
+# itself can serve the same files. PUBLIC_MEDIA_ROOT only ever holds
+# world-readable content, so there is no security boundary to defend
+# here; the Django fallback is purely a perf trade-off.
+#
+# We bypass ``django.conf.urls.static`` here because it is a no-op
+# when ``DEBUG=False`` (the production default). Direct
+# ``re_path + static.serve`` works in either mode. In production
+# nginx still wins because /public-media/ never reaches gunicorn.
+urlpatterns.append(re_path(
+    r'^public-media/(?P<path>.*)$',
+    static_serve,
+    {'document_root': str(settings.PUBLIC_MEDIA_ROOT)},
+))
 
 # E2E test-only routes. See cases/test_auth.py for the security
 # model and settings.py for the gating env vars
