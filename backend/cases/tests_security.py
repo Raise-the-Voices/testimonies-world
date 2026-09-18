@@ -6,6 +6,7 @@ Coverage:
 - CookieSecurityTests      — session + CSRF cookie flags in prod-mode
 - SecurityHeadersTests     — HSTS, X-CTO, X-Frame, Referrer-Policy
 - InputSanitizationTests   — bleach strips HTML from text/url fields
+- JsonErrorHandlerTests    — JSON 404/500 envelopes, no path or traceback leak
 
 These pin the security posture in CI: any future refactor of
 settings.py or the sanitizers that regresses the posture will
@@ -392,3 +393,143 @@ class InputSanitizationTests(BaseTestCase):
         self.assertEqual(person.name, 'New')
         # summary_narrative unchanged
         self.assertEqual(person.summary_narrative, '<p>existing</p>')
+
+
+# --- Custom JSON error handlers (C2 hardening) -------------------------
+# Django ships default 404/500 templates that render the request
+# path verbatim and (under DEBUG) the full Python traceback. The
+# SvelteKit frontend expects JSON on every /api/* response, and the
+# path / traceback echo is a fingerprinting / information-leakage
+# vector regardless. The custom handlers in backend/testimonies/urls.py
+# return a stable JSON envelope with no request details.
+#
+# These tests pin that behavior:
+#   - 404 → JSON envelope, never echoes the offending path
+#   - 500 → JSON envelope, never echoes the traceback or path
+#
+# The 500 tests run under DEBUG=False because that's the mode in
+# which our handler is actually invoked — Django's debug page
+# (DEBUG=True) bypasses handler500 entirely.
+
+from django.urls import path
+
+
+def _raising_view(request):
+    """Test-only view that always raises. Used by the 500 tests
+    to drive an unhandled exception through the WSGI stack so
+    handler500 actually runs. Never registered in production
+    urlpatterns — the @override_settings(ROOT_URLCONF=...) in each
+    test points the test client at cases.tests_500_urlconf, which
+    exposes a single raising route.
+    """
+    raise RuntimeError('synthetic-canary-leak-do-not-expose')
+
+
+_TEST_500_URLCONF = 'cases.tests_500_urlconf'
+
+
+class JsonErrorHandlerTests(BaseTestCase):
+    """Pin the C2 fix: Django's default 404/500 pages leak routing
+    structure (the request path is rendered into the HTML body)
+    and — under DEBUG — the full Python traceback. The SvelteKit
+    frontend expects JSON on every /api/* response, so an HTML
+    error page makes the client log a noisy parse error instead
+    of surfacing a clean status.
+
+    These tests verify the JSON envelope is in place AND that
+    nothing from the request or exception leaks into the body.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_404_returns_json_envelope(self):
+        """Hitting a non-existent URL → 404 with JSON, not HTML.
+
+        Django's default 404 template is text/html; the frontend
+        API client treats anything non-JSON as a transport error.
+        """
+        res = self.client.get('/this-path-does-not-exist/')
+        self.assertEqual(res.status_code, 404)
+        self.assertEqual(res.headers['Content-Type'], 'application/json')
+        body = res.json()
+        self.assertEqual(body, {'error': 'Not found', 'status': 404})
+
+    def test_404_does_not_leak_request_path(self):
+        """The path of the offending request must NOT appear in the body.
+
+        Echoing the path makes routing fingerprinting trivial
+        (a probe confirms whether /admin/, /api/foo/, etc. are
+        mounted on this host). The status code alone is enough
+        for the client to recover.
+        """
+        sentinel = 'canary-secret-route-7f3a'
+        res = self.client.get(f'/{sentinel}/')
+        self.assertEqual(res.status_code, 404)
+        body_text = res.content.decode('utf-8')
+        self.assertNotIn(sentinel, body_text)
+        # Belt-and-suspenders: also assert the response isn't HTML.
+        self.assertNotIn('<html', body_text.lower())
+
+    def test_404_does_not_leak_query_string_or_exception(self):
+        """Query strings and exception details (when present) must
+        not appear in the 404 envelope. Django's default 404 template
+        includes the resolver exception class for the failed lookup
+        (e.g. NoReverseMatch) — that goes into a stable JSON
+        envelope only.
+        """
+        sentinel_qs = 'leak=canary-qs-9b2e'
+        res = self.client.get(f'/does-not-exist/?{sentinel_qs}')
+        self.assertEqual(res.status_code, 404)
+        body_text = res.content.decode('utf-8')
+        self.assertNotIn(sentinel_qs, body_text)
+
+    @override_settings(DEBUG=False, SECURE_SSL_REDIRECT=False, ROOT_URLCONF=_TEST_500_URLCONF)
+    def test_500_returns_json_envelope(self):
+        """A view that raises → 500 with JSON envelope (DEBUG=False).
+
+        With DEBUG=True, Django intercepts the exception and
+        renders its technical 500 debug page — our handler is
+        bypassed entirely. We override DEBUG=False to exercise
+        the production code path. raise_request_exception=False
+        makes the test client turn the unhandled exception into
+        a real 500 response instead of re-raising in the test.
+        """
+        client = APIClient()
+        client.raise_request_exception = False
+        res = client.get('/test-500/')
+        self.assertEqual(res.status_code, 500)
+        self.assertEqual(res.headers['Content-Type'], 'application/json')
+        body = res.json()
+        self.assertEqual(body, {'error': 'Server error', 'status': 500})
+
+    @override_settings(DEBUG=False, SECURE_SSL_REDIRECT=False, ROOT_URLCONF=_TEST_500_URLCONF)
+    def test_500_does_not_leak_traceback_or_path(self):
+        """The 500 body must contain none of the exception text,
+        the exception type, or the request path. Django's default
+        500 page (DEBUG=False) includes the exception class name;
+        the debug page (DEBUG=True) includes the full traceback
+        with local-variable values. Our handler returns a stable
+        envelope so probes can't read installed package versions
+        or in-flight secrets from the failing frame.
+
+        The canary is the exception message itself — a globally
+        unique string literal that only appears if the traceback
+        (or exception message) is rendered into the response.
+        """
+        sentinel_path = '/test-500/'
+        # The canary string is the exception message raised by
+        # _raising_view at module top — it's unique enough that a
+        # false positive would only happen if the handler rendered
+        # the exception body into the response.
+        canary_msg = 'synthetic-canary-leak-do-not-expose'
+
+        client = APIClient()
+        client.raise_request_exception = False
+        res = client.get(sentinel_path)
+        self.assertEqual(res.status_code, 500)
+        body_text = res.content.decode('utf-8')
+        self.assertNotIn(canary_msg, body_text)
+        self.assertNotIn('RuntimeError', body_text)
+        self.assertNotIn('Traceback', body_text)
+        self.assertNotIn(sentinel_path, body_text)

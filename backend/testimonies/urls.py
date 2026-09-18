@@ -19,12 +19,12 @@ from cases.views import (
     CaseCategoryViewSet,
     DebugRecentPersonsView,
     FamilyRelationshipViewSet,
+    MediaDownloadView,
     MediaViewSet,
     PersonViewSet,
     ReportViewSet,
     SourceViewSet,
     logout_done,
-    serve_protected_media,
 )
 from cases.dashboard import DashboardViewSet
 from casework.views import (
@@ -76,6 +76,67 @@ def session_info(request):
             'is_staff': request.user.is_staff,
         })
     return JsonResponse({'authenticated': False})
+
+
+# --- Custom JSON error handlers (C2 hardening) -------------------------
+# Django's defaults render an HTML 404 / 500 page. The SvelteKit
+# frontend treats every response as JSON and rejects anything else
+# on /api/* — so an HTML 404 on, say, /api/persons/999/ makes the
+# frontend log a noisy parse error instead of surfacing a clean
+# "not found". Worse, the default 500 page echoes the request path,
+# query string, and (under DEBUG) the full Python traceback — enough
+# to fingerprint installed packages and read local variables in the
+# failing frame.
+#
+# These handlers return a stable JSON envelope with no request
+# details. The real traceback still lands in Sentry / journald via
+# the logging wiring in testimonies/ops.py — operators see it, the
+# anonymous HTTP client doesn't.
+#
+# The string dotted paths below are what Django's URL resolver
+# actually uses (not the function objects). Setting them at module
+# level is what makes them the ROOT_URLCONF-wide handler404/500 —
+# the same pattern Django's docs recommend.
+
+def json_404(request, exception=None):
+    """404 handler. Returns JSON, never the request path.
+
+    Django's default 404 page renders the offending path verbatim
+    inside the page body. Echoing the path back is convenient for
+    debugging but leaks routing structure to probes — e.g. hitting
+    /api/admin/foo/ confirms /admin/ is on the same host. We omit
+    the path entirely; the status code is enough for the client
+    to recover.
+    """
+    return JsonResponse(
+        {'error': 'Not found', 'status': 404},
+        status=404,
+    )
+
+
+def json_500(request):
+    """500 handler. Returns JSON, never the traceback or path.
+
+    Django's debug 500 page (DEBUG=True) renders the full Python
+    traceback — local variables, package versions, the query
+    string, the request body, everything in the failing frame.
+    Even DEBUG=False still includes the exception type and
+    request.path in the standard 500 template, which is enough
+    to fingerprint routing and installed apps.
+
+    We return a stable envelope and nothing else. The real
+    traceback is captured by Django's logger + Sentry (config in
+    testimonies/ops.py). Operators see it via journalctl; an
+    anonymous HTTP client doesn't get a single byte of it.
+    """
+    return JsonResponse(
+        {'error': 'Server error', 'status': 500},
+        status=500,
+    )
+
+
+handler404 = 'testimonies.urls.json_404'
+handler500 = 'testimonies.urls.json_500'
 
 
 urlpatterns = [
@@ -131,7 +192,7 @@ urlpatterns = [
     # straight off disk (the alias-based setup that was replaced on
     # 2026-08-27). 401 = the auth gate fired; 404 = nginx/Django are
     # mis-wired and we'd be back to leaking filenames.
-    re_path(r'^media/(?P<path>.*)$', serve_protected_media, name='protected-media'),
+    re_path(r'^media/(?P<path>.*)$', MediaDownloadView.as_view(), name='protected-media'),
     # /healthz — liveness probe. Used by Docker HEALTHCHECK, k8s
     # liveness probes, and load balancers. Returns 200 with
     # `{ok, db, cache}` or 503 on failure. The nginx config
