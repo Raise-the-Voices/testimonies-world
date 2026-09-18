@@ -1,0 +1,22 @@
+{% extends "allauth/layouts/base.html" %}
+{% load i18n %}
+
+{% block head_title %}{% trans "Signed out" %}{% endblock head_title %}
+
+{% block content %}
+    {# Status icon — large success checkmark in the primary teal. #}
+    <div class="status-icon status-success" aria-hidden="true">✓</div>
+
+    <h1 class="status-title">{% trans "You're signed out" %}</h1>
+    <p class="status-body">
+        {% trans "Your session has been ended. Thanks for your work." %}
+    </p>
+
+    <div class="status-actions">
+        {% if next and next != '/' %}
+            <a href="{{ next }}" class="btn-link">{% trans "Return to where you were" %}</a>
+        {% endif %}
+        <a href="{% url 'account_login' %}" class="btn-link">{% trans "Sign in again" %}</a>
+        <a href="/" class="btn-link">{% trans "Back to home" %}</a>
+    </div>
+{% endblock content %}

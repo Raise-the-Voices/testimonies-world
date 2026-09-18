@@ -23,11 +23,29 @@
             {% endif %}
 
             {% for field in form %}
-                <div class="field">
-                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                <div class="field" data-field-name="{{ field.name }}">
+                    <label for="{{ field.id_for_label }}">
+                        {{ field.label }}{% if field.field.required %} <span class="required-mark" aria-hidden="true">*</span>{% endif %}
+                    </label>
                     {{ field }}
                     {% if field.help_text %}
                         <small class="helptext">{{ field.help_text|safe }}</small>
+                    {% endif %}
+                    {% if field.name == 'password1' %}
+                        {# Live strength meter — JS toggles .visible + strength-* classes. #}
+                        <div class="pw-strength" aria-hidden="true">
+                            <div class="pw-strength-bar"></div>
+                        </div>
+                        <div class="pw-strength-label" aria-live="polite">
+                            {% trans "Strength:" %} <span class="strength-text"></span>
+                        </div>
+                    {% endif %}
+                    {% if field.name == 'password2' %}
+                        {# Match indicator against password1 — JS toggles. #}
+                        <div class="pw-match" aria-live="polite">
+                            <span class="pw-match-icon" aria-hidden="true"></span>
+                            <span class="pw-match-text"></span>
+                        </div>
                     {% endif %}
                     {% if field.errors %}
                         <ul class="errorlist">
@@ -36,6 +54,27 @@
                     {% endif %}
                 </div>
             {% endfor %}
+
+            {# Client-only Confirm Password — JS-enforced match against
+               password2. Backend doesn't get this field; it's just a UX
+               guard so users catch typos before submitting. #}
+            <div class="field" data-field-name="password_confirm">
+                <label for="id_password_confirm">
+                    {% trans "Confirm password" %} <span class="required-mark" aria-hidden="true">*</span>
+                </label>
+                <input
+                    type="password"
+                    name="password_confirm"
+                    id="id_password_confirm"
+                    placeholder="{% trans 'Re-enter your password' %}"
+                    autocomplete="new-password"
+                    required
+                />
+                <div class="pw-match" aria-live="polite">
+                    <span class="pw-match-icon" aria-hidden="true"></span>
+                    <span class="pw-match-text"></span>
+                </div>
+            </div>
 
             <button type="submit" class="auth-submit">{% trans "Sign Up" %}</button>
 

@@ -504,7 +504,13 @@ AUTHENTICATION_BACKENDS = [
     'allauth.account.auth_backends.AuthenticationBackend',
 ]
 LOGIN_REDIRECT_URL = f'{SCRIPT_NAME}/' if SCRIPT_NAME else '/'
-LOGOUT_REDIRECT_URL = f'{SCRIPT_NAME}/' if SCRIPT_NAME else '/'
+LOGOUT_REDIRECT_URL = '/logout/done/'
+# allauth reads ACCOUNT_LOGOUT_REDIRECT_URL in preference to LOGOUT_REDIRECT_URL
+# — we point it at our own success screen so the volunteer sees a "You're
+# signed out" confirmation before being returned to the app. The view at
+# /logout/done/ (cases.views.logout_done) honours ?next=… with a same-origin
+# check so it can't be abused as an open-redirector.
+ACCOUNT_LOGOUT_REDIRECT_URL = '/logout/done/'
 ACCOUNT_LOGIN_ON_GET = True
 SOCIALACCOUNT_LOGIN_ON_GET = True
 # 'none' = no verification, AND (in allauth 0.63.x) suppresses EmailAddress

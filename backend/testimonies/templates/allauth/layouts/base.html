@@ -15,7 +15,13 @@
 </head>
 <body>
     <header class="auth-header">
-        <a href="/">Raise the Voices — Cases</a>
+        <a href="/" aria-label="{% trans 'Raise the Voices — Cases, home' %}">
+            <span class="auth-header-brand">{% trans "RAISE THE VOICES" %}</span>
+            <span class="auth-header-sub">{% trans "CASES" %}</span>
+        </a>
+        <p class="auth-header-tagline">
+            {% trans "Documenting cases of people facing oppression." %}
+        </p>
     </header>
 
     <main class="auth-stage">
@@ -36,6 +42,8 @@
         <a href="https://raisethevoices.org">RaisetheVoices.org</a> — Every person matters.
     </footer>
 
-    {% block extra_body %}{% endblock extra_body %}
+    {% block extra_body %}
+    <script src="{% static 'auth/auth.js' %}" defer></script>
+    {% endblock extra_body %}
 </body>
 </html>
