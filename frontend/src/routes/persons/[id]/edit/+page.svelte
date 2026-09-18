@@ -43,7 +43,12 @@ import Skeleton from '$lib/Skeleton.svelte';
 	let summaryNarrative = $state('');
 	let ethnicity = $state('');
 	let gender = $state('');
-	let dateOfBirth = $state('');
+	// Age at incident (replaces date_of_birth — most cases don't have a
+	// precise DOB but we can usually guess the age at the incident).
+	// Empty string means "unspecified"; the wire field is
+	// `age_at_incident`. Backend validates 0-150.
+	let ageAtIncident = $state<number | ''>('');
+	let occupation = $state('');
 
 	// Media, evidence quality, privacy, verification
 	let qualityTier = $state<number | ''>('');
@@ -106,7 +111,8 @@ import Skeleton from '$lib/Skeleton.svelte';
 		summaryNarrative = person.summary_narrative || '';
 		ethnicity = person.ethnicity || '';
 		gender = (person.gender as string) || '';
-		dateOfBirth = person.date_of_birth || '';
+		ageAtIncident = person.age_at_incident ?? '';
+		occupation = person.occupation || '';
 		qualityTier = person.quality_tier ?? '';
 		medicalNotes = person.medical_notes || '';
 		authoritativeSource = person.authoritative_source || '';
@@ -197,8 +203,13 @@ import Skeleton from '$lib/Skeleton.svelte';
 		if (lastKnownDate && Number.isNaN(new Date(lastKnownDate).getTime())) {
 			e.last_known_date = "That doesn't look like a valid date.";
 		}
-		if (dateOfBirth && Number.isNaN(new Date(dateOfBirth).getTime())) {
-			e.dob = "That doesn't look like a valid date.";
+		if (
+			ageAtIncident !== '' &&
+			ageAtIncident !== null &&
+			ageAtIncident !== undefined &&
+			(!Number.isInteger(ageAtIncident) || (ageAtIncident as number) < 0 || (ageAtIncident as number) > 150)
+		) {
+			e.age_at_incident = 'Enter an age between 0 and 150.';
 		}
 		return e;
 	}
@@ -261,7 +272,12 @@ import Skeleton from '$lib/Skeleton.svelte';
 				category_ids: selectedCategories,
 			};
 			baseData.last_known_date = lastKnownDate || null;
-			baseData.date_of_birth = dateOfBirth || null;
+			if (ageAtIncident !== '' && ageAtIncident !== null && ageAtIncident !== undefined) {
+				baseData.age_at_incident = ageAtIncident;
+			} else {
+				baseData.age_at_incident = null;
+			}
+			baseData.occupation = occupation.trim();
 			if (legalName.trim()) baseData.legal_name = legalName.trim();
 			else baseData.legal_name = null;
 			if (aliases.length) baseData.aliases = aliases.join(', ');
@@ -523,6 +539,24 @@ import Skeleton from '$lib/Skeleton.svelte';
 						{/if}
 					</div>
 
+					<!-- Occupation / profession (Section B). Optional. -->
+					<div class="field">
+						<label for="occupation">
+							Profession / Occupation <span class="optional-mark">(optional)</span>
+						</label>
+						<input
+							id="occupation"
+							type="text"
+							bind:value={occupation}
+							placeholder="e.g. journalist, teacher, farmer"
+							maxlength={255}
+							autocomplete="off"
+						/>
+						<p class="field-help">
+							Their role at the time of the incident — helps build the case narrative.
+						</p>
+					</div>
+
 					<div class="field">
 						<label for="status">Current Status</label>
 						<select id="status" bind:value={currentStatus}>
@@ -595,17 +629,27 @@ import Skeleton from '$lib/Skeleton.svelte';
 						</select>
 					</div>
 
-					<div class="field" class:has-error={errors.dob}>
-						<label for="dob">Date of Birth</label>
+					<div class="field" class:has-error={!!errors.age_at_incident}>
+						<label for="age_at_incident">
+							Age at incident <span class="optional-mark">(optional)</span>
+						</label>
 						<input
-							id="dob"
-							type="date"
-							bind:value={dateOfBirth}
-							oninput={() => clearError('dob')}
-							aria-invalid={errors.dob ? 'true' : 'false'}
-							aria-describedby={errors.dob ? 'dob-error' : undefined}
+							id="age_at_incident"
+							type="number"
+							inputmode="numeric"
+							min="0"
+							max="150"
+							step="1"
+							bind:value={ageAtIncident}
+							oninput={() => clearError('age_at_incident')}
+							placeholder="e.g. 34"
+							autocomplete="off"
+							aria-invalid={errors.age_at_incident ? 'true' : 'false'}
+							aria-describedby={errors.age_at_incident ? 'age-at-incident-error' : undefined}
 						/>
-						{#if errors.dob}<p class="field-error" id="dob-error" role="alert">{errors.dob}</p>{/if}
+						{#if errors.age_at_incident}
+							<p class="field-error" id="age-at-incident-error" role="alert">{errors.age_at_incident}</p>
+						{/if}
 					</div>
 
 					<div class="field">

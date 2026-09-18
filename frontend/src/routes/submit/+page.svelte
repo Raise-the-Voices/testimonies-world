@@ -38,6 +38,16 @@
 	// `draftSaveError` surfaces localStorage quota / private-mode
 	// failures in the same pill (silent failure is worse than no draft).
 	let draftSavedAt = $state<string | null>(null);
+
+	// Post-submit success state. We capture the server-generated
+	// case_id here so the Case Details section can display it (the
+	// case_id is server-generated via `Person.case_id = UUIDField(
+	// default=uuid.uuid4) and never editable by the volunteer). The
+	// form then offers a "View case page" button instead of auto-
+	// redirecting, so the volunteer has a moment to copy the ID.
+	let submittedCaseId = $state<string | null>(null);
+	let submittedPersonId = $state<number | null>(null);
+	let copyLabel = $state('Copy');  // 'Copy' → 'Copied ✓' on click
 	let pendingDraft = $state<SubmitDraft | null>(null);
 	let showRestoreBanner = $state(false);
 	let draftSaveError = $state(false);
@@ -69,7 +79,14 @@
 	let lastKnownDate = $state('');
 	let ethnicity = $state('');
 	let gender = $state('');
-	let dateOfBirth = $state('');
+	// Age at the time of the incident (replaces Date of Birth — we
+	// usually don't have a precise DOB but we can usually guess the
+	// age). Empty string means "unspecified"; the wire field is
+	// `age_at_incident`. Validated 0-150 server-side.
+	let ageAtIncident = $state<number | ''>('');
+	// Person's occupation at the time of the incident. Backend field
+	// is `occupation`; max_length 255, blank allowed.
+	let occupation = $state('');
 
 	// Person fields — media, evidence quality, privacy, verification
 	let qualityTier = $state<number | ''>('');
@@ -113,7 +130,8 @@
 			lastKnownDate,
 			ethnicity,
 			gender,
-			dateOfBirth,
+			ageAtIncident,
+			occupation,
 			qualityTier,
 			profileImageCleared,
 			medicalNotes,
@@ -152,7 +170,11 @@
 		if (typeof p.lastKnownDate === 'string') lastKnownDate = p.lastKnownDate;
 		if (typeof p.ethnicity === 'string') ethnicity = p.ethnicity;
 		if (typeof p.gender === 'string') gender = p.gender;
-		if (typeof p.dateOfBirth === 'string') dateOfBirth = p.dateOfBirth;
+		// ageAtIncident: empty string OR a finite number
+		if (p.ageAtIncident === '' || (typeof p.ageAtIncident === 'number' && Number.isFinite(p.ageAtIncident))) {
+			ageAtIncident = p.ageAtIncident;
+		}
+		if (typeof p.occupation === 'string') occupation = p.occupation;
 		if (p.qualityTier === '' || typeof p.qualityTier === 'number') qualityTier = p.qualityTier;
 		if (typeof p.profileImageCleared === 'boolean') profileImageCleared = p.profileImageCleared;
 		if (typeof p.medicalNotes === 'string') medicalNotes = p.medicalNotes;
@@ -295,6 +317,21 @@
 			profileImagePreview = null;
 		}
 	});
+	async function copyCaseId() {
+		// Best-effort clipboard copy. Falls back to a manual-select
+		// hint if the Clipboard API is blocked (insecure context,
+		// permission denied). The input has `onclick` selecting its
+		// contents so the user can always ⌘C as a fallback.
+		if (!submittedCaseId) return;
+		try {
+			await navigator.clipboard.writeText(submittedCaseId);
+			copyLabel = 'Copied ✓';
+			setTimeout(() => (copyLabel = 'Copy'), 1800);
+		} catch {
+			copyLabel = 'Press ⌘C';
+		}
+	}
+
 	function onProfileImageChange(e: Event) {
 		const input = e.currentTarget as HTMLInputElement;
 		const f = input.files?.[0] ?? null;
@@ -349,8 +386,13 @@
 		if (lastKnownDate) {
 			if (Number.isNaN(new Date(lastKnownDate).getTime())) e.last_known_date = 'That doesn’t look like a valid date.';
 		}
-		if (dateOfBirth) {
-			if (Number.isNaN(new Date(dateOfBirth).getTime())) e.dob = 'That doesn’t look like a valid date.';
+		// ageAtIncident: optional, but if the user typed something it
+		// must be a positive integer in the 0-150 range. Empty string
+		// (default state) means "unspecified".
+		if (ageAtIncident !== '' && ageAtIncident !== null && ageAtIncident !== undefined) {
+			if (!Number.isInteger(ageAtIncident) || ageAtIncident < 0 || ageAtIncident > 150) {
+				e.age_at_incident = 'Enter an age between 0 and 150.';
+			}
 		}
 		if (reportDateStart) {
 			if (Number.isNaN(new Date(reportDateStart).getTime())) e.report_date = 'That doesn’t look like a valid date.';
@@ -432,7 +474,12 @@
 				fd.append('ethnicity', ethnicity.trim());
 				if (gender) fd.append('gender', gender);
 				if (lastKnownDate) fd.append('last_known_date', lastKnownDate);
-				if (dateOfBirth) fd.append('date_of_birth', dateOfBirth);
+				// age_at_incident is optional + server-validated to 0-150.
+				if (ageAtIncident !== '' && ageAtIncident !== null && ageAtIncident !== undefined) {
+					fd.append('age_at_incident', String(ageAtIncident));
+				}
+				// occupation is a CharField(max_length=255, blank=True).
+				if (occupation.trim()) fd.append('occupation', occupation.trim());
 				if (legalName.trim()) fd.append('legal_name', legalName.trim());
 				if (aliases.length) fd.append('aliases', aliases.join(', '));
 				if (qualityTier !== '') fd.append('quality_tier', String(qualityTier));
@@ -457,7 +504,10 @@
 					category_ids: selectedCategories,
 				};
 				if (lastKnownDate) payload.last_known_date = lastKnownDate;
-				if (dateOfBirth) payload.date_of_birth = dateOfBirth;
+				if (ageAtIncident !== '' && ageAtIncident !== null && ageAtIncident !== undefined) {
+					payload.age_at_incident = ageAtIncident;
+				}
+				if (occupation.trim()) payload.occupation = occupation.trim();
 				if (legalName.trim()) payload.legal_name = legalName.trim();
 				if (aliases.length) payload.aliases = aliases.join(', ');
 				if (qualityTier !== '') payload.quality_tier = qualityTier;
@@ -490,7 +540,12 @@
 			clearDraft(draftKey);
 			draftSavedAt = null;
 
-			goto(`${base}/persons/${person.id}`);
+			// Capture the server-generated case_id so the Case Details
+			// section can show it (the volunteer can copy it for their
+			// records before continuing). The redirect happens from
+			// the post-submit confirmation card below, not here.
+			submittedCaseId = person.case_id ?? null;
+			submittedPersonId = person.id;
 		} catch (e: any) {
 			if (e instanceof ApiError) {
 				if (e.isValidation && Object.keys(e.fieldErrors).length > 0) {
@@ -781,6 +836,31 @@
 						{/if}
 					</div>
 
+					<!-- Occupation / profession (Section B). Optional. -->
+					<div class="field">
+						<label for="occupation">
+							Profession / Occupation <span class="optional-mark">(optional)</span>
+						</label>
+						<input
+							id="occupation"
+							type="text"
+							bind:value={occupation}
+							oninput={() => clearError('occupation')}
+							placeholder="e.g. journalist, teacher, farmer"
+							maxlength={255}
+							autocomplete="off"
+							aria-invalid={errors.occupation ? 'true' : 'false'}
+							aria-describedby={errors.occupation ? 'occupation-error' : 'occupation-help'}
+						/>
+						{#if errors.occupation}
+							<p class="field-error" id="occupation-error" role="alert">{errors.occupation}</p>
+						{:else}
+							<p class="field-help" id="occupation-help">
+								Their role at the time of the incident — helps build the case narrative.
+							</p>
+						{/if}
+					</div>
+
 					<div class="field">
 						<label for="status">Current Status</label>
 						<select id="status" bind:value={currentStatus}>
@@ -855,9 +935,34 @@
 						</select>
 					</div>
 
-					<div class="field">
-						<label for="dob">Date of Birth</label>
-						<input id="dob" type="date" bind:value={dateOfBirth} />
+					<!-- Age at incident (replaces Date of Birth). We usually
+					     know the approximate age even when we don't know
+					     the precise DOB; this is what gets persisted. -->
+					<div class="field" class:has-error={!!errors.age_at_incident}>
+						<label for="age_at_incident">
+							Age at incident <span class="optional-mark">(optional)</span>
+						</label>
+						<input
+							id="age_at_incident"
+							type="number"
+							inputmode="numeric"
+							min="0"
+							max="150"
+							step="1"
+							bind:value={ageAtIncident}
+							oninput={() => clearError('age_at_incident')}
+							placeholder="e.g. 34"
+							autocomplete="off"
+							aria-invalid={errors.age_at_incident ? 'true' : 'false'}
+							aria-describedby={errors.age_at_incident ? 'age-at-incident-error' : 'age-at-incident-help'}
+						/>
+						{#if errors.age_at_incident}
+							<p class="field-error" id="age-at-incident-error" role="alert">{errors.age_at_incident}</p>
+						{:else}
+							<p class="field-help" id="age-at-incident-help">
+								Approximate age when the incident occurred. Leave blank if unknown.
+							</p>
+						{/if}
 					</div>
 
 					<!-- Quality tier — evidence reliability rating -->
@@ -916,6 +1021,81 @@
 						{/if}
 					</div>
 				</div>
+			</section>
+
+			<!-- ============== Section 1c: Case Details ============== -->
+			<!-- The case_id is server-generated (Person.case_id is a
+			     UUIDField with default=uuid.uuid4 + editable=False), so
+			     the volunteer never types it. We surface it here so
+			     they have a moment to copy it after submit. -->
+			<section class="form-section" aria-labelledby="sec-case-details">
+				<h2 id="sec-case-details" class="form-section-title">
+					<span class="title-bar" aria-hidden="true"></span>
+					Case Details
+				</h2>
+				<p class="form-section-desc">
+					A unique Case ID is auto-generated when you save. Save it
+					for your records — it's how you'll find this case later.
+				</p>
+
+				{#if submittedCaseId}
+					<!-- Post-submit: show the assigned ID + continue button. -->
+					<div class="case-id-card" role="status">
+						<h3 class="case-id-title">✓ Case submitted</h3>
+						<div class="case-id-row">
+							<label for="case-id-display" class="case-id-label">Case ID</label>
+							<div class="case-id-value-row">
+								<input
+									id="case-id-display"
+									type="text"
+									class="case-id-input"
+									value={submittedCaseId}
+									readonly
+									aria-readonly="true"
+									onclick={(e) => (e.currentTarget as HTMLInputElement).select()}
+								/>
+								<button
+									type="button"
+									class="btn btn-secondary btn-sm"
+									onclick={() => copyCaseId()}
+								>{copyLabel}</button>
+							</div>
+							<p class="case-id-help">
+								Captured by the backend the moment this form was submitted.
+							</p>
+						</div>
+						<div class="case-id-actions">
+							<a
+								href="{base}/persons/{submittedPersonId}"
+								class="btn btn-primary"
+								onclick={(e) => {
+									e.preventDefault();
+									if (submittedPersonId !== null) {
+										goto(`${base}/persons/${submittedPersonId}`);
+									}
+								}}
+							>View case page →</a>
+						</div>
+					</div>
+				{:else}
+					<!-- Pre-submit: empty placeholder so the volunteer
+					     understands the case_id will appear here. -->
+					<div class="field">
+						<label for="case_id_placeholder">Case ID</label>
+						<input
+							id="case_id_placeholder"
+							type="text"
+							value=""
+							readonly
+							aria-readonly="true"
+							placeholder="Will be assigned on submit"
+						/>
+						<p class="field-help">
+							You don't need to fill this in — the backend
+							generates a UUID when the form saves.
+						</p>
+					</div>
+				{/if}
 			</section>
 
 			<!-- ============== Section 1b: Privacy ============== -->
@@ -1686,6 +1866,69 @@
 		font-size: 0.85rem;
 		color: var(--color-text-muted);
 		flex: 1 1 auto;
+	}
+
+	/* === Case ID card (post-submit confirmation) =============== */
+	.case-id-card {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		padding: 1.25rem;
+		background: var(--color-surface, #f8fafb);
+		border: 1px solid var(--color-border-light);
+		border-left: 3px solid var(--color-success, #2f855a);
+		border-radius: var(--radius-card-lg);
+	}
+	.case-id-title {
+		margin: 0;
+		font-size: 1.05rem;
+		font-weight: 700;
+		color: var(--color-success, #166534);
+	}
+	.case-id-row {
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
+	}
+	.case-id-label {
+		font-size: 0.78rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06rem;
+		color: var(--color-text-muted);
+	}
+	.case-id-value-row {
+		display: flex;
+		gap: 0.5rem;
+		align-items: stretch;
+	}
+	.case-id-input {
+		flex: 1 1 auto;
+		min-width: 0;
+		padding: 0.55rem 0.75rem;
+		border: 1px solid var(--color-border-light);
+		border-radius: var(--radius-input, 6px);
+		background: var(--color-bg-white);
+		color: var(--color-text);
+		font: inherit;
+		font-size: 0.92rem;
+		font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+		cursor: text;
+	}
+	.case-id-input:focus {
+		outline: none;
+		border-color: var(--color-primary);
+		box-shadow: 0 0 0 3px var(--color-primary-tint, rgba(37, 100, 106, 0.15));
+	}
+	.case-id-help {
+		margin: 0;
+		font-size: 0.78rem;
+		color: var(--color-text-muted);
+	}
+	.case-id-actions {
+		display: flex;
+		gap: 0.6rem;
+		margin-top: 0.25rem;
 	}
 	.submit-btn {
 		min-width: 160px;

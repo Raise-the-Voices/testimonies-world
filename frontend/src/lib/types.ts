@@ -173,6 +173,11 @@ export interface Person {
 	ethnicity?: string;
 	gender?: Gender;
 	date_of_birth?: string | null;
+	/** Age at the time of the incident. Distinct from date_of_birth
+	    (we don't always have a precise DOB but we can usually guess
+	    a year-of-incident age). Backend field: ``age_at_incident``. */
+	age_at_incident?: number | null;
+	occupation?: string;
 	last_known_date?: string | null;
 	summary_narrative?: string;
 	authoritative_source?: string;
@@ -185,6 +190,10 @@ export interface Person {
 	reports?: Report[];
 	media_files?: Media[];
 	family?: FamilyRelationship[];
+	/** Server-generated UUID. Set by the backend on create, read-only
+	    thereafter. Surfaced in the submit form for volunteers to
+	    capture for their own records; not editable. */
+	case_id?: string;
 	created_at: string;
 	updated_at: string;
 }
