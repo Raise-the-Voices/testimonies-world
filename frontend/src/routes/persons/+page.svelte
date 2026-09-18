@@ -484,12 +484,25 @@
 		gap: 1rem;
 		flex-wrap: wrap;
 		padding-bottom: 1rem;
-		margin-bottom: 1.5rem;
+		margin-bottom: var(--space-section);
 		border-bottom: 1px solid var(--color-border-light);
 	}
 	.catalog-header h1 {
 		margin: 0;
 		color: var(--color-primary);
+	}
+
+	/* Page outer wrapper — standardized rhythm (matches dashboard/casework).
+	   Replaces the legacy .page-surface (which inherited the global
+	   85%-width .container). */
+	.page-surface {
+		width: 100%;
+		max-width: var(--max-w-page);
+		padding: 0 var(--page-px);
+		margin: 0 auto;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-section);
 	}
 
 	.cases-table-wrap {
