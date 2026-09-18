@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 from .models import (
     AuditLog, CaseCategory, CaseEvent, CaseUpdate,
-    FamilyRelationship, Media, Person, Report,
+    FamilyRelationship, Media, Person, Report, Source,
 )
 from .sanitizers import sanitize_text, sanitize_url
 
@@ -179,6 +179,29 @@ class MediaSerializer(SanitizingModelSerializerMixin, serializers.ModelSerialize
         read_only_fields = ['uploaded_by', 'created_at']
 
 
+class SourceSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
+    """A single source attached to a Report.
+
+    Writable via nested create on `ReportSerializer.sources` (so the
+    volunteer can submit a report + N sources in one POST), and also
+    exposed standalone at `/sources/`. Field shape mirrors the primary
+    Report source_* fields so the volunteer form doesn't need to teach
+    two vocabularies.
+    """
+
+    # Source narrative is free-text that may end up rendered in case
+    # pages or exports; sanitize like Report's narrative.
+    text_fields = ['narrative', 'source_attribution']
+
+    class Meta:
+        model = Source
+        fields = [
+            'id', 'report', 'source_type', 'source_attribution',
+            'date_start', 'narrative', 'is_private', 'created_at',
+        ]
+        read_only_fields = ['id', 'report', 'created_at']
+
+
 class ReportSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
     # `narrative` is the canonical human-rights testimony; `reporter_*`
     # and `precise_location` are private. All are free-text and could
@@ -200,6 +223,10 @@ class ReportSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializ
         'internal_notes',
     ]
     media_files = MediaSerializer(many=True, read_only=True)
+    # Writable nested: volunteers can submit N sources alongside the
+    # report in one POST. Standalone /sources/ endpoint also works for
+    # adding more sources later.
+    sources = SourceSerializer(many=True, required=False)
 
     class Meta:
         model = Report

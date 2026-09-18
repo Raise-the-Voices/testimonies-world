@@ -12,7 +12,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
-from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report
+from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report, Source
 from .permissions import IsVolunteer
 from .throttles import ActionScopedThrottle
 from .serializers import (
@@ -24,6 +24,7 @@ from .serializers import (
     PersonListSerializer,
     PersonWriteSerializer,
     ReportSerializer,
+    SourceSerializer,
 )
 
 
@@ -756,6 +757,88 @@ class ReportViewSet(viewsets.ModelViewSet):
         # trace of the report that was.
         person_id = instance.person_id
         self._audit(AuditLog.Action.DELETED, instance, f'person_id={person_id}')
+        instance.delete()
+
+
+class SourceViewSet(viewsets.ModelViewSet):
+    """Standalone CRUD for Report sources.
+
+    Most sources are created via the nested `ReportSerializer.sources`
+    slot during a Report POST. This viewset exists for (a) listing
+    sources across reports, (b) adding a source to an existing report,
+    and (c) editing/deleting an individual source row.
+
+    Permission: same as Report — authenticated + Volunteer. Modifying
+    an existing source requires being the source's report author,
+    Advocate, or staff (mirrors Report authorship gate). Reads on
+    private sources are gated the same way Report reads are.
+    """
+
+    serializer_class = SourceSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
+    filterset_fields = ['report', 'source_type', 'is_private']
+
+    def get_queryset(self):
+        qs = Source.objects.select_related('report', 'report__person')
+        if not self.request.user.is_authenticated:
+            qs = qs.filter(is_private=False, report__is_private=False)
+        return qs
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.is_private or instance.report.is_private:
+            self._audit(AuditLog.Action.VIEWED, instance, 'private')
+        return super().retrieve(request, *args, **kwargs)
+
+    def _user_can_modify_source(self, user, instance: Source) -> bool:
+        """Authorship gate: only the report's author, Advocate, or staff
+        can modify a Source row. Mirrors ReportViewSet._user_can_modify."""
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_staff:
+            return True
+        if user.groups.filter(name='Advocate').exists():
+            return True
+        return instance.report.created_by_id == user.id
+
+    def _client_ip(self) -> str | None:
+        xff = self.request.META.get('HTTP_X_FORWARDED_FOR')
+        if xff:
+            return xff.split(',')[0].strip()
+        return self.request.META.get('REMOTE_ADDR')
+
+    def _audit(self, action: str, instance: Source, details: str = '') -> None:
+        AuditLog.objects.create(
+            user=self.request.user if self.request.user.is_authenticated else None,
+            action=action,
+            target_type='source',
+            target_id=instance.pk,
+            details=details,
+            ip_address=self._client_ip(),
+        )
+
+    def perform_create(self, serializer):
+        # Default report to whatever the URL filter said (or the request
+        # body's `report` field). SourceSerializer has `report` as a
+        # regular writable FK.
+        instance = serializer.save()
+        self._audit(AuditLog.Action.EDITED, instance, 'created')
+
+    def perform_update(self, serializer):
+        if not self._user_can_modify_source(self.request.user, serializer.instance):
+            raise PermissionDenied(
+                'Only the report author, an advocate, or staff can edit this source.'
+            )
+        instance = serializer.save()
+        self._audit(AuditLog.Action.EDITED, instance, 'updated')
+
+    def perform_destroy(self, instance):
+        if not self._user_can_modify_source(self.request.user, instance):
+            raise PermissionDenied(
+                'Only the report author, an advocate, or staff can delete this source.'
+            )
+        report_id = instance.report_id
+        self._audit(AuditLog.Action.DELETED, instance, f'report_id={report_id}')
         instance.delete()
 
 

@@ -16,7 +16,7 @@
 	 */
 	import { onMount, untrack } from 'svelte';
 	import { base } from '$app/paths';
-	import { getReports, createReport, ApiError } from '$lib/api';
+	import { getReports, createReport, ApiError, request } from '$lib/api';
 	import { user, isVolunteer } from '$lib/session';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import StatusBadge from '$lib/StatusBadge.svelte';
@@ -24,7 +24,7 @@
 	import Modal from '$lib/Modal.svelte';
 	import PersonPicker from '$lib/PersonPicker.svelte';
 	import type { PageData } from './$types';
-	import type { Paginated, Report } from '$lib/types';
+	import type { Media, MediaType, Paginated, Report, Visibility } from '$lib/types';
 
 	const PAGE_SIZE = 10;
 	const SEARCH_DEBOUNCE_MS = 300;
@@ -86,6 +86,76 @@
 	// Privacy
 	let isPrivate = $state(false);
 
+	// --- Additional Sources (witnesses / news / docs) -------------------
+	// ReportSerializer.sources is writable nested on POST /reports/.
+	// We track N entries client-side; on submit they're sent inside the
+	// Report payload. Empty entries (no attribution, no narrative) are
+	// dropped so a user who clicked "Add another" by mistake doesn't
+	// create a blank source row.
+	interface SourceEntry {
+		uid: number; // local-only, for keyed {#each}
+		source_type: Report['source_type'];
+		source_attribution: string;
+		date_start: string;
+		narrative: string;
+		is_private: boolean;
+	}
+	let sourceEntries = $state<SourceEntry[]>([]);
+
+	// --- Media (photos / docs / videos / links) -------------------------
+	// MediaViewSet has `report` as a writable FK, so we POST each media
+	// row separately with `report=<newId>` after the Report creates.
+	// Multi-step because ReportSerializer.media_files is read-only nested.
+	interface MediaEntry {
+		uid: number;
+		media_type: MediaType;
+		visibility: Visibility;
+		description: string;
+		url: string;
+	}
+	let mediaEntries = $state<MediaEntry[]>([]);
+
+	// Monotonic local id for keyed each. Not the backend id.
+	let nextEntryUid = 1;
+	function makeSourceEntry(): SourceEntry {
+		return {
+			uid: nextEntryUid++,
+			source_type: 'firsthand',
+			source_attribution: '',
+			date_start: '',
+			narrative: '',
+			is_private: false,
+		};
+	}
+	function makeMediaEntry(): MediaEntry {
+		return {
+			uid: nextEntryUid++,
+			media_type: 'photo',
+			visibility: 'public',
+			description: '',
+			url: '',
+		};
+	}
+	function addSource() {
+		sourceEntries = [...sourceEntries, makeSourceEntry()];
+	}
+	function removeSource(idx: number) {
+		sourceEntries = sourceEntries.filter((_, i) => i !== idx);
+	}
+	function addMedia() {
+		mediaEntries = [...mediaEntries, makeMediaEntry()];
+	}
+	function removeMedia(idx: number) {
+		mediaEntries = mediaEntries.filter((_, i) => i !== idx);
+	}
+
+	// Tracks media that failed to save after a successful Report POST.
+	// The report itself is created — these are warnings, not blockers.
+	let mediaFailures = $state<string[]>([]);
+	function dismissMediaFailures() {
+		mediaFailures = [];
+	}
+
 	// Source type labels — used in both the table pills and the form
 	// dropdown, kept next to the column that renders them.
 	const sourceTypeFormLabels: Record<Report['source_type'], string> = {
@@ -113,6 +183,8 @@
 		suspectedReason = '';
 		officialReason = '';
 		isPrivate = false;
+		sourceEntries = [];
+		mediaEntries = [];
 		fieldErrors = {};
 		formErrorMsg = '';
 		formErrorKind = 'generic';
@@ -165,6 +237,20 @@
 		formSaving = true;
 		formErrorMsg = '';
 		formErrorKind = 'generic';
+		mediaFailures = [];
+
+		// Drop empty source entries — a user who clicked "Add another"
+		// by mistake shouldn't create a blank row.
+		const sources = sourceEntries
+			.filter((s) => s.source_attribution.trim() || s.narrative.trim())
+			.map((s) => ({
+				source_type: s.source_type,
+				source_attribution: s.source_attribution,
+				date_start: s.date_start || null,
+				narrative: s.narrative,
+				is_private: s.is_private,
+			}));
+
 		const payload = {
 			person: formPersonId,
 			source_type: sourceType,
@@ -178,15 +264,50 @@
 			suspected_reason: suspectedReason,
 			official_reason: officialReason,
 			is_private: isPrivate,
+			sources,
 		};
 		try {
-			await createReport(payload);
-			// Success — close modal, refresh the list so the new report
-			// shows up at the top (newest-first default ordering).
+			// Step 1: create the report (with nested sources).
+			const created = await createReport(payload);
+
+			// Step 2: attach each media item separately. ReportSerializer
+			// has media_files as read-only nested, so a second POST per
+			// item is required. Track failures but don't fail the whole
+			// flow — the report itself is saved.
+			const failures: string[] = [];
+			for (let i = 0; i < mediaEntries.length; i++) {
+				const m = mediaEntries[i];
+				// Skip empty media entries (same "Add another" mistake).
+				if (!m.url.trim() && !m.description.trim()) continue;
+				try {
+					await request<Media>('/media/', {
+						method: 'POST',
+						body: JSON.stringify({
+							report: created.id,
+							media_type: m.media_type,
+							visibility: m.visibility,
+							description: m.description,
+							url: m.url,
+						}),
+					});
+				} catch (mErr: unknown) {
+					const msg = mErr instanceof Error ? mErr.message : 'unknown error';
+					failures.push(`Media #${i + 1}: ${msg}`);
+				}
+			}
+
+			// Success (regardless of media partial-failures) — close
+			// modal, refresh list so the new report + its media show up.
 			formOpen = false;
 			resetForm();
 			currentPage = 1;
 			await loadReports();
+
+			// Surface partial-failure warning as a page-level banner
+			// (not in the closed modal).
+			if (failures.length > 0) {
+				mediaFailures = failures;
+			}
 		} catch (err: unknown) {
 			if (err instanceof ApiError) {
 				if (err.isValidation && err.fieldErrors && Object.keys(err.fieldErrors).length) {
@@ -362,6 +483,27 @@
 				>Add Report</button>
 			{/if}
 		</header>
+
+		<!-- Partial-failure banner: shown when the report itself saved
+		     but one or more media items failed. -->
+		{#if mediaFailures.length > 0}
+			<div class="media-failures" role="alert">
+				<div class="media-failures-header">
+					<span class="media-failures-icon" aria-hidden="true">!</span>
+					<strong>Report saved, but {mediaFailures.length} media item(s) failed to attach:</strong>
+				</div>
+				<ul class="media-failures-list">
+					{#each mediaFailures as msg (msg)}
+						<li>{msg}</li>
+					{/each}
+				</ul>
+				<div class="media-failures-actions">
+					<button type="button" onclick={dismissMediaFailures}>
+						Dismiss
+					</button>
+				</div>
+			</div>
+		{/if}
 
 		<!-- Filter row: search + source dropdown + date range + clear -->
 		<section class="reports-toolbar" aria-label="Filters">
@@ -841,6 +983,220 @@
 						<span>Mark this report as private</span>
 					</label>
 				</div>
+			</fieldset>
+
+			<!-- Additional Sources (witnesses / news / documents) -->
+			<fieldset class="form-section">
+				<legend class="section-legend">
+					<span class="section-icon" aria-hidden="true">⚲</span>
+					Sources
+					<span class="legend-count">{sourceEntries.length}</span>
+				</legend>
+				<p class="section-hint">
+					Add additional sources backing this report — each witness,
+					news article, or supporting document gets its own entry
+					with its own attribution, narrative, and privacy flag.
+				</p>
+
+				{#each sourceEntries as entry, i (entry.uid)}
+					<div class="repeatable-entry" data-index={i}>
+						<div class="repeatable-entry-header">
+							<h4 class="repeatable-entry-title">Source #{i + 1}</h4>
+							<button
+								type="button"
+								class="repeatable-entry-remove"
+								aria-label="Remove source {i + 1}"
+								onclick={() => removeSource(i)}
+								disabled={formSaving}
+							>✕ Remove</button>
+						</div>
+
+						<div class="grid-2">
+							<div class="field">
+								<label for="src-{entry.uid}-type">Source type</label>
+								<select
+									id="src-{entry.uid}-type"
+									class="input--search"
+									bind:value={entry.source_type}
+									disabled={formSaving}
+								>
+									{#each Object.entries(sourceTypeFormLabels) as [value, label] (value)}
+										<option {value}>{label}</option>
+									{/each}
+								</select>
+								<p class="field-hint">{sourceTypeFormHelp[entry.source_type]}</p>
+							</div>
+
+							<div class="field">
+								<label for="src-{entry.uid}-attr">
+									Source attribution
+									<span class="badge-public" title="Shown publicly">public</span>
+								</label>
+								<input
+									id="src-{entry.uid}-attr"
+									type="text"
+									class="input--search"
+									bind:value={entry.source_attribution}
+									placeholder='e.g. "family member", "BBC article"'
+									maxlength={MAX_SHORT}
+									autocomplete="off"
+									disabled={formSaving}
+								/>
+							</div>
+
+							<div class="field">
+								<label for="src-{entry.uid}-date">Date start</label>
+								<input
+									id="src-{entry.uid}-date"
+									type="date"
+									class="input--search"
+									bind:value={entry.date_start}
+									disabled={formSaving}
+								/>
+							</div>
+
+							<div class="field">
+								<label class="field-checkbox">
+									<input
+										type="checkbox"
+										bind:checked={entry.is_private}
+										disabled={formSaving}
+									/>
+									<span>Mark this source as private</span>
+								</label>
+								<p class="field-hint">
+									Private sources are hidden from public reads,
+									even on a public report.
+								</p>
+							</div>
+						</div>
+
+						<div class="field field-full">
+							<label for="src-{entry.uid}-narrative">Narrative</label>
+							<textarea
+								id="src-{entry.uid}-narrative"
+								class="input--search"
+								bind:value={entry.narrative}
+								maxlength={MAX_NARRATIVE}
+								placeholder="What does this source say happened? Dates, places, context."
+								disabled={formSaving}
+							></textarea>
+							<div class="field-counter" aria-live="polite">
+								{entry.narrative.length} / {MAX_NARRATIVE}
+							</div>
+						</div>
+					</div>
+				{/each}
+
+				<button
+					type="button"
+					class="repeatable-add"
+					onclick={addSource}
+					disabled={formSaving}
+				>+ Add another</button>
+			</fieldset>
+
+			<!-- Media (photos / documents / videos / links) -->
+			<fieldset class="form-section">
+				<legend class="section-legend">
+					<span class="section-icon" aria-hidden="true">▣</span>
+					Media
+					<span class="legend-count">{mediaEntries.length}</span>
+				</legend>
+				<p class="section-hint">
+					Attach supporting evidence — photos, documents, videos,
+					or external links. Each item gets its own visibility
+					tier; "Sensitive" requires Advocate/Admin role.
+				</p>
+
+				{#each mediaEntries as entry, i (entry.uid)}
+					<div class="repeatable-entry" data-index={i}>
+						<div class="repeatable-entry-header">
+							<h4 class="repeatable-entry-title">Media #{i + 1}</h4>
+							<button
+								type="button"
+								class="repeatable-entry-remove"
+								aria-label="Remove media {i + 1}"
+								onclick={() => removeMedia(i)}
+								disabled={formSaving}
+							>✕ Remove</button>
+						</div>
+
+						<div class="grid-2">
+							<div class="field">
+								<label for="med-{entry.uid}-type">Media type</label>
+								<select
+									id="med-{entry.uid}-type"
+									class="input--search"
+									bind:value={entry.media_type}
+									disabled={formSaving}
+								>
+									<option value="photo">Photo</option>
+									<option value="document">Document</option>
+									<option value="video">Video</option>
+									<option value="link">External link</option>
+								</select>
+							</div>
+
+							<div class="field">
+								<label for="med-{entry.uid}-vis">Visibility</label>
+								<select
+									id="med-{entry.uid}-vis"
+									class="input--search"
+									bind:value={entry.visibility}
+									disabled={formSaving}
+								>
+									<option value="public">Public — anyone can view</option>
+									<option value="restricted">Restricted — authenticated users only</option>
+									<option value="sensitive">Sensitive — advocates/admin only</option>
+								</select>
+							</div>
+
+							<div class="field field-full">
+								<label for="med-{entry.uid}-desc">
+									Description <span class="optional-mark">(optional)</span>
+								</label>
+								<input
+									id="med-{entry.uid}-desc"
+									type="text"
+									class="input--search"
+									bind:value={entry.description}
+									placeholder="What's in this media? Alt text for images."
+									maxlength={500}
+									autocomplete="off"
+									disabled={formSaving}
+								/>
+							</div>
+
+							<div class="field field-full">
+								<label for="med-{entry.uid}-url">
+									File URL <span class="optional-mark">(URL or upload via Media gallery)</span>
+								</label>
+								<input
+									id="med-{entry.uid}-url"
+									type="url"
+									class="input--search"
+									bind:value={entry.url}
+									placeholder="https://… (paste a link, or upload via the case page)"
+									maxlength={1000}
+									autocomplete="off"
+									disabled={formSaving}
+								/>
+								<p class="field-hint">
+									File uploads (multipart) happen on the case page
+									media gallery — this form accepts external links.
+								</p>
+							</div>
+						</div>
+					</div>
+				{/each}
+
+				<button
+					type="button"
+					class="repeatable-add"
+					onclick={addMedia}
+					disabled={formSaving}
+				>+ Add another Media</button>
 			</fieldset>
 
 			<!-- Action footer -->
@@ -1623,5 +1979,156 @@
 			flex: 1 1 auto;
 			min-width: 0;
 		}
+	}
+
+	/* === Repeatable entry (Sources / Media) ============================
+	   Each entry lives in its own bordered block with a header row
+	   (title + remove button) and a field grid. Visual separation
+	   prevents the volunteer from accidentally typing into the wrong
+	   source's narrative. */
+	.report-form--modal .repeatable-entry {
+		display: flex;
+		flex-direction: column;
+		gap: 0.85rem;
+		padding: 1rem 1.1rem;
+		border: 1px solid var(--color-border-light);
+		border-left: 3px solid var(--color-primary-light, #aac0ff);
+		border-radius: var(--radius-card);
+		background: var(--color-surface, #f7f7f9);
+	}
+	.report-form--modal .repeatable-entry + .repeatable-entry {
+		margin-top: 0.75rem;
+	}
+	.report-form--modal .repeatable-entry-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin-bottom: 0.1rem;
+	}
+	.report-form--modal .repeatable-entry-title {
+		margin: 0;
+		font-size: 0.92rem;
+		font-weight: 700;
+		color: var(--color-text);
+	}
+	.report-form--modal .repeatable-entry-remove {
+		background: transparent;
+		border: 1px solid var(--color-border-light);
+		color: var(--color-danger, #c53030);
+		font-size: 0.78rem;
+		padding: 0.25rem 0.65rem;
+		border-radius: var(--radius-card);
+		cursor: pointer;
+		font-weight: 600;
+		min-height: 0;
+	}
+	.report-form--modal .repeatable-entry-remove:hover:not(:disabled) {
+		background: #fed7d7;
+		border-color: #feb2b2;
+	}
+	.report-form--modal .repeatable-entry-remove:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+	}
+
+	/* Add-another button — full-width below the entries list */
+	.report-form--modal .repeatable-add {
+		width: 100%;
+		margin-top: 0.85rem;
+		padding: 0.6rem 0.85rem;
+		background: var(--color-bg-white);
+		border: 1px dashed var(--color-border-light);
+		color: var(--color-primary);
+		font-size: 0.9rem;
+		font-weight: 600;
+		border-radius: var(--radius-card);
+		cursor: pointer;
+		min-height: 0;
+	}
+	.report-form--modal .repeatable-add:hover:not(:disabled) {
+		background: var(--color-surface, #f7f7f9);
+		border-style: solid;
+		border-color: var(--color-primary-light);
+	}
+	.report-form--modal .repeatable-add:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+	}
+
+	/* Count badge next to section legend (Sources: 3, Media: 1, etc.) */
+	.report-form--modal .legend-count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 24px;
+		padding: 0.05rem 0.55rem;
+		margin-left: 0.5rem;
+		background: var(--color-primary-tint, #e6efff);
+		color: var(--color-primary);
+		font-size: 0.75rem;
+		font-weight: 700;
+		border-radius: 999px;
+		vertical-align: middle;
+	}
+
+	/* === Media partial-failure banner (page-level) ==================== */
+	.media-failures {
+		padding: 0.85rem 1.1rem;
+		background: #fef5e7;
+		color: #744210;
+		border: 1px solid #f6ad55;
+		border-left: 3px solid #dd6b20;
+		border-radius: var(--radius-card);
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.media-failures-header {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+	}
+	.media-failures-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+		border-radius: 50%;
+		background: rgba(221, 107, 32, 0.2);
+		color: #dd6b20;
+		font-weight: 700;
+		font-size: 0.85rem;
+		flex: 0 0 auto;
+	}
+	.media-failures-list {
+		margin: 0;
+		padding-left: 1.5rem;
+		font-size: 0.88rem;
+		color: #5a3b00;
+		line-height: 1.5;
+	}
+	.media-failures-list li {
+		margin: 0.15rem 0;
+	}
+	.media-failures-actions {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: 0.25rem;
+	}
+	.media-failures-actions button {
+		background: transparent;
+		border: 1px solid currentColor;
+		color: inherit;
+		font-size: 0.82rem;
+		padding: 0.3rem 0.75rem;
+		border-radius: var(--radius-control);
+		cursor: pointer;
+		font-weight: 600;
+		min-height: 0;
+	}
+	.media-failures-actions button:hover {
+		background: rgba(0, 0, 0, 0.05);
 	}
 </style>
