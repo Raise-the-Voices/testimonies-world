@@ -5,7 +5,18 @@
 			"numberOfRuns": 1,
 			"settings": {
 				"chromeFlags": "--headless=new --no-sandbox --disable-gpu"
-			}
+			},
+			// Start the adapter-node server ourselves so Lighthouse has
+			// something to load. The previous config relied on the
+			// treosh/lighthouse-ci-action starting one, but no
+			// `startServerCommand` was ever declared — so Chrome hit
+			// a closed port on 127.0.0.1:4173 and failed with
+			// `CHROME_INTERSTITIAL_ERROR`. PUBLIC_BASE_PATH and
+			// ORIGIN must match the URL above so SvelteKit's path-base
+			// resolves to /testimonies and not 404 against /. PORT
+			// 4173 is Vite preview's default but adapter-node listens
+			// on $PORT regardless of `npm run preview`.
+			"startServerCommand": "PUBLIC_BASE_PATH=/testimonies ORIGIN=http://127.0.0.1:4173 PORT=4173 node build/index.js"
 		},
 		"assert": {
 			"preset": "lighthouse:no-pwa",
