@@ -43,6 +43,37 @@ jobs:
           PUBLIC_BASE_PATH: '/testimonies'
 
   # -------------------------------------------------------------------------
+  # Frontend Vitest unit tests — runs in parallel with `frontend`
+  # (svelte-check + build). Vitest is the project's component/unit-test
+  # runner (see frontend/vitest.config.ts). `--run` exits non-zero on
+  # failure unlike the default watch mode.
+  #
+  # Playwright E2E (frontend/tests/*.spec.ts) is intentionally NOT in
+  # this workflow yet — those specs need an out-of-band auth bootstrap
+  # (see tests/auth.setup.ts + TESTIMONIAL_E2E_AUTH.md) and a
+  # running Django backend. Wiring that is a separate concern; track
+  # it via the existing tests/ E2E setup work.
+  # -------------------------------------------------------------------------
+  frontend-tests:
+    name: Frontend Vitest unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd frontend && npm ci
+
+      - name: Vitest unit tests
+        run: cd frontend && npm test -- --run
+
+  # -------------------------------------------------------------------------
   # Backend — Django check + migration drift + tests + the API drift gate.
   # All steps use SQLite via USE_SQLITE=True (no DB credentials in the
   # runner secret store; no network to the prod Postgres needed).
@@ -77,6 +108,15 @@ jobs:
       # Block any PR that introduces model changes without a migration.
       - name: Migration drift check
         run: cd backend && python manage.py makemigrations --check --dry-run
+        env:
+          DJANGO_SECRET_KEY: ci-placeholder-not-secret
+          USE_SQLITE: 'True'
+
+      # Apply migrations on the fresh CI database. --keepdb below
+      # only works when a DB already exists — on a brand-new CI
+      # runner we'd 429 partway through. Run migrate explicitly first.
+      - name: Apply migrations
+        run: cd backend && python manage.py migrate --noinput
         env:
           DJANGO_SECRET_KEY: ci-placeholder-not-secret
           USE_SQLITE: 'True'
