@@ -11,6 +11,7 @@ import type {
   ApiCategoriesListParams,
   ApiContactsListParams,
   ApiDashboardListParams,
+  ApiDebugRecentPersonsListParams,
   ApiMediaListParams,
   ApiNotificationsListParams,
   ApiPersonsCountriesListParams,
@@ -19,6 +20,7 @@ import type {
   ApiPreferencesListParams,
   ApiRelationshipsListParams,
   ApiReportsListParams,
+  ApiSourcesListParams,
   ApiTestimonialTagsListParams,
   ApiTestimonialsListParams,
   AuditLog,
@@ -44,6 +46,7 @@ import type {
   PaginatedNotificationList,
   PaginatedPersonListList,
   PaginatedReportList,
+  PaginatedSourceList,
   PaginatedTestimonialPublicList,
   PaginatedTestimonialTagList,
   PaginatedUserPreferenceList,
@@ -53,15 +56,19 @@ import type {
   PatchedMediaRequest,
   PatchedPersonWriteRequest,
   PatchedReportRequest,
+  PatchedSourceRequest,
   PatchedTestimonialTagRequest,
   PatchedTestimonialWriteRequest,
   PatchedUserPreferenceRequest,
   PersonDetail,
+  PersonList,
   PersonWrite,
   PersonWriteRequest,
   RelatedPersonsResponse,
   Report,
   ReportRequest,
+  Source,
+  SourceRequest,
   StatisticsResponse,
   TestimonialPublic,
   TestimonialTag,
@@ -705,6 +712,63 @@ export const getApiDashboardListUrl = (params?: ApiDashboardListParams,) => {
 export const apiDashboardList = async (params?: ApiDashboardListParams, options?: RequestInit): Promise<apiDashboardListResponse> => {
   
   return fetcher<apiDashboardListResponse>(getApiDashboardListUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
+ * GET /api/debug/recent-persons/ — last 5 created persons, staff-only.
+
+Self-audit endpoint for smoke-testing the create → DB → retrieve
+lifecycle: after a POST /api/persons/ with a unique name, hit this
+endpoint to confirm the row landed in PostgreSQL without scanning
+the full /api/persons/ list. Returns the 5 most recent persons
+(newest first) using PersonListSerializer so the response shape
+matches the public list endpoint.
+
+Permission: IsAdminUser (staff). Non-staff get 403. The path lives
+under /api/debug/ to make the operator-facing intent obvious and
+to keep it visually separate from production routes.
+
+Not paginated — the slice is hard-capped at 5 so the response
+payload is bounded regardless of caller intent.
+ */
+export type apiDebugRecentPersonsListResponse200 = {
+  data: PersonList[]
+  status: 200
+}
+    
+export type apiDebugRecentPersonsListResponseSuccess = (apiDebugRecentPersonsListResponse200) & {
+  headers: Headers;
+};
+;
+
+export type apiDebugRecentPersonsListResponse = (apiDebugRecentPersonsListResponseSuccess)
+
+export const getApiDebugRecentPersonsListUrl = (params?: ApiDebugRecentPersonsListParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/debug/recent-persons/?${stringifiedParams}` : `/api/debug/recent-persons/`
+}
+
+export const apiDebugRecentPersonsList = async (params?: ApiDebugRecentPersonsListParams, options?: RequestInit): Promise<apiDebugRecentPersonsListResponse> => {
+  
+  return fetcher<apiDebugRecentPersonsListResponse>(getApiDebugRecentPersonsListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -2788,6 +2852,294 @@ export const getApiReportsDestroyUrl = (id: number,) => {
 export const apiReportsDestroy = async (id: number, options?: RequestInit): Promise<apiReportsDestroyResponse> => {
   
   return fetcher<apiReportsDestroyResponse>(getApiReportsDestroyUrl(id),
+  {      
+    ...options,
+    method: 'DELETE'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Standalone CRUD for Report sources.
+
+Most sources are created via the nested `ReportSerializer.sources`
+slot during a Report POST. This viewset exists for (a) listing
+sources across reports, (b) adding a source to an existing report,
+and (c) editing/deleting an individual source row.
+
+Permission: same as Report — authenticated + Volunteer. Modifying
+an existing source requires being the source's report author,
+Advocate, or staff (mirrors Report authorship gate). Reads on
+private sources are gated the same way Report reads are.
+ */
+export type apiSourcesListResponse200 = {
+  data: PaginatedSourceList
+  status: 200
+}
+    
+export type apiSourcesListResponseSuccess = (apiSourcesListResponse200) & {
+  headers: Headers;
+};
+;
+
+export type apiSourcesListResponse = (apiSourcesListResponseSuccess)
+
+export const getApiSourcesListUrl = (params?: ApiSourcesListParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/sources/?${stringifiedParams}` : `/api/sources/`
+}
+
+export const apiSourcesList = async (params?: ApiSourcesListParams, options?: RequestInit): Promise<apiSourcesListResponse> => {
+  
+  return fetcher<apiSourcesListResponse>(getApiSourcesListUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Standalone CRUD for Report sources.
+
+Most sources are created via the nested `ReportSerializer.sources`
+slot during a Report POST. This viewset exists for (a) listing
+sources across reports, (b) adding a source to an existing report,
+and (c) editing/deleting an individual source row.
+
+Permission: same as Report — authenticated + Volunteer. Modifying
+an existing source requires being the source's report author,
+Advocate, or staff (mirrors Report authorship gate). Reads on
+private sources are gated the same way Report reads are.
+ */
+export type apiSourcesCreateResponse201 = {
+  data: Source
+  status: 201
+}
+    
+export type apiSourcesCreateResponseSuccess = (apiSourcesCreateResponse201) & {
+  headers: Headers;
+};
+;
+
+export type apiSourcesCreateResponse = (apiSourcesCreateResponseSuccess)
+
+export const getApiSourcesCreateUrl = () => {
+
+
+  
+
+  return `/api/sources/`
+}
+
+export const apiSourcesCreate = async (sourceRequest: SourceRequest, options?: RequestInit): Promise<apiSourcesCreateResponse> => {
+  
+  return fetcher<apiSourcesCreateResponse>(getApiSourcesCreateUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      sourceRequest,)
+  }
+);}
+
+
+
+/**
+ * Standalone CRUD for Report sources.
+
+Most sources are created via the nested `ReportSerializer.sources`
+slot during a Report POST. This viewset exists for (a) listing
+sources across reports, (b) adding a source to an existing report,
+and (c) editing/deleting an individual source row.
+
+Permission: same as Report — authenticated + Volunteer. Modifying
+an existing source requires being the source's report author,
+Advocate, or staff (mirrors Report authorship gate). Reads on
+private sources are gated the same way Report reads are.
+ */
+export type apiSourcesRetrieveResponse200 = {
+  data: Source
+  status: 200
+}
+    
+export type apiSourcesRetrieveResponseSuccess = (apiSourcesRetrieveResponse200) & {
+  headers: Headers;
+};
+;
+
+export type apiSourcesRetrieveResponse = (apiSourcesRetrieveResponseSuccess)
+
+export const getApiSourcesRetrieveUrl = (id: number,) => {
+
+
+  
+
+  return `/api/sources/${id}/`
+}
+
+export const apiSourcesRetrieve = async (id: number, options?: RequestInit): Promise<apiSourcesRetrieveResponse> => {
+  
+  return fetcher<apiSourcesRetrieveResponse>(getApiSourcesRetrieveUrl(id),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+/**
+ * Standalone CRUD for Report sources.
+
+Most sources are created via the nested `ReportSerializer.sources`
+slot during a Report POST. This viewset exists for (a) listing
+sources across reports, (b) adding a source to an existing report,
+and (c) editing/deleting an individual source row.
+
+Permission: same as Report — authenticated + Volunteer. Modifying
+an existing source requires being the source's report author,
+Advocate, or staff (mirrors Report authorship gate). Reads on
+private sources are gated the same way Report reads are.
+ */
+export type apiSourcesUpdateResponse200 = {
+  data: Source
+  status: 200
+}
+    
+export type apiSourcesUpdateResponseSuccess = (apiSourcesUpdateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type apiSourcesUpdateResponse = (apiSourcesUpdateResponseSuccess)
+
+export const getApiSourcesUpdateUrl = (id: number,) => {
+
+
+  
+
+  return `/api/sources/${id}/`
+}
+
+export const apiSourcesUpdate = async (id: number,
+    sourceRequest: SourceRequest, options?: RequestInit): Promise<apiSourcesUpdateResponse> => {
+  
+  return fetcher<apiSourcesUpdateResponse>(getApiSourcesUpdateUrl(id),
+  {      
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      sourceRequest,)
+  }
+);}
+
+
+
+/**
+ * Standalone CRUD for Report sources.
+
+Most sources are created via the nested `ReportSerializer.sources`
+slot during a Report POST. This viewset exists for (a) listing
+sources across reports, (b) adding a source to an existing report,
+and (c) editing/deleting an individual source row.
+
+Permission: same as Report — authenticated + Volunteer. Modifying
+an existing source requires being the source's report author,
+Advocate, or staff (mirrors Report authorship gate). Reads on
+private sources are gated the same way Report reads are.
+ */
+export type apiSourcesPartialUpdateResponse200 = {
+  data: Source
+  status: 200
+}
+    
+export type apiSourcesPartialUpdateResponseSuccess = (apiSourcesPartialUpdateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type apiSourcesPartialUpdateResponse = (apiSourcesPartialUpdateResponseSuccess)
+
+export const getApiSourcesPartialUpdateUrl = (id: number,) => {
+
+
+  
+
+  return `/api/sources/${id}/`
+}
+
+export const apiSourcesPartialUpdate = async (id: number,
+    patchedSourceRequest: PatchedSourceRequest, options?: RequestInit): Promise<apiSourcesPartialUpdateResponse> => {
+  
+  return fetcher<apiSourcesPartialUpdateResponse>(getApiSourcesPartialUpdateUrl(id),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      patchedSourceRequest,)
+  }
+);}
+
+
+
+/**
+ * Standalone CRUD for Report sources.
+
+Most sources are created via the nested `ReportSerializer.sources`
+slot during a Report POST. This viewset exists for (a) listing
+sources across reports, (b) adding a source to an existing report,
+and (c) editing/deleting an individual source row.
+
+Permission: same as Report — authenticated + Volunteer. Modifying
+an existing source requires being the source's report author,
+Advocate, or staff (mirrors Report authorship gate). Reads on
+private sources are gated the same way Report reads are.
+ */
+export type apiSourcesDestroyResponse204 = {
+  data: void
+  status: 204
+}
+    
+export type apiSourcesDestroyResponseSuccess = (apiSourcesDestroyResponse204) & {
+  headers: Headers;
+};
+;
+
+export type apiSourcesDestroyResponse = (apiSourcesDestroyResponseSuccess)
+
+export const getApiSourcesDestroyUrl = (id: number,) => {
+
+
+  
+
+  return `/api/sources/${id}/`
+}
+
+export const apiSourcesDestroy = async (id: number, options?: RequestInit): Promise<apiSourcesDestroyResponse> => {
+  
+  return fetcher<apiSourcesDestroyResponse>(getApiSourcesDestroyUrl(id),
   {      
     ...options,
     method: 'DELETE'

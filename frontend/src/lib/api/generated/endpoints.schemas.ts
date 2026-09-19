@@ -433,6 +433,13 @@ export const ApiReportsListSourceType = {
   secondhand: 'secondhand',
 } as const;
 
+export const ApiSourcesListSourceType = {
+  document: 'document',
+  firsthand: 'firsthand',
+  news: 'news',
+  secondhand: 'secondhand',
+} as const;
+
 export const ApiTestimonialsListStatus = {
   archived: 'archived',
   draft: 'draft',
@@ -1320,6 +1327,15 @@ export interface PaginatedReportList {
   results: Report[];
 }
 
+export interface PaginatedSourceList {
+  count: number;
+  /** @nullable */
+  next?: string | null;
+  /** @nullable */
+  previous?: string | null;
+  results: Source[];
+}
+
 export interface PaginatedTestimonialPublicList {
   count: number;
   /** @nullable */
@@ -1717,6 +1733,7 @@ export interface PatchedPersonWriteRequest {
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
 export interface PatchedReportRequest {
+  sources?: SourceRequest[];
   source_type?: SourceTypeEnum;
   /**
    * Public attribution — e.g. "family member", "BBC report"
@@ -1928,6 +1945,29 @@ export interface PatchedReportRequest {
   person?: number;
   /** @nullable */
   qc_reviewed_by?: number | null;
+}
+
+/**
+ * A single source attached to a Report.
+
+Writable via nested create on `ReportSerializer.sources` (so the
+volunteer can submit a report + N sources in one POST), and also
+exposed standalone at `/sources/`. Field shape mirrors the primary
+Report source_* fields so the volunteer form doesn't need to teach
+two vocabularies.
+ */
+export interface PatchedSourceRequest {
+  source_type?: SourceTypeEnum;
+  /**
+   * Public attribution — e.g. "family member", "BBC report"
+   * @maxLength 500
+   */
+  source_attribution?: string;
+  /** @nullable */
+  date_start?: string | null;
+  narrative?: string;
+  /** Hide this source from public reads. */
+  is_private?: boolean;
 }
 
 export interface PatchedTestimonialTagRequest {
@@ -3018,6 +3058,7 @@ export type RelationshipTypeEnum = typeof RelationshipTypeEnum[keyof typeof Rela
 export interface Report {
   readonly id: number;
   readonly media_files: readonly Media[];
+  sources?: Source[];
   source_type?: SourceTypeEnum;
   /**
    * Public attribution — e.g. "family member", "BBC report"
@@ -3271,6 +3312,7 @@ export interface Report {
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
 export interface ReportRequest {
+  sources?: SourceRequest[];
   source_type?: SourceTypeEnum;
   /**
    * Public attribution — e.g. "family member", "BBC report"
@@ -3530,6 +3572,32 @@ export type ScopeEnum = typeof ScopeEnum[keyof typeof ScopeEnum];
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
 /**
+ * A single source attached to a Report.
+
+Writable via nested create on `ReportSerializer.sources` (so the
+volunteer can submit a report + N sources in one POST), and also
+exposed standalone at `/sources/`. Field shape mirrors the primary
+Report source_* fields so the volunteer form doesn't need to teach
+two vocabularies.
+ */
+export interface Source {
+  readonly id: number;
+  readonly report: number;
+  source_type?: SourceTypeEnum;
+  /**
+   * Public attribution — e.g. "family member", "BBC report"
+   * @maxLength 500
+   */
+  source_attribution?: string;
+  /** @nullable */
+  date_start?: string | null;
+  narrative?: string;
+  /** Hide this source from public reads. */
+  is_private?: boolean;
+  readonly created_at: string;
+}
+
+/**
  * * `consistent` - Consistent
 * `some_differences` - Some differences
 * `major_conflict` - Major conflict
@@ -3538,6 +3606,29 @@ export type ScopeEnum = typeof ScopeEnum[keyof typeof ScopeEnum];
 export type SourceConsistencyEnum = typeof SourceConsistencyEnum[keyof typeof SourceConsistencyEnum];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
+
+/**
+ * A single source attached to a Report.
+
+Writable via nested create on `ReportSerializer.sources` (so the
+volunteer can submit a report + N sources in one POST), and also
+exposed standalone at `/sources/`. Field shape mirrors the primary
+Report source_* fields so the volunteer form doesn't need to teach
+two vocabularies.
+ */
+export interface SourceRequest {
+  source_type?: SourceTypeEnum;
+  /**
+   * Public attribution — e.g. "family member", "BBC report"
+   * @maxLength 500
+   */
+  source_attribution?: string;
+  /** @nullable */
+  date_start?: string | null;
+  narrative?: string;
+  /** Hide this source from public reads. */
+  is_private?: boolean;
+}
 
 /**
  * * `firsthand` - Firsthand
@@ -3962,6 +4053,17 @@ page?: number;
 search?: string;
 };
 
+export type ApiDebugRecentPersonsListParams = {
+/**
+ * Which field to use when ordering the results.
+ */
+ordering?: string;
+/**
+ * A search term.
+ */
+search?: string;
+};
+
 export type ApiMediaListParams = {
 /**
  * * `photo` - Photo
@@ -4331,6 +4433,34 @@ source_type?: ApiReportsListSourceType;
 };
 
 export type ApiReportsListSourceType = typeof ApiReportsListSourceType[keyof typeof ApiReportsListSourceType];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+
+export type ApiSourcesListParams = {
+is_private?: boolean;
+/**
+ * Which field to use when ordering the results.
+ */
+ordering?: string;
+/**
+ * A page number within the paginated result set.
+ */
+page?: number;
+report?: number;
+/**
+ * A search term.
+ */
+search?: string;
+/**
+ * * `firsthand` - Firsthand
+* `secondhand` - Secondhand
+* `news` - News report
+* `document` - Document
+ */
+source_type?: ApiSourcesListSourceType;
+};
+
+export type ApiSourcesListSourceType = typeof ApiSourcesListSourceType[keyof typeof ApiSourcesListSourceType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
