@@ -754,21 +754,23 @@ class FamilyRelationshipPermissionTests(BaseTestCase):
                 res = getattr(anon, verb)(path, body, format='json')
             self.assertIn(res.status_code, (401, 403), f'{verb} {path}: {res.content}')
 
-    def test_reads_are_open_to_anonymous(self):
-        # Volunteer creates a row; anonymous can still GET the list.
+    def test_reads_require_authentication(self):
+        # (C6 + M1) Family relationships name relatives of a victim —
+        # PII with a real-world doxxing hazard if leaked. They were
+        # previously open to anonymous reads via the default
+        # IsAuthenticatedOrReadOnly on FamilyRelationshipViewSet; the
+        # viewset was tightened to IsAuthenticated so anonymous
+        # browsers can no longer enumerate family rows.
         self.client.force_login(self.volunteer)
-        rid = self.client.post(
-            '/api/relationships/', self._payload(), format='json',
-        ).json()['id']
+        self.client.post('/api/relationships/', self._payload(), format='json')
+
         anon = APIClient()
         res = anon.get('/api/relationships/')
-        self.assertEqual(res.status_code, 200)
-        ids = [
-            r['id'] for r in (
-                res.json()['results'] if 'results' in res.json() else res.json()
-            )
-        ]
-        self.assertIn(rid, ids)
+        # DRF returns 403 (not 401) when auth credentials are missing —
+        # that's the project-wide convention for unauthenticated API
+        # responses.
+        self.assertEqual(res.status_code, 403)
+        self.assertIn(b'Authentication credentials were not provided', res.content)
 
     # --- Audit log -------------------------------------------------------
 
