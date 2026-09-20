@@ -88,14 +88,14 @@
 			nextSteps = r.next_steps ?? '';
 			notes = r.notes ?? '';
 			selectedPersons = Array.isArray(r.persons) ? r.persons.slice() : [];
-		} catch (e: any) {
+		} catch (e: unknown) {
 			if (token !== loadToken) return;
 			if (e instanceof ApiError && e.status === 404) {
 				loadError = 'That record no longer exists.';
 			} else if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
 				loadError = "You don't have permission to edit this record.";
 			} else {
-				loadError = e?.message || "Couldn't load this record.";
+				loadError = e instanceof Error ? e.message : "Couldn't load this record.";
 			}
 		} finally {
 			if (token === loadToken) loading = false;

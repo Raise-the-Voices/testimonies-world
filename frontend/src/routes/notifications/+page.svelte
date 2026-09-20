@@ -26,8 +26,8 @@
 		try {
 			const r = await getNotifications({ unread: filter === 'unread' });
 			items = Array.isArray(r) ? (r as Notification[]) : (r.results ?? []);
-		} catch (e: any) {
-			error = e?.message ?? "Couldn't load notifications.";
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : "Couldn't load notifications.";
 			items = [];
 		} finally {
 			loading = false;
