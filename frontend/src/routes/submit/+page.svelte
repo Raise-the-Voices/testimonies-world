@@ -546,7 +546,7 @@
 			// the post-submit confirmation card below, not here.
 			submittedCaseId = person.case_id ?? null;
 			submittedPersonId = person.id;
-		} catch (e: any) {
+		} catch (e: unknown) {
 			if (e instanceof ApiError) {
 				if (e.isValidation && Object.keys(e.fieldErrors).length > 0) {
 					const mapped: Record<string, string> = {};
