@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * StatRow — a single labelled metric row inside a <StatCard>.
+	 * StatRow — a single labelled metric row inside a <StatisticsCard variant="section">.
 	 *
 	 *   ┌──────────────────────────────────────────────────┐
 	 *   │  Label                       (60)  ← count pill  │

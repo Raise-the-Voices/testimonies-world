@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import { getStatistics } from '$lib/api';
 	import { statusLabels } from '$lib/StatusBadge.svelte';
-	import StatCard from '$lib/StatCard.svelte';
+	import StatisticsCard from '$lib/StatisticsCard.svelte';
 	import StatRow from '$lib/StatRow.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import type { PageData } from './$types';
@@ -137,7 +137,7 @@
 		</div>
 	{:else if stats}
 		<div class="stats-grid">
-			<StatCard title="By Status" meta="{sortedByStatus.length} categories" delayMs={0}>
+			<StatisticsCard variant="section" title="By Status" meta="{sortedByStatus.length} categories" delayMs={0}>
 				{#if sortedByStatus.length > 0}
 					<ul class="stat-list">
 						{#each sortedByStatus as [key, count] (key)}
@@ -147,9 +147,9 @@
 				{:else}
 					<p class="stat-empty">No data yet</p>
 				{/if}
-			</StatCard>
+			</StatisticsCard>
 
-			<StatCard title="By Country" meta="{countries.length} countries" delayMs={50}>
+			<StatisticsCard variant="section" title="By Country" meta="{countries.length} countries" delayMs={50}>
 				{#if countries.length > 0}
 					<ul class="stat-list">
 						{#each countries as [country, count] (country)}
@@ -159,9 +159,10 @@
 				{:else}
 					<p class="stat-empty">No data yet</p>
 				{/if}
-			</StatCard>
+			</StatisticsCard>
 
-			<StatCard
+			<StatisticsCard
+				variant="section"
 				title="By Category"
 				meta="{sortedCategories.length} categories"
 				delayMs={100}
@@ -175,9 +176,10 @@
 				{:else}
 					<p class="stat-empty">No data yet</p>
 				{/if}
-			</StatCard>
+			</StatisticsCard>
 
-			<StatCard
+			<StatisticsCard
+				variant="section"
 				title="By Medical Status"
 				meta="{sortedByMedical.length} statuses"
 				delayMs={150}
@@ -195,7 +197,7 @@
 				{:else}
 					<p class="stat-empty">No data yet</p>
 				{/if}
-			</StatCard>
+			</StatisticsCard>
 		</div>
 	{/if}
 </div>
