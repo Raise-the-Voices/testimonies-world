@@ -501,6 +501,30 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
     'GENERIC_ADDITIONAL_PROPERTIES': False,
+    # SECURITY — declares the SessionAuthentication scheme so the
+    # Swagger UI "Authorize" button has something to bind to. The
+    # API uses SessionAuthentication (cookies); the cookie name
+    # matches Django's default SESSION_COOKIE_NAME. The sessionid
+    # cookie is set by allauth after Google OAuth login — the
+    # Authorize form is mostly informational for human operators
+    # (you can't paste a cookie value into a Swagger UI field in
+    # a useful way) but the security scheme is what makes the
+    # endpoints show as requiring auth instead of "no security".
+    'APPEND_COMPONENTS': {
+        'securitySchemes': {
+            'cookieAuth': {
+                'type': 'apiKey',
+                'in': 'cookie',
+                'name': 'sessionid',
+                'description': (
+                    'Django session cookie. Set automatically by allauth '
+                    'after Google OAuth login; visitors without a session '
+                    'are redirected to /accounts/google/login/.'
+                ),
+            },
+        },
+    },
+    'SECURITY': [{'cookieAuth': []}],
     # ENUM_NAME_OVERRIDES collapses drf-spectacular's per-field enum
     # component names (auto-derived from the field name) into a
     # single canonical name per shared TextChoices. Without this,
