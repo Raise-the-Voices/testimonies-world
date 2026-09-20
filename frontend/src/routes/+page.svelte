@@ -3,7 +3,7 @@
 	import { base } from '$app/paths';
 	import { getStatistics } from '$lib/api';
 	import Icon from '$lib/Icon.svelte';
-	import SkeletonStatItem from '$lib/SkeletonStatItem.svelte';
+	import StatisticsCard from '$lib/StatisticsCard.svelte';
 	import type { PageData } from './$types';
 	import type { Statistics } from '$lib/types';
 
@@ -100,7 +100,7 @@
 	{#if statsLoading}
 		<section class="stats-bar" aria-busy="true" aria-label="Loading platform statistics">
 			{#each counters as c (c.label)}
-				<SkeletonStatItem />
+				<StatisticsCard variant="skeleton" />
 			{/each}
 		</section>
 	{:else if statsError}
