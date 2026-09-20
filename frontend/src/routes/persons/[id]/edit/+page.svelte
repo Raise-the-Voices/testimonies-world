@@ -5,7 +5,7 @@
 	import { user, isVolunteer, isAdmin, loadSession } from '$lib/session';
 	import { getPerson, updatePerson, getCategories, ApiError } from '$lib/api';
 import Skeleton from '$lib/Skeleton.svelte';
-	import type { Person } from '$lib/types';
+	import type { Person, PersonCategory } from '$lib/types';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -13,7 +13,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 	// SSR-hydrated auth (see +layout.svelte for the full rationale).
 	let currentUser = $derived(data.user ?? $user);
 	let isAdminUser = $derived(isAdmin(currentUser));
-	let categories: any[] = $state([]);
+	let categories: PersonCategory[] = $state([]);
 	let saving = $state(false);
 	let loading = $state(true);
 	let refreshing = $state(false);
@@ -119,7 +119,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 		authoritativeUrl = person.authoritative_url || '';
 		isPublished = person.is_published ?? true;
 		existingProfileImageUrl = person.profile_image_url ?? null;
-		selectedCategories = (person.categories || []).map((c: any) => c.id);
+		selectedCategories = (person.categories ?? []).map((c: PersonCategory) => c.id);
 	}
 
 	function toggleCategory(id: number) {

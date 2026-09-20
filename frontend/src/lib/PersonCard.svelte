@@ -19,6 +19,7 @@
 	 * a color change on the title.
 	 */
 	import { base } from '$app/paths';
+	import type { Person } from '$lib/types';
 	import Icon from './Icon.svelte';
 	import StatusBadge from './StatusBadge.svelte';
 
@@ -26,7 +27,7 @@
 		person,
 		delayMs = 0,
 	}: {
-		person: any;
+		person: Person;
 		delayMs?: number;
 	} = $props();
 

@@ -17,6 +17,7 @@
 	import { apiPersonsRelatedRetrieve } from '$lib/api/generated/endpoints';
 	import type { PersonList } from '$lib/api/generated/endpoints.schemas';
 	import StatusBadge from '$lib/StatusBadge.svelte';
+	import type { StatusValue } from '$lib/StatusBadge.svelte';
 
 	interface Props {
 		/** The person whose related-cases we want. */
@@ -38,8 +39,12 @@
 			// because the @extend_schema declares a `results` field on
 			// the inline RelatedPersonsResponse serializer. Normalize
 			// defensively in case the schema shape evolves.
-			const body: any = res.data;
-			items = Array.isArray(body?.results) ? body.results : (Array.isArray(body) ? body : []);
+			const body: PersonList[] | { results?: PersonList[] } | undefined = res.data;
+			items = Array.isArray(body?.results)
+				? body.results
+				: Array.isArray(body)
+					? body
+					: [];
 		} catch (e) {
 			// Don't surface a hard error for the widget — a failed
 			// related-cases fetch shouldn't break the rest of the
@@ -105,7 +110,7 @@
 						<span class="related-card-meta">
 							<span class="related-card-country">{person.country}</span>
 							{#if person.current_status}
-								<StatusBadge status={person.current_status as any} variant="default" />
+								<StatusBadge status={person.current_status as StatusValue} variant="default" />
 							{/if}
 						</span>
 					</div>

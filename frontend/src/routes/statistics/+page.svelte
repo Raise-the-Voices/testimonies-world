@@ -56,20 +56,20 @@
 		normalizeCountries(stats?.by_country ?? []).sort((a, b) => b[1] - a[1]),
 	);
 
-	const sortedByStatus = $derived(
-		Object.entries(stats?.by_status ?? {}).sort(
-			(a, b) => (b[1] as number) - (a[1] as number),
-		),
+	const sortedByStatus = $derived<Array<[string, number]>>(
+		Object.entries(stats?.by_status ?? {})
+			.map(([k, v]) => [k, Number(v)] as [string, number])
+			.sort((a, b) => b[1] - a[1]),
 	);
 
-	const sortedByMedical = $derived(
-		Object.entries(stats?.by_medical ?? {}).sort(
-			(a, b) => (b[1] as number) - (a[1] as number),
-		),
+	const sortedByMedical = $derived<Array<[string, number]>>(
+		Object.entries(stats?.by_medical ?? {})
+			.map(([k, v]) => [k, Number(v)] as [string, number])
+			.sort((a, b) => b[1] - a[1]),
 	);
 
 	const sortedCategories = $derived(
-		((stats?.by_category ?? []) as Array<{ name: string; count: number }>)
+		(stats?.by_category ?? [])
 			.filter((c) => c.count > 0)
 			.sort((a, b) => b.count - a.count),
 	);
@@ -139,7 +139,7 @@
 				{#if sortedByStatus.length > 0}
 					<ul class="stat-list">
 						{#each sortedByStatus as [key, count] (key)}
-							<StatRow label={statusLabels[key] || key} count={count as number} {total} />
+							<StatRow label={statusLabels[key] || key} {count} {total} />
 						{/each}
 					</ul>
 				{:else}
@@ -187,7 +187,7 @@
 						{#each sortedByMedical as [key, count] (key)}
 							<StatRow
 								label={medicalLabels[key] || key}
-								count={count as number}
+								{count}
 								{total}
 							/>
 						{/each}

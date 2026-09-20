@@ -12,6 +12,7 @@
 		formatDraftAge,
 		type SubmitDraft,
 	} from '$lib/submitDraft';
+	import type { PersonCategory } from '$lib/types';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -22,7 +23,7 @@
 	// (logout, cross-tab session expiry).
 	let currentUser = $derived(data.user ?? $user);
 	let isAdminUser = $derived(isAdmin(currentUser));
-	let categories: any[] = $state([]);
+	let categories: PersonCategory[] = $state([]);
 	let saving = $state(false);
 	let refreshing = $state(false);
 	// Top-level banner — ONLY for API / auth / server failures.
@@ -153,7 +154,7 @@
 	}
 
 	function restoreFromDraft(draft: SubmitDraft) {
-		const p = draft.payload as Record<string, any>;
+		const p = draft.payload as Record<string, unknown>;
 		// Defensive per-field assignment — keeps the form usable even
 		// if a future schemaVersion-bumped payload is partially valid
 		// (loadDraft drops unknown-schema drafts, but a same-version

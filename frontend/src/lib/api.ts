@@ -91,8 +91,11 @@ function flattenDrfError(body: unknown, status: number, statusText: string): {
 		const firstMsg = fieldErrors[firstField][0];
 		return { message: `${firstField}: ${firstMsg}`, fieldErrors };
 	}
-	if (body && typeof body === 'object' && 'detail' in body && typeof (body as any).detail === 'string') {
-		return { message: (body as any).detail as string, fieldErrors };
+	if (body && typeof body === 'object' && 'detail' in body) {
+		const detail = (body as { detail: unknown }).detail;
+		if (typeof detail === 'string') {
+			return { message: detail, fieldErrors };
+		}
 	}
 
 	const fallback: Record<number, string> = {
