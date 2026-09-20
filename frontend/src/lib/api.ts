@@ -230,8 +230,17 @@ export async function getWatchdog(): Promise<Person[]> {
 	return request<Person[]>('/persons/watchdog/');
 }
 
-export async function getStatistics(): Promise<Statistics> {
-	return request<Statistics>('/persons/statistics/');
+/**
+ * `injectedFetch` mirrors the `getDashboard()` pattern: SvelteKit's
+ * universal load functions pass a wrapped `fetch` that forwards cookies
+ * during SSR. The global fetch does NOT. Pass it explicitly from
+ * `+page.ts` so the SSR call to `/persons/statistics/` is authenticated
+ * when the user has a session cookie set.
+ */
+export async function getStatistics(
+	injectedFetch?: typeof globalThis.fetch,
+): Promise<Statistics> {
+	return request<Statistics>('/persons/statistics/', { fetch: injectedFetch });
 }
 
 /**
