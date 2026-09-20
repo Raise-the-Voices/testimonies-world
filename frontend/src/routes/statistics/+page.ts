@@ -7,16 +7,15 @@
 // throwing, so the page component's existing error UI can render. A
 // thrown load() would bubble up to SvelteKit's error page, which is
 // worse UX for what is a transient backend issue.
-import { base } from '$app/paths';
-import type { Statistics } from '$lib/types';
+import { getStatistics } from '$lib/api';
 
 export async function load({ fetch }) {
     try {
-        const res = await fetch(`${base}/api/persons/statistics/`);
-        if (!res.ok) {
-            return { statistics: null, error: `HTTP ${res.status}` };
-        }
-        const statistics = (await res.json()) as Statistics;
+        // Pass the SSR-aware `fetch` so cookies forward to the backend
+        // during server rendering. getStatistics() routes through the
+        // shared request() helper, which means an authenticated SSR
+        // request lands on the backend with the session cookie intact.
+        const statistics = await getStatistics(fetch);
         return { statistics, error: null };
     } catch (e) {
         return {
