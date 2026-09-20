@@ -19,8 +19,8 @@ import Skeleton from '$lib/Skeleton.svelte';
 			const p = await getPreferences();
 			prefs = { ...p };
 			original = { ...p };
-		} catch (e: any) {
-			error = e?.message ?? "Couldn't load preferences.";
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : "Couldn't load preferences.";
 		} finally {
 			loading = false;
 		}
@@ -35,8 +35,8 @@ import Skeleton from '$lib/Skeleton.svelte';
 			prefs = { ...next };
 			original = { ...next };
 			savedAt = new Date().toLocaleTimeString();
-		} catch (e: any) {
-			error = e?.message ?? "Couldn't save preferences.";
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : "Couldn't save preferences.";
 		} finally {
 			saving = false;
 		}
