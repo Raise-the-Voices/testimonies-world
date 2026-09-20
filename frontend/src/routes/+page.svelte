@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import { base } from '$app/paths';
 	import { getStatistics } from '$lib/api';
+	import { handleApiError } from '$lib/api/handleError';
 	import Icon from '$lib/Icon.svelte';
 	import StatisticsCard from '$lib/StatisticsCard.svelte';
 	import type { PageData } from './$types';
@@ -70,7 +71,12 @@
 		try {
 			stats = await getStatistics();
 		} catch (e) {
-			statsError = e instanceof Error ? e.message : 'Could not load statistics.';
+			// Inline UI keeps its short, friendly copy. The toast
+			// surfaces the actual server/network reason for diagnosis
+			// — visible even if the user has scrolled past the
+			// stats-bar.
+			statsError = 'Could not load platform statistics.';
+			handleApiError(e);
 		} finally {
 			statsLoading = false;
 		}

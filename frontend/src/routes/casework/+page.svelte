@@ -145,10 +145,11 @@
 			if (filterAction) params.action_type = filterAction;
 			const data = await getCasework(params);
 			records = Array.isArray(data) ? data : data.results ?? [];
-		} catch (e: any) {
+		} catch (e: unknown) {
 			loadError =
-				e?.message ||
-				"Couldn't load casework records. Check your connection and try again.";
+				e instanceof Error
+					? e.message
+					: "Couldn't load casework records. Check your connection and try again.";
 			records = [];
 		} finally {
 			loading = false;
@@ -201,11 +202,12 @@
 			toastTimer = setTimeout(() => {
 				if (deleteToast?.id === target.id) deleteToast = null;
 			}, 2000);
-		} catch (e: any) {
+		} catch (e: unknown) {
 			deleteToast = {
 				...target,
 				stage: 'error',
-				errorMessage: e?.message || "Couldn't delete that record. Please try again.",
+				errorMessage:
+					e instanceof Error ? e.message : "Couldn't delete that record. Please try again.",
 			};
 		}
 	}
