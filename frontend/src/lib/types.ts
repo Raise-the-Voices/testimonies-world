@@ -159,6 +159,26 @@ export interface FamilyRelationshipRow {
 	notes: string;
 }
 
+/** A single auto-captured status change on a Person. Wire shape comes
+   from CaseEventSerializer (backend/cases/serializers.py). Each row
+   represents one diff captured by PersonViewSet.perform_update —
+   the `description` is formatted as `"<field>: <prev> → <current>"`. */
+export interface StatusHistoryEntry {
+	id: number;
+	event_date: string | null;
+	event_kind: string;
+	description: string;
+	source: string;
+	verification?: string;
+	/** FK id of the user who wrote the row (NULL for legacy rows or
+	    system actions). The backend also denormalises the username
+	    as `created_by_username` so the UI doesn't need to resolve
+	    the FK separately. */
+	created_by: number | null;
+	created_by_username: string | null;
+	created_at?: string;
+}
+
 export interface Person {
 	id: number;
 	name: string;
@@ -190,6 +210,13 @@ export interface Person {
 	reports?: Report[];
 	media_files?: Media[];
 	family?: FamilyRelationship[];
+	/** Auto-captured history of edits to the status-ish fields
+	    (current_status, medical_status, current_status_date,
+	    current_status_source, current_status_verification). One row
+	    per changed field per save, written by PersonViewSet.perform_update
+	    in backend/cases/views.py. Surfaced on the person-detail page
+	    via <StatusHistoryTimeline>. */
+	status_history?: StatusHistoryEntry[];
 	/** Server-generated UUID. Set by the backend on create, read-only
 	    thereafter. Surfaced in the submit form for volunteers to
 	    capture for their own records; not editable. */

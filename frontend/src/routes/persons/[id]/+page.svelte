@@ -17,6 +17,7 @@
 	} from '$lib/api';
 	import { user, isVolunteer, isAdvocate } from '$lib/session';
 	import StatusBadge from '$lib/StatusBadge.svelte';
+	import StatusHistoryTimeline from '$lib/StatusHistoryTimeline.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import MediaUploadModal from '$lib/MediaUploadModal.svelte';
@@ -952,6 +953,14 @@
 					<div class="sidebar-status">
 						<StatusBadge status={person.current_status} />
 					</div>
+					<!-- Status history — auto-captured on every PATCH that
+					     touches one of the status-ish fields. See
+					     PersonViewSet.perform_update (backend/cases/views.py)
+					     and PersonDetailSerializer.get_status_history
+					     (backend/cases/serializers.py) for the wire shape. -->
+					{#if person.status_history}
+						<StatusHistoryTimeline events={person.status_history} />
+					{/if}
 					<dl class="sidebar-fields">
 						<div class="sidebar-field">
 							<dt>Country</dt>
