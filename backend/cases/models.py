@@ -1052,6 +1052,17 @@ class CaseEvent(models.Model):
         choices=VerificationLevel.choices,
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    # FK to the user who created the row. Nullable so historical
+    # rows from before this column was added survive without a
+    # forced backfill. SET_NULL on delete so removing a user
+    # doesn't cascade-delete timeline history.
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='+',
+        help_text='User who created this event row. NULL for legacy rows or system actions.',
+    )
 
     class Meta:
         ordering = ['event_date', '-created_at']
