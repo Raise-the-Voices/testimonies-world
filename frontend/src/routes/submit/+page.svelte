@@ -2,8 +2,12 @@
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { user, isVolunteer, isAdmin, loadSession } from '$lib/session';
-	import { createPerson, createReport, getCategories, ApiError } from '$lib/api';
+	import { user, isVolunteer, isAdvocate, isAdmin, loadSession } from '$lib/session';
+	import { createPerson, createReport, getCategories, request, ApiError } from '$lib/api';
+	import SourcesField from '$lib/SourcesField.svelte';
+	import type { SourceEntry } from '$lib/SourcesField.svelte';
+	import MediaField from '$lib/MediaField.svelte';
+	import type { MediaEntry } from '$lib/MediaField.svelte';
 	import {
 		loadDraft,
 		saveDraft,
@@ -22,12 +26,24 @@
 	// (logout, cross-tab session expiry).
 	let currentUser = $derived(data.user ?? $user);
 	let isAdminUser = $derived(isAdmin(currentUser));
+	// Reactive: hide `sensitive` from media visibility dropdown for users
+	// who can't mark sensitive. Mirrors MediaUploadModal + the
+	// MediaViewSet server-side gate (views.py:904). Re-evaluates when
+	// the user store flips (login, role change).
+	let canMarkSensitiveMedia = $derived(
+		isAdvocate(currentUser) || isAdmin(currentUser),
+	);
 	let categories: any[] = $state([]);
 	let saving = $state(false);
 	let refreshing = $state(false);
 	// Top-level banner — ONLY for API / auth / server failures.
 	let formError = $state('');
 	let formErrorKind = $state<'auth' | 'server' | 'other'>('other');
+	// Per-media-item failure messages collected after the Report POST
+	// succeeds. The partial-failure banner renders when this is non-
+	// empty. Cleared on a successful submit or when the volunteer
+	// dismisses it.
+	let mediaFailures = $state<string[]>([]);
 	// Per-field errors — shown inline below each field.
 	let errors = $state<Record<string, string>>({});
 
@@ -113,11 +129,20 @@
 	let suspectedReason = $state('');
 	let officialReason = $state('');
 
+	// Sources + Media attached to the new Report. The bound arrays are
+	// owned by the child components (SourcesField / MediaField); the
+	// parent reads them at submit time. File binaries on `mediaEntries`
+	// are stripped before draft persistence (see buildDraftPayload).
+	let sourceEntries = $state<SourceEntry[]>([]);
+	let mediaEntries = $state<MediaEntry[]>([]);
+
 	function buildDraftPayload(): Record<string, unknown> {
-		// The image File binary is intentionally NOT included — it
-		// doesn't survive JSON.stringify and would blow past the ~5MB
-		// localStorage quota. The `profileImageCleared` flag IS saved
-		// so the user's "remove image" intent survives a refresh.
+		// File binaries are intentionally NOT included — `profileImageFile`
+		// and each `mediaEntries[i].file` don't survive JSON.stringify and
+		// would blow past the ~5MB localStorage quota. The
+		// `profileImageCleared` flag IS saved so the user's "remove image"
+		// intent survives a refresh. The restore-banner copy tells the
+		// volunteer about the media-file loss at restore time.
 		return {
 			name,
 			legalName,
@@ -149,6 +174,15 @@
 			narrative,
 			suspectedReason,
 			officialReason,
+			sourceEntries: sourceEntries.map((s) => ({ ...s })),
+			mediaEntries: mediaEntries.map((m) => {
+				// Strip the File binary — never persisted (see above).
+				// `url` and `description` round-trip cleanly; `file` is
+				// re-picked by the volunteer post-restore.
+				const { file: _drop, ...rest } = m;
+				void _drop;
+				return rest;
+			}),
 		};
 	}
 
@@ -194,6 +228,53 @@
 		if (typeof p.narrative === 'string') narrative = p.narrative;
 		if (typeof p.suspectedReason === 'string') suspectedReason = p.suspectedReason;
 		if (typeof p.officialReason === 'string') officialReason = p.officialReason;
+		// Sources restored from draft — text only (no file concept here).
+		// Per-field guards drop malformed entries; same defensive pattern
+		// as the rest of this function.
+		if (Array.isArray(p.sourceEntries)) {
+			sourceEntries = (p.sourceEntries as unknown[]).filter(
+				(s): s is SourceEntry =>
+					typeof s === 'object' &&
+					s !== null &&
+					typeof (s as any).uid === 'number' &&
+					typeof (s as any).source_type === 'string' &&
+					typeof (s as any).source_attribution === 'string' &&
+					typeof (s as any).narrative === 'string' &&
+					typeof (s as any).is_private === 'boolean',
+			);
+		}
+		// Media restored from draft — strip `file` (never persisted) and
+		// force-snap `visibility: 'sensitive'` to `'restricted'` if the
+		// current user lacks permission, so the backend doesn't 403 an
+		// entry that survived only because the draft key was shared
+		// between users.
+		if (Array.isArray(p.mediaEntries)) {
+			mediaEntries = (p.mediaEntries as unknown[])
+				.filter(
+					(m): m is MediaEntry =>
+						typeof m === 'object' &&
+						m !== null &&
+						typeof (m as any).uid === 'number' &&
+						typeof (m as any).media_type === 'string' &&
+						typeof (m as any).visibility === 'string' &&
+						typeof (m as any).description === 'string' &&
+						typeof (m as any).url === 'string',
+				)
+				.map((m) => ({
+					...m,
+					// File binary is intentionally absent — the volunteer
+					// re-picks via the file input after restore.
+					file: null,
+					// Defense in depth: a draft with `sensitive` rows that
+					// outlived a role downgrade (or was created by an
+					// Advocate and is being restored by a Volunteer) gets
+					// force-snapped to `'restricted'`.
+					visibility:
+						!canMarkSensitiveMedia && m.visibility === 'sensitive'
+							? 'restricted'
+							: m.visibility,
+				}));
+		}
 	}
 
 	function discardDraft() {
@@ -519,7 +600,23 @@
 
 			const person = await createPerson(payload);
 
-			await createReport({
+			// Build sources array — drop empty rows so a volunteer who
+			// clicked "+ Add another" by mistake doesn't create a blank
+			// row server-side. Same rule as ReportForm.handleSubmit.
+			const sources = sourceEntries
+				.filter(
+					(s) =>
+						s.source_attribution.trim() || s.narrative.trim(),
+				)
+				.map((s) => ({
+					source_type: s.source_type,
+					source_attribution: s.source_attribution.trim(),
+					date_start: s.date_start || null,
+					narrative: s.narrative.trim(),
+					is_private: s.is_private,
+				}));
+
+			const report = await createReport({
 				person: person.id,
 				source_type: sourceType,
 				source_attribution: sourceAttribution.trim(),
@@ -530,7 +627,85 @@
 				narrative: narrative.trim(),
 				suspected_reason: suspectedReason.trim(),
 				official_reason: officialReason.trim(),
+				// Nested sources: ReportSerializer.sources creates them
+				// atomically inside the same transaction as the Report
+				// (serializers.py line 229). Either every source lands
+				// or none do.
+				sources,
 			});
+
+			// Attach each media item separately. ReportSerializer has
+			// media_files as read-only nested, so a second POST per item
+			// is required. Track failures but don't fail the whole flow —
+			// the report itself is saved. Branches on file vs URL per row:
+			//   - file  → multipart/form-data with `file` field set
+			//   - url   → JSON, url + description + visibility + media_type
+			// A row with BOTH file and url is a programmer error — the
+			// file branch wins and url is ignored. A row with neither
+			// is filtered out so empty rows don't trigger a 400.
+			const failures: string[] = [];
+			for (let i = 0; i < mediaEntries.length; i++) {
+				const m = mediaEntries[i];
+				const hasFile = !!m.file;
+				const hasUrl = !!m.url.trim();
+				const hasDesc = !!m.description.trim();
+				if (!hasFile && !hasUrl && !hasDesc) continue;
+				// Client-side file-size guard mirrors MediaUploadModal's
+				// 25 MB cap. A too-large file aborts the rest of the
+				// loop because a 413 from the server would otherwise
+				// silently break subsequent items.
+				if (hasFile && m.file && m.file.size > 25 * 1024 * 1024) {
+					failures.push(
+						`Media #${i + 1}: file is too large ` +
+							`(${(m.file.size / 1024 / 1024).toFixed(1)} MB; max 25 MB).`,
+					);
+					continue;
+				}
+				try {
+					if (hasFile && m.file) {
+						const fd = new FormData();
+						fd.append('report', String(report.id));
+						fd.append('media_type', m.media_type);
+						fd.append('visibility', m.visibility);
+						if (m.description.trim()) {
+							fd.append('description', m.description.trim());
+						}
+						fd.append('file', m.file);
+						await request<unknown>('/media/', {
+							method: 'POST',
+							body: fd,
+						});
+					} else {
+						await request<unknown>('/media/', {
+							method: 'POST',
+							body: JSON.stringify({
+								report: report.id,
+								media_type: m.media_type,
+								visibility: m.visibility,
+								description: m.description.trim(),
+								url: m.url.trim(),
+							}),
+						});
+					}
+				} catch (mErr: unknown) {
+					// Session-expired during the loop — abort the rest
+					// of the media uploads and surface the auth banner
+					// instead of N "session expired" failures.
+					if (mErr instanceof ApiError && mErr.isUnauthorized) {
+						formErrorKind = 'auth';
+						formError =
+							'Your session expired while uploading media. ' +
+							'Try refreshing your session — if that doesn’t work, log in again.';
+						mediaFailures = failures;
+						throw mErr; // triggers catch (e) below for the
+						            // outer state cleanup; auth banner
+						            // already set above.
+					}
+					const msg =
+						mErr instanceof Error ? mErr.message : 'unknown error';
+					failures.push(`Media #${i + 1}: ${msg}`);
+				}
+			}
 
 			// Submission succeeded — clear the draft so the next visit
 			// to /submit starts fresh. Also clears the localStorage
@@ -546,6 +721,11 @@
 			// the post-submit confirmation card below, not here.
 			submittedCaseId = person.case_id ?? null;
 			submittedPersonId = person.id;
+
+			// Surface per-media failures AFTER the success card — the
+			// case itself is submitted, the volunteer just needs to
+			// know which media didn't make it across.
+			mediaFailures = failures;
 		} catch (e: unknown) {
 			if (e instanceof ApiError) {
 				if (e.isValidation && Object.keys(e.fieldErrors).length > 0) {
@@ -672,6 +852,36 @@
 			</div>
 		{/if}
 
+		<!-- ============== Media partial-failure banner ============== -->
+		<!-- Case submitted, but N media items failed to attach. Volunteer
+		     can retry by uploading the failed items on the case page. -->
+		{#if mediaFailures.length > 0 && submittedCaseId}
+			<div class="media-failures" role="status" aria-live="polite">
+				<div class="media-failures-header">
+					<span class="media-failures-icon" aria-hidden="true">!</span>
+					<strong>
+						Case submitted, but {mediaFailures.length} media
+						{mediaFailures.length === 1 ? 'item' : 'items'} failed to attach:
+					</strong>
+				</div>
+				<ul class="media-failures-list">
+					{#each mediaFailures as msg (msg)}
+						<li>{msg}</li>
+					{/each}
+				</ul>
+				<p class="media-failures-help">
+					You can re-upload these files from the case page.
+				</p>
+				<div class="media-failures-actions">
+					<button
+						type="button"
+						class="btn btn-secondary btn-sm"
+						onclick={() => (mediaFailures = [])}
+					>Dismiss</button>
+				</div>
+			</div>
+		{/if}
+
 		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} novalidate>
 			<!-- ============== Restore-from-draft banner ============== -->
 			<!-- Shown only when a draft was found on mount and the user
@@ -682,8 +892,9 @@
 					<div class="draft-restore-body">
 						<p class="draft-restore-title">We found a saved draft.</p>
 						<p class="draft-restore-desc">
-							Saved {formatDraftAge(pendingDraft.savedAt)}. Image uploads aren't
-							saved — re-upload before submitting.
+							Saved {formatDraftAge(pendingDraft.savedAt)}. Profile and
+							media file uploads aren't saved — re-select files
+							before submitting.
 						</p>
 					</div>
 					<div class="draft-restore-actions">
@@ -1394,6 +1605,53 @@
 						</div>
 					</div>
 				</div>
+			</section>
+
+			<!-- ============== Section 4: Sources ============== -->
+			<!-- Repeating row list, owned by <SourcesField>. Bound array
+			     `sourceEntries` is sent nested in the Report POST body
+			     (ReportSerializer.sources — atomic on the backend).
+			     Wrapped in submit's section chrome so the visual rhythm
+			     matches Person / Summary / Initial Report. -->
+			<section class="form-section" aria-labelledby="sec-sources">
+				<h2 id="sec-sources" class="form-section-title">
+					<span class="title-bar" aria-hidden="true"></span>
+					Sources
+				</h2>
+				<p class="form-section-desc">
+					Add supporting sources for this case — each witness,
+					news article, or supporting document gets its own
+					entry with its own attribution, narrative, and
+					privacy flag.
+				</p>
+
+				<SourcesField bind:entries={sourceEntries} disabled={saving} />
+			</section>
+
+			<!-- ============== Section 5: Media ============== -->
+			<!-- Repeating row list, owned by <MediaField>. Bound array
+			     `mediaEntries` is sent one POST per item, with the
+			     `report` FK set to the new report's id. Per-item
+			     failures are collected into `mediaFailures` and shown
+			     in a partial-failure banner (mirrors /reports UX). -->
+			<section class="form-section" aria-labelledby="sec-media">
+				<h2 id="sec-media" class="form-section-title">
+					<span class="title-bar" aria-hidden="true"></span>
+					Media
+				</h2>
+				<p class="form-section-desc">
+					Attach supporting evidence — photos, documents,
+					videos, or external links. Each item gets its own
+					visibility tier; "Sensitive" requires Advocate/Admin
+					role.
+				</p>
+
+				<MediaField
+					bind:entries={mediaEntries}
+					disabled={saving}
+					canMarkSensitive={canMarkSensitiveMedia}
+					allowFileUpload={true}
+				/>
 			</section>
 
 			<!-- Submit -->
@@ -2182,5 +2440,62 @@
 		.draft-restore-actions .btn {
 			flex: 1;
 		}
+	}
+
+	/* === Media partial-failure banner (page-level) ===
+	   Same visual language as /reports/+page.svelte .media-failures.
+	   Renders ONLY when the Report itself succeeded but N media items
+	   failed — the volunteer is shown a list they can act on without
+	   having to dig through server logs. */
+	.media-failures {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		padding: 1rem 1.15rem;
+		background: #fffaf0;
+		border: 1px solid #fbd38d;
+		border-left: 3px solid #c97a0d;
+		border-radius: var(--radius-input, 10px);
+		color: var(--color-text);
+	}
+	.media-failures-header {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		font-size: 0.95rem;
+	}
+	.media-failures-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+		border-radius: 50%;
+		background: #c97a0d;
+		color: #fffaf0;
+		font-weight: 700;
+		font-size: 0.85rem;
+		flex: 0 0 22px;
+	}
+	.media-failures-list {
+		margin: 0;
+		padding-left: 1.25rem;
+		font-size: 0.88rem;
+		line-height: 1.5;
+		color: var(--color-text);
+	}
+	.media-failures-list li {
+		margin: 0.1rem 0;
+	}
+	.media-failures-help {
+		margin: 0;
+		font-size: 0.82rem;
+		color: var(--color-text-muted);
+	}
+	.media-failures-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.5rem;
+		margin-top: 0.25rem;
 	}
 </style>

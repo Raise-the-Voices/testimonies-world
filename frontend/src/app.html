@@ -17,14 +17,9 @@
 		<meta name="twitter:card" content="summary" />
 		<meta name="twitter:site" content="@raisethevoices" />
 
-		<!-- Font loading — preconnect warms up DNS/TLS so PT Sans
-		     doesn't block first paint. -->
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link
-			rel="stylesheet"
-			href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap"
-		/>
+		<!-- PT Sans is bundled via @fontsource/pt-sans and imported in
+		     +layout.svelte — no external font CDN, no third-party IP
+		     tracking. -->
 
 		%sveltekit.head%
 	</head>
