@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import { user, isVolunteer, isAdvocate, isAdmin, loadSession } from '$lib/session';
 	import { createPerson, createReport, getCategories, request, ApiError } from '$lib/api';
+	import { showToast } from '$lib/toast';
 	import SourcesField from '$lib/SourcesField.svelte';
 	import type { SourceEntry } from '$lib/SourcesField.svelte';
 	import MediaField from '$lib/MediaField.svelte';
@@ -55,15 +56,6 @@
 	// failures in the same pill (silent failure is worse than no draft).
 	let draftSavedAt = $state<string | null>(null);
 
-	// Post-submit success state. We capture the server-generated
-	// case_id here so the Case Details section can display it (the
-	// case_id is server-generated via `Person.case_id = UUIDField(
-	// default=uuid.uuid4) and never editable by the volunteer). The
-	// form then offers a "View case page" button instead of auto-
-	// redirecting, so the volunteer has a moment to copy the ID.
-	let submittedCaseId = $state<string | null>(null);
-	let submittedPersonId = $state<number | null>(null);
-	let copyLabel = $state('Copy');  // 'Copy' → 'Copied ✓' on click
 	let pendingDraft = $state<SubmitDraft | null>(null);
 	let showRestoreBanner = $state(false);
 	let draftSaveError = $state(false);
@@ -398,21 +390,7 @@
 			profileImagePreview = null;
 		}
 	});
-	async function copyCaseId() {
-		// Best-effort clipboard copy. Falls back to a manual-select
-		// hint if the Clipboard API is blocked (insecure context,
-		// permission denied). The input has `onclick` selecting its
-		// contents so the user can always ⌘C as a fallback.
-		if (!submittedCaseId) return;
-		try {
-			await navigator.clipboard.writeText(submittedCaseId);
-			copyLabel = 'Copied ✓';
-			setTimeout(() => (copyLabel = 'Copy'), 1800);
-		} catch {
-			copyLabel = 'Press ⌘C';
-		}
-	}
-
+	
 	function onProfileImageChange(e: Event) {
 		const input = e.currentTarget as HTMLInputElement;
 		const f = input.files?.[0] ?? null;
@@ -715,17 +693,33 @@
 			clearDraft(draftKey);
 			draftSavedAt = null;
 
-			// Capture the server-generated case_id so the Case Details
-			// section can show it (the volunteer can copy it for their
-			// records before continuing). The redirect happens from
-			// the post-submit confirmation card below, not here.
-			submittedCaseId = person.case_id ?? null;
-			submittedPersonId = person.id;
-
-			// Surface per-media failures AFTER the success card — the
-			// case itself is submitted, the volunteer just needs to
-			// know which media didn't make it across.
+			// Capture the server-generated case_id for the toast details.
+			const submittedCaseId = person.case_id ?? null;
 			mediaFailures = failures;
+
+			// Fire the success toast BEFORE the navigation. The toast
+			// store is module-scope — renders on the destination page.
+			// details carries the new Person record so the operator
+			// sees the assigned id + created_at without expanding.
+			showToast('Case submitted.', {
+				variant: 'success',
+				details: { ...(person as unknown as Record<string, unknown>), case_id: submittedCaseId },
+			});
+
+			// Surface media partial-failures as a second toast so the
+			// volunteer knows which items didn't make it. Stays on the
+			// form for a moment so the count is visible during the
+			// transition; the case page itself can be used to retry.
+			if (failures.length > 0) {
+				showToast(
+					`${failures.length} media ${failures.length === 1 ? 'item' : 'items'} failed to upload.`,
+					{ variant: 'warning', durationMs: 10_000 },
+				);
+			}
+
+			// replaceState so Back from the case page doesn't return to
+			// a stale form with the case we just submitted.
+			void goto(`${base}/persons/${person.id}`, { replaceState: true });
 		} catch (e: unknown) {
 			if (e instanceof ApiError) {
 				if (e.isValidation && Object.keys(e.fieldErrors).length > 0) {
@@ -855,7 +849,7 @@
 		<!-- ============== Media partial-failure banner ============== -->
 		<!-- Case submitted, but N media items failed to attach. Volunteer
 		     can retry by uploading the failed items on the case page. -->
-		{#if mediaFailures.length > 0 && submittedCaseId}
+		{#if mediaFailures.length > 0}
 			<div class="media-failures" role="status" aria-live="polite">
 				<div class="media-failures-header">
 					<span class="media-failures-icon" aria-hidden="true">!</span>
@@ -1249,45 +1243,12 @@
 					for your records — it's how you'll find this case later.
 				</p>
 
-				{#if submittedCaseId}
-					<!-- Post-submit: show the assigned ID + continue button. -->
-					<div class="case-id-card" role="status">
-						<h3 class="case-id-title">✓ Case submitted</h3>
-						<div class="case-id-row">
-							<label for="case-id-display" class="case-id-label">Case ID</label>
-							<div class="case-id-value-row">
-								<input
-									id="case-id-display"
-									type="text"
-									class="case-id-input"
-									value={submittedCaseId}
-									readonly
-									aria-readonly="true"
-									onclick={(e) => (e.currentTarget as HTMLInputElement).select()}
-								/>
-								<button
-									type="button"
-									class="btn btn-secondary btn-sm"
-									onclick={() => copyCaseId()}
-								>{copyLabel}</button>
-							</div>
-							<p class="case-id-help">
-								Captured by the backend the moment this form was submitted.
-							</p>
-						</div>
-						<div class="case-id-actions">
-							<a
-								href="{base}/persons/{submittedPersonId}"
-								class="btn btn-primary"
-								onclick={(e) => {
-									e.preventDefault();
-									if (submittedPersonId !== null) {
-										goto(`${base}/persons/${submittedPersonId}`);
-									}
-								}}
-							>View case page →</a>
-						</div>
-					</div>
+				{#if false}
+					<!-- Post-submit copy-card removed: success now fires a
+					     toast and goto()s the case page. Kept the
+					     `{#if false}` so the slot stays in place for any
+					     future post-submit UI without re-introducing the old
+					     inline card. -->
 				{:else}
 					<!-- Pre-submit: empty placeholder so the volunteer
 					     understands the case_id will appear here. -->
@@ -2126,68 +2087,6 @@
 		flex: 1 1 auto;
 	}
 
-	/* === Case ID card (post-submit confirmation) =============== */
-	.case-id-card {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-		padding: 1.25rem;
-		background: var(--color-surface, #f8fafb);
-		border: 1px solid var(--color-border-light);
-		border-left: 3px solid var(--color-success, #2f855a);
-		border-radius: var(--radius-card-lg);
-	}
-	.case-id-title {
-		margin: 0;
-		font-size: 1.05rem;
-		font-weight: 700;
-		color: var(--color-success, #166534);
-	}
-	.case-id-row {
-		display: flex;
-		flex-direction: column;
-		gap: 0.45rem;
-	}
-	.case-id-label {
-		font-size: 0.78rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.06rem;
-		color: var(--color-text-muted);
-	}
-	.case-id-value-row {
-		display: flex;
-		gap: 0.5rem;
-		align-items: stretch;
-	}
-	.case-id-input {
-		flex: 1 1 auto;
-		min-width: 0;
-		padding: 0.55rem 0.75rem;
-		border: 1px solid var(--color-border-light);
-		border-radius: var(--radius-input, 6px);
-		background: var(--color-bg-white);
-		color: var(--color-text);
-		font: inherit;
-		font-size: 0.92rem;
-		font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
-		cursor: text;
-	}
-	.case-id-input:focus {
-		outline: none;
-		border-color: var(--color-primary);
-		box-shadow: 0 0 0 3px var(--color-primary-tint, rgba(37, 100, 106, 0.15));
-	}
-	.case-id-help {
-		margin: 0;
-		font-size: 0.78rem;
-		color: var(--color-text-muted);
-	}
-	.case-id-actions {
-		display: flex;
-		gap: 0.6rem;
-		margin-top: 0.25rem;
-	}
 	.submit-btn {
 		min-width: 160px;
 		display: inline-flex;
