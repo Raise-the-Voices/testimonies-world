@@ -339,6 +339,16 @@ class PersonDetailSerializer(serializers.ModelSerializer):
     days_since_last_report = serializers.IntegerField(read_only=True)
     family = serializers.SerializerMethodField()
     profile_image_url = serializers.SerializerMethodField()
+    # Auto-captured history of edits to the status-ish fields on Person
+    # (current_status, medical_status, current_status_date,
+    # current_status_source, current_status_verification). Each
+    # CaseEvent row with event_kind='status_change' is one diff
+    # captured by PersonViewSet.perform_update. The prefetched
+    # `timeline_events` reverse-FK is filtered in Python — the
+    # underlying queryset is index-scanned (models.py:1063), so the
+    # filtering is free. Anonymous viewers see this too — status
+    # history is public timeline info.
+    status_history = serializers.SerializerMethodField()
 
     class Meta:
         model = Person
@@ -408,6 +418,25 @@ class PersonDetailSerializer(serializers.ModelSerializer):
                 'relationship': rel.get_relationship_type_display(),
             })
         return result
+
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
+    def get_status_history(self, obj):
+        # Iterates the prefetched `timeline_events` cache — the
+        # viewset prefetches `timeline_events` in get_queryset
+        # (views.py), so this is one index scan + Python filter, no
+        # per-row query. Anonymous viewers see the same shape; we
+        # intentionally don't gate this behind auth — status history
+        # is part of the public timeline, not PII.
+        #
+        # Schema hint: `CaseEventSerializer` (serializers.py:581)
+        # lives below this class, so we can't reference it directly
+        # in the @extend_schema_field decorator. The generic ListField
+        # hint mirrors the pattern used by `get_family` above.
+        events = [
+            e for e in obj.timeline_events.all()
+            if e.event_kind == CaseEvent.EventKind.STATUS_CHANGE
+        ]
+        return CaseEventSerializer(events, many=True, context=self.context).data
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -589,6 +618,16 @@ class CaseEventSerializer(SanitizingModelSerializerMixin, serializers.ModelSeria
     # timeline heading; `source` is a credit / attribution line.
     text_fields = ['description', 'source']
 
+    # Denormalised actor — exposes the username inline so the timeline
+    # UI can render "by <username>" without resolving the FK separately.
+    # NULL-safe: legacy rows + system actions show as `null`.
+    created_by_username = serializers.CharField(
+        source='created_by.username',
+        read_only=True,
+        allow_null=True,
+        default=None,
+    )
+
     class Meta:
         model = CaseEvent
         fields = [
@@ -601,8 +640,10 @@ class CaseEventSerializer(SanitizingModelSerializerMixin, serializers.ModelSeria
             'source',
             'verification',
             'created_at',
+            'created_by',
+            'created_by_username',
         ]
-        read_only_fields = ['created_at']
+        read_only_fields = ['created_at', 'created_by', 'created_by_username']
 
 
 class CaseUpdateSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
