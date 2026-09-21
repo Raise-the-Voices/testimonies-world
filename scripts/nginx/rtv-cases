@@ -180,6 +180,17 @@ server {
     location = /favicon.ico { access_log off; try_files $uri =404; }
     location = /robots.txt  { access_log off; try_files $uri =404; }
 
+    # ---- Bare-host root → /testimonies/ ----
+    # SvelteKit is mounted at /testimonies/ via PUBLIC_BASE_PATH. A request
+    # to https://cases.raisethevoices.org/ otherwise falls through to the
+    # SvelteKit catch-all, which (correctly) returns 404 because it
+    # doesn't recognize a route outside its base path. Send bare-host
+    # visitors to the app root so they don't land on a 404 page when
+    # typing the domain by hand.
+    location = / {
+        return 302 /testimonies/;
+    }
+
     # ---- Django / gunicorn routes ----
     # Explicit, ordered before the frontend catch-all below. Adding a new
     # Django route? Add it here so it doesn't get caught by `location /`.
