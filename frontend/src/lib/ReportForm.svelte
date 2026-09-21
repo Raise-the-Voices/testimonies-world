@@ -48,7 +48,11 @@
 	import { fly } from 'svelte/transition';
 	import { ApiError, createReport, getReport, request, updateReport } from '$lib/api';
 	import PersonPicker from '$lib/PersonPicker.svelte';
-	import type { Media, MediaType, Report, Visibility } from '$lib/types';
+	import SourcesField from '$lib/SourcesField.svelte';
+	import type { SourceEntry } from '$lib/SourcesField.svelte';
+	import MediaField from '$lib/MediaField.svelte';
+	import type { MediaEntry } from '$lib/MediaField.svelte';
+	import type { Media, Report } from '$lib/types';
 
 	// --- Public props ---------------------------------------------------
 	interface Person {
@@ -78,6 +82,11 @@
 		// Disable all inputs (e.g. while parent is doing unrelated work).
 		// Submission is also blocked while saving internally.
 		disabled?: boolean;
+		// When true, the `sensitive` media visibility option is shown in
+		// the per-row dropdown. Backend enforces this gate too
+		// (MediaViewSet._can_mark_sensitive, views.py:904). Parents
+		// derive this from the current user's groups.
+		canMarkSensitive?: boolean;
 	}
 	let {
 		person: personProp,
@@ -86,6 +95,11 @@
 		onSuccess,
 		onCancel,
 		disabled = false,
+		// Default `true` to preserve the prior inline-ReportForm behavior
+		// (it always showed all 3 visibility options). New call sites that
+		// want role-based gating — like /submit — pass `false` for non-
+		// advocates and the dropdown filters accordingly.
+		canMarkSensitive = true,
 	}: Props = $props();
 
 	const isEdit = $derived(reportId !== null);
@@ -127,25 +141,13 @@
 	// Privacy
 	let isPrivate = $state(false);
 
-	// Repeating Sources
-	interface SourceEntry {
-		uid: number;
-		source_type: Report['source_type'];
-		source_attribution: string;
-		date_start: string;
-		narrative: string;
-		is_private: boolean;
-	}
+	// Repeating Sources — entries live in the child <SourcesField> component;
+	// local `entries` array is mutated through `bind:entries`. The SourceEntry
+	// shape is exported from SourcesField.svelte and imported above.
 	let sourceEntries = $state<SourceEntry[]>([]);
 
-	// Repeating Media
-	interface MediaEntry {
-		uid: number;
-		media_type: MediaType;
-		visibility: Visibility;
-		description: string;
-		url: string;
-	}
+	// Repeating Media — same pattern. The MediaEntry shape (including the
+	// optional `file` field for uploads) is exported from MediaField.svelte.
 	let mediaEntries = $state<MediaEntry[]>([]);
 
 	// Submission state
@@ -162,40 +164,6 @@
 	// Refetch-guard token so Back/Forward between ?id=5 and ?id=7
 	// can't let a slow response for 5 clobber the form populated for 7.
 	let loadToken = 0;
-
-	// Monotonic local id for keyed each. Not the backend id.
-	let nextEntryUid = 1;
-	function makeSourceEntry(): SourceEntry {
-		return {
-			uid: nextEntryUid++,
-			source_type: 'firsthand',
-			source_attribution: '',
-			date_start: '',
-			narrative: '',
-			is_private: false,
-		};
-	}
-	function makeMediaEntry(): MediaEntry {
-		return {
-			uid: nextEntryUid++,
-			media_type: 'photo',
-			visibility: 'public',
-			description: '',
-			url: '',
-		};
-	}
-	function addSource() {
-		sourceEntries = [...sourceEntries, makeSourceEntry()];
-	}
-	function removeSource(idx: number) {
-		sourceEntries = sourceEntries.filter((_, i) => i !== idx);
-	}
-	function addMedia() {
-		mediaEntries = [...mediaEntries, makeMediaEntry()];
-	}
-	function removeMedia(idx: number) {
-		mediaEntries = mediaEntries.filter((_, i) => i !== idx);
-	}
 	function resetForm() {
 		if (personProp === undefined) {
 			formPersonId = null;
@@ -230,6 +198,9 @@
 	const MAX_NARRATIVE = 5000;
 	const MAX_SHORT = 500;
 
+	// Source-type labels + help — for the *primary* report's source
+	// type/attribution. The repeating-sources list inside <SourcesField>
+	// has its own copy of these constants.
 	const sourceTypeLabels: Record<Report['source_type'], string> = {
 		firsthand: 'Firsthand',
 		secondhand: 'Secondhand',
@@ -733,6 +704,8 @@
 		<!-- ============================================================
 		     Sources (repeating) — additional witnesses / news / docs
 		     Hidden on edit mode (DRF nested-writable replaces on update).
+		     Reusable row markup lives in <SourcesField>; this fieldset
+		     owns the section chrome (icon + legend + count + hint).
 		     ============================================================ -->
 		{#if !isEdit}
 			<fieldset class="form-section">
@@ -747,108 +720,16 @@
 					with its own attribution, narrative, and privacy flag.
 				</p>
 
-				{#each sourceEntries as entry, i (entry.uid)}
-					<div class="repeatable-entry" data-index={i}>
-						<div class="repeatable-entry-header">
-							<h4 class="repeatable-entry-title">Source #{i + 1}</h4>
-							<button
-								type="button"
-								class="repeatable-entry-remove"
-								aria-label="Remove source {i + 1}"
-								onclick={() => removeSource(i)}
-								disabled={saving || disabled}
-							>✕ Remove</button>
-						</div>
-
-						<div class="grid-2">
-							<div class="field">
-								<label for="src-{entry.uid}-type">Source type</label>
-								<select
-									id="src-{entry.uid}-type"
-									class="input--search"
-									bind:value={entry.source_type}
-									disabled={saving || disabled}
-								>
-									{#each Object.entries(sourceTypeLabels) as [value, label] (value)}
-										<option {value}>{label}</option>
-									{/each}
-								</select>
-								<p class="field-hint">{sourceTypeHelp[entry.source_type]}</p>
-							</div>
-
-							<div class="field">
-								<label for="src-{entry.uid}-attr">
-									Source attribution
-									<span class="badge-public" title="Shown publicly">public</span>
-								</label>
-								<input
-									id="src-{entry.uid}-attr"
-									type="text"
-									class="input--search"
-									bind:value={entry.source_attribution}
-									placeholder='e.g. "family member", "BBC article"'
-									maxlength={MAX_SHORT}
-									autocomplete="off"
-									disabled={saving || disabled}
-								/>
-							</div>
-
-							<div class="field">
-								<label for="src-{entry.uid}-date">Date start</label>
-								<input
-									id="src-{entry.uid}-date"
-									type="date"
-									class="input--search"
-									bind:value={entry.date_start}
-									disabled={saving || disabled}
-								/>
-							</div>
-
-							<div class="field">
-								<label class="field-checkbox">
-									<input
-										type="checkbox"
-										bind:checked={entry.is_private}
-										disabled={saving || disabled}
-									/>
-									<span>Mark this source as private</span>
-								</label>
-								<p class="field-hint">
-									Private sources are hidden from public reads,
-									even on a public report.
-								</p>
-							</div>
-						</div>
-
-						<div class="field field-full">
-							<label for="src-{entry.uid}-narrative">Narrative</label>
-							<textarea
-								id="src-{entry.uid}-narrative"
-								class="input--search"
-								bind:value={entry.narrative}
-								maxlength={MAX_NARRATIVE}
-								placeholder="What does this source say happened? Dates, places, context."
-								disabled={saving || disabled}
-							></textarea>
-							<div class="field-counter" aria-live="polite">
-								{entry.narrative.length} / {MAX_NARRATIVE}
-							</div>
-						</div>
-					</div>
-				{/each}
-
-				<button
-					type="button"
-					class="repeatable-add"
-					onclick={addSource}
-					disabled={saving || disabled}
-				>+ Add another</button>
+				<SourcesField bind:entries={sourceEntries} disabled={saving || disabled} />
 			</fieldset>
 		{/if}
 
 		<!-- ============================================================
 		     Media (repeating) — photos / documents / videos / links
 		     Hidden on edit mode (multi-step submit only on create).
+		     Reusable row markup lives in <MediaField>; the visibility
+		     dropdown's `sensitive` option is filtered by `canMarkSensitive`
+		     (Advocate/Admin only — see MediaViewSet line 904).
 		     ============================================================ -->
 		{#if !isEdit}
 			<fieldset class="form-section">
@@ -863,94 +744,12 @@
 					tier; "Sensitive" requires Advocate/Admin role.
 				</p>
 
-				{#each mediaEntries as entry, i (entry.uid)}
-					<div class="repeatable-entry" data-index={i}>
-						<div class="repeatable-entry-header">
-							<h4 class="repeatable-entry-title">Media #{i + 1}</h4>
-							<button
-								type="button"
-								class="repeatable-entry-remove"
-								aria-label="Remove media {i + 1}"
-								onclick={() => removeMedia(i)}
-								disabled={saving || disabled}
-							>✕ Remove</button>
-						</div>
-
-						<div class="grid-2">
-							<div class="field">
-								<label for="med-{entry.uid}-type">Media type</label>
-								<select
-									id="med-{entry.uid}-type"
-									class="input--search"
-									bind:value={entry.media_type}
-									disabled={saving || disabled}
-								>
-									<option value="photo">Photo</option>
-									<option value="document">Document</option>
-									<option value="video">Video</option>
-									<option value="link">External link</option>
-								</select>
-							</div>
-
-							<div class="field">
-								<label for="med-{entry.uid}-vis">Visibility</label>
-								<select
-									id="med-{entry.uid}-vis"
-									class="input--search"
-									bind:value={entry.visibility}
-									disabled={saving || disabled}
-								>
-									<option value="public">Public — anyone can view</option>
-									<option value="restricted">Restricted — authenticated users only</option>
-									<option value="sensitive">Sensitive — advocates/admin only</option>
-								</select>
-							</div>
-
-							<div class="field field-full">
-								<label for="med-{entry.uid}-desc">
-									Description <span class="optional-mark">(optional)</span>
-								</label>
-								<input
-									id="med-{entry.uid}-desc"
-									type="text"
-									class="input--search"
-									bind:value={entry.description}
-									placeholder="What's in this media? Alt text for images."
-									maxlength={500}
-									autocomplete="off"
-									disabled={saving || disabled}
-								/>
-							</div>
-
-							<div class="field field-full">
-								<label for="med-{entry.uid}-url">
-									File URL <span class="optional-mark">(URL or upload via Media gallery)</span>
-								</label>
-								<input
-									id="med-{entry.uid}-url"
-									type="url"
-									class="input--search"
-									bind:value={entry.url}
-									placeholder="https://… (paste a link, or upload via the case page)"
-									maxlength={1000}
-									autocomplete="off"
-									disabled={saving || disabled}
-								/>
-								<p class="field-hint">
-									File uploads (multipart) happen on the case page
-									media gallery — this form accepts external links.
-								</p>
-							</div>
-						</div>
-					</div>
-				{/each}
-
-				<button
-					type="button"
-					class="repeatable-add"
-					onclick={addMedia}
+				<MediaField
+					bind:entries={mediaEntries}
 					disabled={saving || disabled}
-				>+ Add another Media</button>
+					{canMarkSensitive}
+					allowFileUpload={false}
+				/>
 			</fieldset>
 		{/if}
 
@@ -1235,73 +1034,8 @@
 	}
 
 	/* === Repeating entries (Sources / Media) === */
-	.repeatable-entry {
-		display: flex;
-		flex-direction: column;
-		gap: 0.85rem;
-		padding: 1rem 1.1rem;
-		border: 1px solid var(--color-border-light);
-		border-left: 3px solid var(--color-primary-light, #aac0ff);
-		border-radius: var(--radius-card);
-		background: var(--color-surface, #f7f7f9);
-	}
-	.repeatable-entry + .repeatable-entry {
-		margin-top: 0.75rem;
-	}
-	.repeatable-entry-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.75rem;
-		margin-bottom: 0.1rem;
-	}
-	.repeatable-entry-title {
-		margin: 0;
-		font-size: 0.92rem;
-		font-weight: 700;
-		color: var(--color-text);
-	}
-	.repeatable-entry-remove {
-		background: transparent;
-		border: 1px solid var(--color-border-light);
-		color: var(--color-danger, #c53030);
-		font-size: 0.78rem;
-		padding: 0.25rem 0.65rem;
-		border-radius: var(--radius-card);
-		cursor: pointer;
-		font-weight: 600;
-		min-height: 0;
-	}
-	.repeatable-entry-remove:hover:not(:disabled) {
-		background: #fed7d7;
-		border-color: #feb2b2;
-	}
-	.repeatable-entry-remove:disabled {
-		opacity: 0.55;
-		cursor: not-allowed;
-	}
-	.repeatable-add {
-		width: 100%;
-		margin-top: 0.85rem;
-		padding: 0.6rem 0.85rem;
-		background: var(--color-bg-white);
-		border: 1px dashed var(--color-border-light);
-		color: var(--color-primary);
-		font-size: 0.9rem;
-		font-weight: 600;
-		border-radius: var(--radius-card);
-		cursor: pointer;
-		min-height: 0;
-	}
-	.repeatable-add:hover:not(:disabled) {
-		background: var(--color-surface, #f7f7f9);
-		border-style: solid;
-		border-color: var(--color-primary-light);
-	}
-	.repeatable-add:disabled {
-		opacity: 0.55;
-		cursor: not-allowed;
-	}
+	/* Row markup lives in <SourcesField> / <MediaField>; the count badge
+	   in the section legend is the only piece this parent still owns. */
 	.legend-count {
 		display: inline-flex;
 		align-items: center;
