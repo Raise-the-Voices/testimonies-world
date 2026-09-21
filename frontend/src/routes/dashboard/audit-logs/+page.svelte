@@ -46,7 +46,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { base } from '$app/paths';
-	import { user as userStore } from '$lib/session';
+	import { user as userStore, isAdmin } from '$lib/session';
 	import type { PageData } from './$types';
 	import DashboardCard from '$lib/DashboardCard.svelte';
 	import ActivityItem from '$lib/ActivityItem.svelte';
@@ -57,6 +57,12 @@
 
 	// SSR-hydrated auth (see +layout.svelte for the full rationale).
 	const currentUser = $derived(data.user ?? $userStore);
+	// Defensive: `isAdmin` reads `u.authenticated`, so guard against a
+	// null/undefined currentUser (initial SSR render before session
+	// resolves).
+	const showAdminLink = $derived(
+		currentUser !== null && currentUser !== undefined && isAdmin(currentUser)
+	);
 
 	function convertIsoToLocal(iso: string): string {
 		// Backend returns ISO 8601 (often with Z or +00:00).
@@ -228,15 +234,25 @@
 				action, target type, or time range.
 			</p>
 		</div>
+		{#if showAdminLink}
+			<a
+				href="{base}/admin/cases/auditlog/"
+				class="admin-link"
+				rel="noopener"
+				title="Open the Django admin audit-log page in a new tab"
+			>
+				Django admin →
+			</a>
+		{/if}
 	</header>
 
 	{#if data.error}
 		<ErrorCard
 			title="Couldn't load the audit log"
 			message={data.error}
-			kind="network"
+			kind={data.errorKind === 'auth' ? 'auth' : 'network'}
 		/>
-	{:else if data.logs}
+	{:else if data.logs && Array.isArray(data.logs.results)}
 		<DashboardCard
 			title="Filters"
 			subtitle="URL syncs as you change filters — shareable, refresh-safe."
@@ -255,10 +271,10 @@
 
 		<DashboardCard
 			title="Results"
-			subtitle="{data.logs.count} {data.logs.count === 1 ? 'entry' : 'entries'}"
+			subtitle="{data.logs.count ?? 0} {(data.logs.count ?? 0) === 1 ? 'entry' : 'entries'}"
 		>
 			{#if data.logs.results.length === 0}
-				<p class="empty">No audit log entries match your filters. <span class="empty-total">({data.logs.count} total entries)</span></p>
+				<p class="empty">No audit log entries match your filters. <span class="empty-total">({data.logs.count ?? 0} total entries)</span></p>
 			{:else}
 				<!-- activity-feed + ActivityItem — same shape as the
 				     dashboard's Recent activity widget, so this page
@@ -400,6 +416,21 @@
 		margin: 0 0 0.25rem 0;
 		font-size: 1.5rem;
 		color: var(--color-primary);
+	}
+	.admin-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		font-size: 0.85rem;
+		color: var(--color-primary);
+		text-decoration: none;
+		padding: 0.35rem 0.7rem;
+		border: 1px solid var(--color-border-light);
+		border-radius: var(--radius-input);
+	}
+	.admin-link:hover {
+		border-color: var(--color-primary);
+		text-decoration: underline;
 	}
 	.page-subtitle {
 		margin: 0;
