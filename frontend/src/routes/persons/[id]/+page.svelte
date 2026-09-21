@@ -18,6 +18,7 @@
 	import { user, isVolunteer, isAdvocate } from '$lib/session';
 	import StatusBadge from '$lib/StatusBadge.svelte';
 	import StatusHistoryTimeline from '$lib/StatusHistoryTimeline.svelte';
+	import StatusTransitionBanner from '$lib/StatusTransitionBanner.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import MediaUploadModal from '$lib/MediaUploadModal.svelte';
@@ -953,6 +954,14 @@
 					<div class="sidebar-status">
 						<StatusBadge status={person.current_status} />
 					</div>
+					<!-- Transition banner — the headline "what changed?"
+					     callout. Renders ONLY when there's a current_status
+					     flip in the history. Sibling component to the timeline
+					     below; the timeline handles the full feed including
+					     medical_status / date / source / verification rows. -->
+					{#if person.status_history && person.status_history.length > 0}
+						<StatusTransitionBanner events={person.status_history} />
+					{/if}
 					<!-- Status history — auto-captured on every PATCH that
 					     touches one of the status-ish fields. See
 					     PersonViewSet.perform_update (backend/cases/views.py)
