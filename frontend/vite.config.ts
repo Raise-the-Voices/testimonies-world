@@ -2,10 +2,11 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 // VITE_API_PROXY_TARGET overrides where the dev server proxies
-// /testimonies/api/* requests. When unset, requests go to the live
-// production backend (cases.raisethevoices.org) — the default for
-// day-to-day dev, since the local Postgres credentials in .env are
-// placeholders that don't authenticate against 10.0.0.100.
+// /testimonies/api/* and /testimonies/accounts/* requests. When unset,
+// requests go to the live production backend (cases.raisethevoices.org)
+// — the default for day-to-day dev, since the local Postgres
+// credentials in .env are placeholders that don't authenticate
+// against 10.0.0.100.
 //
 // The Playwright E2E suite sets this to http://127.0.0.1:8040 so
 // specs run against the local backend and the /__test__/login/
@@ -29,7 +30,7 @@ export default defineConfig({
 				target: proxyTarget,
 				changeOrigin: true,
 				secure: proxyIsHttps,
-				rewrite: (path) => path.replace(/^\/testimonies\/accounts', '/accounts'),
+rewrite: (path) => path.replace(/^\/testimonies\/accounts/, '/accounts'),
 			},
 		},
 	}
