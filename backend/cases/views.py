@@ -1,10 +1,12 @@
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Max, Q, When
 from django.db.models.functions import Lower
 from django.http import (
     FileResponse, HttpResponse, HttpResponseForbidden, HttpResponseNotFound,
     HttpResponsePermanentRedirect,
 )
+from django.utils import timezone
 from django_filters import rest_framework as filters
 from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 from rest_framework import generics, permissions, serializers, viewsets
@@ -12,7 +14,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
-from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report, Source
+from .models import AuditLog, CaseCategory, CaseEvent, FamilyRelationship, Media, Person, Report, Source
 from .permissions import IsVolunteer
 from .throttles import ActionScopedThrottle
 from .serializers import (
@@ -130,6 +132,20 @@ class PersonFilter(filters.FilterSet):
         from django.utils import timezone
         cutoff = timezone.now() - timedelta(days=days)
         return queryset.filter(updated_at__lt=cutoff)
+
+
+# Fields on Person whose edits auto-write a CaseEvent row in
+# `PersonViewSet.perform_update`. One row per changed field per save.
+# All five are surfaced in the public person-detail timeline (the
+# "Status history" feed on the case page). A future PR can extend
+# this tuple without touching perform_update's diff logic.
+_STATUS_HISTORY_FIELDS = (
+    'current_status',
+    'medical_status',
+    'current_status_date',
+    'current_status_source',
+    'current_status_verification',
+)
 
 
 class PersonViewSet(viewsets.ModelViewSet):
@@ -280,6 +296,12 @@ class PersonViewSet(viewsets.ModelViewSet):
                     public_reports,
                     'reports__media_files',
                     'media_files',
+                    # Power PersonDetailSerializer.get_status_history —
+                    # timeline_events is filtered in Python by event_kind,
+                    # so a flat prefetch is fine (CaseEvent indexes person
+                    # + event_date, models.py:1063, so the prefetch is a
+                    # single index scan per person).
+                    'timeline_events',
                     'relationships_as_a__person_b',
                     'relationships_as_b__person_a',
                 )
@@ -289,6 +311,7 @@ class PersonViewSet(viewsets.ModelViewSet):
                     'reports',
                     'reports__media_files',
                     'media_files',
+                    'timeline_events',
                     'relationships_as_a__person_b',
                     'relationships_as_b__person_a',
                 )
@@ -379,7 +402,33 @@ class PersonViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not (user.is_staff or user.groups.filter(name='Advocate').exists()):
             serializer.validated_data.pop('is_published', None)
-        serializer.save()
+        # Status-change capture: every edit that touches one of the
+        # status-ish fields writes a CaseEvent row. The whole block is
+        # in a transaction so a DB failure on either side rolls back.
+        # We diff after save() (rather than comparing validated_data to
+        # the instance) because validated_data only carries the fields
+        # the caller sent — an unchanged field would diff against the
+        # new value via the instance attribute, which is the right
+        # comparison.
+        old_values = {
+            f: getattr(serializer.instance, f)
+            for f in _STATUS_HISTORY_FIELDS
+        }
+        with transaction.atomic():
+            instance = serializer.save()
+            new_values = {
+                f: getattr(instance, f) for f in _STATUS_HISTORY_FIELDS
+            }
+            for field in _STATUS_HISTORY_FIELDS:
+                if old_values[field] != new_values[field]:
+                    CaseEvent.objects.create(
+                        person=instance,
+                        event_kind=CaseEvent.EventKind.STATUS_CHANGE,
+                        event_date=timezone.now().date(),
+                        description=f'{field}: {old_values[field]} → {new_values[field]}',
+                        source='auto',
+                        created_by=user,
+                    )
 
     def retrieve(self, request, *args, **kwargs):
         # Audit-log every detail view of a Person. Anonymous retrievals are
