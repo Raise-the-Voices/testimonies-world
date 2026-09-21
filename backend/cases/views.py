@@ -12,6 +12,7 @@ from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_seriali
 from rest_framework import generics, permissions, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 from .models import AuditLog, CaseCategory, CaseEvent, FamilyRelationship, Media, Person, Report, Source
@@ -1300,6 +1301,27 @@ class AuditLogFilter(filters.FilterSet):
         fields = ['user__username', 'action', 'target_type']
 
 
+class AuditLogPagination(PageNumberPagination):
+    """Pagination tuned for the audit-log review page.
+
+    Default page size is 25 (vs the global default of 10) so a reviewer
+    scanning the last few weeks of activity sees a meaningful slice on
+    page 1. `page_size_query_param='page_size'` lets the frontend ask
+    for larger slices via `?page_size=N` (capped at `max_page_size=500`)
+    so a single page can hold a week of activity at a glance without
+    the user clicking "Next" 28 times.
+
+    Why not just raise the global default? PersonViewSet and the rest
+    of the API are sized for card-style list views where 10-25 rows
+    fits a fold. The audit-log page is the only place that needs
+    bigger pages, so the override stays scoped to this viewset.
+    """
+
+    page_size = 25
+    page_size_query_param = 'page_size'
+    max_page_size = 500
+
+
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     """Read-only API for AuditLog rows.
 
@@ -1318,13 +1340,15 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
       ?search=...                text search over details, ip_address,
                                  user__username (DRF SearchFilter)
       ?ordering=timestamp        default is -timestamp
-      ?page=N                    default page size 10
+      ?page=N                    default page size 25
+      ?page_size=N               override (capped at 500)
     """
 
     queryset = AuditLog.objects.select_related('user').order_by('-timestamp')
     serializer_class = AuditLogSerializer
     permission_classes = [permissions.IsAdminUser]
     filterset_class = AuditLogFilter
+    pagination_class = AuditLogPagination
     search_fields = ['details', 'ip_address', 'user__username']
     ordering_fields = ['timestamp']
     ordering = ['-timestamp']  # default
