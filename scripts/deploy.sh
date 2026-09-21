@@ -5,6 +5,16 @@ cd /opt/rtv-cases
 PROJECT_ROOT="$(pwd)"   # Used by the nohup fallbacks below to return here
                         # after `cd`ing into backend/ or frontend/.
 
+# Mark the deploy checkout as a safe.directory for whatever user the
+# appleboy/ssh-action runs as. Git 2.35.2+ refuses to operate on a
+# repo owned by a different UID unless explicitly allowlisted — the
+# SSH-action user (typically `runner` or `deploy`) doesn't own
+# /opt/rtv-cases on prod, so `git fetch`/`git reset` would otherwise
+# fail with "detected dubious ownership" and the deploy aborts in 1s
+# (run #216, 2026-09-21). Targeted path instead of `*` keeps the
+# allowlist as narrow as possible.
+git config --global --add safe.directory /opt/rtv-cases
+
 SITE="https://cases.raisethevoices.org"
 
 # --- Ensure Node >= 22.18.0 is available before `npm ci` ---
