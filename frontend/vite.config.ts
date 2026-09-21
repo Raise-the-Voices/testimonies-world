@@ -25,6 +25,12 @@ export default defineConfig({
 				secure: proxyIsHttps,
 				rewrite: (path) => path.replace(/^\/testimonies\/api/, '/api'),
 			},
+			'/testimonies/accounts/': {
+				target: proxyTarget,
+				changeOrigin: true,
+				secure: proxyIsHttps,
+				rewrite: (path) => path.replace(/^\/testimonies\/accounts', '/accounts'),
+			},
 		},
 	}
 });
