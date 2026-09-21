@@ -199,6 +199,18 @@ server {
     location /admin/    { proxy_pass http://rtv_cases_backend; }
     location /accounts/ { proxy_pass http://rtv_cases_backend; }
     location /events/   { proxy_pass http://rtv_cases_backend; }
+
+    # Mirror of the Django routes above, prefixed with the SPA base path.
+    # The SvelteKit app is mounted at /testimonies/, and api.ts:28
+    # builds every API URL as `${base}/api/...` — so the browser /
+    # SSR fetch ends up at /testimonies/api/... which the bare /api/
+    # block above doesn't match (nginx matches the FULL path). Without
+    # this mirror, every API call 404s with the SPA's HTML "Not Found"
+    # body. proxy_pass keeps the /api/ prefix intact.
+    location /testimonies/api/      { proxy_pass http://rtv_cases_backend/api/; }
+    location /testimonies/admin/    { proxy_pass http://rtv_cases_backend/admin; }
+    location /testimonies/accounts/ { proxy_pass http://rtv_cases_backend/accounts/; }
+    location /testimonies/events/   { proxy_pass http://rtv_cases_backend/events/; }
     # /media/ is now defined above (auth-protected proxy to Django).
 
     # SPA route aliases — the SvelteKit app is mounted at /testimonies/
