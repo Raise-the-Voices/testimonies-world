@@ -173,7 +173,7 @@ fi
 # and /robots.txt straight off disk from here and falls back to the node
 # service if a file is missing — see /etc/nginx/sites-available/rtv-cases.
 sudo mkdir -p /var/www/cases
-sudo rsync -a --delete build/client/ /var/www/cases/
+sudo rsync -a --delete build/client/testimonies/ /var/www/cases/
 sudo chown -R www-data:www-data /var/www/cases
 sudo chmod -R u+rwX,g+rX,o+rX /var/www/cases
 
