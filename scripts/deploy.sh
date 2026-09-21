@@ -166,7 +166,14 @@ sudo chmod -R u+rwX,g+rX,o+rX "$PROJECT_ROOT/backend/public_media"
 # Frontend
 cd ../frontend
 npm ci --omit=dev
-npm run build
+# PUBLIC_BASE_PATH controls both the runtime base + the build's
+# output directory layout. With /testimonies set, vite emits the
+# client bundle to build/client/testimonies/ — which the rsync
+# below (0b0f3e0) strips so nginx serves /_app/* from
+#/var/www/cases/_app/. Without it, the rsync source doesn't
+# exist and the deploy dies at "change_dir ... failed" (run
+# #35598625731, 2026-09-21).
+PUBLIC_BASE_PATH=/testimonies npm run build
 
 # @sveltejs/adapter-node 5.5.x under @sveltejs/kit 2.66 / vite 7 emits the
 # server runtime into build/server/chunks/ rather than build/. The runtime
