@@ -201,6 +201,18 @@ server {
     location /events/   { proxy_pass http://rtv_cases_backend; }
     # /media/ is now defined above (auth-protected proxy to Django).
 
+    # SPA route aliases — the SvelteKit app is mounted at /testimonies/
+    # (PUBLIC_BASE_PATH=/testimonies), so any bare /persons/<id> URL
+    # falls through to the node catch-all and 404s. Redirect to the
+    # prefixed path so bookmarks, autocomplete, and stale bundles
+    # without the base still resolve. $request_uri preserves the
+    # trailing path + query string. Add more SPA route prefixes
+    # here as needed (don't redirect /admin/, /api/, etc — those
+    # are real Django routes handled above).
+    location /persons {
+        return 301 /testimonies$request_uri;
+    }
+
     # ---- SvelteKit frontend catch-all (must come last) ----
     location / {
         proxy_pass http://rtv_cases_frontend;
