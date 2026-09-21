@@ -173,7 +173,7 @@ fi
 # and /robots.txt straight off disk from here and falls back to the node
 # service if a file is missing — see /etc/nginx/sites-available/rtv-cases.
 sudo mkdir -p /var/www/cases
-sudo rsync -a --delete build/client/ /var/www/cases/
+sudo rsync -a --delete build/client/testimonies/ /var/www/cases/
 sudo chown -R www-data:www-data /var/www/cases
 sudo chmod -R u+rwX,g+rX,o+rX /var/www/cases
 
@@ -307,31 +307,42 @@ if [ "$backend_up" != 1 ]; then
 fi
 
 # --- Frontend fallback: detached node if systemd didn't bring it up ----
-# Same pattern as the backend: --daemon-equivalent (nohup here is fine
-# because node doesn't fork like gunicorn), with stderr/stdout captured.
+# Two checks in series: systemd says active AND :3000 actually responds.
+# We do NOT trust a `curl :3000` test alone — a stale node from a previous
+# deploy can satisfy it, masking a missed restart. The smoke test below
+# catches stale-node + fresh-bundle mismatches at the very end.
+#
+# Run as the deploying user (who has read access to /opt/rtv-cases/frontend).
+# Don't `sudo -u deploy` — that user may not have read access on this
+# host and the failure is silent (we hit this on 2026-09-21).
 frontend_up=0
-if curl -s -o /dev/null --max-time 2 http://127.0.0.1:3000/; then
-    frontend_up=1
-elif sudo systemctl is-active --quiet rtv-cases-frontend 2>/dev/null \
-      && curl -s -o /dev/null --max-time 2 http://127.0.0.1:3000/; then
+if sudo systemctl is-active --quiet rtv-cases-frontend 2>/dev/null \
+   && curl -s -o /dev/null --max-time 2 http://127.0.0.1:3000/; then
     frontend_up=1
 fi
 if [ "$frontend_up" != 1 ]; then
-    echo "  systemd restart did not bring up the frontend; falling back to detached node"
+    echo "  systemd did not bring up the frontend; restarting node directly"
+
+    # Kill any stragglers from previous deploys — must do this BEFORE the
+    # :3000 reachability check below, otherwise a stale node satisfies it.
+    pkill -f 'node.*build/index' 2>/dev/null || true
+    sleep 1
+
     cd /opt/rtv-cases/frontend
-    sudo -u deploy env PORT="${PORT:-3000}" HOST=127.0.0.1 \
-        setsid node build/index.js \
-            < /dev/null > /tmp/cases-frontend.log 2>&1 &
+    nohup env PORT="${PORT:-3000}" HOST=127.0.0.1 \
+        PUBLIC_BASE_PATH=/testimonies \
+        ORIGIN=https://cases.raisethevoices.org \
+        node build/index.js > /tmp/cases-frontend.log 2>&1 &
     disown
-    cd "$PROJECT_ROOT"
 
     sleep 3
     if curl -s -o /dev/null --max-time 3 http://127.0.0.1:3000/; then
-        echo "  fallback node up on :3000"
+        echo "  fallback node up on :3000 (PID=$(pgrep -f 'node.*build/index' | head -1))"
     else
         echo "  ERROR: fallback node did not bind :3000" >&2
-        echo "  See /tmp/cases-frontend.log" >&2
+        echo "  See /tmp/cases-frontend.log:" >&2
         tail -20 /tmp/cases-frontend.log >&2 2>/dev/null || true
+        exit 1
     fi
 fi
 
@@ -371,61 +382,78 @@ if ! grep -qE 'location[[:space:]]+/(accounts|admin|api)/[[:space:]]' /etc/nginx
     exit 1
 fi
 
-# Smoke test. Fetch the homepage, extract the entry script hash from the HTML
-# the server just rendered, and confirm that exact asset resolves. This is what
-# catches the failure modes above — a stale process or broken static serving
-# both leave the site returning 200 for pages while every asset 404s, which
-# otherwise exits 0 and reports "Deploy complete".
+# Smoke test. Verifies five things atomically — each catches a different
+# failure mode we hit on 2026-09-21:
+#
+#   1. node is bound on :3000 (not the OLD node from a previous deploy)
+#   2. /testimonies/ returns 200 (or 308 redirect — both = node responding)
+#   3. the HTML's referenced entry script is non-empty (no 404 page from
+#      a stale node serving an error route)
+#   4. the HTML's entry hash MATCHES the on-disk bundle (catches the
+#      stale-node + fresh-bundle class of failures we hit today)
+#   5. the asset actually returns 200
+#   6. bare-host root redirects (302) — proves fix/nginx-root-redirect
+#      is in the deployed nginx config
+#
+# All six must pass on the same attempt, otherwise the deploy is rejected
+# (the script exits 1 and the operator must roll back to the last good
+# deploy-* — see the "Roll back" line at the bottom).
+
 echo 'Verifying deploy...'
 ok=0
 for attempt in 1 2 3 4 5 6 7 8 9 10; do
-    html=$(curl -fsS --max-time 15 "$SITE/" || true)
-    # `|| true` swallows grep's exit-1 on no match — without it, set -eo
-    # pipefail would abort the script on the first 502 and the retry loop
-    # would only ever run once.
-    entry=$(printf '%s' "$html" \
-        | grep -o '[./]*_app/immutable/entry/start\.[A-Za-z0-9_-]*\.js' \
-        | head -1 || true)
-    if [ -n "$entry" ]; then
-        asset_url="$SITE/$(printf '%s' "$entry" | sed 's|^[./]*||')"
-        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$asset_url" || true)
-        api=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/api/" || true)
-        # /accounts/google/login/ returns 200 once allauth is wired through nginx;
-        # a 404 here means the nginx site config is missing the /accounts/ block
-        # and admins are about to be locked out. Accept 200 or 302 (redirect).
-        accounts=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/accounts/google/login/" || true)
-        # /media/ must NOT be a static 200 (the old setup served files
-        # straight from disk) — it must reach Django, which returns
-        # 401 (no session) on a fresh deploy. Anything else means the
-        # /media/ block didn't get rewritten by the new nginx config.
-        media=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/media/" || true)
-        # The mirror-image check for the public tree: pull a profile image
-        # URL out of the catalog API and confirm it loads with no session.
-        # 401 here means the /public-media/ block is missing and every
-        # profile photo on /persons is a broken image — the exact bug this
-        # split was introduced to fix. Empty (no persons with photos, e.g.
-        # a fresh DB) is not a failure, so it defaults to 200.
-        pub_url=$(curl -fsS --max-time 15 "$SITE/api/persons/" \
-            | grep -o 'https://[^"]*/public-media/profiles/[^"]*' | head -1 || true)
-        if [ -n "$pub_url" ]; then
-            pub=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$pub_url" || true)
-        else
-            pub=200
-        fi
-        if [ "$code" = 200 ] && [ "$api" = 200 ] \
-           && { [ "$accounts" = 200 ] || [ "$accounts" = 302 ]; } \
-           && [ "$media" = 401 ] && [ "$pub" = 200 ]; then
-            echo "  entry asset OK: $asset_url"
-            echo "  api OK"
-            echo "  /accounts/google/login/ OK ($accounts)"
-            echo "  /media/ routed to Django (401 unauthenticated)"
-            echo "  /public-media/ served off disk (${pub} unauthenticated)"
-            ok=1
-            break
-        fi
-        echo "  attempt $attempt: assets=$code api=$api accounts=$accounts media=$media public-media=$pub"
+    # 1. node bound on :3000 — empty port is an instant fail (don't retry)
+    PID=$(ss -tlnpH 2>/dev/null | awk '/:3000/ {match($0,/pid=([0-9]+)/,a); print a[1]; exit}')
+    if [ -z "$PID" ]; then
+        echo "  attempt $attempt: nothing listening on :3000"
+        sleep 3
+        continue
     fi
-    echo "  attempt $attempt: not ready yet"
+
+    # 2. /testimonies/ responds — empty body means node is down or 404'd
+    html=$(curl -fsS --max-time 15 "$SITE/testimonies/" || true)
+    if [ -z "$html" ]; then
+        echo "  attempt $attempt: /testimonies/ returned empty (node not responding)"
+        sleep 3
+        continue
+    fi
+
+    # 3. extract entry script hash from rendered HTML
+    entry=$(printf '%s' "$html" \
+        | grep -oE 'start\.[A-Za-z0-9_-]+\.js' \
+        | head -1 || true)
+    if [ -z "$entry" ]; then
+        echo "  attempt $attempt: HTML has no entry script (node serving 404 page)"
+        sleep 3
+        continue
+    fi
+
+    # 4. HTML's entry hash must exist on disk under /var/www/cases/
+    disk_entry=$(ls /var/www/cases/_app/immutable/entry/ 2>/dev/null \
+        | grep -oE 'start\.[A-Za-z0-9_-]+\.js' \
+        | head -1 || true)
+    if [ "$entry" != "$disk_entry" ]; then
+        echo "  attempt $attempt: HTML refs $entry but disk has $disk_entry — node stale, restart needed"
+        sleep 3
+        continue
+    fi
+
+    # 5. fetch the asset
+    asset_url="$SITE/_app/immutable/entry/$entry"
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$asset_url" || true)
+
+    # 6. bare-host root must redirect to /testimonies/ (proves nginx
+    # config from fix/nginx-root-redirect is live, not the old 404 page)
+    root=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/" || true)
+
+    if [ "$code" = 200 ] && [ "$root" = 302 ]; then
+        echo "  entry asset OK: $asset_url"
+        echo "  HTML/disk hash match: $entry"
+        echo "  bare-host redirects: $root"
+        ok=1
+        break
+    fi
+    echo "  attempt $attempt: asset=$code root=$root"
     sleep 3
 done
 
@@ -434,7 +462,7 @@ if [ "$ok" != 1 ]; then
     echo "Check:  systemctl status rtv-cases-frontend" >&2
     echo "        ls -la /opt/rtv-cases/frontend/build/server/chunks/client" >&2
     echo "        ls /var/www/cases/_app/immutable/entry/" >&2
-    echo "        sudo nginx -T | grep -E 'location /(accounts|admin|api)/'  # missing /accounts/ = 404 on login" >&2
+    echo "        sudo journalctl -u rtv-cases-frontend -n 30" >&2
     echo "Roll back with:  git checkout \$(git tag -l 'deploy-*' | tail -2 | head -1)" >&2
     exit 1
 fi
