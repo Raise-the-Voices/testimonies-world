@@ -19,6 +19,19 @@ jobs:
             set -e
             cd /opt/rtv-cases
 
+            # Mark the deploy checkout as a safe.directory for
+            # whatever user appleboy/ssh-action logs in as. Git
+            # 2.35.2+ refuses to operate on a repo owned by a
+            # different UID without an explicit allowlist — the
+            # SSH-action user doesn't own /opt/rtv-cases on prod,
+            # so `git fetch` below would otherwise fail with
+            # "detected dubious ownership" and abort the deploy
+            # before deploy.sh is even invoked (run #216,
+            # 2026-09-21). Must run inside this YAML `script:`
+            # block — putting it in deploy.sh is too late because
+            # the first git op here is the one that fails.
+            git config --global --add safe.directory /opt/rtv-cases
+
             # Bootstrap deploy.sh to the latest tracked version.
             # The workflow can't depend on the host's deploy.sh being
             # up to date — otherwise an out-of-date script can fail
