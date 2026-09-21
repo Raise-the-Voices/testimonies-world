@@ -5,6 +5,8 @@
 	import Bell from '$lib/Bell.svelte';
 	import Toast from '$lib/Toast.svelte';
 	import '../app.css';
+	import '@fontsource/pt-sans/400.css';
+	import '@fontsource/pt-sans/700.css';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
