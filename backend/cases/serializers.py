@@ -1,6 +1,7 @@
 from urllib.parse import urljoin
 
 from django.conf import settings
+from django.db import transaction
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -225,13 +226,28 @@ class ReportSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializ
     media_files = MediaSerializer(many=True, read_only=True)
     # Writable nested: volunteers can submit N sources alongside the
     # report in one POST. Standalone /sources/ endpoint also works for
-    # adding more sources later.
+    # adding more sources later. Atomic — see `create()` below.
     sources = SourceSerializer(many=True, required=False)
 
     class Meta:
         model = Report
         fields = '__all__'
         read_only_fields = ['created_by', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        # Writable `sources` requires an explicit `.create()` — DRF's
+        # default ModelSerializer.create() refuses nested writes
+        # (asserts). Pop sources, save the Report, then create each
+        # Source with the FK auto-set. Wrapped in a transaction so a
+        # DB failure on either side rolls back — either every source
+        # lands or none do, matching the contract the submit form
+        # relies on.
+        sources_data = validated_data.pop('sources', [])
+        with transaction.atomic():
+            report = super().create(validated_data)
+            for source_data in sources_data:
+                Source.objects.create(report=report, **source_data)
+        return report
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
