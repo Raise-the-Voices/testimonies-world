@@ -31,7 +31,14 @@
   Bump both together if the global default ever changes.
 -->
 <script lang="ts" module>
-	export const PAGE_SIZE = 10;
+	/** Default page size — matches AuditLogPagination.page_size in the
+	 *  backend. The dropdown options below are the values the user
+	 *  can pick; bump both together if the backend default ever moves. */
+	export const PAGE_SIZE = 25;
+	/** Page-size choices offered in the dropdown. Capped at 200 to keep
+	 *  the table scannable; the backend caps at 500 so any value here
+	 *  is honored. */
+	const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 200] as const;
 </script>
 
 <script lang="ts">
@@ -58,12 +65,22 @@
 		return iso.slice(0, 16);
 	}
 
+	function parsePageSize(raw: string | undefined): number {
+		const n = raw ? Number(raw) : NaN;
+		if (Number.isFinite(n) && (PAGE_SIZE_OPTIONS as readonly number[]).includes(n)) return n;
+		return PAGE_SIZE;
+	}
+
 	let username = $state(untrack(() => data.requestParams.user__username ?? ''));
 	let action = $state(untrack(() => data.requestParams.action ?? ''));
 	let targetType = $state(untrack(() => data.requestParams.target_type ?? ''));
 	let search = $state(untrack(() => data.requestParams.search ?? ''));
 	let timestampAfter = $state(untrack(() => convertIsoToLocal(data.requestParams.timestamp_after ?? '')));
 	let timestampBefore = $state(untrack(() => convertIsoToLocal(data.requestParams.timestamp_before ?? '')));
+	// pageSize mirrors ?page_size= in the URL so deep-links survive a
+	// reload. Falls back to PAGE_SIZE when the param is absent or invalid.
+	let pageSize = $state(untrack(() => parsePageSize(data.requestParams.page_size)));
+	let jumpTo = $state<number>(untrack(() => currentPageFromUrl()));
 
 	function currentPageFromUrl(): number {
 		const p = $page.url.searchParams.get('page');
@@ -79,6 +96,9 @@
 		if (search.trim()) params.set('search', search.trim());
 		if (timestampAfter) params.set('timestamp_after', timestampAfter);
 		if (timestampBefore) params.set('timestamp_before', timestampBefore);
+		// Omit page_size when it's the default — keeps the URL clean
+		// and matches the case where the backend itself omits it.
+		if (pageSize !== PAGE_SIZE) params.set('page_size', String(pageSize));
 		if (nextPage && nextPage > 1) {
 			params.set('page', String(nextPage));
 		} else if (nextPage === null) {
@@ -100,6 +120,22 @@
 		const params = buildParams(pageNum);
 		const qs = params.toString();
 		goto(qs ? `?${qs}` : $page.url.pathname, { replaceState: true, noScroll: true });
+	}
+
+	/** Changing page size resets to page 1 — keeping the old page
+	 *  number is meaningless once the slice size shifts. */
+	function changePageSize() {
+		const params = buildParams(1);
+		const qs = params.toString();
+		goto(qs ? `?${qs}` : $page.url.pathname, { replaceState: true, noScroll: true });
+	}
+
+	/** Clamp the jump-to input to [1, totalPages] and navigate. No-op
+	 *  when the target equals the current page. */
+	function jumpToPage() {
+		const total = pagesTotal();
+		const target = Math.max(1, Math.min(total, Math.floor(jumpTo) || 1));
+		if (target !== currentPageFromUrl()) goToPage(target);
 	}
 
 	function clearFilters() {
@@ -152,6 +188,27 @@
 		if (i) return `IP ${i}`;
 		return '';
 	}
+
+	// Derived: page count + window for the numeric pagination strip.
+	function pagesTotal(): number {
+		const count = data.logs?.count ?? 0;
+		return Math.max(1, Math.ceil(count / pageSize));
+	}
+
+	/** Build the page-number strip shown inside the pagination nav.
+	 *  Always shows first and last, current ± 1, and an ellipsis on
+	 *  each gap when the window doesn't bridge them. */
+	function buildPageList(current: number, total: number): (number | 'ellipsis')[] {
+		if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+		const pages: (number | 'ellipsis')[] = [1];
+		const start = Math.max(2, current - 1);
+		const end = Math.min(total - 1, current + 1);
+		if (start > 2) pages.push('ellipsis');
+		for (let i = start; i <= end; i++) pages.push(i);
+		if (end < total - 1) pages.push('ellipsis');
+		pages.push(total);
+		return pages;
+	}
 </script>
 
 <svelte:head>
@@ -201,7 +258,7 @@
 			subtitle="{data.logs.count} {data.logs.count === 1 ? 'entry' : 'entries'}"
 		>
 			{#if data.logs.results.length === 0}
-				<p class="empty">No audit log entries match your filters.</p>
+				<p class="empty">No audit log entries match your filters. <span class="empty-total">({data.logs.count} total entries)</span></p>
 			{:else}
 				<!-- activity-feed + ActivityItem — same shape as the
 				     dashboard's Recent activity widget, so this page
@@ -220,14 +277,27 @@
 					{/each}
 				</ul>
 
-				{#if data.logs.next || data.logs.previous}
-					{@const totalPages = Math.ceil(data.logs.count / PAGE_SIZE)}
+				{#if data.logs.next || data.logs.previous || data.logs.count > pageSize}
+					{@const totalPages = pagesTotal()}
 					{@const currentPage = currentPageFromUrl()}
+					{@const pageList = buildPageList(currentPage, totalPages)}
+					{@const showingFrom = (currentPage - 1) * pageSize + 1}
+					{@const showingTo = Math.min(currentPage * pageSize, data.logs.count)}
 					<nav class="pagination" aria-label="Pagination">
 						<div class="pagination-summary">
-							Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong>
+							Showing <strong>{showingFrom}–{showingTo}</strong> of <strong>{data.logs.count}</strong> entries
 						</div>
+
 						<div class="pagination-controls">
+							<button
+								type="button"
+								class="btn btn-secondary"
+								onclick={() => goToPage(1)}
+								disabled={currentPage <= 1}
+								aria-label="First page"
+							>
+								« First
+							</button>
 							<button
 								type="button"
 								class="btn btn-secondary"
@@ -235,8 +305,24 @@
 								disabled={!data.logs.previous}
 								aria-label="Previous page"
 							>
-								‹ Previous
+								‹ Prev
 							</button>
+							{#each pageList as p, i (i + '-' + p)}
+								{#if p === 'ellipsis'}
+									<span class="pagination-ellipsis" aria-hidden="true">…</span>
+								{:else if p === currentPage}
+									<span class="pagination-current" aria-current="page">{p}</span>
+								{:else}
+									<button
+										type="button"
+										class="btn btn-secondary"
+										onclick={() => goToPage(p)}
+										aria-label={`Page ${p}`}
+									>
+										{p}
+									</button>
+								{/if}
+							{/each}
 							<button
 								type="button"
 								class="btn btn-secondary"
@@ -246,6 +332,43 @@
 							>
 								Next ›
 							</button>
+							<button
+								type="button"
+								class="btn btn-secondary"
+								onclick={() => goToPage(totalPages)}
+								disabled={currentPage >= totalPages}
+								aria-label="Last page"
+							>
+								Last »
+							</button>
+						</div>
+
+						<div class="pagination-extras">
+							<label class="pagination-extras-field">
+								<span class="pagination-extras-label">Page size</span>
+								<select
+									class="select"
+									bind:value={pageSize}
+									onchange={changePageSize}
+									aria-label="Results per page"
+								>
+									{#each PAGE_SIZE_OPTIONS as opt (opt)}
+										<option value={opt}>{opt}</option>
+									{/each}
+								</select>
+							</label>
+							<label class="pagination-extras-field">
+								<span class="pagination-extras-label">Go to page</span>
+								<input
+									type="number"
+									class="input"
+									min="1"
+									max={totalPages}
+									bind:value={jumpTo}
+									onkeydown={(e) => e.key === 'Enter' && jumpToPage()}
+									aria-label={`Go to page (1–${totalPages})`}
+								/>
+							</label>
 						</div>
 					</nav>
 				{/if}
@@ -304,13 +427,20 @@
 		color: var(--color-text-muted);
 		font-size: 0.95rem;
 	}
+	.empty-total {
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+		font-variant-numeric: tabular-nums;
+	}
 
+	/* Pagination nav: summary row, control row (page numbers + first/
+	   prev/next/last), extras row (page size + jump). Stacks on
+	   narrow viewports via flex-wrap so the table reads cleanly on
+	   mobile. */
 	.pagination {
 		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 1rem;
-		flex-wrap: wrap;
+		flex-direction: column;
+		gap: 0.65rem;
 		margin-top: 0.85rem;
 		padding-top: 0.85rem;
 		border-top: 1px solid var(--color-border-light);
@@ -325,7 +455,69 @@
 	}
 	.pagination-controls {
 		display: flex;
-		gap: 0.5rem;
+		align-items: center;
+		gap: 0.3rem;
+		flex-wrap: wrap;
+	}
+	.pagination-current {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 2rem;
+		height: 2rem;
+		padding: 0 0.6rem;
+		font-size: 0.85rem;
+		font-variant-numeric: tabular-nums;
+		font-weight: 600;
+		color: var(--color-primary);
+		background: var(--color-primary-tint);
+		border: 1px solid var(--color-primary);
+		border-radius: var(--radius-input);
+	}
+	.pagination-ellipsis {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 1.5rem;
+		height: 2rem;
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+	}
+	.pagination-extras {
+		display: flex;
+		gap: 1rem;
+		flex-wrap: wrap;
+		align-items: flex-end;
+	}
+	.pagination-extras-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+	.pagination-extras-label {
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06rem;
+		color: var(--color-text-muted);
+	}
+	.pagination-extras .input,
+	.pagination-extras .select {
+		font: inherit;
+		padding: 0.35rem 0.5rem;
+		border: 1px solid var(--color-border-light);
+		border-radius: var(--radius-input);
+		background: var(--color-bg-white);
+		color: var(--color-text);
+		min-width: 4.5rem;
+	}
+	.pagination-extras .input {
+		max-width: 6rem;
+	}
+	.pagination-extras .input:focus-visible,
+	.pagination-extras .select:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px var(--color-primary-tint);
+		border-color: var(--color-primary);
 	}
 	.btn[disabled] {
 		opacity: 0.5;
