@@ -49,16 +49,19 @@
 	let errors = $state<Record<string, string>>({});
 
 	// `draftSavedAt` drives the "Saved Xm ago" status pill in the header.
-	// `pendingDraft` holds the draft that the user can choose to restore
-	// — auto-restore would be surprising, so we always require an explicit
-	// click. `showRestoreBanner` is the visibility flag for the banner.
+	// On mount, if a valid draft exists for this user, it's applied
+	// silently (Google-Forms-style) — the user sees the status pill
+	// flip from hidden to "Saved Xm ago" but no banner interrupts them.
 	// `draftSaveError` surfaces localStorage quota / private-mode
 	// failures in the same pill (silent failure is worse than no draft).
 	let draftSavedAt = $state<string | null>(null);
-
-	let pendingDraft = $state<SubmitDraft | null>(null);
-	let showRestoreBanner = $state(false);
 	let draftSaveError = $state(false);
+	// Two-stage Confirm-to-Clear control in the header. The user clicks
+	// "Clear form"; the button label flips to "Click again to confirm"
+	// with a destructive style; a 4s timeout resets it. A second click
+	// within the window wipes the form and the saved draft.
+	let clearingForm = $state(false);
+	let clearConfirmTimer: ReturnType<typeof setTimeout> | null = null;
 	// Per-call guard: the helper APIs need a non-undefined username,
 	// but TS can't narrow `currentUser.username` through the
 	// `authenticated` check alone. Empty string makes loadDraft /
@@ -270,25 +273,98 @@
 	}
 
 	function discardDraft() {
-		if (!currentUser.authenticated) return;
+		// Deprecated: replaced by clearForm(), which also wipes the
+		// form fields. Kept as a no-op alias in case any external
+		// code (or test) still calls it.
 		clearDraft(draftKey);
-		pendingDraft = null;
-		showRestoreBanner = false;
 		draftSavedAt = null;
 	}
 
-	function acceptDraft() {
-		if (!pendingDraft) return;
-		restoreFromDraft(pendingDraft);
-		draftSavedAt = pendingDraft.savedAt;
-		pendingDraft = null;
-		showRestoreBanner = false;
-		// Re-save immediately so the saved-at timestamp reflects "now
-		// after restore", not the old draft's age. Otherwise the
-		// status pill would say "saved 3 days ago" forever.
-		if (currentUser.authenticated) {
-			saveDraft(draftKey, buildDraftPayload());
-			draftSavedAt = new Date().toISOString();
+	// Reset every form field to its initial state and remove the
+	// saved draft. Called from the header's Confirm-to-Clear button.
+	function resetFormFields() {
+		// Person — identity
+		name = '';
+		legalName = '';
+		aliasesRaw = '';
+		country = '';
+		// Person — demographics & location
+		currentStatus = 'unknown';
+		medicalStatus = 'unknown';
+		roughLocation = '';
+		preciseLocation = '';
+		lastKnownDate = '';
+		ethnicity = '';
+		gender = '';
+		ageAtIncident = '';
+		occupation = '';
+		// Person — media, evidence, privacy
+		qualityTier = '';
+		profileImageFile = null;
+		profileImagePreview = null;
+		profileImageCleared = false;
+		medicalNotes = '';
+		authoritativeSource = '';
+		authoritativeUrl = '';
+		isPublished = true;
+		selectedCategories = [];
+		summaryNarrative = '';
+		// Initial report
+		sourceType = 'firsthand';
+		sourceAttribution = '';
+		reporterName = '';
+		reporterContact = '';
+		reportDateStart = '';
+		reportRoughLocation = '';
+		narrative = '';
+		suspectedReason = '';
+		officialReason = '';
+		// Sources + media attached to the new Report
+		sourceEntries = [];
+		mediaEntries = [];
+		// Errors
+		errors = {};
+		formError = '';
+		formErrorKind = 'other';
+		mediaFailures = [];
+		// Draft bookkeeping
+		draftSavedAt = null;
+		draftSaveError = false;
+		// lastSerialized guards the auto-save $effect from immediately
+		// re-saving an empty payload over our cleared draft. After a
+		// real edit it will start saving again from the new baseline.
+		lastSerialized = '';
+	}
+
+	function clearForm() {
+		if (!currentUser.authenticated) return;
+		clearDraft(draftKey);
+		resetFormFields();
+		showToast('Form cleared.', { variant: 'info', durationMs: 3000 });
+	}
+
+	function requestClear() {
+		// Two-stage: first click flips into "confirm" mode; second
+		// click within 4s executes. A timer auto-resets so an
+		// abandoned confirm doesn't linger.
+		if (clearingForm) {
+			clearForm();
+			cancelClearConfirm();
+			return;
+		}
+		clearingForm = true;
+		if (clearConfirmTimer) clearTimeout(clearConfirmTimer);
+		clearConfirmTimer = setTimeout(() => {
+			clearingForm = false;
+			clearConfirmTimer = null;
+		}, 4000);
+	}
+
+	function cancelClearConfirm() {
+		clearingForm = false;
+		if (clearConfirmTimer) {
+			clearTimeout(clearConfirmTimer);
+			clearConfirmTimer = null;
 		}
 	}
 
@@ -333,16 +409,15 @@
 			console.error(e);
 		}
 
-		// Draft check runs once on mount. Only show the restore banner
-		// if (a) the user is authenticated, (b) a valid draft exists,
-		// and (c) the draft's payload actually differs from the current
-		// (empty) form — otherwise we'd show a useless "found a draft"
-		// banner for an empty initial visit.
-		if (currentUser.authenticated && hasDraft(draftKey)) {
+		// Draft check runs once on mount. If a valid draft exists for
+		// this user, apply it silently (Google-Forms-style) so the
+		// volunteer lands mid-stream without an interruptive prompt.
+		// The status pill below the title will flip from hidden to
+		// "Saved Xm ago" — that's the only signal.
+		if (currentUser.authenticated) {
 			const draft = loadDraft(draftKey);
 			if (draft) {
-				pendingDraft = draft;
-				showRestoreBanner = true;
+				restoreFromDraft(draft);
 				draftSavedAt = draft.savedAt;
 			}
 		}
@@ -775,6 +850,23 @@
 		<header class="form-header">
 			<div class="form-header-row">
 				<h1>Submit a Case</h1>
+				<!-- Clear form control. Two-stage: first click flips to
+				     a destructive "Click again to confirm" label that
+				     auto-resets after 4s; second click within the window
+				     wipes the form fields + the saved draft. Shown only
+				     for authenticated users since drafts are user-scoped. -->
+				{#if currentUser.authenticated}
+					<button
+						type="button"
+						class="clear-form-btn"
+						class:clear-form-btn-confirm={clearingForm}
+						onclick={requestClear}
+						onblur={cancelClearConfirm}
+						aria-label={clearingForm ? 'Confirm clearing the form' : 'Clear the form'}
+					>
+						{clearingForm ? 'Click again to confirm' : 'Clear form'}
+					</button>
+				{/if}
 				<!-- Draft status pill. Two states:
 				     - "Saved Xm ago" (positive, with a tiny sync glyph)
 				     - "Could not save draft" (error, no glyph, alerts the
@@ -877,39 +969,6 @@
 		{/if}
 
 		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} novalidate>
-			<!-- ============== Restore-from-draft banner ============== -->
-			<!-- Shown only when a draft was found on mount and the user
-			     hasn't yet accepted or discarded it. Auto-restore would
-			     surprise users; we always require an explicit click. -->
-			{#if showRestoreBanner && pendingDraft}
-				<div class="draft-restore-banner" role="status" aria-live="polite">
-					<div class="draft-restore-body">
-						<p class="draft-restore-title">We found a saved draft.</p>
-						<p class="draft-restore-desc">
-							Saved {formatDraftAge(pendingDraft.savedAt)}. Profile and
-							media file uploads aren't saved — re-select files
-							before submitting.
-						</p>
-					</div>
-					<div class="draft-restore-actions">
-						<button
-							type="button"
-							class="btn btn-primary"
-							onclick={acceptDraft}
-						>
-							Restore
-						</button>
-						<button
-							type="button"
-							class="btn btn-secondary"
-							onclick={discardDraft}
-						>
-							Discard
-						</button>
-					</div>
-				</div>
-			{/if}
-
 			<!-- ============== Section 1: Person Information ============== -->
 			<section class="form-section" aria-labelledby="sec-person">
 				<h2 id="sec-person" class="form-section-title">
@@ -2258,9 +2317,9 @@
 
 	/* === Auto-save + drafts ============================================
 	   - .form-header-row: header pill next to the H1
+	   - .clear-form-btn: two-stage Confirm-to-Clear button
 	   - .draft-pill: small status indicator (Saved Xm ago)
 	   - .draft-pill-error: error variant when localStorage fails
-	   - .draft-restore-banner: top-of-form card offering restore/discard
 	   ================================================================ */
 
 	.form-header-row {
@@ -2297,48 +2356,42 @@
 		font-weight: 700;
 	}
 
-	.draft-restore-banner {
-		display: flex;
-		justify-content: space-between;
+	/* === Clear form button (header) ===
+	   Two-stage Confirm-to-Clear pattern. Default: a quiet ghost
+	   button in the header. On first click: text flips and color
+	   shifts to a destructive palette; second click within the 4s
+	   window executes. `onblur` cancels an abandoned confirm. */
+	.clear-form-btn {
+		display: inline-flex;
 		align-items: center;
-		gap: 1rem;
-		flex-wrap: wrap;
-		padding: 0.9rem 1.1rem;
-		margin-bottom: 1.25rem;
-		background: var(--color-surface);
-		border: 1px solid var(--color-primary-light);
-		border-left: 3px solid var(--color-primary);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-card);
-	}
-	.draft-restore-body {
-		min-width: 0;
-		flex: 1 1 280px;
-	}
-	.draft-restore-title {
-		margin: 0;
-		font-weight: 700;
-		color: var(--color-text);
-		font-size: 0.95rem;
-	}
-	.draft-restore-desc {
-		margin: 0.2rem 0 0 0;
-		font-size: 0.82rem;
+		padding: 0.3rem 0.7rem;
+		font-size: 0.78rem;
+		font-weight: 600;
 		color: var(--color-text-muted);
-		line-height: 1.4;
+		background: transparent;
+		border: 1px solid var(--color-border-light);
+		border-radius: var(--radius-control);
+		cursor: pointer;
+		white-space: nowrap;
+		transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 	}
-	.draft-restore-actions {
-		display: flex;
-		gap: 0.5rem;
-		flex-shrink: 0;
+	.clear-form-btn:hover {
+		color: var(--color-text);
+		border-color: var(--color-text-muted);
 	}
-	@media (max-width: 600px) {
-		.draft-restore-actions {
-			width: 100%;
-		}
-		.draft-restore-actions .btn {
-			flex: 1;
-		}
+	.clear-form-btn:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+	}
+	.clear-form-btn-confirm {
+		color: #fff;
+		background: var(--color-danger);
+		border-color: var(--color-danger);
+	}
+	.clear-form-btn-confirm:hover {
+		background: var(--color-danger);
+		border-color: var(--color-danger);
+		opacity: 0.92;
 	}
 
 	/* === Media partial-failure banner (page-level) ===
