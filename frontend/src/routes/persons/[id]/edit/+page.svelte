@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { user, isVolunteer, isAdmin, loadSession } from '$lib/session';
 	import { getPerson, updatePerson, getCategories, ApiError } from '$lib/api';
+	import { focusFirstFormError } from '$lib/formFocus';
 import Skeleton from '$lib/Skeleton.svelte';
 	import type { Person } from '$lib/types';
 	import type { PageData } from './$types';
@@ -215,23 +216,18 @@ import Skeleton from '$lib/Skeleton.svelte';
 	}
 
 	function focusFirstError(errs: Record<string, string>) {
-		const order = [
-			'name', 'legal_name', 'aliases', 'country', 'status', 'medical',
-			'rough_location', 'precise_location', 'last_known_date', 'ethnicity',
-			'gender', 'dob', 'quality_tier', 'profile_image', 'medical_notes',
-			'authoritative_source', 'authoritative_url',
-			'summary',
-		];
-		for (const f of order) {
-			if (errs[f]) {
-				const el = document.getElementById(f) as HTMLElement | null;
-				if (el) {
-					el.focus();
-					el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-					return;
-				}
-			}
-		}
+		focusFirstFormError(errs, {
+			order: [
+				'name', 'legal_name', 'aliases', 'country', 'status', 'medical',
+				'rough_location', 'precise_location', 'last_known_date', 'ethnicity',
+				'gender', 'dob', 'quality_tier', 'profile_image', 'medical_notes',
+				'authoritative_source', 'authoritative_url',
+				'summary',
+			],
+			idMap: {
+				aliases: ['aliases-input'],
+			},
+		});
 	}
 
 	async function doRefreshSession() {

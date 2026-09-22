@@ -180,6 +180,17 @@ server {
     location = /favicon.ico { access_log off; try_files $uri =404; }
     location = /robots.txt  { access_log off; try_files $uri =404; }
 
+    # ---- Bare-host root → /testimonies/ ----
+    # SvelteKit is mounted at /testimonies/ via PUBLIC_BASE_PATH. A request
+    # to https://cases.raisethevoices.org/ otherwise falls through to the
+    # SvelteKit catch-all, which (correctly) returns 404 because it
+    # doesn't recognize a route outside its base path. Send bare-host
+    # visitors to the app root so they don't land on a 404 page when
+    # typing the domain by hand.
+    location = / {
+        return 302 /testimonies/;
+    }
+
     # ---- Django / gunicorn routes ----
     # Explicit, ordered before the frontend catch-all below. Adding a new
     # Django route? Add it here so it doesn't get caught by `location /`.
@@ -188,7 +199,31 @@ server {
     location /admin/    { proxy_pass http://rtv_cases_backend; }
     location /accounts/ { proxy_pass http://rtv_cases_backend; }
     location /events/   { proxy_pass http://rtv_cases_backend; }
+
+    # Mirror of the Django routes above, prefixed with the SPA base path.
+    # The SvelteKit app is mounted at /testimonies/, and api.ts:28
+    # builds every API URL as `${base}/api/...` — so the browser /
+    # SSR fetch ends up at /testimonies/api/... which the bare /api/
+    # block above doesn't match (nginx matches the FULL path). Without
+    # this mirror, every API call 404s with the SPA's HTML "Not Found"
+    # body. proxy_pass keeps the /api/ prefix intact.
+    location /testimonies/api/      { proxy_pass http://rtv_cases_backend/api/; }
+    location /testimonies/admin/    { proxy_pass http://rtv_cases_backend/admin; }
+    location /testimonies/accounts/ { proxy_pass http://rtv_cases_backend/accounts/; }
+    location /testimonies/events/   { proxy_pass http://rtv_cases_backend/events/; }
     # /media/ is now defined above (auth-protected proxy to Django).
+
+    # SPA route aliases — the SvelteKit app is mounted at /testimonies/
+    # (PUBLIC_BASE_PATH=/testimonies), so any bare /persons/<id> URL
+    # falls through to the node catch-all and 404s. Redirect to the
+    # prefixed path so bookmarks, autocomplete, and stale bundles
+    # without the base still resolve. $request_uri preserves the
+    # trailing path + query string. Add more SPA route prefixes
+    # here as needed (don't redirect /admin/, /api/, etc — those
+    # are real Django routes handled above).
+    location /persons {
+        return 301 /testimonies$request_uri;
+    }
 
     # ---- SvelteKit frontend catch-all (must come last) ----
     location / {

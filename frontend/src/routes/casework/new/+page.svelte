@@ -9,6 +9,8 @@
 		updateCasework,
 		ApiError,
 	} from '$lib/api';
+	import { classifyFormError, reportFormError, type FormErrorKind } from '$lib/formError';
+	import { focusFirstFormError } from '$lib/formFocus';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import PersonMultiPicker from '$lib/PersonMultiPicker.svelte';
 	import type { PageData } from './$types';
@@ -22,7 +24,7 @@
 	let loading = $state(true);
 	let loadError = $state('');
 	let formError = $state('');
-	let formErrorKind = $state<'auth' | 'server' | 'other'>('other');
+	let formErrorKind = $state<FormErrorKind>('generic');
 	let errors = $state<Record<string, string>>({});
 	let selectedPersons: number[] = $state([]);
 
@@ -87,14 +89,14 @@
 			nextSteps = r.next_steps ?? '';
 			notes = r.notes ?? '';
 			selectedPersons = Array.isArray(r.persons) ? r.persons.slice() : [];
-		} catch (e: any) {
+		} catch (e: unknown) {
 			if (token !== loadToken) return;
 			if (e instanceof ApiError && e.status === 404) {
 				loadError = 'That record no longer exists.';
 			} else if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
 				loadError = "You don't have permission to edit this record.";
 			} else {
-				loadError = e?.message || "Couldn't load this record.";
+				loadError = e instanceof Error ? e.message : "Couldn't load this record.";
 			}
 		} finally {
 			if (token === loadToken) loading = false;
@@ -159,17 +161,9 @@
 	}
 
 	function focusFirstError(errs: Record<string, string>) {
-		const order = ['action_type', 'date', 'status', 'description', 'next_steps', 'notes'];
-		for (const f of order) {
-			if (errs[f]) {
-				const el = document.getElementById(f) as HTMLElement | null;
-				if (el) {
-					el.focus();
-					el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-					return;
-				}
-			}
-		}
+		focusFirstFormError(errs, {
+			order: ['action_type', 'date', 'status', 'description', 'next_steps', 'notes'],
+		});
 	}
 
 	async function refreshSession() {
@@ -212,32 +206,37 @@
 				await createCasework(payload);
 				await goto(`${base}/casework?saved=1`, { replaceState: true });
 			}
-		} catch (e: any) {
-			if (e instanceof ApiError) {
-				if (e.isValidation && Object.keys(e.fieldErrors).length > 0) {
-					const mapped: Record<string, string> = {};
-					for (const [k, msgs] of Object.entries(e.fieldErrors)) {
-						mapped[mapServerField(k)] = msgs[0];
-					}
-					errors = mapped;
-					focusFirstError(mapped);
-				} else if (e.isUnauthorized) {
-					formErrorKind = 'auth';
-					formError =
-						'Your session has expired, or you don’t have permission to add records. ' +
-						'Try refreshing your session — if that doesn’t work, log in again.';
-				} else if (e.isServer || e.status === 0) {
-					formErrorKind = 'server';
-					formError = e.message || 'The server hit a snag. Please try again in a moment.';
-				} else {
-					formErrorKind = 'other';
-					formError = e.message || 'Something went wrong. Please try again.';
+		} catch (e: unknown) {
+			// Centralized classification — see $lib/formError for the full
+			// validation / auth / network / server / generic contract.
+			const shape = classifyFormError(e);
+			formErrorKind = shape.kind;
+			formError = shape.message;
+
+			if (shape.kind === 'validation' && shape.fieldErrors) {
+				// Map server snake_case keys → the form's element ids
+				// (kept here, not in the utility, because the mapping is
+				// form-specific — different forms use different ids).
+				const mapped: Record<string, string> = {};
+				for (const [k, msg] of Object.entries(shape.fieldErrors)) {
+					mapped[mapServerField(k)] = msg;
 				}
+				errors = mapped;
+				focusFirstError(mapped);
 			} else {
-				formErrorKind = 'other';
-				formError = 'Something went wrong. Please try again.';
+				// Non-validation failures clear any stale field-level
+				// errors so a red border doesn't linger from a prior
+				// submit attempt that the user has since fixed.
+				errors = {};
 			}
+
+			// Transient toast for non-validation failures. The helper
+			// no-ops on `kind === 'validation'`, so we don't double-
+			// report field problems with a banner + toast.
+			reportFormError(e);
 		} finally {
+			// Reset regardless of success/failure so the submit button
+			// never gets stuck disabled.
 			saving = false;
 		}
 	}

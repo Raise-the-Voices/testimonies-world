@@ -3,6 +3,7 @@
 	import { base } from '$app/paths';
 	import { user } from '$lib/session';
 	import { safeText, isEmptyAfterSanitization } from '$lib/testimonial-sanitize';
+	import { sanitizeText } from '$lib/sanitize';
 	import WorkflowActions from '$lib/WorkflowActions.svelte';
 	import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
 	import type { PageData } from './$types';
@@ -37,14 +38,22 @@
 	// conflict markers and returns '' if the field is wholly corrupt.
 	// The page then shows a clear 'not available' panel instead of
 	// misleading content.
-	const safeTitle = $derived(safeText(t?.title));
-	const safeSummary = $derived(safeText(t?.summary));
-	const safeNarrative = $derived(safeText(t?.narrative));
-	const safeOutcome = $derived(safeText(t?.outcome));
-	const safeCountry = $derived(safeText(t?.country));
-	const safeRegion = $derived(safeText(t?.region));
-	const safeLocationDisplay = $derived(safeText(t?.public_location_display));
-	const safeSourceLabel = $derived(safeText(t?.public_source_label));
+	//
+	// `sanitizeText()` is run AFTER `safeText()` as defence-in-depth
+	// against stored XSS (audit item M14): any HTML / script that
+	// sneaks past server-side validation is stripped here. Svelte's
+	// `{value}` interpolation already escapes, so this layer is
+	// belt-and-braces — but it pins the safety contract at the
+	// rendering boundary and survives a future migration to
+	// `{@html}` or Markdown rendering.
+	const safeTitle = $derived(sanitizeText(safeText(t?.title)));
+	const safeSummary = $derived(sanitizeText(safeText(t?.summary)));
+	const safeNarrative = $derived(sanitizeText(safeText(t?.narrative)));
+	const safeOutcome = $derived(sanitizeText(safeText(t?.outcome)));
+	const safeCountry = $derived(sanitizeText(safeText(t?.country)));
+	const safeRegion = $derived(sanitizeText(safeText(t?.region)));
+	const safeLocationDisplay = $derived(sanitizeText(safeText(t?.public_location_display)));
+	const safeSourceLabel = $derived(sanitizeText(safeText(t?.public_source_label)));
 	const isRowCorrupt = $derived(
 		!!t && isEmptyAfterSanitization({
 			title: t.title,

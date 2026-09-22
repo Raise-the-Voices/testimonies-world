@@ -31,7 +31,11 @@ export const PersonDetailSchema = z.object({
 	categories: z.array(z.any()),
 	reports: z.array(z.any()),
 	media_files: z.array(z.any()),
-	days_since_last_report: z.number(),
+	// Backend returns null for Person rows with no reports (or where every
+	// report has a null date_start). The wire type from orval already allows
+	// null (`number | null`); the overlay must match or .parse() crashes
+	// the detail page for any empty-case Person record.
+	days_since_last_report: z.number().nullable(),
 	family: z.array(z.any()),
 	profile_image_url: z.string().nullable(),
 	name: z.string(),

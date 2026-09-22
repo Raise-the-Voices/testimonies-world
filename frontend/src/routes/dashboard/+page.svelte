@@ -42,7 +42,7 @@
 	import { fade } from 'svelte/transition';
 	import Icon from '$lib/Icon.svelte';
 	import DashboardCard from '$lib/DashboardCard.svelte';
-	import StatTile from '$lib/StatTile.svelte';
+	import StatisticsCard from '$lib/StatisticsCard.svelte';
 	import QuickActions from '$lib/QuickActions.svelte';
 	import StatusBreakdownChart from '$lib/StatusBreakdownChart.svelte';
 	import { isAdvocate, isAdmin, isVolunteer } from '$lib/session';
@@ -197,7 +197,7 @@
 		</DashboardCard>
 	{:else}
 		<!-- === SECTION: Summary row (4 tiles) ===
-		     min-height matches the real StatTile geometry so the swap
+		     min-height matches the real KPI tile geometry so the swap
 		     doesn't reflow. -->
 		<div class="dashboard-section summary-section">
 			{#if loading}
@@ -211,34 +211,39 @@
 			{:else if data.data}
 				<div class="section-inner" transition:fade={{ duration: 220 }}>
 					<section class="summary-row" aria-label="Platform summary">
-						<StatTile
+						<StatisticsCard
+							variant="kpi"
 							label="Open cases"
 							value={data.data.summary.open_cases}
 							hint="Published persons, any status."
 							href="{base}/persons"
 						/>
-						<StatTile
+						<StatisticsCard
+							variant="kpi"
 							label="Stale cases"
 							value={data.data.summary.stale_cases}
 							hint="Not released, not deceased."
 							href="{base}/watchdog"
 						/>
 						{#if isAdvocate(currentUser) || isAdmin(currentUser)}
-							<StatTile
+							<StatisticsCard
+								variant="kpi"
 								label="My open casework"
 								value={data.data.summary.my_open_casework}
 								hint="Open + in-progress."
 								href="{base}/casework"
 							/>
 						{:else}
-							<StatTile
+							<StatisticsCard
+								variant="kpi"
 								label="My reports"
 								value={data.data.recent_reports.length}
 								hint="Most recent across all cases."
 								href="{base}/reports"
 							/>
 						{/if}
-						<StatTile
+						<StatisticsCard
+							variant="kpi"
 							label="Unread notifications"
 							value={data.data.summary.unread_notifications}
 							hint={isAdvocate(currentUser) ? 'Advocate in-app alerts.' : 'Account-level alerts.'}

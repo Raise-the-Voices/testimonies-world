@@ -36,6 +36,7 @@
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import ErrorCard from '$lib/ErrorCard.svelte';
+	import { sanitizeText } from '$lib/sanitize';
 	import type { PageData } from './$types';
 	import type { CaseworkRecord } from '$lib/types';
 
@@ -145,10 +146,11 @@
 			if (filterAction) params.action_type = filterAction;
 			const data = await getCasework(params);
 			records = Array.isArray(data) ? data : data.results ?? [];
-		} catch (e: any) {
+		} catch (e: unknown) {
 			loadError =
-				e?.message ||
-				"Couldn't load casework records. Check your connection and try again.";
+				e instanceof Error
+					? e.message
+					: "Couldn't load casework records. Check your connection and try again.";
 			records = [];
 		} finally {
 			loading = false;
@@ -201,11 +203,12 @@
 			toastTimer = setTimeout(() => {
 				if (deleteToast?.id === target.id) deleteToast = null;
 			}, 2000);
-		} catch (e: any) {
+		} catch (e: unknown) {
 			deleteToast = {
 				...target,
 				stage: 'error',
-				errorMessage: e?.message || "Couldn't delete that record. Please try again.",
+				errorMessage:
+					e instanceof Error ? e.message : "Couldn't delete that record. Please try again.",
 			};
 		}
 	}
@@ -402,18 +405,18 @@
 										</div>
 									</div>
 
-									<p class="record-description">{record.description}</p>
+									<p class="record-description">{sanitizeText(record.description)}</p>
 
 									{#if record.next_steps}
 										<p class="record-meta">
-											<strong>Next steps:</strong> {record.next_steps}
+											<strong>Next steps:</strong> {sanitizeText(record.next_steps)}
 										</p>
 									{/if}
 
 									{#if record.notes}
 										<details class="record-notes">
 											<summary>Internal notes</summary>
-											<p>{record.notes}</p>
+											<p>{sanitizeText(record.notes)}</p>
 										</details>
 									{/if}
 

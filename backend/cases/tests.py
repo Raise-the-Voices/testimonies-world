@@ -1642,8 +1642,8 @@ class AuditLogEndpointTests(BaseTestCase):
     # --- Pagination -------------------------------------------------------
 
     def test_default_pagination_envelope(self):
-        """Default PAGE_SIZE=10, but we only seeded 3 rows.
-        count=3, next=null, previous=null."""
+        """Default AuditLogPagination.page_size=25; we only seeded 3 rows
+        so count=3, next=null, previous=null."""
         self.client.force_login(self.staff)
         body = self.client.get(self.URL).json()
         self.assertEqual(body['count'], 3)
@@ -1651,14 +1651,32 @@ class AuditLogEndpointTests(BaseTestCase):
         self.assertIsNone(body['previous'])
 
     def test_pagination_with_explicit_page_size(self):
-        """page_size=2 returns 2 rows + a next link."""
+        """?page_size=2 returns 2 rows on page 1 + a next link.
+
+        AuditLogViewSet uses AuditLogPagination which sets
+        page_size_query_param='page_size'. With 3 seeded rows and
+        page_size=2: page 1 has 2 results + next=page=2, page 2
+        has 1 result + next=null.
+        """
         self.client.force_login(self.staff)
         body = self.client.get(self.URL, {'page_size': '2'}).json()
-        # The default PageNumberPagination doesn't honor ?page_size=
-        # unless the viewset sets page_size_query_param, which ours
-        # doesn't. We assert the row count of page 1 to match
-        # default behavior (PAGE_SIZE=10, so all 3 fit).
-        self.assertLessEqual(len(body['results']), 3)
+        self.assertEqual(len(body['results']), 2)
+        self.assertIsNotNone(body['next'])
+        self.assertEqual(body['count'], 3)
+
+        # Page 2 has the leftover row.
+        body2 = self.client.get(self.URL, {'page': '2', 'page_size': '2'}).json()
+        self.assertEqual(len(body2['results']), 1)
+        self.assertIsNone(body2['next'])
+
+    def test_pagination_max_page_size_caps_at_500(self):
+        """?page_size=10000 is capped to AuditLogPagination.max_page_size=500."""
+        self.client.force_login(self.staff)
+        body = self.client.get(self.URL, {'page_size': '10000'}).json()
+        # 3 seeded rows < cap, but the cap was honored (we'd see 10000
+        # rows back if it weren't).
+        self.assertEqual(body['count'], 3)
+        self.assertEqual(len(body['results']), 3)
 
 
 class RelatedPersonsTests(BaseTestCase):
