@@ -993,13 +993,31 @@ class FamilyRelationship(models.Model):
     notes = models.CharField(max_length=255, blank=True, default='')
 
     class Meta:
-        unique_together = ['person_a', 'person_b']
         indexes = [
             # relationship_type is low-cardinality but cheap to index;
             # speeds up `?relationship_type=sibling` style filters.
             models.Index(
                 fields=['relationship_type'],
                 name='familyrel_type_idx',
+            ),
+        ]
+        constraints = [
+            # Replaces the legacy `unique_together = ['person_a', 'person_b']`.
+            # Semantically identical: one row per ordered (person_a, person_b)
+            # pair regardless of relationship_type. Kept under the modern
+            # constraints API so the rule surfaces in admin / inspectdb
+            # and emits an explicit ALTER TABLE in migrations.
+            models.UniqueConstraint(
+                fields=['person_a', 'person_b'],
+                name='familyrel_unique_pair',
+            ),
+            # Schema-level self-link guard. `FamilyRelationshipSerializer.validate`
+            # rejects `person_a == person_b` with a friendly message; this
+            # is defense-in-depth against direct ORM / admin / management-command
+            # writes that bypass the serializer.
+            models.CheckConstraint(
+                condition=~models.Q(person_a=models.F('person_b')),
+                name='familyrel_no_self_link',
             ),
         ]
 
