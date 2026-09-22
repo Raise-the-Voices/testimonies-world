@@ -6,7 +6,9 @@
 			"settings": {
 				"chromeFlags": "--headless=new --no-sandbox --disable-gpu"
 			},
-			"startServerCommand": "cd frontend && PUBLIC_BASE_PATH=/testimonies ORIGIN=http://127.0.0.1:4173 PORT=4173 node build/index.js"
+			"startServerCommand": "cd frontend && PUBLIC_BASE_PATH=/testimonies ORIGIN=http://127.0.0.1:4173 PORT=4173 node build/index.js",
+			"startServerReadyTimeout": 60000,
+			"startServerReadyPattern": "Listening on"
 		},
 		"assert": {
 			"preset": "lighthouse:no-pwa",
