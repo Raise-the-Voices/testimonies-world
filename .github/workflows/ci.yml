@@ -169,6 +169,26 @@ jobs:
         env:
           DJANGO_SECRET_KEY: ci-not-secret
           USE_SQLITE: 'True'
+          # ENABLE_E2E_TEST_AUTH=True is required to match local-dev regen.
+          # When False, the /__test__/login/ URL is not registered, and
+          # drf-spectacular's os.path.commonpath of all URL paths returns
+          # '/' (instead of '/api/') because there's no longer a deeper
+          # common prefix. That makes SCHEMA_PATH_PREFIX collapse to '^/'
+          # and operationId generation drops the 'api_' prefix on every
+          # endpoint — a 648-line diff against the committed openapi.yml
+          # that breaks the drift gate even when no serializer changed.
+          # The /__test__/login/ view itself is @extend_schema(exclude=True)
+          # so it never leaks into the regenerated openapi.yml — the env
+          # var only affects what URLs are *registered*, not what gets
+          # *emitted*.
+          #
+          # TESTIMONIAL_E2E_AUTH_TOKEN must also be set (the URL is gated
+          # by both flags in testimonies/urls.py:242-249). The token value
+          # here is a throwaway placeholder — the gen:api subprocess never
+          # hits the endpoint, only registers it so commonpath computes
+          # the same way it does in local dev.
+          ENABLE_E2E_TEST_AUTH: 'True'
+          TESTIMONIAL_E2E_AUTH_TOKEN: ci-not-real-token-discard-after-run
 
       # The actual gate. Print version + ls artifacts before the diff
       # so a failure log shows "what we ran" + "what it produced"

@@ -47,7 +47,11 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 # production path. If we passed ``default='something'`` the failure
 # mode would be 'silently use the weak fallback' — the opposite of
 # fail-closed.
-_raw_secret = config('SECRET_KEY', default='')
+# Accept either DJANGO_SECRET_KEY (the documented convention used by
+# CI, pre-push, validate.sh, and CI_CD_TROUBLESHOOTING.md) or SECRET_KEY
+# (the raw name still used by the production systemd unit's .env). Prefer
+# the prefixed form when both are set so the canonical name wins.
+_raw_secret = config('DJANGO_SECRET_KEY', default='') or config('SECRET_KEY', default='')
 if _raw_secret:
     SECRET_KEY = _raw_secret
 elif DEBUG:
