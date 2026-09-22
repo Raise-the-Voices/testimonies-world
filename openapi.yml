@@ -38,6 +38,12 @@ paths:
         description: A page number within the paginated result set.
         schema:
           type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
       - name: search
         required: false
         in: query
@@ -94,7 +100,8 @@ paths:
           ?search=...                text search over details, ip_address,
                                      user__username (DRF SearchFilter)
           ?ordering=timestamp        default is -timestamp
-          ?page=N                    default page size 10
+          ?page=N                    default page size 25
+          ?page_size=N               override (capped at 500)
       parameters:
       - in: path
         name: id
@@ -5756,6 +5763,12 @@ components:
           format: uri
           nullable: true
           readOnly: true
+        status_history:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
         name:
           type: string
           maxLength: 255
@@ -6032,6 +6045,7 @@ components:
       - name
       - profile_image_url
       - reports
+      - status_history
       - updated_at
     PersonList:
       type: object

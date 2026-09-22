@@ -143,7 +143,8 @@ Filters (via django-filter, all optional):
   ?search=...                text search over details, ip_address,
                              user__username (DRF SearchFilter)
   ?ordering=timestamp        default is -timestamp
-  ?page=N                    default page size 10
+  ?page=N                    default page size 25
+  ?page_size=N               override (capped at 500)
  */
 export type apiAuditLogsRetrieveResponse200 = {
   data: AuditLog
