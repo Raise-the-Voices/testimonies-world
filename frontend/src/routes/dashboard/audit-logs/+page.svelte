@@ -43,7 +43,7 @@
 
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { base } from '$app/paths';
 	import { user as userStore, isAdmin } from '$lib/session';
@@ -195,26 +195,37 @@
 		return '';
 	}
 
-	// Derived: page count + window for the numeric pagination strip.
+	// Derived: total page count used by the pagination strip and the
+	// "Go to page" input.
 	function pagesTotal(): number {
 		const count = data.logs?.count ?? 0;
 		return Math.max(1, Math.ceil(count / pageSize));
 	}
 
-	/** Build the page-number strip shown inside the pagination nav.
-	 *  Always shows first and last, current ± 1, and an ellipsis on
-	 *  each gap when the window doesn't bridge them. */
-	function buildPageList(current: number, total: number): (number | 'ellipsis')[] {
-		if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-		const pages: (number | 'ellipsis')[] = [1];
-		const start = Math.max(2, current - 1);
-		const end = Math.min(total - 1, current + 1);
-		if (start > 2) pages.push('ellipsis');
-		for (let i = start; i <= end; i++) pages.push(i);
-		if (end < total - 1) pages.push('ellipsis');
-		pages.push(total);
-		return pages;
+	/** Scroll the audit-log results card into view. Used after page
+	 *  changes so the reader lands at the top of the new slice instead
+	 *  of staying parked at the bottom of the previous one. Instant
+	 *  (not smooth) because there's no positional context to preserve
+	 *  — a smooth 400ms scroll feels laggy on every page click. */
+	function scrollToResults() {
+		if (typeof document === 'undefined') return;
+		document.getElementById('audit-results-top')?.scrollIntoView({
+			behavior: 'auto',
+			block: 'start',
+		});
 	}
+
+	/** After every SvelteKit navigation, scroll to the top of the
+	 *  results card — but only when the ?page= param actually changed.
+	 *  Filter changes keep the same page number, so scrolling there
+	 *  would be a jarring surprise (the user is still reading the
+	 *  same slice, just narrowed). */
+	afterNavigate(({ to, from }) => {
+		if (!to) return;
+		const toPage = to.url.searchParams.get('page');
+		const fromPage = from?.url.searchParams.get('page') ?? null;
+		if (toPage !== fromPage) scrollToResults();
+	});
 </script>
 
 <svelte:head>
@@ -273,6 +284,11 @@
 			title="Results"
 			subtitle="{data.logs.count ?? 0} {(data.logs.count ?? 0) === 1 ? 'entry' : 'entries'}"
 		>
+			<!-- `audit-results-top` is the scroll anchor used after page
+			     changes. The afterNavigate hook in <script> lands here so
+			     the reader starts at the top of the new slice instead of
+			     staying parked at the bottom of the previous one. -->
+			<div id="audit-results-top"></div>
 			{#if data.logs.results.length === 0}
 				<p class="empty">No audit log entries match your filters. <span class="empty-total">({data.logs.count ?? 0} total entries)</span></p>
 			{:else}
@@ -293,71 +309,43 @@
 					{/each}
 				</ul>
 
+				<!-- Pagination mirrors /persons and /reports: Prev +
+				     page indicator + Next, plus Page size and Go-to-page
+				     inputs. The earlier numbered-strip + First/Last +
+				     ellipsis layout was overkill for a paginated audit
+				     log and crowded the row. The Go-to-page input lets
+				     readers jump anywhere they need without a long
+				     button strip. -->
 				{#if data.logs.next || data.logs.previous || data.logs.count > pageSize}
 					{@const totalPages = pagesTotal()}
 					{@const currentPage = currentPageFromUrl()}
-					{@const pageList = buildPageList(currentPage, totalPages)}
 					{@const showingFrom = (currentPage - 1) * pageSize + 1}
 					{@const showingTo = Math.min(currentPage * pageSize, data.logs.count)}
 					<nav class="pagination" aria-label="Pagination">
-						<div class="pagination-summary">
-							Showing <strong>{showingFrom}–{showingTo}</strong> of <strong>{data.logs.count}</strong> entries
+						<button
+							type="button"
+							class="btn btn-secondary"
+							onclick={() => goToPage(currentPage - 1)}
+							disabled={!data.logs.previous}
+							aria-label="Previous page"
+						>
+							‹ Prev
+						</button>
+						<div class="pagination-indicator">
+							Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong>
+							<span class="pagination-range">
+								— showing <strong>{showingFrom}–{showingTo}</strong> of <strong>{data.logs.count}</strong>
+							</span>
 						</div>
-
-						<div class="pagination-controls">
-							<button
-								type="button"
-								class="btn btn-secondary"
-								onclick={() => goToPage(1)}
-								disabled={currentPage <= 1}
-								aria-label="First page"
-							>
-								« First
-							</button>
-							<button
-								type="button"
-								class="btn btn-secondary"
-								onclick={() => goToPage(currentPage - 1)}
-								disabled={!data.logs.previous}
-								aria-label="Previous page"
-							>
-								‹ Prev
-							</button>
-							{#each pageList as p, i (i + '-' + p)}
-								{#if p === 'ellipsis'}
-									<span class="pagination-ellipsis" aria-hidden="true">…</span>
-								{:else if p === currentPage}
-									<span class="pagination-current" aria-current="page">{p}</span>
-								{:else}
-									<button
-										type="button"
-										class="btn btn-secondary"
-										onclick={() => goToPage(p)}
-										aria-label={`Page ${p}`}
-									>
-										{p}
-									</button>
-								{/if}
-							{/each}
-							<button
-								type="button"
-								class="btn btn-secondary"
-								onclick={() => goToPage(currentPage + 1)}
-								disabled={!data.logs.next}
-								aria-label="Next page"
-							>
-								Next ›
-							</button>
-							<button
-								type="button"
-								class="btn btn-secondary"
-								onclick={() => goToPage(totalPages)}
-								disabled={currentPage >= totalPages}
-								aria-label="Last page"
-							>
-								Last »
-							</button>
-						</div>
+						<button
+							type="button"
+							class="btn btn-secondary"
+							onclick={() => goToPage(currentPage + 1)}
+							disabled={!data.logs.next}
+							aria-label="Next page"
+						>
+							Next ›
+						</button>
 
 						<div class="pagination-extras">
 							<label class="pagination-extras-field">
@@ -464,61 +452,41 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	/* Pagination nav: summary row, control row (page numbers + first/
-	   prev/next/last), extras row (page size + jump). Stacks on
-	   narrow viewports via flex-wrap so the table reads cleanly on
-	   mobile. */
+	/* Pagination nav: prev / indicator / next on the top row, page-size
+	   + jump inputs on the second row. Same shape as /persons and
+	   /reports so reviewers don't relearn the controls per page.
+	   flex-wrap keeps it readable on narrow viewports. */
 	.pagination {
 		display: flex;
-		flex-direction: column;
-		gap: 0.65rem;
+		align-items: center;
+		gap: 0.75rem;
+		flex-wrap: wrap;
 		margin-top: 0.85rem;
 		padding-top: 0.85rem;
 		border-top: 1px solid var(--color-border-light);
 	}
-	.pagination-summary {
+	.pagination-indicator {
 		font-size: 0.85rem;
 		color: var(--color-text-muted);
+		font-variant-numeric: tabular-nums;
+		flex: 1 1 auto;
+		text-align: center;
+		min-width: 12rem;
 	}
-	.pagination-summary strong {
+	.pagination-indicator strong {
 		color: var(--color-text);
-		font-variant-numeric: tabular-nums;
 	}
-	.pagination-controls {
-		display: flex;
-		align-items: center;
-		gap: 0.3rem;
-		flex-wrap: wrap;
-	}
-	.pagination-current {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-width: 2rem;
-		height: 2rem;
-		padding: 0 0.6rem;
-		font-size: 0.85rem;
-		font-variant-numeric: tabular-nums;
-		font-weight: 600;
-		color: var(--color-primary);
-		background: var(--color-primary-tint);
-		border: 1px solid var(--color-primary);
-		border-radius: var(--radius-input);
-	}
-	.pagination-ellipsis {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-width: 1.5rem;
-		height: 2rem;
+	.pagination-range {
 		color: var(--color-text-muted);
-		font-size: 0.85rem;
+		margin-left: 0.35rem;
 	}
 	.pagination-extras {
 		display: flex;
 		gap: 1rem;
 		flex-wrap: wrap;
 		align-items: flex-end;
+		flex-basis: 100%;
+		justify-content: flex-end;
 	}
 	.pagination-extras-field {
 		display: flex;
