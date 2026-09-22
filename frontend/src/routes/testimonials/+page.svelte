@@ -10,6 +10,7 @@
 	import { asPaginated } from '$lib/api/drfCompat';
 	import { isAdvocate, user } from '$lib/session';
 	import Skeleton from '$lib/Skeleton.svelte';
+	import { sanitizeText } from '$lib/sanitize';
 	import TestimonialCard from '$lib/TestimonialCard.svelte';
 	import type { Paginated } from '$lib/types';
 	import type { PageData } from './$types';
@@ -62,6 +63,17 @@
 		readonly review_notes?: string;
 		readonly reviewed_at?: string | null;
 	};
+
+	// Defence-in-depth: reviewer notes are user-authored free text
+	// rendered with `white-space: pre-line` on the rejected tab. Svelte
+	// text-interpolation already escapes HTML, but we still funnel the
+	// value through the project's output sanitiser at the rendering
+	// boundary — a future migration to `{@html}` or Markdown rendering
+	// keeps the same safety guarantee. Per-row sanitisation (inside the
+	// `rejectedCard` snippet) so a rejected row never sees another row's
+	// notes by accident.
+	const safeReviewNotes = (t: TestimonialWithWorkflow): string =>
+		sanitizeText(t.review_notes);
 
 	type EmptyAction = { label: string; href: string };
 
@@ -227,7 +239,7 @@
 						</time>
 					{/if}
 				</header>
-				<p class="rejection-reason-text">{t.review_notes}</p>
+				<p class="rejection-reason-text">{safeReviewNotes(t)}</p>
 			</aside>
 		{/if}
 	</div>
