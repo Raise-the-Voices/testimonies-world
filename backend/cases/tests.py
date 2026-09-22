@@ -472,6 +472,133 @@ class ReportPermissionTests(BaseTestCase):
         self.assertEqual(res.json()['results'], [])
 
 
+class PersonDetailAnonymousTests(BaseTestCase):
+    """Regression tests for public read access to ``/api/persons/{id}/``.
+
+    Pins the behaviour the public case-detail page depends on:
+
+    - Anonymous GET on a *published* Person returns 200 with the public
+      payload — no auth challenge. The frontend's "view details" button
+      relies on this in incognito / unauthenticated mode.
+    - Anonymous GET on an *unpublished* Person returns 404 (not 401).
+      The publish gate lives in ``PersonViewSet.get_queryset`` (filters
+      to ``is_published=True`` for anon), not in the permission class
+      — distinguishing 404 from 401 matters because a 401 here would
+      falsely tell a public visitor to log in to see a case that simply
+      isn't published yet.
+    - The payload NEVER contains ``PRIVATE_PERSON_FIELDS``
+      (``medical_notes``, ``precise_location``) for anonymous viewers.
+      ``PersonDetailSerializer.to_representation`` strips them when
+      ``request.user`` is not authenticated; this test pins that contract
+      so a future serializer refactor doesn't silently leak private
+      fields to the public detail page.
+    - Anonymous POST/PATCH/DELETE are still rejected (401/403) — the
+      read-open posture must not regress into write-open.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        # Published row — what the public catalog/detail page serves.
+        self.published = Person.objects.create(
+            name='Published Person',
+            country='Pakistan',
+            is_published=True,
+            precise_location='House #7, Quetta — should never leak',
+            medical_notes='Confidential — should never leak',
+            summary_narrative='A public narrative.',
+        )
+        # Unpublished row — must look like "not found" to anon.
+        self.unpublished = Person.objects.create(
+            name='Draft Person',
+            country='Pakistan',
+            is_published=False,
+            precise_location='Should never leak, ever.',
+            summary_narrative='Draft narrative.',
+        )
+
+    def test_anonymous_can_retrieve_published_person(self):
+        # The frontend's case-detail page hits this URL in incognito.
+        # Must come back 200, not 401/403, with the public payload.
+        res = self.client.get(f'/api/persons/{self.published.id}/')
+        self.assertEqual(res.status_code, 200, res.content)
+        body = res.json()
+        self.assertEqual(body['id'], self.published.id)
+        self.assertEqual(body['name'], 'Published Person')
+        # Public payload surface: name, country, narrative, status.
+        # The serializer renders these for everyone.
+        self.assertEqual(body['country'], 'Pakistan')
+        self.assertEqual(body['summary_narrative'], 'A public narrative.')
+
+    def test_anonymous_get_unpublished_returns_404_not_401(self):
+        # The publish gate is in get_queryset (filters is_published=True
+        # for anon), NOT in the permission class. So the response is
+        # 404 — DRF's standard "this row is invisible to you" — never
+        # 401 ("please log in"). A 401 here would falsely tell a public
+        # visitor to authenticate to view a row that simply isn't
+        # published yet, and would leak the existence of unpublished
+        # drafts (a 404 vs 200 is the only thing distinguishing them
+        # from the public surface).
+        res = self.client.get(f'/api/persons/{self.unpublished.id}/')
+        self.assertEqual(res.status_code, 404, res.content)
+
+    def test_anonymous_payload_omits_private_fields(self):
+        # PRIVATE_PERSON_FIELDS = ['medical_notes', 'precise_location'].
+        # PersonDetailSerializer.to_representation strips them for anon;
+        # this test pins the contract so a serializer refactor can't
+        # silently leak them.
+        res = self.client.get(f'/api/persons/{self.published.id}/')
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertNotIn(
+            'precise_location', body,
+            'precise_location must be stripped for anonymous viewers',
+        )
+        self.assertNotIn(
+            'medical_notes', body,
+            'medical_notes must be stripped for anonymous viewers',
+        )
+        # Sanity: the *public* location field stays — that's the whole
+        # point of the public detail page.
+        self.assertIn('rough_location', body)
+
+    def test_authenticated_user_sees_private_fields(self):
+        # Counterpart to the previous test: a logged-in viewer DOES
+        # see precise_location + medical_notes. If this regresses the
+        # to_representation gate is over-broad and an advocate doing
+        # casework loses the very data they need.
+        user = make_user('volunteer', in_group='Volunteer')
+        self.client.force_login(user)
+        res = self.client.get(f'/api/persons/{self.published.id}/')
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertIn('precise_location', body)
+        self.assertEqual(body['precise_location'], 'House #7, Quetta — should never leak')
+        self.assertIn('medical_notes', body)
+
+    def test_anonymous_cannot_create_person(self):
+        # Read-open must not regress into write-open. Even if
+        # IsAuthenticatedOrReadOnly lets GETs through, POSTs still
+        # require authentication.
+        res = self.client.post(
+            '/api/persons/',
+            {'name': 'Anon attempt', 'country': 'Pakistan'},
+            format='json',
+        )
+        self.assertIn(res.status_code, (401, 403), res.content)
+
+    def test_anonymous_cannot_patch_person(self):
+        res = self.client.patch(
+            f'/api/persons/{self.published.id}/',
+            {'summary_narrative': 'hijacked'},
+            format='json',
+        )
+        self.assertIn(res.status_code, (401, 403), res.content)
+
+    def test_anonymous_cannot_delete_person(self):
+        res = self.client.delete(f'/api/persons/{self.published.id}/')
+        self.assertIn(res.status_code, (401, 403), res.content)
+
+
 class PersonDeletePermissionTests(BaseTestCase):
     """Permission + cascade coverage for `PersonViewSet.perform_destroy`.
 
@@ -754,23 +881,74 @@ class FamilyRelationshipPermissionTests(BaseTestCase):
                 res = getattr(anon, verb)(path, body, format='json')
             self.assertIn(res.status_code, (401, 403), f'{verb} {path}: {res.content}')
 
-    def test_reads_require_authentication(self):
-        # (C6 + M1) Family relationships name relatives of a victim —
-        # PII with a real-world doxxing hazard if leaked. They were
-        # previously open to anonymous reads via the default
-        # IsAuthenticatedOrReadOnly on FamilyRelationshipViewSet; the
-        # viewset was tightened to IsAuthenticated so anonymous
-        # browsers can no longer enumerate family rows.
+    def test_anonymous_can_read_published_relationships(self):
+        # 2026-09-22 reversal of (C6 + M1): the public case-detail page
+        # needs the family sidebar to render for anonymous visitors, so
+        # permission_classes was relaxed back to IsAuthenticatedOrReadOnly.
+        # Defense-in-depth lives in get_queryset now: anon only sees rows
+        # whose BOTH persons are published. See the matching tests below
+        # for the unpublished-side filter.
         self.client.force_login(self.volunteer)
-        self.client.post('/api/relationships/', self._payload(), format='json')
+        rid = self.client.post(
+            '/api/relationships/', self._payload(), format='json',
+        ).json()['id']
 
         anon = APIClient()
-        res = anon.get('/api/relationships/')
-        # DRF returns 403 (not 401) when auth credentials are missing —
-        # that's the project-wide convention for unauthenticated API
-        # responses.
-        self.assertEqual(res.status_code, 403)
-        self.assertIn(b'Authentication credentials were not provided', res.content)
+        # Seed persons land as is_published=False (the publish gate is a
+        # separate flag from create — see PersonViewSet.perform_create).
+        # For this test we publish both so anon can see them.
+        Person.objects.filter(pk__in=[self.alice['id'], self.bob['id']]).update(
+            is_published=True,
+        )
+
+        # List endpoint: relationship must appear for anon.
+        list_res = anon.get('/api/relationships/')
+        self.assertEqual(list_res.status_code, 200, list_res.content)
+        ids = [r['id'] for r in list_res.json()['results']]
+        self.assertIn(rid, ids)
+
+        # Retrieve endpoint: same row readable by id, by anon.
+        detail_res = anon.get(f'/api/relationships/{rid}/')
+        self.assertEqual(detail_res.status_code, 200, detail_res.content)
+        self.assertEqual(detail_res.json()['id'], rid)
+
+        # ?person=X filter: anon can find relationships via person ID
+        # (the frontend person-detail page passes ?person=130 here).
+        filtered = anon.get(f'/api/relationships/?person={self.alice["id"]}')
+        self.assertEqual(filtered.status_code, 200)
+        self.assertTrue(any(r['id'] == rid for r in filtered.json()['results']))
+
+    def test_anonymous_cannot_read_relationship_involving_unpublished_person(self):
+        # Defense-in-depth: even though permission_classes is open, anon
+        # cannot see a relationship where EITHER side is unpublished.
+        # Publishing a row shouldn't leak the unpublished side's name.
+        self.client.force_login(self.volunteer)
+        # Note: Person.is_published defaults to True at the model layer
+        # (cases/models.py:352); PersonViewSet.perform_create drops the
+        # field for non-staff so the model default applies. Force both
+        # persons to unpublished so the test exercises the gate
+        # unambiguously.
+        Person.objects.filter(pk__in=[self.alice['id'], self.bob['id']]).update(
+            is_published=False,
+        )
+        rid = self.client.post(
+            '/api/relationships/', self._payload(), format='json',
+        ).json()['id']
+
+        # Publish ONLY side A — side B stays a draft.
+        Person.objects.filter(pk=self.alice['id']).update(is_published=True)
+
+        anon = APIClient()
+        list_res = anon.get('/api/relationships/')
+        self.assertEqual(list_res.status_code, 200)
+        self.assertFalse(
+            any(r['id'] == rid for r in list_res.json()['results']),
+            'relationship involving an unpublished person must not appear '
+            'in anonymous list output',
+        )
+        # Direct retrieve still 404 — the row is invisible to anon.
+        detail_res = anon.get(f'/api/relationships/{rid}/')
+        self.assertEqual(detail_res.status_code, 404, detail_res.content)
 
     # --- Audit log -------------------------------------------------------
 
