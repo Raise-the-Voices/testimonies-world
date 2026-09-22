@@ -104,6 +104,23 @@ import Skeleton from '$lib/Skeleton.svelte';
 		void load();
 	});
 
+	// DOM order of fields with potential validation errors. focusFirstError
+	// walks this list so the user's cursor lands on the topmost problem
+	// after they hit Save on a form that's missing a required field.
+	const FIELD_ORDER = ['name', 'role', 'email', 'phone', 'signal', 'whatsapp', 'notes'];
+
+	function focusFirstError(errs: Record<string, string>) {
+		for (const field of FIELD_ORDER) {
+			if (!errs[field]) continue;
+			const el = document.getElementById(`contact-${field}`) as HTMLElement | null;
+			if (el) {
+				el.focus();
+				el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+				return;
+			}
+		}
+	}
+
 	function validate(): boolean {
 		const e: Record<string, string> = {};
 		const trimmedName = name.trim();
@@ -127,7 +144,13 @@ import Skeleton from '$lib/Skeleton.svelte';
 		// disabled={saving} DOM attribute while a request is in
 		// flight. Bail before any state changes.
 		if (saving) return;
-		if (!validate()) return;
+		if (!validate()) {
+			// Pull the user straight to the topmost problem field so
+			// it's obvious what needs fixing (vs. a toast that can
+			// be missed or auto-dismiss).
+			focusFirstError(errors);
+			return;
+		}
 		formError = '';
 		formErrorKind = 'generic';
 		saving = true;
