@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report
+from .models import (
+    AuditLog,
+    CaseCategory,
+    FamilyRelationship,
+    Media,
+    Person,
+    PreApprovedEmail,
+    Report,
+)
 
 
 class ReportInline(admin.TabularInline):
@@ -108,3 +116,21 @@ class AuditLogAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(PreApprovedEmail)
+class PreApprovedEmailAdmin(admin.ModelAdmin):
+    """Operator UI for the Google OAuth allow-list (M2).
+
+    Admins add an entry before inviting a new volunteer / advocate /
+    partner to log in via Google OAuth. The custom SocialAccountAdapter
+    looks this table up on every OAuth callback — case-insensitive.
+    """
+    list_display = ['email', 'added_by', 'added_at']
+    search_fields = ['email', 'note']
+    readonly_fields = ['added_at']
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.added_by = request.user
+        super().save_model(request, obj, form, change)

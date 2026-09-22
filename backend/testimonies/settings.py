@@ -601,7 +601,14 @@ SOCIALACCOUNT_LOGIN_ON_GET = True
 # can find them by email and complete the link.
 ACCOUNT_EMAIL_VERIFICATION = 'optional'
 ACCOUNT_LOGOUT_ON_GET = True
-SOCIALACCOUNT_AUTO_SIGNUP = True
+# Tightened in M2 — auto-signup is OFF; the custom adapter in
+# cases.adapters.CustomSocialAccountAdapter decides per-request
+# whether the incoming Google account is on the approved list
+# (existing SocialAccount, is_staff, in Volunteer/Advocate group, or
+# email in PreApprovedEmail). Anything else is rejected with a
+# friendly error rather than silently creating an account.
+SOCIALACCOUNT_AUTO_SIGNUP = False
+SOCIALACCOUNT_ADAPTER = 'cases.adapters.CustomSocialAccountAdapter'
 
 # Google OAuth — configure client_id and secret in Django admin → Social Applications
 SOCIALACCOUNT_PROVIDERS = {

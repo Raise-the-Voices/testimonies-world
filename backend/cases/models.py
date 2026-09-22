@@ -1201,6 +1201,39 @@ class AuditLog(models.Model):
         return f'{self.user} {self.action} {self.target_type}#{self.target_id}'
 
 
+class PreApprovedEmail(models.Model):
+    """Email addresses authorized to create an account via Google OAuth.
+
+    Used by ``cases.adapters.CustomSocialAccountAdapter`` as one of
+    the three authorization gates alongside ``is_staff`` and
+    membership in the ``Volunteer`` / ``Advocate`` groups. Admin-only
+    via Django admin (see ``cases/admin.py``); no self-service signup
+    path exists or will be added — invitations are issued by an
+    operator and recorded here before the invitee tries to log in.
+
+    The table is intentionally empty on first deploy; admins populate
+    it as new invites come in. No seed data ships in any migration.
+    """
+    email = models.EmailField(unique=True)
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='preapproved_emails_added',
+    )
+    added_at = models.DateTimeField(auto_now_add=True)
+    note = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text='Why this email was pre-approved — e.g. "partner NGO contact".',
+    )
+
+    class Meta:
+        ordering = ['email']
+        verbose_name = 'pre-approved email'
+        verbose_name_plural = 'pre-approved emails'
+
+    def __str__(self):
+        return self.email
+
+
 # ============================================================================
 # Testimonials — publication-facing wrapper around cases.
 #
