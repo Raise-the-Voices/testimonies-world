@@ -47,6 +47,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { ApiError, createReport, getReport, request, updateReport } from '$lib/api';
+	import { focusFirstFormError } from '$lib/formFocus';
 	import PersonPicker from '$lib/PersonPicker.svelte';
 	import SourcesField from '$lib/SourcesField.svelte';
 	import type { SourceEntry } from '$lib/SourcesField.svelte';
@@ -272,10 +273,32 @@
 		return Object.keys(e).length === 0;
 	}
 
+	// Visual order of fields with potential validation errors. Focuses the
+	// topmost broken field after a failed submit so the user lands where
+	// they need to act, not at the submit button. The form's input ids
+	// are rf-* prefixed; the map translates validator keys to those.
+	const REPORT_FIELD_ORDER = [
+		'person', 'narrative', 'date_end', 'source_attribution', 'reporter_contact',
+	];
+	const REPORT_FIELD_ID_MAP: Record<string, string[]> = {
+		narrative: ['rf-narrative'],
+		date_end: ['rf-date-end'],
+		source_attribution: ['rf-source-attr'],
+		reporter_contact: ['rf-reporter-contact'],
+	};
+
 	// --- Submit ----------------------------------------------------------
 	async function handleSubmit() {
 		if (saving || disabled) return;
-		if (!validate()) return;
+		if (!validate()) {
+			// Pull the user up to the topmost broken field instead of
+			// leaving them stranded at the submit button.
+			focusFirstFormError(fieldErrors, {
+				order: REPORT_FIELD_ORDER,
+				idMap: REPORT_FIELD_ID_MAP,
+			});
+			return;
+		}
 		if (formPersonId === null) return;
 		saving = true;
 		errorMsg = '';

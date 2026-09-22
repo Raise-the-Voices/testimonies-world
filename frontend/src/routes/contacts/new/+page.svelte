@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { user, isAdvocate } from '$lib/session';
 	import { createContact, getContact, updateContact, ApiError } from '$lib/api';
+	import { focusFirstFormError } from '$lib/formFocus';
 	import type { Contact, ContactRole } from '$lib/types';
 import Skeleton from '$lib/Skeleton.svelte';
 	import type { PageData } from './$types';
@@ -108,18 +109,16 @@ import Skeleton from '$lib/Skeleton.svelte';
 	// walks this list so the user's cursor lands on the topmost problem
 	// after they hit Save on a form that's missing a required field.
 	const FIELD_ORDER = ['name', 'role', 'email', 'phone', 'signal', 'whatsapp', 'notes'];
-
-	function focusFirstError(errs: Record<string, string>) {
-		for (const field of FIELD_ORDER) {
-			if (!errs[field]) continue;
-			const el = document.getElementById(`contact-${field}`) as HTMLElement | null;
-			if (el) {
-				el.focus();
-				el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-				return;
-			}
-		}
-	}
+	const FIELD_ID_MAP: Record<string, string[]> = {
+		// The form's input ids are prefixed with `contact-`.
+		name: ['contact-name'],
+		role: ['contact-role'],
+		email: ['contact-email'],
+		phone: ['contact-phone'],
+		signal: ['contact-signal'],
+		whatsapp: ['contact-whatsapp'],
+		notes: ['contact-notes'],
+	};
 
 	function validate(): boolean {
 		const e: Record<string, string> = {};
@@ -148,7 +147,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 			// Pull the user straight to the topmost problem field so
 			// it's obvious what needs fixing (vs. a toast that can
 			// be missed or auto-dismiss).
-			focusFirstError(errors);
+			focusFirstFormError(errors, { order: FIELD_ORDER, idMap: FIELD_ID_MAP });
 			return;
 		}
 		formError = '';
