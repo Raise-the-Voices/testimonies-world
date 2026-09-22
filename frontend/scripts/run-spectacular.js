@@ -92,6 +92,19 @@ const childEnv = {
 	// descriptions when LC_ALL was unset. Force C.UTF-8 for stability.
 	LC_ALL: 'C.UTF-8',
 	LANG: 'C.UTF-8',
+	// ENABLE_E2E_TEST_AUTH + TESTIMONIAL_E2E_AUTH_TOKEN: passthrough
+	// from the parent env so CI's gen:api step can match local-dev
+	// regen. Without these, /__test__/login/ is not registered, and
+	// drf-spectacular's os.path.commonpath collapses from '/api/' to
+	// '/' — operationId generation drops the 'api_' prefix on every
+	// endpoint, breaking the drift gate even when no serializer
+	// changed. The /__test__/login/ view itself is
+	// @extend_schema(exclude=True) so it never appears in the
+	// regenerated openapi.yml regardless; the flags only affect URL
+	// registration, which is what commonpath sees. See testimonies/
+	// urls.py:242-249 for the gate that consumes these.
+	ENABLE_E2E_TEST_AUTH: process.env.ENABLE_E2E_TEST_AUTH || '',
+	TESTIMONIAL_E2E_AUTH_TOKEN: process.env.TESTIMONIAL_E2E_AUTH_TOKEN || '',
 };
 
 if (process.env.DEBUG) {
