@@ -469,24 +469,54 @@
 		return e;
 	}
 
+	/**
+	 * Map error keys to the DOM IDs that actually exist on the form.
+	 * Most fields use the error key as the input id directly (e.g. `name`),
+	 * but a handful were renamed during the form's evolution. Keep this
+	 * map in sync with the form's `id="..."` attributes — otherwise the
+	 * scroll-to-error silently no-ops for those keys.
+	 */
+	const FIELD_DOM_IDS: Record<string, string[]> = {
+		aliases: ['aliases-input'],
+		age_at_incident: ['age_at_incident'],
+		medical_notes: ['medical_notes'],
+		authoritative_source: ['authoritative_source'],
+		authoritative_url: ['authoritative_url'],
+	};
+
 	function focusFirstError(errs: Record<string, string>) {
+		// Visual order on the page — top-to-bottom. `errs` order doesn't
+		// reflect screen position because the validator is keyed by
+		// field, not row.
 		const order = [
 			'name', 'legal_name', 'aliases', 'country', 'status', 'medical',
 			'rough_location', 'precise_location', 'last_known_date', 'ethnicity',
-			'gender', 'dob', 'quality_tier', 'profile_image', 'medical_notes',
+			'gender', 'age_at_incident', 'quality_tier', 'profile_image', 'medical_notes',
 			'authoritative_source', 'authoritative_url', 'is_published',
 			'summary', 'source_type', 'source_attr', 'reporter_name', 'reporter_contact',
 			'report_date', 'report_location', 'narrative', 'suspected_reason', 'official_reason',
 		];
 		for (const f of order) {
-			if (errs[f]) {
-				const el = document.getElementById(f) as HTMLElement | null;
-				if (el) {
-					el.focus();
-					el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-					return;
-				}
+			if (!errs[f]) continue;
+			// Try each candidate ID for this field; first hit wins.
+			const candidates = FIELD_DOM_IDS[f] ?? [f];
+			let target: HTMLElement | null = null;
+			for (const id of candidates) {
+				const el = document.getElementById(id);
+				if (el) { target = el as HTMLElement; break; }
 			}
+			// Last-resort: any .field.has-error paragraph + its wrapper.
+			// Catches server-side keys that aren't in FIELD_DOM_IDS.
+			if (!target) {
+				const fallback = document.querySelector('.field.has-error');
+				if (fallback) target = fallback as HTMLElement;
+			}
+			if (!target) continue;
+			// preventScroll so focus() doesn't fight scrollIntoView() —
+			// the second scroll would jump and undo the smooth animation.
+			try { target.focus({ preventScroll: true }); } catch { /* ignore */ }
+			target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			return;
 		}
 	}
 
