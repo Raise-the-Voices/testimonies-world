@@ -43,15 +43,51 @@ jobs:
           npm ci
           npm run build
 
-      # Lighthouse-CI starts the preview server itself when given
-      # `startServerCommand` in .lighthouserc.json. port 4173 matches
-      # Vite preview defaults. We intentionally do NOT need a backend:
-      # the homepage loads with a skeleton + auth check; if it 5xx's,
-      # performance scores catch it. Real audits against seeded data
-      # happen in scripts/audit-lighthouse.sh against a staging URL.
+      # Start the adapter-node server as a background job and poll the
+      # homepage until it returns 200. We do NOT use lhci's own
+      # startServerCommand: treosh/lighthouse-ci-action@v12's
+      # collectChild-process-helper rejects with exit code 13 when the
+      # server's server.init() top-level await hangs longer than
+      # ~500ms before printing 'Listening on' — and that race has
+      # nothing to do with our code. Spawning it ourselves lets us
+      # poll the HTTP response (which SvelteKit only answers once
+      # init() has resolved) and gives us a clean kill at the end.
+      # PUBLIC_BASE_PATH and ORIGIN must match the URL below so
+      # SvelteKit's path-base resolves to /testimonies and CSRF accepts
+      # 127.0.0.1. PORT 4173 is Vite preview's default.
+      - name: Start adapter-node server
+        run: |
+          cd frontend
+          nohup env PUBLIC_BASE_PATH=/testimonies \
+                    ORIGIN=http://127.0.0.1:4173 \
+                    PORT=4173 \
+                    node build/index.js \
+              > /tmp/server.log 2>&1 &
+          echo "server PID: $!"
+          echo "$!" > /tmp/server.pid
+          for i in $(seq 1 60); do
+            sleep 1
+            if curl -sf -o /dev/null http://127.0.0.1:4173/testimonies/; then
+              echo "server ready after ${i}s"
+              exit 0
+            fi
+          done
+          echo "server failed to start within 60s. log:"
+          cat /tmp/server.log
+          kill "$(cat /tmp/server.pid)" 2>/dev/null || true
+          exit 1
+
+      # We intentionally do NOT need a backend: the homepage loads with
+      # a skeleton + auth check; if it 5xx's, performance scores catch
+      # it. Real audits against seeded data happen in
+      # scripts/audit-lighthouse.sh against a staging URL.
       - name: Run Lighthouse CI
         uses: treosh/lighthouse-ci-action@v12
         with:
           configPath: frontend/.lighthouserc.json
           uploadArtifacts: true
           temporaryPublicStorage: true
+
+      - name: Stop server
+        if: always()
+        run: kill "$(cat /tmp/server.pid)" 2>/dev/null || true
