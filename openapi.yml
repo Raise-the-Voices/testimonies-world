@@ -38,6 +38,12 @@ paths:
         description: A page number within the paginated result set.
         schema:
           type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
       - name: search
         required: false
         in: query
@@ -94,7 +100,8 @@ paths:
           ?search=...                text search over details, ip_address,
                                      user__username (DRF SearchFilter)
           ?ordering=timestamp        default is -timestamp
-          ?page=N                    default page size 10
+          ?page=N                    default page size 25
+          ?page_size=N               override (capped at 500)
       parameters:
       - in: path
         name: id
@@ -581,6 +588,51 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedDashboardResponseList'
           description: Role-scoped dashboard payload.
+  /api/debug/recent-persons/:
+    get:
+      operationId: api_debug_recent_persons_list
+      description: |-
+        GET /api/debug/recent-persons/ — last 5 created persons, staff-only.
+
+        Self-audit endpoint for smoke-testing the create → DB → retrieve
+        lifecycle: after a POST /api/persons/ with a unique name, hit this
+        endpoint to confirm the row landed in PostgreSQL without scanning
+        the full /api/persons/ list. Returns the 5 most recent persons
+        (newest first) using PersonListSerializer so the response shape
+        matches the public list endpoint.
+
+        Permission: IsAdminUser (staff). Non-staff get 403. The path lives
+        under /api/debug/ to make the operator-facing intent obvious and
+        to keep it visually separate from production routes.
+
+        Not paginated — the slice is hard-capped at 5 so the response
+        payload is bounded regardless of caller intent.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PersonList'
+          description: ''
   /api/media/:
     get:
       operationId: api_media_list
@@ -2133,7 +2185,6 @@ paths:
       - api
       security:
       - cookieAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -2218,7 +2269,6 @@ paths:
       - api
       security:
       - cookieAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -2684,6 +2734,258 @@ paths:
         schema:
           type: integer
         description: A unique integer value identifying this report.
+        required: true
+      tags:
+      - api
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/sources/:
+    get:
+      operationId: api_sources_list
+      description: |-
+        Standalone CRUD for Report sources.
+
+        Most sources are created via the nested `ReportSerializer.sources`
+        slot during a Report POST. This viewset exists for (a) listing
+        sources across reports, (b) adding a source to an existing report,
+        and (c) editing/deleting an individual source row.
+
+        Permission: same as Report — authenticated + Volunteer. Modifying
+        an existing source requires being the source's report author,
+        Advocate, or staff (mirrors Report authorship gate). Reads on
+        private sources are gated the same way Report reads are.
+      parameters:
+      - in: query
+        name: is_private
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: report
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: source_type
+        schema:
+          type: string
+          enum:
+          - document
+          - firsthand
+          - news
+          - secondhand
+        description: |-
+          * `firsthand` - Firsthand
+          * `secondhand` - Secondhand
+          * `news` - News report
+          * `document` - Document
+      tags:
+      - api
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSourceList'
+          description: ''
+    post:
+      operationId: api_sources_create
+      description: |-
+        Standalone CRUD for Report sources.
+
+        Most sources are created via the nested `ReportSerializer.sources`
+        slot during a Report POST. This viewset exists for (a) listing
+        sources across reports, (b) adding a source to an existing report,
+        and (c) editing/deleting an individual source row.
+
+        Permission: same as Report — authenticated + Volunteer. Modifying
+        an existing source requires being the source's report author,
+        Advocate, or staff (mirrors Report authorship gate). Reads on
+        private sources are gated the same way Report reads are.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SourceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SourceRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Source'
+          description: ''
+  /api/sources/{id}/:
+    get:
+      operationId: api_sources_retrieve
+      description: |-
+        Standalone CRUD for Report sources.
+
+        Most sources are created via the nested `ReportSerializer.sources`
+        slot during a Report POST. This viewset exists for (a) listing
+        sources across reports, (b) adding a source to an existing report,
+        and (c) editing/deleting an individual source row.
+
+        Permission: same as Report — authenticated + Volunteer. Modifying
+        an existing source requires being the source's report author,
+        Advocate, or staff (mirrors Report authorship gate). Reads on
+        private sources are gated the same way Report reads are.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this source.
+        required: true
+      tags:
+      - api
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Source'
+          description: ''
+    put:
+      operationId: api_sources_update
+      description: |-
+        Standalone CRUD for Report sources.
+
+        Most sources are created via the nested `ReportSerializer.sources`
+        slot during a Report POST. This viewset exists for (a) listing
+        sources across reports, (b) adding a source to an existing report,
+        and (c) editing/deleting an individual source row.
+
+        Permission: same as Report — authenticated + Volunteer. Modifying
+        an existing source requires being the source's report author,
+        Advocate, or staff (mirrors Report authorship gate). Reads on
+        private sources are gated the same way Report reads are.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this source.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SourceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SourceRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Source'
+          description: ''
+    patch:
+      operationId: api_sources_partial_update
+      description: |-
+        Standalone CRUD for Report sources.
+
+        Most sources are created via the nested `ReportSerializer.sources`
+        slot during a Report POST. This viewset exists for (a) listing
+        sources across reports, (b) adding a source to an existing report,
+        and (c) editing/deleting an individual source row.
+
+        Permission: same as Report — authenticated + Volunteer. Modifying
+        an existing source requires being the source's report author,
+        Advocate, or staff (mirrors Report authorship gate). Reads on
+        private sources are gated the same way Report reads are.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this source.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSourceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSourceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSourceRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Source'
+          description: ''
+    delete:
+      operationId: api_sources_destroy
+      description: |-
+        Standalone CRUD for Report sources.
+
+        Most sources are created via the nested `ReportSerializer.sources`
+        slot during a Report POST. This viewset exists for (a) listing
+        sources across reports, (b) adding a source to an existing report,
+        and (c) editing/deleting an individual source row.
+
+        Permission: same as Report — authenticated + Volunteer. Modifying
+        an existing source requires being the source's report author,
+        Advocate, or staff (mirrors Report authorship gate). Reads on
+        private sources are gated the same way Report reads are.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this source.
         required: true
       tags:
       - api
@@ -4491,6 +4793,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Report'
+    PaginatedSourceList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Source'
     PaginatedTestimonialPublicList:
       type: object
       required:
@@ -4961,6 +5286,10 @@ components:
     PatchedReportRequest:
       type: object
       properties:
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceRequest'
         source_type:
           $ref: '#/components/schemas/SourceTypeEnum'
         source_attribution:
@@ -5278,6 +5607,32 @@ components:
         qc_reviewed_by:
           type: integer
           nullable: true
+    PatchedSourceRequest:
+      type: object
+      description: |-
+        A single source attached to a Report.
+
+        Writable via nested create on `ReportSerializer.sources` (so the
+        volunteer can submit a report + N sources in one POST), and also
+        exposed standalone at `/sources/`. Field shape mirrors the primary
+        Report source_* fields so the volunteer form doesn't need to teach
+        two vocabularies.
+      properties:
+        source_type:
+          $ref: '#/components/schemas/SourceTypeEnum'
+        source_attribution:
+          type: string
+          description: Public attribution — e.g. "family member", "BBC report"
+          maxLength: 500
+        date_start:
+          type: string
+          format: date
+          nullable: true
+        narrative:
+          type: string
+        is_private:
+          type: boolean
+          description: Hide this source from public reads.
     PatchedTestimonialTagRequest:
       type: object
       properties:
@@ -5407,6 +5762,12 @@ components:
           type: string
           format: uri
           nullable: true
+          readOnly: true
+        status_history:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
           readOnly: true
         name:
           type: string
@@ -5684,6 +6045,7 @@ components:
       - name
       - profile_image_url
       - reports
+      - status_history
       - updated_at
     PersonList:
       type: object
@@ -6611,6 +6973,10 @@ components:
           items:
             $ref: '#/components/schemas/Media'
           readOnly: true
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/Source'
         source_type:
           $ref: '#/components/schemas/SourceTypeEnum'
         source_attribution:
@@ -6950,6 +7316,10 @@ components:
     ReportRequest:
       type: object
       properties:
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceRequest'
         source_type:
           $ref: '#/components/schemas/SourceTypeEnum'
         source_attribution:
@@ -7328,6 +7698,46 @@ components:
         * `staff` - staff
         * `advocate` - advocate
         * `volunteer` - volunteer
+    Source:
+      type: object
+      description: |-
+        A single source attached to a Report.
+
+        Writable via nested create on `ReportSerializer.sources` (so the
+        volunteer can submit a report + N sources in one POST), and also
+        exposed standalone at `/sources/`. Field shape mirrors the primary
+        Report source_* fields so the volunteer form doesn't need to teach
+        two vocabularies.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        report:
+          type: integer
+          readOnly: true
+        source_type:
+          $ref: '#/components/schemas/SourceTypeEnum'
+        source_attribution:
+          type: string
+          description: Public attribution — e.g. "family member", "BBC report"
+          maxLength: 500
+        date_start:
+          type: string
+          format: date
+          nullable: true
+        narrative:
+          type: string
+        is_private:
+          type: boolean
+          description: Hide this source from public reads.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - report
     SourceConsistencyEnum:
       enum:
       - consistent
@@ -7340,6 +7750,32 @@ components:
         * `some_differences` - Some differences
         * `major_conflict` - Major conflict
         * `requires_further_verification` - Requires further verification
+    SourceRequest:
+      type: object
+      description: |-
+        A single source attached to a Report.
+
+        Writable via nested create on `ReportSerializer.sources` (so the
+        volunteer can submit a report + N sources in one POST), and also
+        exposed standalone at `/sources/`. Field shape mirrors the primary
+        Report source_* fields so the volunteer form doesn't need to teach
+        two vocabularies.
+      properties:
+        source_type:
+          $ref: '#/components/schemas/SourceTypeEnum'
+        source_attribution:
+          type: string
+          description: Public attribution — e.g. "family member", "BBC report"
+          maxLength: 500
+        date_start:
+          type: string
+          format: date
+          nullable: true
+        narrative:
+          type: string
+        is_private:
+          type: boolean
+          description: Hide this source from public reads.
     SourceTypeEnum:
       enum:
       - firsthand
