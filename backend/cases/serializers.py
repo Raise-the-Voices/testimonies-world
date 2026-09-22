@@ -489,7 +489,7 @@ class FamilyRelationshipSerializer(SanitizingModelSerializerMixin, serializers.M
         - `person_a != person_b` — no self-link.
         - One row per ordered `(person_a, person_b)` pair, regardless
           of type — the model already enforces this via
-          `unique_together = ['person_a', 'person_b']` but we drop
+          `UniqueConstraint(fields=['person_a','person_b'])` but we drop
           DRF's auto-validator (see `get_unique_together_validators`)
           so the volunteer sees a friendlier message.
         - For undirected types (`sibling`, `spouse`, `other`), the
@@ -542,7 +542,7 @@ class FamilyRelationshipSerializer(SanitizingModelSerializerMixin, serializers.M
 
         if person_a and person_b:
             # Reject a second row on the same ordered pair regardless
-            # of type. unique_together on the model already does this,
+            # of type. The model's UniqueConstraint already does this,
             # but a friendlier message helps the volunteer fix it.
             dup_qs = FamilyRelationship.objects.filter(
                 person_a=person_a, person_b=person_b,
