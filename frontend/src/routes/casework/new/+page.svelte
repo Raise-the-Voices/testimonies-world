@@ -10,6 +10,7 @@
 		ApiError,
 	} from '$lib/api';
 	import { classifyFormError, reportFormError, type FormErrorKind } from '$lib/formError';
+	import { focusFirstFormError } from '$lib/formFocus';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import PersonMultiPicker from '$lib/PersonMultiPicker.svelte';
 	import type { PageData } from './$types';
@@ -160,17 +161,9 @@
 	}
 
 	function focusFirstError(errs: Record<string, string>) {
-		const order = ['action_type', 'date', 'status', 'description', 'next_steps', 'notes'];
-		for (const f of order) {
-			if (errs[f]) {
-				const el = document.getElementById(f) as HTMLElement | null;
-				if (el) {
-					el.focus();
-					el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-					return;
-				}
-			}
-		}
+		focusFirstFormError(errs, {
+			order: ['action_type', 'date', 'status', 'description', 'next_steps', 'notes'],
+		});
 	}
 
 	async function refreshSession() {

@@ -31,6 +31,7 @@
 		apiTestimonialsUpdate,
 	} from '$lib/api/generated/endpoints';
 	import { user } from '$lib/session';
+	import { focusFirstFormError } from '$lib/formFocus';
 	import type { User } from '$lib/types';
 	import type { TestimonialWriteRequest } from '$lib/api/generated/endpoints.schemas';
 	import PersonPicker from '$lib/PersonPicker.svelte';
@@ -163,6 +164,24 @@
 		};
 	}
 
+	// Visual order on the page — top-to-bottom. Zod field names use
+	// camelCase but the form's input ids are kebab-case for the renamed
+	// fields; see TESTIMONIAL_FIELD_ID_MAP.
+	const TESTIMONIAL_FIELD_ORDER = [
+		'title', 'country', 'region', 'incidentDate', 'incidentDatePrecision',
+		'language', 'summary', 'narrative', 'outcome', 'verificationLevel',
+		'sourceVisibility', 'publicSourceLabel', 'locationVisibility',
+		'familyProtected', 'contactProtected', 'person',
+	];
+	const TESTIMONIAL_FIELD_ID_MAP: Record<string, string[]> = {
+		incidentDate: ['incident-date'],
+		incidentDatePrecision: ['incident-precision'],
+		sourceVisibility: ['source-visibility'],
+		publicSourceLabel: ['public-source-label'],
+		locationVisibility: ['location-visibility'],
+		verificationLevel: ['verification'],
+	};
+
 	async function save(submitAfter: boolean) {
 		if (saving) return;
 		const result = newTestimonialSchema.safeParse(buildInput());
@@ -170,12 +189,10 @@
 			const v = zodToFieldErrors(result.error);
 			errors = v;
 			formError = 'Some fields need attention — see below.';
-			if (typeof document !== 'undefined') {
-				const firstKey = Object.keys(v)[0];
-				const el = document.getElementById(firstKey);
-				el?.focus();
-				el?.scrollIntoView({ block: 'center' });
-			}
+			focusFirstFormError(v, {
+				order: TESTIMONIAL_FIELD_ORDER,
+				idMap: TESTIMONIAL_FIELD_ID_MAP,
+			});
 			return;
 		}
 

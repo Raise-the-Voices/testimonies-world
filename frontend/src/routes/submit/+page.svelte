@@ -17,6 +17,7 @@
 		formatDraftAge,
 		type SubmitDraft,
 	} from '$lib/submitDraft';
+	import { focusFirstFormError } from '$lib/formFocus';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -478,46 +479,19 @@
 	 */
 	const FIELD_DOM_IDS: Record<string, string[]> = {
 		aliases: ['aliases-input'],
-		age_at_incident: ['age_at_incident'],
-		medical_notes: ['medical_notes'],
-		authoritative_source: ['authoritative_source'],
-		authoritative_url: ['authoritative_url'],
 	};
 
+	const FIELD_ORDER = [
+		'name', 'legal_name', 'aliases', 'country', 'status', 'medical',
+		'rough_location', 'precise_location', 'last_known_date', 'ethnicity',
+		'gender', 'age_at_incident', 'quality_tier', 'profile_image', 'medical_notes',
+		'authoritative_source', 'authoritative_url', 'is_published',
+		'summary', 'source_type', 'source_attr', 'reporter_name', 'reporter_contact',
+		'report_date', 'report_location', 'narrative', 'suspected_reason', 'official_reason',
+	];
+
 	function focusFirstError(errs: Record<string, string>) {
-		// Visual order on the page — top-to-bottom. `errs` order doesn't
-		// reflect screen position because the validator is keyed by
-		// field, not row.
-		const order = [
-			'name', 'legal_name', 'aliases', 'country', 'status', 'medical',
-			'rough_location', 'precise_location', 'last_known_date', 'ethnicity',
-			'gender', 'age_at_incident', 'quality_tier', 'profile_image', 'medical_notes',
-			'authoritative_source', 'authoritative_url', 'is_published',
-			'summary', 'source_type', 'source_attr', 'reporter_name', 'reporter_contact',
-			'report_date', 'report_location', 'narrative', 'suspected_reason', 'official_reason',
-		];
-		for (const f of order) {
-			if (!errs[f]) continue;
-			// Try each candidate ID for this field; first hit wins.
-			const candidates = FIELD_DOM_IDS[f] ?? [f];
-			let target: HTMLElement | null = null;
-			for (const id of candidates) {
-				const el = document.getElementById(id);
-				if (el) { target = el as HTMLElement; break; }
-			}
-			// Last-resort: any .field.has-error paragraph + its wrapper.
-			// Catches server-side keys that aren't in FIELD_DOM_IDS.
-			if (!target) {
-				const fallback = document.querySelector('.field.has-error');
-				if (fallback) target = fallback as HTMLElement;
-			}
-			if (!target) continue;
-			// preventScroll so focus() doesn't fight scrollIntoView() —
-			// the second scroll would jump and undo the smooth animation.
-			try { target.focus({ preventScroll: true }); } catch { /* ignore */ }
-			target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-			return;
-		}
+		focusFirstFormError(errs, { order: FIELD_ORDER, idMap: FIELD_DOM_IDS });
 	}
 
 	async function doRefreshSession() {
