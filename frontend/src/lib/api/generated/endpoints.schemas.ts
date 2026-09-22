@@ -2051,6 +2051,8 @@ export interface PatchedUserPreferenceRequest {
 
 export type PersonDetailFamilyItem = {[key: string]: unknown};
 
+export type PersonDetailStatusHistoryItem = {[key: string]: unknown};
+
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -2092,6 +2094,7 @@ export interface PersonDetail {
   readonly family: readonly PersonDetailFamilyItem[];
   /** @nullable */
   readonly profile_image_url: string | null;
+  readonly status_history: readonly PersonDetailStatusHistoryItem[];
   /** @maxLength 255 */
   name: string;
   /** @maxLength 255 */
@@ -3941,6 +3944,10 @@ ordering?: string;
  * A page number within the paginated result set.
  */
 page?: number;
+/**
+ * Number of results to return per page.
+ */
+page_size?: number;
 /**
  * A search term.
  */
