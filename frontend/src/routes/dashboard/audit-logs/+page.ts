@@ -20,7 +20,10 @@
  */
 import type { PageLoad } from './$types';
 import { apiAuditLogsList } from '$lib/api/generated/endpoints';
+import type { AuditLog } from '$lib/api/generated/endpoints.schemas';
 import { ApiError } from '$lib/api';
+import { asPaginated } from '$lib/api/drfCompat';
+import type { Paginated } from '$lib/types';
 
 type ErrorKind = 'auth' | 'network' | 'server' | 'validation';
 
@@ -57,18 +60,10 @@ function errorMessage(e: unknown): { msg: string; kind: ErrorKind } {
 	return { kind: 'network', msg: 'Could not load audit log.' };
 }
 
-function hasPaginatedShape(value: unknown): value is {
-	count: number;
-	results: unknown[];
-	next: string | null;
-	previous: string | null;
-} {
+function hasPaginatedShape<T>(value: unknown): value is Paginated<T> {
 	if (!value || typeof value !== 'object') return false;
 	const v = value as Record<string, unknown>;
-	return (
-		typeof v.count === 'number' &&
-		Array.isArray(v.results)
-	);
+	return typeof v.count === 'number' && Array.isArray(v.results);
 }
 
 export const load: PageLoad = async ({ url }) => {
@@ -80,8 +75,17 @@ export const load: PageLoad = async ({ url }) => {
 	}
 
 	try {
+		// orval-vs-DRF response shape: orval's generated types wrap the
+		// body in `{ data, status, headers }`, but our mutator returns
+		// the body itself (res.json() directly). `asPaginated` is the
+		// single shim that handles both — see $lib/api/drfCompat.ts.
+		// Without it `hasPaginatedShape(response.data)` checks
+		// `response.data` which is `undefined` at runtime, and the
+		// page renders the "response was not in the expected format"
+		// error even on a perfectly normal 200 OK.
 		const response = await apiAuditLogsList(params);
-		if (!hasPaginatedShape(response.data)) {
+		const body = asPaginated<AuditLog>(response);
+		if (!hasPaginatedShape<AuditLog>(body)) {
 			// 2xx but the body isn't a paginated envelope. Almost
 			// always means an HTML page leaked through (e.g. nginx
 			// 404 served with status 200 after a redirect, or a
@@ -97,7 +101,7 @@ export const load: PageLoad = async ({ url }) => {
 			};
 		}
 		return {
-			logs: response.data,
+			logs: body,
 			appliedFilters: params,
 			error: null as string | null,
 			errorKind: null as ErrorKind | null,
