@@ -1026,8 +1026,13 @@ class FamilyRelationshipFilter(filters.FilterSet):
 class FamilyRelationshipViewSet(viewsets.ModelViewSet):
     """Family-relationship CRUD.
 
-    Read access: anyone (anonymous included) — the family list is part
-    of every person-detail response.
+    Read access: anonymous visitors can read relationships whose
+    BOTH persons are published — the public case-detail page renders
+    the family section for these rows. Anon reads are also gated
+    server-side in `get_queryset`, so unpublished persons' family
+    links never leak via this endpoint.
+
+    Authenticated volunteers / advocates / staff read everything.
 
     Write access (create / update / destroy):
         - Must be authenticated (`IsAuthenticatedOrReadOnly`).
@@ -1042,23 +1047,40 @@ class FamilyRelationshipViewSet(viewsets.ModelViewSet):
     pair (see `FamilyRelationshipSerializer.validate`). Schema-level
     validation only — no business logic in the viewset beyond the
     gate + audit trail.
+
+    History note (C6 + M1, reverted 2026-09-22): the previous tighten
+    to `IsAuthenticated` blocked the public case-detail page from
+    rendering the family sidebar. UX was chosen over the original
+    C6+M1 anon-tightening; defense-in-depth is preserved by the
+    `is_published=True` filter on both sides in `get_queryset`, so
+    relationships involving unpublished persons remain invisible to
+    anon. Operators reviewing this tradeoff: if anon should not see
+    family links at all, revert permission_classes back to
+    `[permissions.IsAuthenticated, IsVolunteer]` and keep the
+    queryset filter (a no-op for authed viewers).
     """
 
-    queryset = (
-        FamilyRelationship.objects
-        .select_related('person_a', 'person_b')
-        .order_by('id')
-    )
     serializer_class = FamilyRelationshipSerializer
     filterset_class = FamilyRelationshipFilter
-    # (C6 + M1) Family relationships name relatives of a victim —
-    # PII-adjacent and a real-world danger if leaked (targeted
-    # harassment, doxxing). The previous default of
-    # IsAuthenticatedOrReadOnly let ANY anonymous browser session
-    # list every family row via GET /api/relationships/. Tighten to
-    # IsAuthenticated so only logged-in volunteers see this data.
-    # IsVolunteer still gates writes on top of that.
-    permission_classes = [permissions.IsAuthenticated, IsVolunteer]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsVolunteer]
+
+    def get_queryset(self):
+        qs = (
+            FamilyRelationship.objects
+            .select_related('person_a', 'person_b')
+            .order_by('id')
+        )
+        # Same anon-defense-in-depth pattern as PersonViewSet.get_queryset:
+        # anonymous viewers only see relationships whose BOTH persons are
+        # published. A relationship between an unpublished draft and a
+        # published case must not leak the unpublished side's name to a
+        # scraper. Authenticated volunteers see everything.
+        if not self.request.user.is_authenticated:
+            qs = qs.filter(
+                person_a__is_published=True,
+                person_b__is_published=True,
+            )
+        return qs
     # Family-relationship writes are uncommon (1-2 per case); keep
     # them under the generic mutation cap.
     throttle_classes = [ActionScopedThrottle]

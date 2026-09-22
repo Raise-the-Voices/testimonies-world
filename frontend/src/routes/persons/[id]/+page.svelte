@@ -246,17 +246,54 @@
 
 			// Media + relationships fire in parallel; each loader handles
 			// its own cancellation independently if the user navigates on.
-			const [m, r] = await Promise.all([
+			// `Promise.allSettled` (not `Promise.all`) so a single failing
+			// secondary fetch — a 403 from /api/relationships/ for an anon
+			// visitor before C6+M1 was relaxed, a 502 from a flaky upstream,
+			// a network blip on media — does not reject the whole batch and
+			// trip the outer try/catch. Each loader's failure becomes an
+			// inline error inside its own section (mediaError / relationshipError)
+			// instead of a page-level error that hides every other column.
+			const [m, r] = await Promise.allSettled([
 				mediaLoader.load(p.id),
 				relationshipsLoader.load(p.id),
 			]);
-			if (m !== undefined) {
-				mediaList = Array.isArray(m) ? m : m.results ?? [];
+			if (m.status === 'fulfilled' && m.value !== undefined) {
+				mediaList = Array.isArray(m.value) ? m.value : m.value.results ?? [];
 				loadingMedia = false;
+			} else if (m.status === 'rejected') {
+				loadingMedia = false;
+				mediaError =
+					m.reason instanceof Error
+						? m.reason.message
+						: 'Failed to load media for this case.';
 			}
-			if (r !== undefined) {
-				relationships = Array.isArray(r) ? r : r.results ?? [];
+			if (r.status === 'fulfilled' && r.value !== undefined) {
+				relationships = Array.isArray(r.value)
+					? r.value
+					: r.value.results ?? [];
 				loadingRelationships = false;
+			} else {
+				// Relationships failed. Anon visitors on the public case
+				// page may hit this — the family sidebar hides itself when
+				// `relationships` is empty AND the viewer isn't a volunteer
+				// (see the wrapper at line ~1069). For authenticated
+				// volunteers / advocates we surface the message inline
+				// rather than silently swallowing it, matching the
+				// mediaError pattern above.
+				loadingRelationships = false;
+				relationships = [];
+				const isAuthed =
+					isAdvocate(currentUser) || isVolunteer(currentUser);
+				if (isAuthed) {
+					const reason =
+						r.status === 'rejected' ? r.reason : undefined;
+					relationshipError =
+						reason instanceof Error
+							? reason.message
+							: "Couldn't load family links — try again.";
+				} else {
+					relationshipError = '';
+				}
 			}
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : 'Failed to load case.';
