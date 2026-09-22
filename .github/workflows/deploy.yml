@@ -19,6 +19,17 @@ jobs:
             set -e
             cd /opt/rtv-cases
 
+            # Take ownership of /opt/rtv-cases for this run. The
+            # appleboy/ssh-action user (DEPLOY_USER) does not own the
+            # repo on prod — so `git fetch` errors with
+            # "cannot open .git/FETCH_HEAD: Permission denied"
+            # (run #218, 2026-09-21 11:49 UTC) once the upstream
+            # safe.directory check is satisfied. The SSH user has
+            # passwordless sudo on prod (deploy.sh uses it for
+            # systemctl + nginx), so this is safe. Idempotent: a
+            # no-op when ownership already matches.
+            sudo chown -R "$(whoami)" /opt/rtv-cases
+
             # Bootstrap deploy.sh to the latest tracked version.
             # The workflow can't depend on the host's deploy.sh being
             # up to date — otherwise an out-of-date script can fail

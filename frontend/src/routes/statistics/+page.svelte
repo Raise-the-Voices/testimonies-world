@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { getStatistics } from '$lib/api';
+	import ErrorState from '$lib/ErrorState.svelte';
 	import { statusLabels } from '$lib/StatusBadge.svelte';
-	import StatCard from '$lib/StatCard.svelte';
+	import StatisticsCard from '$lib/StatisticsCard.svelte';
 	import StatRow from '$lib/StatRow.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import type { PageData } from './$types';
@@ -131,13 +132,10 @@
 			<Skeleton variant="stat-card" lines={3} />
 		</div>
 	{:else if error}
-		<div class="error-state" role="alert">
-			<p class="error-state-message">Could not load statistics: {error}</p>
-			<button type="button" class="btn btn-secondary" onclick={loadStats}>Retry</button>
-		</div>
+		<ErrorState error={error} title="Could not load statistics" onRetry={loadStats} />
 	{:else if stats}
 		<div class="stats-grid">
-			<StatCard title="By Status" meta="{sortedByStatus.length} categories" delayMs={0}>
+			<StatisticsCard variant="section" title="By Status" meta="{sortedByStatus.length} categories" delayMs={0}>
 				{#if sortedByStatus.length > 0}
 					<ul class="stat-list">
 						{#each sortedByStatus as [key, count] (key)}
@@ -147,9 +145,9 @@
 				{:else}
 					<p class="stat-empty">No data yet</p>
 				{/if}
-			</StatCard>
+			</StatisticsCard>
 
-			<StatCard title="By Country" meta="{countries.length} countries" delayMs={50}>
+			<StatisticsCard variant="section" title="By Country" meta="{countries.length} countries" delayMs={50}>
 				{#if countries.length > 0}
 					<ul class="stat-list">
 						{#each countries as [country, count] (country)}
@@ -159,9 +157,10 @@
 				{:else}
 					<p class="stat-empty">No data yet</p>
 				{/if}
-			</StatCard>
+			</StatisticsCard>
 
-			<StatCard
+			<StatisticsCard
+				variant="section"
 				title="By Category"
 				meta="{sortedCategories.length} categories"
 				delayMs={100}
@@ -175,9 +174,10 @@
 				{:else}
 					<p class="stat-empty">No data yet</p>
 				{/if}
-			</StatCard>
+			</StatisticsCard>
 
-			<StatCard
+			<StatisticsCard
+				variant="section"
 				title="By Medical Status"
 				meta="{sortedByMedical.length} statuses"
 				delayMs={150}
@@ -195,7 +195,7 @@
 				{:else}
 					<p class="stat-empty">No data yet</p>
 				{/if}
-			</StatCard>
+			</StatisticsCard>
 		</div>
 	{/if}
 </div>
@@ -276,24 +276,6 @@
 		color: var(--color-text-muted);
 		font-size: 0.85rem;
 		text-align: center;
-	}
-
-	.error-state {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 1rem;
-		padding: 3rem 1rem;
-		background: var(--color-bg-white);
-		border: 1px solid var(--color-border-light);
-		border-left: 3px solid var(--color-danger);
-		border-radius: var(--radius-card);
-		text-align: center;
-	}
-	.error-state-message {
-		margin: 0;
-		color: var(--color-text-muted);
-		max-width: var(--max-w-prose);
 	}
 
 	@media (max-width: 700px) {

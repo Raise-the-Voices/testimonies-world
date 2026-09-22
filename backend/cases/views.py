@@ -1,18 +1,21 @@
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Max, Q, When
 from django.db.models.functions import Lower
 from django.http import (
     FileResponse, HttpResponse, HttpResponseForbidden, HttpResponseNotFound,
     HttpResponsePermanentRedirect,
 )
+from django.utils import timezone
 from django_filters import rest_framework as filters
 from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 from rest_framework import generics, permissions, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
-from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report, Source
+from .models import AuditLog, CaseCategory, CaseEvent, FamilyRelationship, Media, Person, Report, Source
 from .permissions import IsVolunteer
 from .throttles import ActionScopedThrottle
 from .serializers import (
@@ -130,6 +133,20 @@ class PersonFilter(filters.FilterSet):
         from django.utils import timezone
         cutoff = timezone.now() - timedelta(days=days)
         return queryset.filter(updated_at__lt=cutoff)
+
+
+# Fields on Person whose edits auto-write a CaseEvent row in
+# `PersonViewSet.perform_update`. One row per changed field per save.
+# All five are surfaced in the public person-detail timeline (the
+# "Status history" feed on the case page). A future PR can extend
+# this tuple without touching perform_update's diff logic.
+_STATUS_HISTORY_FIELDS = (
+    'current_status',
+    'medical_status',
+    'current_status_date',
+    'current_status_source',
+    'current_status_verification',
+)
 
 
 class PersonViewSet(viewsets.ModelViewSet):
@@ -280,6 +297,12 @@ class PersonViewSet(viewsets.ModelViewSet):
                     public_reports,
                     'reports__media_files',
                     'media_files',
+                    # Power PersonDetailSerializer.get_status_history —
+                    # timeline_events is filtered in Python by event_kind,
+                    # so a flat prefetch is fine (CaseEvent indexes person
+                    # + event_date, models.py:1063, so the prefetch is a
+                    # single index scan per person).
+                    'timeline_events',
                     'relationships_as_a__person_b',
                     'relationships_as_b__person_a',
                 )
@@ -289,6 +312,7 @@ class PersonViewSet(viewsets.ModelViewSet):
                     'reports',
                     'reports__media_files',
                     'media_files',
+                    'timeline_events',
                     'relationships_as_a__person_b',
                     'relationships_as_b__person_a',
                 )
@@ -379,7 +403,33 @@ class PersonViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not (user.is_staff or user.groups.filter(name='Advocate').exists()):
             serializer.validated_data.pop('is_published', None)
-        serializer.save()
+        # Status-change capture: every edit that touches one of the
+        # status-ish fields writes a CaseEvent row. The whole block is
+        # in a transaction so a DB failure on either side rolls back.
+        # We diff after save() (rather than comparing validated_data to
+        # the instance) because validated_data only carries the fields
+        # the caller sent — an unchanged field would diff against the
+        # new value via the instance attribute, which is the right
+        # comparison.
+        old_values = {
+            f: getattr(serializer.instance, f)
+            for f in _STATUS_HISTORY_FIELDS
+        }
+        with transaction.atomic():
+            instance = serializer.save()
+            new_values = {
+                f: getattr(instance, f) for f in _STATUS_HISTORY_FIELDS
+            }
+            for field in _STATUS_HISTORY_FIELDS:
+                if old_values[field] != new_values[field]:
+                    CaseEvent.objects.create(
+                        person=instance,
+                        event_kind=CaseEvent.EventKind.STATUS_CHANGE,
+                        event_date=timezone.now().date(),
+                        description=f'{field}: {old_values[field]} → {new_values[field]}',
+                        source='auto',
+                        created_by=user,
+                    )
 
     def retrieve(self, request, *args, **kwargs):
         # Audit-log every detail view of a Person. Anonymous retrievals are
@@ -1251,6 +1301,27 @@ class AuditLogFilter(filters.FilterSet):
         fields = ['user__username', 'action', 'target_type']
 
 
+class AuditLogPagination(PageNumberPagination):
+    """Pagination tuned for the audit-log review page.
+
+    Default page size is 25 (vs the global default of 10) so a reviewer
+    scanning the last few weeks of activity sees a meaningful slice on
+    page 1. `page_size_query_param='page_size'` lets the frontend ask
+    for larger slices via `?page_size=N` (capped at `max_page_size=500`)
+    so a single page can hold a week of activity at a glance without
+    the user clicking "Next" 28 times.
+
+    Why not just raise the global default? PersonViewSet and the rest
+    of the API are sized for card-style list views where 10-25 rows
+    fits a fold. The audit-log page is the only place that needs
+    bigger pages, so the override stays scoped to this viewset.
+    """
+
+    page_size = 25
+    page_size_query_param = 'page_size'
+    max_page_size = 500
+
+
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     """Read-only API for AuditLog rows.
 
@@ -1269,13 +1340,15 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
       ?search=...                text search over details, ip_address,
                                  user__username (DRF SearchFilter)
       ?ordering=timestamp        default is -timestamp
-      ?page=N                    default page size 10
+      ?page=N                    default page size 25
+      ?page_size=N               override (capped at 500)
     """
 
     queryset = AuditLog.objects.select_related('user').order_by('-timestamp')
     serializer_class = AuditLogSerializer
     permission_classes = [permissions.IsAdminUser]
     filterset_class = AuditLogFilter
+    pagination_class = AuditLogPagination
     search_fields = ['details', 'ip_address', 'user__username']
     ordering_fields = ['timestamp']
     ordering = ['-timestamp']  # default

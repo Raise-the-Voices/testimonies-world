@@ -2,32 +2,13 @@
  * Notification client — typed wrapper around /api/notifications/ and
  * /api/preferences/. Mirrors the backend serializer shape, so when
  * backend types change, this should too.
+ *
+ * Uses the shared `request()` from `$lib/api` so notification calls
+ * benefit from the same CSRF handling, ApiError shaping, and field-error
+ * parsing that every other endpoint gets. We previously re-implemented
+ * those here — that duplication is now removed.
  */
-// We call `fetch()` directly here since notification endpoints don't need
-// the ApiError-shaping layer (they're all safe GET/POST JSON) and api.ts
-// keeps its `request` helper module-private.
-async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
-	const API_BASE = '/api';
-	const method = (options.method ?? 'GET').toUpperCase();
-	const headers: Record<string, string> = {
-		'Content-Type': 'application/json',
-		...(options.headers as Record<string, string> | undefined),
-	};
-	if (method !== 'GET') {
-		const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
-		if (m) headers['X-CSRFToken'] = decodeURIComponent(m[1]);
-	}
-	const res = await fetch(`${API_BASE}${path}`, {
-		credentials: 'include',
-		headers,
-		...options,
-	});
-	const text = await res.text();
-	if (!res.ok) {
-		throw new Error(`Request failed (${res.status}): ${text || res.statusText}`);
-	}
-	return (text ? JSON.parse(text) : (undefined as unknown)) as T;
-}
+import { request } from './api';
 import type { Paginated } from './types';
 
 export type NotificationKind =
@@ -61,35 +42,35 @@ export async function getNotifications(
 	if (params.unread) q.unread = '1';
 	if (params.page) q.page = String(params.page);
 	const qs = new URLSearchParams(q).toString();
-	return http<Paginated<Notification>>(
+	return request<Paginated<Notification>>(
 		`/notifications/${qs ? '?' + qs : ''}`,
 	);
 }
 
 export async function getUnreadCount(): Promise<{ count: number }> {
-	return http<{ count: number }>('/notifications/unread-count/');
+	return request<{ count: number }>('/notifications/unread-count/');
 }
 
 export async function markOneRead(id: number): Promise<Notification> {
-	return http<Notification>(`/notifications/${id}/read/`, {
+	return request<Notification>(`/notifications/${id}/read/`, {
 		method: 'POST',
 	});
 }
 
 export async function markAllRead(): Promise<{ updated: number }> {
-	return http<{ updated: number }>('/notifications/read-all/', {
+	return request<{ updated: number }>('/notifications/read-all/', {
 		method: 'POST',
 	});
 }
 
 export async function getPreferences(): Promise<UserPreferences> {
-	return http<UserPreferences>('/preferences/');
+	return request<UserPreferences>('/preferences/');
 }
 
 export async function updatePreferences(
 	patch: Partial<UserPreferences>,
 ): Promise<UserPreferences> {
-	return http<UserPreferences>('/preferences/', {
+	return request<UserPreferences>('/preferences/', {
 		method: 'POST',
 		body: JSON.stringify(patch),
 	});

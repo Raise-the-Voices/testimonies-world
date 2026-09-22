@@ -31,15 +31,22 @@
   Bump both together if the global default ever changes.
 -->
 <script lang="ts" module>
-	export const PAGE_SIZE = 10;
+	/** Default page size — matches AuditLogPagination.page_size in the
+	 *  backend. The dropdown options below are the values the user
+	 *  can pick; bump both together if the backend default ever moves. */
+	export const PAGE_SIZE = 25;
+	/** Page-size choices offered in the dropdown. Capped at 200 to keep
+	 *  the table scannable; the backend caps at 500 so any value here
+	 *  is honored. */
+	const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 200] as const;
 </script>
 
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { base } from '$app/paths';
-	import { user as userStore } from '$lib/session';
+	import { user as userStore, isAdmin } from '$lib/session';
 	import type { PageData } from './$types';
 	import DashboardCard from '$lib/DashboardCard.svelte';
 	import ActivityItem from '$lib/ActivityItem.svelte';
@@ -50,6 +57,12 @@
 
 	// SSR-hydrated auth (see +layout.svelte for the full rationale).
 	const currentUser = $derived(data.user ?? $userStore);
+	// Defensive: `isAdmin` reads `u.authenticated`, so guard against a
+	// null/undefined currentUser (initial SSR render before session
+	// resolves).
+	const showAdminLink = $derived(
+		currentUser !== null && currentUser !== undefined && isAdmin(currentUser)
+	);
 
 	function convertIsoToLocal(iso: string): string {
 		// Backend returns ISO 8601 (often with Z or +00:00).
@@ -58,12 +71,22 @@
 		return iso.slice(0, 16);
 	}
 
+	function parsePageSize(raw: string | undefined): number {
+		const n = raw ? Number(raw) : NaN;
+		if (Number.isFinite(n) && (PAGE_SIZE_OPTIONS as readonly number[]).includes(n)) return n;
+		return PAGE_SIZE;
+	}
+
 	let username = $state(untrack(() => data.requestParams.user__username ?? ''));
 	let action = $state(untrack(() => data.requestParams.action ?? ''));
 	let targetType = $state(untrack(() => data.requestParams.target_type ?? ''));
 	let search = $state(untrack(() => data.requestParams.search ?? ''));
 	let timestampAfter = $state(untrack(() => convertIsoToLocal(data.requestParams.timestamp_after ?? '')));
 	let timestampBefore = $state(untrack(() => convertIsoToLocal(data.requestParams.timestamp_before ?? '')));
+	// pageSize mirrors ?page_size= in the URL so deep-links survive a
+	// reload. Falls back to PAGE_SIZE when the param is absent or invalid.
+	let pageSize = $state(untrack(() => parsePageSize(data.requestParams.page_size)));
+	let jumpTo = $state<number>(untrack(() => currentPageFromUrl()));
 
 	function currentPageFromUrl(): number {
 		const p = $page.url.searchParams.get('page');
@@ -79,6 +102,9 @@
 		if (search.trim()) params.set('search', search.trim());
 		if (timestampAfter) params.set('timestamp_after', timestampAfter);
 		if (timestampBefore) params.set('timestamp_before', timestampBefore);
+		// Omit page_size when it's the default — keeps the URL clean
+		// and matches the case where the backend itself omits it.
+		if (pageSize !== PAGE_SIZE) params.set('page_size', String(pageSize));
 		if (nextPage && nextPage > 1) {
 			params.set('page', String(nextPage));
 		} else if (nextPage === null) {
@@ -100,6 +126,22 @@
 		const params = buildParams(pageNum);
 		const qs = params.toString();
 		goto(qs ? `?${qs}` : $page.url.pathname, { replaceState: true, noScroll: true });
+	}
+
+	/** Changing page size resets to page 1 — keeping the old page
+	 *  number is meaningless once the slice size shifts. */
+	function changePageSize() {
+		const params = buildParams(1);
+		const qs = params.toString();
+		goto(qs ? `?${qs}` : $page.url.pathname, { replaceState: true, noScroll: true });
+	}
+
+	/** Clamp the jump-to input to [1, totalPages] and navigate. No-op
+	 *  when the target equals the current page. */
+	function jumpToPage() {
+		const total = pagesTotal();
+		const target = Math.max(1, Math.min(total, Math.floor(jumpTo) || 1));
+		if (target !== currentPageFromUrl()) goToPage(target);
 	}
 
 	function clearFilters() {
@@ -152,6 +194,38 @@
 		if (i) return `IP ${i}`;
 		return '';
 	}
+
+	// Derived: total page count used by the pagination strip and the
+	// "Go to page" input.
+	function pagesTotal(): number {
+		const count = data.logs?.count ?? 0;
+		return Math.max(1, Math.ceil(count / pageSize));
+	}
+
+	/** Scroll the audit-log results card into view. Used after page
+	 *  changes so the reader lands at the top of the new slice instead
+	 *  of staying parked at the bottom of the previous one. Instant
+	 *  (not smooth) because there's no positional context to preserve
+	 *  — a smooth 400ms scroll feels laggy on every page click. */
+	function scrollToResults() {
+		if (typeof document === 'undefined') return;
+		document.getElementById('audit-results-top')?.scrollIntoView({
+			behavior: 'auto',
+			block: 'start',
+		});
+	}
+
+	/** After every SvelteKit navigation, scroll to the top of the
+	 *  results card — but only when the ?page= param actually changed.
+	 *  Filter changes keep the same page number, so scrolling there
+	 *  would be a jarring surprise (the user is still reading the
+	 *  same slice, just narrowed). */
+	afterNavigate(({ to, from }) => {
+		if (!to) return;
+		const toPage = to.url.searchParams.get('page');
+		const fromPage = from?.url.searchParams.get('page') ?? null;
+		if (toPage !== fromPage) scrollToResults();
+	});
 </script>
 
 <svelte:head>
@@ -171,15 +245,25 @@
 				action, target type, or time range.
 			</p>
 		</div>
+		{#if showAdminLink}
+			<a
+				href="{base}/admin/cases/auditlog/"
+				class="admin-link"
+				rel="noopener"
+				title="Open the Django admin audit-log page in a new tab"
+			>
+				Django admin →
+			</a>
+		{/if}
 	</header>
 
 	{#if data.error}
 		<ErrorCard
 			title="Couldn't load the audit log"
 			message={data.error}
-			kind="network"
+			kind={data.errorKind === 'auth' ? 'auth' : 'network'}
 		/>
-	{:else if data.logs}
+	{:else if data.logs && Array.isArray(data.logs.results)}
 		<DashboardCard
 			title="Filters"
 			subtitle="URL syncs as you change filters — shareable, refresh-safe."
@@ -198,10 +282,15 @@
 
 		<DashboardCard
 			title="Results"
-			subtitle="{data.logs.count} {data.logs.count === 1 ? 'entry' : 'entries'}"
+			subtitle="{data.logs.count ?? 0} {(data.logs.count ?? 0) === 1 ? 'entry' : 'entries'}"
 		>
+			<!-- `audit-results-top` is the scroll anchor used after page
+			     changes. The afterNavigate hook in <script> lands here so
+			     the reader starts at the top of the new slice instead of
+			     staying parked at the bottom of the previous one. -->
+			<div id="audit-results-top"></div>
 			{#if data.logs.results.length === 0}
-				<p class="empty">No audit log entries match your filters.</p>
+				<p class="empty">No audit log entries match your filters. <span class="empty-total">({data.logs.count ?? 0} total entries)</span></p>
 			{:else}
 				<!-- activity-feed + ActivityItem — same shape as the
 				     dashboard's Recent activity widget, so this page
@@ -220,32 +309,70 @@
 					{/each}
 				</ul>
 
-				{#if data.logs.next || data.logs.previous}
-					{@const totalPages = Math.ceil(data.logs.count / PAGE_SIZE)}
+				<!-- Pagination mirrors /persons and /reports: Prev +
+				     page indicator + Next, plus Page size and Go-to-page
+				     inputs. The earlier numbered-strip + First/Last +
+				     ellipsis layout was overkill for a paginated audit
+				     log and crowded the row. The Go-to-page input lets
+				     readers jump anywhere they need without a long
+				     button strip. -->
+				{#if data.logs.next || data.logs.previous || data.logs.count > pageSize}
+					{@const totalPages = pagesTotal()}
 					{@const currentPage = currentPageFromUrl()}
+					{@const showingFrom = (currentPage - 1) * pageSize + 1}
+					{@const showingTo = Math.min(currentPage * pageSize, data.logs.count)}
 					<nav class="pagination" aria-label="Pagination">
-						<div class="pagination-summary">
+						<button
+							type="button"
+							class="btn btn-secondary"
+							onclick={() => goToPage(currentPage - 1)}
+							disabled={!data.logs.previous}
+							aria-label="Previous page"
+						>
+							‹ Prev
+						</button>
+						<div class="pagination-indicator">
 							Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong>
+							<span class="pagination-range">
+								— showing <strong>{showingFrom}–{showingTo}</strong> of <strong>{data.logs.count}</strong>
+							</span>
 						</div>
-						<div class="pagination-controls">
-							<button
-								type="button"
-								class="btn btn-secondary"
-								onclick={() => goToPage(currentPage - 1)}
-								disabled={!data.logs.previous}
-								aria-label="Previous page"
-							>
-								‹ Previous
-							</button>
-							<button
-								type="button"
-								class="btn btn-secondary"
-								onclick={() => goToPage(currentPage + 1)}
-								disabled={!data.logs.next}
-								aria-label="Next page"
-							>
-								Next ›
-							</button>
+						<button
+							type="button"
+							class="btn btn-secondary"
+							onclick={() => goToPage(currentPage + 1)}
+							disabled={!data.logs.next}
+							aria-label="Next page"
+						>
+							Next ›
+						</button>
+
+						<div class="pagination-extras">
+							<label class="pagination-extras-field">
+								<span class="pagination-extras-label">Page size</span>
+								<select
+									class="select"
+									bind:value={pageSize}
+									onchange={changePageSize}
+									aria-label="Results per page"
+								>
+									{#each PAGE_SIZE_OPTIONS as opt (opt)}
+										<option value={opt}>{opt}</option>
+									{/each}
+								</select>
+							</label>
+							<label class="pagination-extras-field">
+								<span class="pagination-extras-label">Go to page</span>
+								<input
+									type="number"
+									class="input"
+									min="1"
+									max={totalPages}
+									bind:value={jumpTo}
+									onkeydown={(e) => e.key === 'Enter' && jumpToPage()}
+									aria-label={`Go to page (1–${totalPages})`}
+								/>
+							</label>
 						</div>
 					</nav>
 				{/if}
@@ -278,6 +405,21 @@
 		font-size: 1.5rem;
 		color: var(--color-primary);
 	}
+	.admin-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		font-size: 0.85rem;
+		color: var(--color-primary);
+		text-decoration: none;
+		padding: 0.35rem 0.7rem;
+		border: 1px solid var(--color-border-light);
+		border-radius: var(--radius-input);
+	}
+	.admin-link:hover {
+		border-color: var(--color-primary);
+		text-decoration: underline;
+	}
 	.page-subtitle {
 		margin: 0;
 		font-size: 0.95rem;
@@ -304,28 +446,77 @@
 		color: var(--color-text-muted);
 		font-size: 0.95rem;
 	}
+	.empty-total {
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+		font-variant-numeric: tabular-nums;
+	}
 
+	/* Pagination nav: prev / indicator / next on the top row, page-size
+	   + jump inputs on the second row. Same shape as /persons and
+	   /reports so reviewers don't relearn the controls per page.
+	   flex-wrap keeps it readable on narrow viewports. */
 	.pagination {
 		display: flex;
-		justify-content: space-between;
 		align-items: center;
-		gap: 1rem;
+		gap: 0.75rem;
 		flex-wrap: wrap;
 		margin-top: 0.85rem;
 		padding-top: 0.85rem;
 		border-top: 1px solid var(--color-border-light);
 	}
-	.pagination-summary {
+	.pagination-indicator {
 		font-size: 0.85rem;
 		color: var(--color-text-muted);
-	}
-	.pagination-summary strong {
-		color: var(--color-text);
 		font-variant-numeric: tabular-nums;
+		flex: 1 1 auto;
+		text-align: center;
+		min-width: 12rem;
 	}
-	.pagination-controls {
+	.pagination-indicator strong {
+		color: var(--color-text);
+	}
+	.pagination-range {
+		color: var(--color-text-muted);
+		margin-left: 0.35rem;
+	}
+	.pagination-extras {
 		display: flex;
-		gap: 0.5rem;
+		gap: 1rem;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		flex-basis: 100%;
+		justify-content: flex-end;
+	}
+	.pagination-extras-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+	.pagination-extras-label {
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06rem;
+		color: var(--color-text-muted);
+	}
+	.pagination-extras .input,
+	.pagination-extras .select {
+		font: inherit;
+		padding: 0.35rem 0.5rem;
+		border: 1px solid var(--color-border-light);
+		border-radius: var(--radius-input);
+		background: var(--color-bg-white);
+		color: var(--color-text);
+		min-width: 4.5rem;
+	}
+	.pagination-extras .input {
+		max-width: 6rem;
+	}
+	.pagination-extras .input:focus-visible,
+	.pagination-extras .select:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px var(--color-primary-tint);
+		border-color: var(--color-primary);
 	}
 	.btn[disabled] {
 		opacity: 0.5;

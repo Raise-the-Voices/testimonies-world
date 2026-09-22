@@ -17,11 +17,14 @@
 	} from '$lib/api';
 	import { user, isVolunteer, isAdvocate } from '$lib/session';
 	import StatusBadge from '$lib/StatusBadge.svelte';
+	import StatusHistoryTimeline from '$lib/StatusHistoryTimeline.svelte';
+	import StatusTransitionBanner from '$lib/StatusTransitionBanner.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import MediaUploadModal from '$lib/MediaUploadModal.svelte';
 	import MediaImage from '$lib/MediaImage.svelte';
 	import RelatedCases from '$lib/RelatedCases.svelte';
+	import { sanitizeText } from '$lib/sanitize';
 	import type { FamilyRelationshipRow, Media, Person, Report } from '$lib/types';
 	import type { PageData } from './$types';
 
@@ -107,22 +110,29 @@
 
 	// URL extraction — finds http(s):// and bare www. links in narrative text,
 	// trims trailing punctuation users commonly leave after pasting URLs.
+	//
+	// Defence-in-depth (audit item M14): the raw narrative is run through
+	// `sanitizeText` before scanning so any HTML that snuck past server-
+	// side validation is removed before it's interpolated into the page
+	// (and before it's fed into the URL detector, which would otherwise
+	// treat an attacker-controlled <a href="javascript:..."> as a URL).
 	const URL_RE = /\b((?:https?:\/\/|www\.)[^\s<>"']+)/gi;
 	function scanNarrative(text: string): Array<{ kind: 'text' | 'url'; value: string }> {
 		if (!text) return [];
+		const safe = sanitizeText(text);
 		const out: Array<{ kind: 'text' | 'url'; value: string }> = [];
 		let last = 0;
 		let m: RegExpExecArray | null;
 		URL_RE.lastIndex = 0;
-		while ((m = URL_RE.exec(text)) !== null) {
-			if (m.index > last) out.push({ kind: 'text', value: text.slice(last, m.index) });
+		while ((m = URL_RE.exec(safe)) !== null) {
+			if (m.index > last) out.push({ kind: 'text', value: safe.slice(last, m.index) });
 			let url = m[0];
 			const trail = url.match(/[),.;]+$/);
 			if (trail) url = url.slice(0, -trail[0].length);
 			out.push({ kind: 'url', value: url });
 			last = m.index + m[0].length;
 		}
-		if (last < text.length) out.push({ kind: 'text', value: text.slice(last) });
+		if (last < safe.length) out.push({ kind: 'text', value: safe.slice(last) });
 		return out;
 	}
 	function domainOf(url: string): string {
@@ -138,10 +148,12 @@
 	}
 
 	// Paragraph split — narrative uses newlines between paragraphs.
-	// Returns trimmed non-empty paragraphs.
+	// Returns trimmed non-empty paragraphs. Sanitised before splitting
+	// so a row whose narrative contains raw HTML doesn't render it.
 	function paragraphs(text: string): string[] {
 		if (!text) return [];
-		return text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+		const safe = sanitizeText(text);
+		return safe.split(/\n+/).map((s) => s.trim()).filter(Boolean);
 	}
 
 	// Date detection — bold temporal milestones for scannability.
@@ -164,16 +176,17 @@
 	);
 	function scanNarrativeDates(text: string): Array<{ kind: 'text' | 'date'; value: string }> {
 		if (!text) return [];
+		const safe = sanitizeText(text);
 		const out: Array<{ kind: 'text' | 'date'; value: string }> = [];
 		let last = 0;
 		let m: RegExpExecArray | null;
 		DATE_RE.lastIndex = 0;
-		while ((m = DATE_RE.exec(text)) !== null) {
-			if (m.index > last) out.push({ kind: 'text', value: text.slice(last, m.index) });
+		while ((m = DATE_RE.exec(safe)) !== null) {
+			if (m.index > last) out.push({ kind: 'text', value: safe.slice(last, m.index) });
 			out.push({ kind: 'date', value: m[0] });
 			last = m.index + m[0].length;
 		}
-		if (last < text.length) out.push({ kind: 'text', value: text.slice(last) });
+		if (last < safe.length) out.push({ kind: 'text', value: safe.slice(last) });
 		return out;
 	}
 
@@ -723,7 +736,7 @@
 						{#if open}
 							<div id="report-body-{report.id}" class="report-card-body">
 								{#if report.rough_location}
-									<p class="small muted">Location: {report.rough_location}</p>
+									<p class="small muted">Location: {sanitizeText(report.rough_location)}</p>
 								{/if}
 								<p class="report-card-narrative">
 									{#each scanNarrative(report.narrative) as part, i (i)}
@@ -744,10 +757,10 @@
 									{/each}
 								</p>
 								{#if report.suspected_reason}
-									<p class="mt-1"><strong>Suspected reason:</strong> {report.suspected_reason}</p>
+									<p class="mt-1"><strong>Suspected reason:</strong> {sanitizeText(report.suspected_reason)}</p>
 								{/if}
 								{#if report.official_reason}
-									<p class="mt-1"><strong>Official reason:</strong> {report.official_reason}</p>
+									<p class="mt-1"><strong>Official reason:</strong> {sanitizeText(report.official_reason)}</p>
 								{/if}
 								{#if report.media_files && report.media_files.length > 0}
 									<div class="report-card-media">
@@ -952,6 +965,22 @@
 					<div class="sidebar-status">
 						<StatusBadge status={person.current_status} />
 					</div>
+					<!-- Transition banner — the headline "what changed?"
+					     callout. Renders ONLY when there's a current_status
+					     flip in the history. Sibling component to the timeline
+					     below; the timeline handles the full feed including
+					     medical_status / date / source / verification rows. -->
+					{#if person.status_history && person.status_history.length > 0}
+						<StatusTransitionBanner events={person.status_history} />
+					{/if}
+					<!-- Status history — auto-captured on every PATCH that
+					     touches one of the status-ish fields. See
+					     PersonViewSet.perform_update (backend/cases/views.py)
+					     and PersonDetailSerializer.get_status_history
+					     (backend/cases/serializers.py) for the wire shape. -->
+					{#if person.status_history}
+						<StatusHistoryTimeline events={person.status_history} />
+					{/if}
 					<dl class="sidebar-fields">
 						<div class="sidebar-field">
 							<dt>Country</dt>

@@ -18,9 +18,22 @@
  *      submission's data on disk after it's been persisted to the
  *      server).
  *   3. Clear on logout (the +layout.svelte hook does this).
+ *
+ * Schema history:
+ *   v1 — initial 30-field payload (Person + Initial Report).
+ *   v2 — adds `sourceEntries` and `mediaEntries` arrays for the
+ *        Sources and Media sections. File binaries on
+ *        `mediaEntries[i].file` are stripped by the caller before
+ *        serialization; the volunteer must re-pick files after
+ *        restore (banner copy says so). Drafts persisted at v1
+ *        are silently dropped on next mount via the
+ *        drop-on-mismatch policy below — this is the explicit
+ *        choice (better to start fresh than restore a wrong-shape
+ *        payload into the new form). TTL is 7 days so the cutover
+ *        is bounded.
  */
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const STORAGE_PREFIX = 'submit_form_draft_';
 /** Drafts older than this are discarded on read — a stale draft
  *  is worse than no draft (the user might not even remember what
