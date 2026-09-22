@@ -36,6 +36,7 @@
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import ErrorCard from '$lib/ErrorCard.svelte';
+	import { sanitizeText } from '$lib/sanitize';
 	import type { PageData } from './$types';
 	import type { CaseworkRecord } from '$lib/types';
 
@@ -404,18 +405,18 @@
 										</div>
 									</div>
 
-									<p class="record-description">{record.description}</p>
+									<p class="record-description">{sanitizeText(record.description)}</p>
 
 									{#if record.next_steps}
 										<p class="record-meta">
-											<strong>Next steps:</strong> {record.next_steps}
+											<strong>Next steps:</strong> {sanitizeText(record.next_steps)}
 										</p>
 									{/if}
 
 									{#if record.notes}
 										<details class="record-notes">
 											<summary>Internal notes</summary>
-											<p>{record.notes}</p>
+											<p>{sanitizeText(record.notes)}</p>
 										</details>
 									{/if}
 

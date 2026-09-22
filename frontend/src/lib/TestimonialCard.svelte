@@ -2,6 +2,7 @@
 	import { base } from '$app/paths';
 	import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
 	import { isEmptyAfterSanitization, safeText, safeTextOr } from '$lib/testimonial-sanitize';
+	import { sanitizeText } from '$lib/sanitize';
 	import { statusLabel } from '$lib/statusPresentation';
 
 	/**
@@ -31,12 +32,12 @@
 
 	let { testimonial, showStatus = false }: Props = $props();
 
-	const safeTitle = $derived(safeText(testimonial.title));
-	const safeSummary = $derived(safeText(testimonial.summary));
-	const safeCountry = $derived(safeText(testimonial.country));
-	const safeRegion = $derived(safeText(testimonial.region));
-	const safeLocationDisplay = $derived(safeText(testimonial.public_location_display));
-	const safeSourceLabel = $derived(safeText(testimonial.public_source_label));
+	const safeTitle = $derived(sanitizeText(safeText(testimonial.title)));
+	const safeSummary = $derived(sanitizeText(safeText(testimonial.summary)));
+	const safeCountry = $derived(sanitizeText(safeText(testimonial.country)));
+	const safeRegion = $derived(sanitizeText(safeText(testimonial.region)));
+	const safeLocationDisplay = $derived(sanitizeText(safeText(testimonial.public_location_display)));
+	const safeSourceLabel = $derived(sanitizeText(safeText(testimonial.public_source_label)));
 
 	const isEmpty = $derived(
 		isEmptyAfterSanitization({
@@ -108,7 +109,7 @@
 		{#if testimonial.tags && testimonial.tags.length > 0}
 			<ul class="testimonial-card-tags" aria-label="Tags">
 				{#each testimonial.tags as tag (tag.id)}
-					<li class="testimonial-card-tag">{safeText(tag.name)}</li>
+					<li class="testimonial-card-tag">{sanitizeText(safeText(tag.name))}</li>
 				{/each}
 			</ul>
 		{/if}
