@@ -45,6 +45,7 @@
 	import StatisticsCard from '$lib/StatisticsCard.svelte';
 	import QuickActions from '$lib/QuickActions.svelte';
 	import StatusBreakdownChart from '$lib/StatusBreakdownChart.svelte';
+	import ErrorCard from '$lib/ErrorCard.svelte';
 	import { isAdvocate, isAdmin, isVolunteer } from '$lib/session';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import ActivityItem from '$lib/ActivityItem.svelte';
@@ -198,90 +199,125 @@
 	{:else}
 		<!-- === SECTION: Summary row (4 tiles) ===
 		     min-height matches the real KPI tile geometry so the swap
-		     doesn't reflow. -->
-		<div class="dashboard-section summary-section">
-			{#if loading}
-				<div class="section-inner" transition:fade={{ duration: 220 }}>
-					<div class="summary-row" aria-hidden="true">
-						{#each Array(4) as _, i (i)}
-							<Skeleton variant="rect" height="6rem" />
-						{/each}
+		     doesn't reflow. Wrapped in svelte:boundary so a render-time
+		     crash in this section (e.g. a malformed `value` prop) doesn't
+		     take down the rest of the dashboard. -->
+		<svelte:boundary
+			onerror={(e) => console.error('[dashboard] summary section failed:', e)}
+		>
+			<div class="dashboard-section summary-section">
+				{#if loading}
+					<div class="section-inner" transition:fade={{ duration: 220 }}>
+						<div class="summary-row" aria-hidden="true">
+							{#each Array(4) as _, i (i)}
+								<Skeleton variant="rect" height="6rem" />
+							{/each}
+						</div>
 					</div>
-				</div>
-			{:else if data.data}
-				<div class="section-inner" transition:fade={{ duration: 220 }}>
-					<section class="summary-row" aria-label="Platform summary">
-						<StatisticsCard
-							variant="kpi"
-							label="Total cases"
-							value={data.data.summary.open_cases}
-							hint="All persons, including drafts."
-							href="{base}/persons"
-						/>
-						<StatisticsCard
-							variant="kpi"
-							label="Stale cases"
-							value={data.data.summary.stale_cases}
-							hint="Not released, not deceased."
-							href="{base}/watchdog"
-						/>
-						{#if isAdvocate(currentUser) || isAdmin(currentUser)}
+				{:else if data.data}
+					<div class="section-inner" transition:fade={{ duration: 220 }}>
+						<section class="summary-row" aria-label="Platform summary">
 							<StatisticsCard
 								variant="kpi"
-								label="My open casework"
-								value={data.data.summary.my_open_casework}
-								hint="Open + in-progress."
-								href="{base}/casework"
+								label="Total cases"
+								value={data.data.summary.open_cases}
+								hint="All persons, including drafts."
+								href="{base}/persons"
 							/>
-						{:else}
 							<StatisticsCard
 								variant="kpi"
-								label="My reports"
-								value={data.data.recent_reports.length}
-								hint="Most recent across all cases."
-								href="{base}/reports"
+								label="Stale cases"
+								value={data.data.summary.stale_cases}
+								hint="Not released, not deceased."
+								href="{base}/watchdog"
 							/>
-						{/if}
-						<StatisticsCard
-							variant="kpi"
-							label="Unread notifications"
-							value={data.data.summary.unread_notifications}
-							hint={isAdvocate(currentUser) ? 'Advocate in-app alerts.' : 'Account-level alerts.'}
-						/>
-					</section>
+							{#if isAdvocate(currentUser) || isAdmin(currentUser)}
+								<StatisticsCard
+									variant="kpi"
+									label="My open casework"
+									value={data.data.summary.my_open_casework}
+									hint="Open + in-progress."
+									href="{base}/casework"
+								/>
+							{:else}
+								<StatisticsCard
+									variant="kpi"
+									label="My reports"
+									value={data.data.recent_reports.length}
+									hint="Most recent across all cases."
+									href="{base}/reports"
+								/>
+							{/if}
+							<StatisticsCard
+								variant="kpi"
+								label="Unread notifications"
+								value={data.data.summary.unread_notifications}
+								hint={isAdvocate(currentUser) ? 'Advocate in-app alerts.' : 'Account-level alerts.'}
+							/>
+						</section>
+					</div>
+				{/if}
+			</div>
+			{#snippet failed(error, reset)}
+				<div class="dashboard-section summary-section">
+					<ErrorCard
+						title="Couldn't render the summary"
+						message="This section hit an unexpected error. The rest of the dashboard is still working."
+						kind="server"
+						retry={reset}
+					/>
 				</div>
-			{/if}
-		</div>
+			{/snippet}
+		</svelte:boundary>
 
 		<!-- === SECTION: Quick actions ===
 		     min-height matches the QuickActions grid (2 rows × ~3.5rem
-		     action tiles + card chrome). -->
-		<div class="dashboard-section quick-actions-section">
-			{#if loading}
-				<div class="section-inner" transition:fade={{ duration: 220 }}>
-					<DashboardCard title="Quick actions" subtitle="One click to the right place.">
-						<div class="quick-actions" aria-hidden="true">
-							{#each Array(6) as _, i (i)}
-								<Skeleton variant="rect" height="3.5rem" />
-							{/each}
-						</div>
-					</DashboardCard>
+		     action tiles + card chrome). Wrapped in svelte:boundary so a
+		     crash in QuickActions.svelte doesn't kill the whole page. -->
+		<svelte:boundary
+			onerror={(e) => console.error('[dashboard] quick-actions section failed:', e)}
+		>
+			<div class="dashboard-section quick-actions-section">
+				{#if loading}
+					<div class="section-inner" transition:fade={{ duration: 220 }}>
+						<DashboardCard title="Quick actions" subtitle="One click to the right place.">
+							<div class="quick-actions" aria-hidden="true">
+								{#each Array(6) as _, i (i)}
+									<Skeleton variant="rect" height="3.5rem" />
+								{/each}
+							</div>
+						</DashboardCard>
+					</div>
+				{:else if data.data}
+					<div class="section-inner" transition:fade={{ duration: 220 }}>
+						<DashboardCard title="Quick actions" subtitle="One click to the right place.">
+							{#if visibleActions.length === 0}
+								<p class="empty-state">No actions available for your role.</p>
+							{:else}
+								<QuickActions actions={visibleActions} />
+							{/if}
+						</DashboardCard>
+					</div>
+				{/if}
+			</div>
+			{#snippet failed(error, reset)}
+				<div class="dashboard-section quick-actions-section">
+					<ErrorCard
+						title="Couldn't render quick actions"
+						kind="server"
+						retry={reset}
+					/>
 				</div>
-			{:else if data.data}
-				<div class="section-inner" transition:fade={{ duration: 220 }}>
-					<DashboardCard title="Quick actions" subtitle="One click to the right place.">
-						{#if visibleActions.length === 0}
-							<p class="empty-state">No actions available for your role.</p>
-						{:else}
-							<QuickActions actions={visibleActions} />
-						{/if}
-					</DashboardCard>
-				</div>
-			{/if}
-		</div>
+			{/snippet}
+		</svelte:boundary>
 
 		<!-- === SECTION: Recent activity ===
-		     min-height matches ~5 activity rows + card chrome. -->
+		     min-height matches ~5 activity rows + card chrome.
+		     Wrapped in svelte:boundary so a crash here doesn't kill
+		     the other dashboard sections. -->
+		<svelte:boundary
+			onerror={(e) => console.error('[dashboard] activity section failed:', e)}
+		>
 		<div class="dashboard-section activity-section">
 			{#if loading}
 				<div class="section-inner" transition:fade={{ duration: 220 }}>
@@ -332,9 +368,23 @@
 				</div>
 			{/if}
 		</div>
+			{#snippet failed(error, reset)}
+				<div class="dashboard-section activity-section">
+					<ErrorCard
+						title="Couldn't render recent activity"
+						kind="server"
+						retry={reset}
+					/>
+				</div>
+			{/snippet}
+		</svelte:boundary>
 
 		<!-- === SECTION: Status breakdown ===
-		     min-height matches the chart bar + legend grid. -->
+		     min-height matches the chart bar + legend grid.
+		     Wrapped in svelte:boundary. -->
+		<svelte:boundary
+			onerror={(e) => console.error('[dashboard] status-breakdown section failed:', e)}
+		>
 		<div class="dashboard-section status-section">
 			{#if loading}
 				<div class="section-inner" transition:fade={{ duration: 220 }}>
@@ -357,9 +407,23 @@
 				</div>
 			{/if}
 		</div>
+			{#snippet failed(error, reset)}
+				<div class="dashboard-section status-section">
+					<ErrorCard
+						title="Couldn't render the status breakdown"
+						kind="server"
+						retry={reset}
+					/>
+				</div>
+			{/snippet}
+		</svelte:boundary>
 
 		<!-- === SECTION: Recently updated cases ===
-		     min-height matches ~5 person rows + card chrome. -->
+		     min-height matches ~5 person rows + card chrome.
+		     Wrapped in svelte:boundary. -->
+		<svelte:boundary
+			onerror={(e) => console.error('[dashboard] recent-persons section failed:', e)}
+		>
 		<div class="dashboard-section recent-persons-section">
 			{#if loading}
 				<div class="section-inner" transition:fade={{ duration: 220 }}>
@@ -399,12 +463,26 @@
 				</div>
 			{/if}
 		</div>
+			{#snippet failed(error, reset)}
+				<div class="dashboard-section recent-persons-section">
+					<ErrorCard
+						title="Couldn't render recently updated cases"
+						kind="server"
+						retry={reset}
+					/>
+				</div>
+			{/snippet}
+		</svelte:boundary>
 
 		<!-- === SECTION: Recent casework (Advocate / Admin only) ===
 		     Role gate reads from `currentUser` which is SSR-hydrated
 		     (data.user), so this section is server-rendered with the
-		     correct visibility — no flash on hard refresh. -->
+		     correct visibility — no flash on hard refresh.
+		     Wrapped in svelte:boundary. -->
 		{#if showCaseworkSection}
+		<svelte:boundary
+			onerror={(e) => console.error('[dashboard] recent-casework section failed:', e)}
+		>
 			<div class="dashboard-section recent-casework-section">
 				{#if loading}
 					<div class="section-inner" transition:fade={{ duration: 220 }}>
@@ -454,6 +532,16 @@
 					</div>
 				{/if}
 			</div>
+			{#snippet failed(error, reset)}
+				<div class="dashboard-section recent-casework-section">
+					<ErrorCard
+						title="Couldn't render recent casework"
+						kind="server"
+						retry={reset}
+					/>
+				</div>
+			{/snippet}
+		</svelte:boundary>
 		{/if}
 	{/if}
 </div>
