@@ -498,3 +498,39 @@ class CaseworkAuditLogTests(BaseTestCase):
         )
         self.assertEqual(rows.count(), 1)
         self.assertEqual(rows.first().user, self.alice)
+
+
+class CaseworkPermissionGateTests(SimpleTestCase):
+    """Pin the CaseworkRecordViewSet permission_classes contract.
+
+    Audit C-1 (casework/views.py:32-33, Sept 2026): a duplicate
+    `permission_classes = [permissions.IsAuthenticated]` reassigned
+    the value, silently dropping `IsAdvocate`. Any authenticated
+    volunteer could read every CaseworkRecord row (notes/next_steps
+    often contain PII about family contacts) and create/update/delete
+    them.
+
+    The pre-existing code intent is `IsAdvocate` — see the comment
+    block at casework/views.py:27-31. A regression test on the
+    class attribute catches the reintroduction at import time,
+    before any HTTP request is needed.
+    """
+
+    def test_casework_permission_classes_require_advocate(self):
+        from rest_framework import permissions
+
+        from contacts.permissions import IsAdvocate
+
+        from .views import CaseworkRecordViewSet
+
+        # Class attribute — what DRF reads for the viewset's default
+        # permission gate. Note: the attribute is *replaced*, not
+        # mutated, so `is` and `==` are both safe.
+        self.assertEqual(
+            CaseworkRecordViewSet.permission_classes,
+            [permissions.IsAuthenticated, IsAdvocate],
+            'CaseworkRecordViewSet.permission_classes must require '
+            'IsAdvocate. A second `permission_classes = [...]` '
+            'assignment in casework/views.py silently overrides the '
+            'first; see audit C-1.',
+        )
