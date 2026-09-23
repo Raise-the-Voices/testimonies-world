@@ -123,7 +123,7 @@
 		{
 			label: 'Audit log',
 			description: 'Full system activity (admin).',
-			href: '/admin/cases/auditlog/',
+			href: `${base}/dashboard/audit-logs`,
 			visible: isAdmin(currentUser),
 		},
 	]);
