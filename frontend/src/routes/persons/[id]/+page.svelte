@@ -23,6 +23,7 @@
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import MediaUploadModal from '$lib/MediaUploadModal.svelte';
 	import MediaImage from '$lib/MediaImage.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import RelatedCases from '$lib/RelatedCases.svelte';
 	import { sanitizeText } from '$lib/sanitize';
 	import type { FamilyRelationshipRow, Media, Person, Report } from '$lib/types';
@@ -746,12 +747,7 @@
 										aria-label="Edit report: {title}"
 										title="Edit"
 									>
-										<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-											<path
-												fill="currentColor"
-												d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-											/>
-										</svg>
+										<Icon name="pencil-fill" size={14} filled />
 									</a>
 									<button
 										type="button"
@@ -760,12 +756,7 @@
 										title="Delete"
 										onclick={() => startReportDelete(report)}
 									>
-										<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-											<path
-												fill="currentColor"
-												d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-											/>
-										</svg>
+										<Icon name="trash-fill" size={14} filled />
 									</button>
 								</div>
 							{/if}
@@ -920,12 +911,7 @@
 											title="Edit"
 											onclick={() => openEdit(media)}
 										>
-											<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-												<path
-													fill="currentColor"
-													d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-												/>
-											</svg>
+											<Icon name="pencil-fill" size={14} filled />
 										</button>
 										<button
 											type="button"
@@ -934,12 +920,7 @@
 											title="Delete"
 											onclick={() => startDelete(media)}
 										>
-											<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-												<path
-													fill="currentColor"
-													d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-												/>
-											</svg>
+											<Icon name="trash-fill" size={14} filled />
 										</button>
 									</div>
 								{/if}
@@ -1153,12 +1134,7 @@
 													title="Edit"
 													onclick={() => startRelEdit(rel)}
 												>
-													<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
-														<path
-															fill="currentColor"
-															d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-														/>
-													</svg>
+													<Icon name="pencil-fill" size={12} filled />
 												</button>
 												<button
 													type="button"
@@ -1167,12 +1143,7 @@
 													title="Delete"
 													onclick={() => startRelDelete(rel)}
 												>
-													<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
-														<path
-															fill="currentColor"
-															d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-														/>
-													</svg>
+													<Icon name="trash-fill" size={12} filled />
 												</button>
 											</span>
 										{/if}

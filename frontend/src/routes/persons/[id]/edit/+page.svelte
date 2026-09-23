@@ -6,6 +6,7 @@
 	import { getPerson, updatePerson, getCategories, ApiError } from '$lib/api';
 	import { focusFirstFormError } from '$lib/formFocus';
 import Skeleton from '$lib/Skeleton.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import type { Person } from '$lib/types';
 	import type { PageData } from './$types';
 
@@ -587,9 +588,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 						<label for="precise_location">
 							Precise Location
 							<span class="field-tag-private">
-								<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
-									<path fill="currentColor" d="M4 7V5a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h1zm2 0h4V5a2 2 0 1 0-4 0v2z" />
-								</svg>
+								<Icon name="lock-fill" size={11} filled />
 								private
 							</span>
 						</label>
@@ -725,9 +724,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 					<label for="medical_notes">
 						Medical notes
 						<span class="field-tag-private">
-							<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
-								<path fill="currentColor" d="M4 7V5a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h1zm2 0h4V5a2 2 0 1 0-4 0v2z" />
-							</svg>
+							<Icon name="lock-fill" size={11} filled />
 							private
 						</span>
 					</label>

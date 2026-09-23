@@ -5,6 +5,7 @@
 	import { user, isVolunteer, isAdvocate, isAdmin, loadSession } from '$lib/session';
 	import { createPerson, createReport, getCategories, request, ApiError } from '$lib/api';
 	import { showToast } from '$lib/toast';
+	import Icon from '$lib/Icon.svelte';
 	import SourcesField from '$lib/SourcesField.svelte';
 	import type { SourceEntry } from '$lib/SourcesField.svelte';
 	import MediaField from '$lib/MediaField.svelte';
@@ -1284,9 +1285,7 @@
 						<label for="medical_notes">
 							Medical notes
 							<span class="field-tag-private">
-								<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
-									<path fill="currentColor" d="M4 7V5a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h1zm2 0h4V5a2 2 0 1 0-4 0v2z" />
-								</svg>
+								<Icon name="lock-fill" size={11} filled />
 								private
 							</span>
 						</label>
@@ -1905,7 +1904,7 @@
 		letter-spacing: 0.04rem;
 		line-height: 1.2;
 	}
-	.field-tag-private svg {
+	.field-tag-private :global(svg) {
 		display: inline-block;
 		vertical-align: -1px;
 	}
