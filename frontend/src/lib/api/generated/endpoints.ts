@@ -6,35 +6,26 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
-  ApiAuditLogsListParams,
-  ApiCaseworkListParams,
-  ApiCategoriesListParams,
-  ApiContactsListParams,
-  ApiDashboardListParams,
-  ApiDebugRecentPersonsListParams,
-  ApiMediaListParams,
-  ApiNotificationsListParams,
-  ApiPersonsCountriesListParams,
-  ApiPersonsListParams,
-  ApiPersonsWatchdogListParams,
-  ApiPreferencesListParams,
-  ApiRelationshipsListParams,
-  ApiReportsListParams,
-  ApiSourcesListParams,
-  ApiTestimonialTagsListParams,
-  ApiTestimonialsListParams,
   AuditLog,
+  AuditLogsListParams,
   CaseCategory,
+  CaseworkListParams,
   CaseworkRecord,
   CaseworkRecordRequest,
+  CategoriesListParams,
   Contact,
   ContactRequest,
+  ContactsListParams,
+  DashboardListParams,
+  DebugRecentPersonsListParams,
   FamilyRelationship,
   FamilyRelationshipRequest,
   MarkAllReadResponse,
   Media,
+  MediaListParams,
   MediaRequest,
   Notification,
+  NotificationsListParams,
   PaginatedAuditLogList,
   PaginatedCaseCategoryList,
   PaginatedCaseworkRecordList,
@@ -64,17 +55,26 @@ import type {
   PersonList,
   PersonWrite,
   PersonWriteRequest,
+  PersonsCountriesListParams,
+  PersonsListParams,
+  PersonsWatchdogListParams,
+  PreferencesListParams,
   RelatedPersonsResponse,
+  RelationshipsListParams,
   Report,
   ReportRequest,
+  ReportsListParams,
   Source,
   SourceRequest,
+  SourcesListParams,
   StatisticsResponse,
   TestimonialPublic,
   TestimonialTag,
   TestimonialTagRequest,
+  TestimonialTagsListParams,
   TestimonialWrite,
   TestimonialWriteRequest,
+  TestimonialsListParams,
   UnreadCountResponse,
   UserPreference,
   UserPreferenceRequest
@@ -85,19 +85,19 @@ import { fetcher } from '../mutator';
 /**
  * Staff-only audit log. Paginated, filterable by user/action/target_type/timestamp range. Every CRUD op on a sensitive viewset writes a row here via the `_audit()` helper.
  */
-export type apiAuditLogsListResponse200 = {
+export type auditLogsListResponse200 = {
   data: PaginatedAuditLogList
   status: 200
 }
     
-export type apiAuditLogsListResponseSuccess = (apiAuditLogsListResponse200) & {
+export type auditLogsListResponseSuccess = (auditLogsListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiAuditLogsListResponse = (apiAuditLogsListResponseSuccess)
+export type auditLogsListResponse = (auditLogsListResponseSuccess)
 
-export const getApiAuditLogsListUrl = (params?: ApiAuditLogsListParams,) => {
+export const getAuditLogsListUrl = (params?: AuditLogsListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -112,9 +112,9 @@ export const getApiAuditLogsListUrl = (params?: ApiAuditLogsListParams,) => {
   return stringifiedParams.length > 0 ? `/api/audit-logs/?${stringifiedParams}` : `/api/audit-logs/`
 }
 
-export const apiAuditLogsList = async (params?: ApiAuditLogsListParams, options?: RequestInit): Promise<apiAuditLogsListResponse> => {
+export const auditLogsList = async (params?: AuditLogsListParams, options?: RequestInit): Promise<auditLogsListResponse> => {
   
-  return fetcher<apiAuditLogsListResponse>(getApiAuditLogsListUrl(params),
+  return fetcher<auditLogsListResponse>(getAuditLogsListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -146,19 +146,19 @@ Filters (via django-filter, all optional):
   ?page=N                    default page size 25
   ?page_size=N               override (capped at 500)
  */
-export type apiAuditLogsRetrieveResponse200 = {
+export type auditLogsRetrieveResponse200 = {
   data: AuditLog
   status: 200
 }
     
-export type apiAuditLogsRetrieveResponseSuccess = (apiAuditLogsRetrieveResponse200) & {
+export type auditLogsRetrieveResponseSuccess = (auditLogsRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiAuditLogsRetrieveResponse = (apiAuditLogsRetrieveResponseSuccess)
+export type auditLogsRetrieveResponse = (auditLogsRetrieveResponseSuccess)
 
-export const getApiAuditLogsRetrieveUrl = (id: number,) => {
+export const getAuditLogsRetrieveUrl = (id: number,) => {
 
 
   
@@ -166,9 +166,9 @@ export const getApiAuditLogsRetrieveUrl = (id: number,) => {
   return `/api/audit-logs/${id}/`
 }
 
-export const apiAuditLogsRetrieve = async (id: number, options?: RequestInit): Promise<apiAuditLogsRetrieveResponse> => {
+export const auditLogsRetrieve = async (id: number, options?: RequestInit): Promise<auditLogsRetrieveResponse> => {
   
-  return fetcher<apiAuditLogsRetrieveResponse>(getApiAuditLogsRetrieveUrl(id),
+  return fetcher<auditLogsRetrieveResponse>(getAuditLogsRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -179,19 +179,19 @@ export const apiAuditLogsRetrieve = async (id: number, options?: RequestInit): P
 
 
 
-export type apiCaseworkListResponse200 = {
+export type caseworkListResponse200 = {
   data: PaginatedCaseworkRecordList
   status: 200
 }
     
-export type apiCaseworkListResponseSuccess = (apiCaseworkListResponse200) & {
+export type caseworkListResponseSuccess = (caseworkListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiCaseworkListResponse = (apiCaseworkListResponseSuccess)
+export type caseworkListResponse = (caseworkListResponseSuccess)
 
-export const getApiCaseworkListUrl = (params?: ApiCaseworkListParams,) => {
+export const getCaseworkListUrl = (params?: CaseworkListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -206,9 +206,9 @@ export const getApiCaseworkListUrl = (params?: ApiCaseworkListParams,) => {
   return stringifiedParams.length > 0 ? `/api/casework/?${stringifiedParams}` : `/api/casework/`
 }
 
-export const apiCaseworkList = async (params?: ApiCaseworkListParams, options?: RequestInit): Promise<apiCaseworkListResponse> => {
+export const caseworkList = async (params?: CaseworkListParams, options?: RequestInit): Promise<caseworkListResponse> => {
   
-  return fetcher<apiCaseworkListResponse>(getApiCaseworkListUrl(params),
+  return fetcher<caseworkListResponse>(getCaseworkListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -219,19 +219,19 @@ export const apiCaseworkList = async (params?: ApiCaseworkListParams, options?: 
 
 
 
-export type apiCaseworkCreateResponse201 = {
+export type caseworkCreateResponse201 = {
   data: CaseworkRecord
   status: 201
 }
     
-export type apiCaseworkCreateResponseSuccess = (apiCaseworkCreateResponse201) & {
+export type caseworkCreateResponseSuccess = (caseworkCreateResponse201) & {
   headers: Headers;
 };
 ;
 
-export type apiCaseworkCreateResponse = (apiCaseworkCreateResponseSuccess)
+export type caseworkCreateResponse = (caseworkCreateResponseSuccess)
 
-export const getApiCaseworkCreateUrl = () => {
+export const getCaseworkCreateUrl = () => {
 
 
   
@@ -239,9 +239,9 @@ export const getApiCaseworkCreateUrl = () => {
   return `/api/casework/`
 }
 
-export const apiCaseworkCreate = async (caseworkRecordRequest: CaseworkRecordRequest, options?: RequestInit): Promise<apiCaseworkCreateResponse> => {
+export const caseworkCreate = async (caseworkRecordRequest: CaseworkRecordRequest, options?: RequestInit): Promise<caseworkCreateResponse> => {
   
-  return fetcher<apiCaseworkCreateResponse>(getApiCaseworkCreateUrl(),
+  return fetcher<caseworkCreateResponse>(getCaseworkCreateUrl(),
   {      
     ...options,
     method: 'POST',
@@ -260,19 +260,19 @@ author — the human-sense "verification" the feature is named for.
 Also writes an AuditLog.VIEWED row so casework-record views are
 in the same paper trail as Person / Report / Media views.
  */
-export type apiCaseworkRetrieveResponse200 = {
+export type caseworkRetrieveResponse200 = {
   data: CaseworkRecord
   status: 200
 }
     
-export type apiCaseworkRetrieveResponseSuccess = (apiCaseworkRetrieveResponse200) & {
+export type caseworkRetrieveResponseSuccess = (caseworkRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiCaseworkRetrieveResponse = (apiCaseworkRetrieveResponseSuccess)
+export type caseworkRetrieveResponse = (caseworkRetrieveResponseSuccess)
 
-export const getApiCaseworkRetrieveUrl = (id: number,) => {
+export const getCaseworkRetrieveUrl = (id: number,) => {
 
 
   
@@ -280,9 +280,9 @@ export const getApiCaseworkRetrieveUrl = (id: number,) => {
   return `/api/casework/${id}/`
 }
 
-export const apiCaseworkRetrieve = async (id: number, options?: RequestInit): Promise<apiCaseworkRetrieveResponse> => {
+export const caseworkRetrieve = async (id: number, options?: RequestInit): Promise<caseworkRetrieveResponse> => {
   
-  return fetcher<apiCaseworkRetrieveResponse>(getApiCaseworkRetrieveUrl(id),
+  return fetcher<caseworkRetrieveResponse>(getCaseworkRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -293,19 +293,19 @@ export const apiCaseworkRetrieve = async (id: number, options?: RequestInit): Pr
 
 
 
-export type apiCaseworkUpdateResponse200 = {
+export type caseworkUpdateResponse200 = {
   data: CaseworkRecord
   status: 200
 }
     
-export type apiCaseworkUpdateResponseSuccess = (apiCaseworkUpdateResponse200) & {
+export type caseworkUpdateResponseSuccess = (caseworkUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiCaseworkUpdateResponse = (apiCaseworkUpdateResponseSuccess)
+export type caseworkUpdateResponse = (caseworkUpdateResponseSuccess)
 
-export const getApiCaseworkUpdateUrl = (id: number,) => {
+export const getCaseworkUpdateUrl = (id: number,) => {
 
 
   
@@ -313,10 +313,10 @@ export const getApiCaseworkUpdateUrl = (id: number,) => {
   return `/api/casework/${id}/`
 }
 
-export const apiCaseworkUpdate = async (id: number,
-    caseworkRecordRequest: CaseworkRecordRequest, options?: RequestInit): Promise<apiCaseworkUpdateResponse> => {
+export const caseworkUpdate = async (id: number,
+    caseworkRecordRequest: CaseworkRecordRequest, options?: RequestInit): Promise<caseworkUpdateResponse> => {
   
-  return fetcher<apiCaseworkUpdateResponse>(getApiCaseworkUpdateUrl(id),
+  return fetcher<caseworkUpdateResponse>(getCaseworkUpdateUrl(id),
   {      
     ...options,
     method: 'PUT',
@@ -328,19 +328,19 @@ export const apiCaseworkUpdate = async (id: number,
 
 
 
-export type apiCaseworkPartialUpdateResponse200 = {
+export type caseworkPartialUpdateResponse200 = {
   data: CaseworkRecord
   status: 200
 }
     
-export type apiCaseworkPartialUpdateResponseSuccess = (apiCaseworkPartialUpdateResponse200) & {
+export type caseworkPartialUpdateResponseSuccess = (caseworkPartialUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiCaseworkPartialUpdateResponse = (apiCaseworkPartialUpdateResponseSuccess)
+export type caseworkPartialUpdateResponse = (caseworkPartialUpdateResponseSuccess)
 
-export const getApiCaseworkPartialUpdateUrl = (id: number,) => {
+export const getCaseworkPartialUpdateUrl = (id: number,) => {
 
 
   
@@ -348,10 +348,10 @@ export const getApiCaseworkPartialUpdateUrl = (id: number,) => {
   return `/api/casework/${id}/`
 }
 
-export const apiCaseworkPartialUpdate = async (id: number,
-    patchedCaseworkRecordRequest: PatchedCaseworkRecordRequest, options?: RequestInit): Promise<apiCaseworkPartialUpdateResponse> => {
+export const caseworkPartialUpdate = async (id: number,
+    patchedCaseworkRecordRequest: PatchedCaseworkRecordRequest, options?: RequestInit): Promise<caseworkPartialUpdateResponse> => {
   
-  return fetcher<apiCaseworkPartialUpdateResponse>(getApiCaseworkPartialUpdateUrl(id),
+  return fetcher<caseworkPartialUpdateResponse>(getCaseworkPartialUpdateUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -363,19 +363,19 @@ export const apiCaseworkPartialUpdate = async (id: number,
 
 
 
-export type apiCaseworkDestroyResponse204 = {
+export type caseworkDestroyResponse204 = {
   data: void
   status: 204
 }
     
-export type apiCaseworkDestroyResponseSuccess = (apiCaseworkDestroyResponse204) & {
+export type caseworkDestroyResponseSuccess = (caseworkDestroyResponse204) & {
   headers: Headers;
 };
 ;
 
-export type apiCaseworkDestroyResponse = (apiCaseworkDestroyResponseSuccess)
+export type caseworkDestroyResponse = (caseworkDestroyResponseSuccess)
 
-export const getApiCaseworkDestroyUrl = (id: number,) => {
+export const getCaseworkDestroyUrl = (id: number,) => {
 
 
   
@@ -383,9 +383,9 @@ export const getApiCaseworkDestroyUrl = (id: number,) => {
   return `/api/casework/${id}/`
 }
 
-export const apiCaseworkDestroy = async (id: number, options?: RequestInit): Promise<apiCaseworkDestroyResponse> => {
+export const caseworkDestroy = async (id: number, options?: RequestInit): Promise<caseworkDestroyResponse> => {
   
-  return fetcher<apiCaseworkDestroyResponse>(getApiCaseworkDestroyUrl(id),
+  return fetcher<caseworkDestroyResponse>(getCaseworkDestroyUrl(id),
   {      
     ...options,
     method: 'DELETE'
@@ -396,19 +396,19 @@ export const apiCaseworkDestroy = async (id: number, options?: RequestInit): Pro
 
 
 
-export type apiCategoriesListResponse200 = {
+export type categoriesListResponse200 = {
   data: PaginatedCaseCategoryList
   status: 200
 }
     
-export type apiCategoriesListResponseSuccess = (apiCategoriesListResponse200) & {
+export type categoriesListResponseSuccess = (categoriesListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiCategoriesListResponse = (apiCategoriesListResponseSuccess)
+export type categoriesListResponse = (categoriesListResponseSuccess)
 
-export const getApiCategoriesListUrl = (params?: ApiCategoriesListParams,) => {
+export const getCategoriesListUrl = (params?: CategoriesListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -423,9 +423,9 @@ export const getApiCategoriesListUrl = (params?: ApiCategoriesListParams,) => {
   return stringifiedParams.length > 0 ? `/api/categories/?${stringifiedParams}` : `/api/categories/`
 }
 
-export const apiCategoriesList = async (params?: ApiCategoriesListParams, options?: RequestInit): Promise<apiCategoriesListResponse> => {
+export const categoriesList = async (params?: CategoriesListParams, options?: RequestInit): Promise<categoriesListResponse> => {
   
-  return fetcher<apiCategoriesListResponse>(getApiCategoriesListUrl(params),
+  return fetcher<categoriesListResponse>(getCategoriesListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -436,19 +436,19 @@ export const apiCategoriesList = async (params?: ApiCategoriesListParams, option
 
 
 
-export type apiCategoriesRetrieveResponse200 = {
+export type categoriesRetrieveResponse200 = {
   data: CaseCategory
   status: 200
 }
     
-export type apiCategoriesRetrieveResponseSuccess = (apiCategoriesRetrieveResponse200) & {
+export type categoriesRetrieveResponseSuccess = (categoriesRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiCategoriesRetrieveResponse = (apiCategoriesRetrieveResponseSuccess)
+export type categoriesRetrieveResponse = (categoriesRetrieveResponseSuccess)
 
-export const getApiCategoriesRetrieveUrl = (id: number,) => {
+export const getCategoriesRetrieveUrl = (id: number,) => {
 
 
   
@@ -456,9 +456,9 @@ export const getApiCategoriesRetrieveUrl = (id: number,) => {
   return `/api/categories/${id}/`
 }
 
-export const apiCategoriesRetrieve = async (id: number, options?: RequestInit): Promise<apiCategoriesRetrieveResponse> => {
+export const categoriesRetrieve = async (id: number, options?: RequestInit): Promise<categoriesRetrieveResponse> => {
   
-  return fetcher<apiCategoriesRetrieveResponse>(getApiCategoriesRetrieveUrl(id),
+  return fetcher<categoriesRetrieveResponse>(getCategoriesRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -469,19 +469,19 @@ export const apiCategoriesRetrieve = async (id: number, options?: RequestInit): 
 
 
 
-export type apiContactsListResponse200 = {
+export type contactsListResponse200 = {
   data: PaginatedContactList
   status: 200
 }
     
-export type apiContactsListResponseSuccess = (apiContactsListResponse200) & {
+export type contactsListResponseSuccess = (contactsListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiContactsListResponse = (apiContactsListResponseSuccess)
+export type contactsListResponse = (contactsListResponseSuccess)
 
-export const getApiContactsListUrl = (params?: ApiContactsListParams,) => {
+export const getContactsListUrl = (params?: ContactsListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -496,9 +496,9 @@ export const getApiContactsListUrl = (params?: ApiContactsListParams,) => {
   return stringifiedParams.length > 0 ? `/api/contacts/?${stringifiedParams}` : `/api/contacts/`
 }
 
-export const apiContactsList = async (params?: ApiContactsListParams, options?: RequestInit): Promise<apiContactsListResponse> => {
+export const contactsList = async (params?: ContactsListParams, options?: RequestInit): Promise<contactsListResponse> => {
   
-  return fetcher<apiContactsListResponse>(getApiContactsListUrl(params),
+  return fetcher<contactsListResponse>(getContactsListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -509,19 +509,19 @@ export const apiContactsList = async (params?: ApiContactsListParams, options?: 
 
 
 
-export type apiContactsCreateResponse201 = {
+export type contactsCreateResponse201 = {
   data: Contact
   status: 201
 }
     
-export type apiContactsCreateResponseSuccess = (apiContactsCreateResponse201) & {
+export type contactsCreateResponseSuccess = (contactsCreateResponse201) & {
   headers: Headers;
 };
 ;
 
-export type apiContactsCreateResponse = (apiContactsCreateResponseSuccess)
+export type contactsCreateResponse = (contactsCreateResponseSuccess)
 
-export const getApiContactsCreateUrl = () => {
+export const getContactsCreateUrl = () => {
 
 
   
@@ -529,9 +529,9 @@ export const getApiContactsCreateUrl = () => {
   return `/api/contacts/`
 }
 
-export const apiContactsCreate = async (contactRequest: ContactRequest, options?: RequestInit): Promise<apiContactsCreateResponse> => {
+export const contactsCreate = async (contactRequest: ContactRequest, options?: RequestInit): Promise<contactsCreateResponse> => {
   
-  return fetcher<apiContactsCreateResponse>(getApiContactsCreateUrl(),
+  return fetcher<contactsCreateResponse>(getContactsCreateUrl(),
   {      
     ...options,
     method: 'POST',
@@ -543,19 +543,19 @@ export const apiContactsCreate = async (contactRequest: ContactRequest, options?
 
 
 
-export type apiContactsRetrieveResponse200 = {
+export type contactsRetrieveResponse200 = {
   data: Contact
   status: 200
 }
     
-export type apiContactsRetrieveResponseSuccess = (apiContactsRetrieveResponse200) & {
+export type contactsRetrieveResponseSuccess = (contactsRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiContactsRetrieveResponse = (apiContactsRetrieveResponseSuccess)
+export type contactsRetrieveResponse = (contactsRetrieveResponseSuccess)
 
-export const getApiContactsRetrieveUrl = (id: number,) => {
+export const getContactsRetrieveUrl = (id: number,) => {
 
 
   
@@ -563,9 +563,9 @@ export const getApiContactsRetrieveUrl = (id: number,) => {
   return `/api/contacts/${id}/`
 }
 
-export const apiContactsRetrieve = async (id: number, options?: RequestInit): Promise<apiContactsRetrieveResponse> => {
+export const contactsRetrieve = async (id: number, options?: RequestInit): Promise<contactsRetrieveResponse> => {
   
-  return fetcher<apiContactsRetrieveResponse>(getApiContactsRetrieveUrl(id),
+  return fetcher<contactsRetrieveResponse>(getContactsRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -576,19 +576,19 @@ export const apiContactsRetrieve = async (id: number, options?: RequestInit): Pr
 
 
 
-export type apiContactsUpdateResponse200 = {
+export type contactsUpdateResponse200 = {
   data: Contact
   status: 200
 }
     
-export type apiContactsUpdateResponseSuccess = (apiContactsUpdateResponse200) & {
+export type contactsUpdateResponseSuccess = (contactsUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiContactsUpdateResponse = (apiContactsUpdateResponseSuccess)
+export type contactsUpdateResponse = (contactsUpdateResponseSuccess)
 
-export const getApiContactsUpdateUrl = (id: number,) => {
+export const getContactsUpdateUrl = (id: number,) => {
 
 
   
@@ -596,10 +596,10 @@ export const getApiContactsUpdateUrl = (id: number,) => {
   return `/api/contacts/${id}/`
 }
 
-export const apiContactsUpdate = async (id: number,
-    contactRequest: ContactRequest, options?: RequestInit): Promise<apiContactsUpdateResponse> => {
+export const contactsUpdate = async (id: number,
+    contactRequest: ContactRequest, options?: RequestInit): Promise<contactsUpdateResponse> => {
   
-  return fetcher<apiContactsUpdateResponse>(getApiContactsUpdateUrl(id),
+  return fetcher<contactsUpdateResponse>(getContactsUpdateUrl(id),
   {      
     ...options,
     method: 'PUT',
@@ -611,19 +611,19 @@ export const apiContactsUpdate = async (id: number,
 
 
 
-export type apiContactsPartialUpdateResponse200 = {
+export type contactsPartialUpdateResponse200 = {
   data: Contact
   status: 200
 }
     
-export type apiContactsPartialUpdateResponseSuccess = (apiContactsPartialUpdateResponse200) & {
+export type contactsPartialUpdateResponseSuccess = (contactsPartialUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiContactsPartialUpdateResponse = (apiContactsPartialUpdateResponseSuccess)
+export type contactsPartialUpdateResponse = (contactsPartialUpdateResponseSuccess)
 
-export const getApiContactsPartialUpdateUrl = (id: number,) => {
+export const getContactsPartialUpdateUrl = (id: number,) => {
 
 
   
@@ -631,10 +631,10 @@ export const getApiContactsPartialUpdateUrl = (id: number,) => {
   return `/api/contacts/${id}/`
 }
 
-export const apiContactsPartialUpdate = async (id: number,
-    patchedContactRequest: PatchedContactRequest, options?: RequestInit): Promise<apiContactsPartialUpdateResponse> => {
+export const contactsPartialUpdate = async (id: number,
+    patchedContactRequest: PatchedContactRequest, options?: RequestInit): Promise<contactsPartialUpdateResponse> => {
   
-  return fetcher<apiContactsPartialUpdateResponse>(getApiContactsPartialUpdateUrl(id),
+  return fetcher<contactsPartialUpdateResponse>(getContactsPartialUpdateUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -646,19 +646,19 @@ export const apiContactsPartialUpdate = async (id: number,
 
 
 
-export type apiContactsDestroyResponse204 = {
+export type contactsDestroyResponse204 = {
   data: void
   status: 204
 }
     
-export type apiContactsDestroyResponseSuccess = (apiContactsDestroyResponse204) & {
+export type contactsDestroyResponseSuccess = (contactsDestroyResponse204) & {
   headers: Headers;
 };
 ;
 
-export type apiContactsDestroyResponse = (apiContactsDestroyResponseSuccess)
+export type contactsDestroyResponse = (contactsDestroyResponseSuccess)
 
-export const getApiContactsDestroyUrl = (id: number,) => {
+export const getContactsDestroyUrl = (id: number,) => {
 
 
   
@@ -666,9 +666,9 @@ export const getApiContactsDestroyUrl = (id: number,) => {
   return `/api/contacts/${id}/`
 }
 
-export const apiContactsDestroy = async (id: number, options?: RequestInit): Promise<apiContactsDestroyResponse> => {
+export const contactsDestroy = async (id: number, options?: RequestInit): Promise<contactsDestroyResponse> => {
   
-  return fetcher<apiContactsDestroyResponse>(getApiContactsDestroyUrl(id),
+  return fetcher<contactsDestroyResponse>(getContactsDestroyUrl(id),
   {      
     ...options,
     method: 'DELETE'
@@ -683,19 +683,19 @@ export const apiContactsDestroy = async (id: number, options?: RequestInit): Pro
  * Read-only aggregator for the /dashboard page. Single endpoint
 (list, GET only) returning a curated payload.
  */
-export type apiDashboardListResponse200 = {
+export type dashboardListResponse200 = {
   data: PaginatedDashboardResponseList
   status: 200
 }
     
-export type apiDashboardListResponseSuccess = (apiDashboardListResponse200) & {
+export type dashboardListResponseSuccess = (dashboardListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiDashboardListResponse = (apiDashboardListResponseSuccess)
+export type dashboardListResponse = (dashboardListResponseSuccess)
 
-export const getApiDashboardListUrl = (params?: ApiDashboardListParams,) => {
+export const getDashboardListUrl = (params?: DashboardListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -710,9 +710,9 @@ export const getApiDashboardListUrl = (params?: ApiDashboardListParams,) => {
   return stringifiedParams.length > 0 ? `/api/dashboard/?${stringifiedParams}` : `/api/dashboard/`
 }
 
-export const apiDashboardList = async (params?: ApiDashboardListParams, options?: RequestInit): Promise<apiDashboardListResponse> => {
+export const dashboardList = async (params?: DashboardListParams, options?: RequestInit): Promise<dashboardListResponse> => {
   
-  return fetcher<apiDashboardListResponse>(getApiDashboardListUrl(params),
+  return fetcher<dashboardListResponse>(getDashboardListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -740,19 +740,19 @@ to keep it visually separate from production routes.
 Not paginated — the slice is hard-capped at 5 so the response
 payload is bounded regardless of caller intent.
  */
-export type apiDebugRecentPersonsListResponse200 = {
+export type debugRecentPersonsListResponse200 = {
   data: PersonList[]
   status: 200
 }
     
-export type apiDebugRecentPersonsListResponseSuccess = (apiDebugRecentPersonsListResponse200) & {
+export type debugRecentPersonsListResponseSuccess = (debugRecentPersonsListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiDebugRecentPersonsListResponse = (apiDebugRecentPersonsListResponseSuccess)
+export type debugRecentPersonsListResponse = (debugRecentPersonsListResponseSuccess)
 
-export const getApiDebugRecentPersonsListUrl = (params?: ApiDebugRecentPersonsListParams,) => {
+export const getDebugRecentPersonsListUrl = (params?: DebugRecentPersonsListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -767,9 +767,9 @@ export const getApiDebugRecentPersonsListUrl = (params?: ApiDebugRecentPersonsLi
   return stringifiedParams.length > 0 ? `/api/debug/recent-persons/?${stringifiedParams}` : `/api/debug/recent-persons/`
 }
 
-export const apiDebugRecentPersonsList = async (params?: ApiDebugRecentPersonsListParams, options?: RequestInit): Promise<apiDebugRecentPersonsListResponse> => {
+export const debugRecentPersonsList = async (params?: DebugRecentPersonsListParams, options?: RequestInit): Promise<debugRecentPersonsListResponse> => {
   
-  return fetcher<apiDebugRecentPersonsListResponse>(getApiDebugRecentPersonsListUrl(params),
+  return fetcher<debugRecentPersonsListResponse>(getDebugRecentPersonsListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -795,19 +795,19 @@ can put a row in the `sensitive` tier. This blocks a volunteer from
 accidentally (or otherwise) marking evidence as sensitive, which
 would hide it from other volunteers mid-investigation.
  */
-export type apiMediaListResponse200 = {
+export type mediaListResponse200 = {
   data: PaginatedMediaList
   status: 200
 }
     
-export type apiMediaListResponseSuccess = (apiMediaListResponse200) & {
+export type mediaListResponseSuccess = (mediaListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiMediaListResponse = (apiMediaListResponseSuccess)
+export type mediaListResponse = (mediaListResponseSuccess)
 
-export const getApiMediaListUrl = (params?: ApiMediaListParams,) => {
+export const getMediaListUrl = (params?: MediaListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -822,9 +822,9 @@ export const getApiMediaListUrl = (params?: ApiMediaListParams,) => {
   return stringifiedParams.length > 0 ? `/api/media/?${stringifiedParams}` : `/api/media/`
 }
 
-export const apiMediaList = async (params?: ApiMediaListParams, options?: RequestInit): Promise<apiMediaListResponse> => {
+export const mediaList = async (params?: MediaListParams, options?: RequestInit): Promise<mediaListResponse> => {
   
-  return fetcher<apiMediaListResponse>(getApiMediaListUrl(params),
+  return fetcher<mediaListResponse>(getMediaListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -850,19 +850,19 @@ can put a row in the `sensitive` tier. This blocks a volunteer from
 accidentally (or otherwise) marking evidence as sensitive, which
 would hide it from other volunteers mid-investigation.
  */
-export type apiMediaCreateResponse201 = {
+export type mediaCreateResponse201 = {
   data: Media
   status: 201
 }
     
-export type apiMediaCreateResponseSuccess = (apiMediaCreateResponse201) & {
+export type mediaCreateResponseSuccess = (mediaCreateResponse201) & {
   headers: Headers;
 };
 ;
 
-export type apiMediaCreateResponse = (apiMediaCreateResponseSuccess)
+export type mediaCreateResponse = (mediaCreateResponseSuccess)
 
-export const getApiMediaCreateUrl = () => {
+export const getMediaCreateUrl = () => {
 
 
   
@@ -870,9 +870,9 @@ export const getApiMediaCreateUrl = () => {
   return `/api/media/`
 }
 
-export const apiMediaCreate = async (mediaRequest: MediaRequest, options?: RequestInit): Promise<apiMediaCreateResponse> => {
+export const mediaCreate = async (mediaRequest: MediaRequest, options?: RequestInit): Promise<mediaCreateResponse> => {
   
-  return fetcher<apiMediaCreateResponse>(getApiMediaCreateUrl(),
+  return fetcher<mediaCreateResponse>(getMediaCreateUrl(),
   {      
     ...options,
     method: 'POST',
@@ -899,19 +899,19 @@ can put a row in the `sensitive` tier. This blocks a volunteer from
 accidentally (or otherwise) marking evidence as sensitive, which
 would hide it from other volunteers mid-investigation.
  */
-export type apiMediaRetrieveResponse200 = {
+export type mediaRetrieveResponse200 = {
   data: Media
   status: 200
 }
     
-export type apiMediaRetrieveResponseSuccess = (apiMediaRetrieveResponse200) & {
+export type mediaRetrieveResponseSuccess = (mediaRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiMediaRetrieveResponse = (apiMediaRetrieveResponseSuccess)
+export type mediaRetrieveResponse = (mediaRetrieveResponseSuccess)
 
-export const getApiMediaRetrieveUrl = (id: number,) => {
+export const getMediaRetrieveUrl = (id: number,) => {
 
 
   
@@ -919,9 +919,9 @@ export const getApiMediaRetrieveUrl = (id: number,) => {
   return `/api/media/${id}/`
 }
 
-export const apiMediaRetrieve = async (id: number, options?: RequestInit): Promise<apiMediaRetrieveResponse> => {
+export const mediaRetrieve = async (id: number, options?: RequestInit): Promise<mediaRetrieveResponse> => {
   
-  return fetcher<apiMediaRetrieveResponse>(getApiMediaRetrieveUrl(id),
+  return fetcher<mediaRetrieveResponse>(getMediaRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -947,19 +947,19 @@ can put a row in the `sensitive` tier. This blocks a volunteer from
 accidentally (or otherwise) marking evidence as sensitive, which
 would hide it from other volunteers mid-investigation.
  */
-export type apiMediaUpdateResponse200 = {
+export type mediaUpdateResponse200 = {
   data: Media
   status: 200
 }
     
-export type apiMediaUpdateResponseSuccess = (apiMediaUpdateResponse200) & {
+export type mediaUpdateResponseSuccess = (mediaUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiMediaUpdateResponse = (apiMediaUpdateResponseSuccess)
+export type mediaUpdateResponse = (mediaUpdateResponseSuccess)
 
-export const getApiMediaUpdateUrl = (id: number,) => {
+export const getMediaUpdateUrl = (id: number,) => {
 
 
   
@@ -967,10 +967,10 @@ export const getApiMediaUpdateUrl = (id: number,) => {
   return `/api/media/${id}/`
 }
 
-export const apiMediaUpdate = async (id: number,
-    mediaRequest: MediaRequest, options?: RequestInit): Promise<apiMediaUpdateResponse> => {
+export const mediaUpdate = async (id: number,
+    mediaRequest: MediaRequest, options?: RequestInit): Promise<mediaUpdateResponse> => {
   
-  return fetcher<apiMediaUpdateResponse>(getApiMediaUpdateUrl(id),
+  return fetcher<mediaUpdateResponse>(getMediaUpdateUrl(id),
   {      
     ...options,
     method: 'PUT',
@@ -997,19 +997,19 @@ can put a row in the `sensitive` tier. This blocks a volunteer from
 accidentally (or otherwise) marking evidence as sensitive, which
 would hide it from other volunteers mid-investigation.
  */
-export type apiMediaPartialUpdateResponse200 = {
+export type mediaPartialUpdateResponse200 = {
   data: Media
   status: 200
 }
     
-export type apiMediaPartialUpdateResponseSuccess = (apiMediaPartialUpdateResponse200) & {
+export type mediaPartialUpdateResponseSuccess = (mediaPartialUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiMediaPartialUpdateResponse = (apiMediaPartialUpdateResponseSuccess)
+export type mediaPartialUpdateResponse = (mediaPartialUpdateResponseSuccess)
 
-export const getApiMediaPartialUpdateUrl = (id: number,) => {
+export const getMediaPartialUpdateUrl = (id: number,) => {
 
 
   
@@ -1017,10 +1017,10 @@ export const getApiMediaPartialUpdateUrl = (id: number,) => {
   return `/api/media/${id}/`
 }
 
-export const apiMediaPartialUpdate = async (id: number,
-    patchedMediaRequest: PatchedMediaRequest, options?: RequestInit): Promise<apiMediaPartialUpdateResponse> => {
+export const mediaPartialUpdate = async (id: number,
+    patchedMediaRequest: PatchedMediaRequest, options?: RequestInit): Promise<mediaPartialUpdateResponse> => {
   
-  return fetcher<apiMediaPartialUpdateResponse>(getApiMediaPartialUpdateUrl(id),
+  return fetcher<mediaPartialUpdateResponse>(getMediaPartialUpdateUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -1047,19 +1047,19 @@ can put a row in the `sensitive` tier. This blocks a volunteer from
 accidentally (or otherwise) marking evidence as sensitive, which
 would hide it from other volunteers mid-investigation.
  */
-export type apiMediaDestroyResponse204 = {
+export type mediaDestroyResponse204 = {
   data: void
   status: 204
 }
     
-export type apiMediaDestroyResponseSuccess = (apiMediaDestroyResponse204) & {
+export type mediaDestroyResponseSuccess = (mediaDestroyResponse204) & {
   headers: Headers;
 };
 ;
 
-export type apiMediaDestroyResponse = (apiMediaDestroyResponseSuccess)
+export type mediaDestroyResponse = (mediaDestroyResponseSuccess)
 
-export const getApiMediaDestroyUrl = (id: number,) => {
+export const getMediaDestroyUrl = (id: number,) => {
 
 
   
@@ -1067,9 +1067,9 @@ export const getApiMediaDestroyUrl = (id: number,) => {
   return `/api/media/${id}/`
 }
 
-export const apiMediaDestroy = async (id: number, options?: RequestInit): Promise<apiMediaDestroyResponse> => {
+export const mediaDestroy = async (id: number, options?: RequestInit): Promise<mediaDestroyResponse> => {
   
-  return fetcher<apiMediaDestroyResponse>(getApiMediaDestroyUrl(id),
+  return fetcher<mediaDestroyResponse>(getMediaDestroyUrl(id),
   {      
     ...options,
     method: 'DELETE'
@@ -1085,19 +1085,19 @@ export const apiMediaDestroy = async (id: number, options?: RequestInit): Promis
 the client other than 'mark read' — notifications are server-generated
 only.
  */
-export type apiNotificationsListResponse200 = {
+export type notificationsListResponse200 = {
   data: PaginatedNotificationList
   status: 200
 }
     
-export type apiNotificationsListResponseSuccess = (apiNotificationsListResponse200) & {
+export type notificationsListResponseSuccess = (notificationsListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiNotificationsListResponse = (apiNotificationsListResponseSuccess)
+export type notificationsListResponse = (notificationsListResponseSuccess)
 
-export const getApiNotificationsListUrl = (params?: ApiNotificationsListParams,) => {
+export const getNotificationsListUrl = (params?: NotificationsListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -1112,9 +1112,9 @@ export const getApiNotificationsListUrl = (params?: ApiNotificationsListParams,)
   return stringifiedParams.length > 0 ? `/api/notifications/?${stringifiedParams}` : `/api/notifications/`
 }
 
-export const apiNotificationsList = async (params?: ApiNotificationsListParams, options?: RequestInit): Promise<apiNotificationsListResponse> => {
+export const notificationsList = async (params?: NotificationsListParams, options?: RequestInit): Promise<notificationsListResponse> => {
   
-  return fetcher<apiNotificationsListResponse>(getApiNotificationsListUrl(params),
+  return fetcher<notificationsListResponse>(getNotificationsListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -1130,19 +1130,19 @@ export const apiNotificationsList = async (params?: ApiNotificationsListParams, 
 the client other than 'mark read' — notifications are server-generated
 only.
  */
-export type apiNotificationsRetrieveResponse200 = {
+export type notificationsRetrieveResponse200 = {
   data: Notification
   status: 200
 }
     
-export type apiNotificationsRetrieveResponseSuccess = (apiNotificationsRetrieveResponse200) & {
+export type notificationsRetrieveResponseSuccess = (notificationsRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiNotificationsRetrieveResponse = (apiNotificationsRetrieveResponseSuccess)
+export type notificationsRetrieveResponse = (notificationsRetrieveResponseSuccess)
 
-export const getApiNotificationsRetrieveUrl = (id: number,) => {
+export const getNotificationsRetrieveUrl = (id: number,) => {
 
 
   
@@ -1150,9 +1150,9 @@ export const getApiNotificationsRetrieveUrl = (id: number,) => {
   return `/api/notifications/${id}/`
 }
 
-export const apiNotificationsRetrieve = async (id: number, options?: RequestInit): Promise<apiNotificationsRetrieveResponse> => {
+export const notificationsRetrieve = async (id: number, options?: RequestInit): Promise<notificationsRetrieveResponse> => {
   
-  return fetcher<apiNotificationsRetrieveResponse>(getApiNotificationsRetrieveUrl(id),
+  return fetcher<notificationsRetrieveResponse>(getNotificationsRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -1166,19 +1166,19 @@ export const apiNotificationsRetrieve = async (id: number, options?: RequestInit
 /**
  * Mark a single notification as read for the current user.
  */
-export type apiNotificationsReadCreateResponse200 = {
+export type notificationsReadCreateResponse200 = {
   data: Notification
   status: 200
 }
     
-export type apiNotificationsReadCreateResponseSuccess = (apiNotificationsReadCreateResponse200) & {
+export type notificationsReadCreateResponseSuccess = (notificationsReadCreateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiNotificationsReadCreateResponse = (apiNotificationsReadCreateResponseSuccess)
+export type notificationsReadCreateResponse = (notificationsReadCreateResponseSuccess)
 
-export const getApiNotificationsReadCreateUrl = (id: number,) => {
+export const getNotificationsReadCreateUrl = (id: number,) => {
 
 
   
@@ -1186,9 +1186,9 @@ export const getApiNotificationsReadCreateUrl = (id: number,) => {
   return `/api/notifications/${id}/read/`
 }
 
-export const apiNotificationsReadCreate = async (id: number, options?: RequestInit): Promise<apiNotificationsReadCreateResponse> => {
+export const notificationsReadCreate = async (id: number, options?: RequestInit): Promise<notificationsReadCreateResponse> => {
   
-  return fetcher<apiNotificationsReadCreateResponse>(getApiNotificationsReadCreateUrl(id),
+  return fetcher<notificationsReadCreateResponse>(getNotificationsReadCreateUrl(id),
   {      
     ...options,
     method: 'POST'
@@ -1202,19 +1202,19 @@ export const apiNotificationsReadCreate = async (id: number, options?: RequestIn
 /**
  * Mark every unread notification as read for the current user.
  */
-export type apiNotificationsReadAllCreateResponse200 = {
+export type notificationsReadAllCreateResponse200 = {
   data: MarkAllReadResponse
   status: 200
 }
     
-export type apiNotificationsReadAllCreateResponseSuccess = (apiNotificationsReadAllCreateResponse200) & {
+export type notificationsReadAllCreateResponseSuccess = (notificationsReadAllCreateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiNotificationsReadAllCreateResponse = (apiNotificationsReadAllCreateResponseSuccess)
+export type notificationsReadAllCreateResponse = (notificationsReadAllCreateResponseSuccess)
 
-export const getApiNotificationsReadAllCreateUrl = () => {
+export const getNotificationsReadAllCreateUrl = () => {
 
 
   
@@ -1222,9 +1222,9 @@ export const getApiNotificationsReadAllCreateUrl = () => {
   return `/api/notifications/read-all/`
 }
 
-export const apiNotificationsReadAllCreate = async ( options?: RequestInit): Promise<apiNotificationsReadAllCreateResponse> => {
+export const notificationsReadAllCreate = async ( options?: RequestInit): Promise<notificationsReadAllCreateResponse> => {
   
-  return fetcher<apiNotificationsReadAllCreateResponse>(getApiNotificationsReadAllCreateUrl(),
+  return fetcher<notificationsReadAllCreateResponse>(getNotificationsReadAllCreateUrl(),
   {      
     ...options,
     method: 'POST'
@@ -1238,19 +1238,19 @@ export const apiNotificationsReadAllCreate = async ( options?: RequestInit): Pro
 /**
  * Count of unread notifications for the current user.
  */
-export type apiNotificationsUnreadCountRetrieveResponse200 = {
+export type notificationsUnreadCountRetrieveResponse200 = {
   data: UnreadCountResponse
   status: 200
 }
     
-export type apiNotificationsUnreadCountRetrieveResponseSuccess = (apiNotificationsUnreadCountRetrieveResponse200) & {
+export type notificationsUnreadCountRetrieveResponseSuccess = (notificationsUnreadCountRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiNotificationsUnreadCountRetrieveResponse = (apiNotificationsUnreadCountRetrieveResponseSuccess)
+export type notificationsUnreadCountRetrieveResponse = (notificationsUnreadCountRetrieveResponseSuccess)
 
-export const getApiNotificationsUnreadCountRetrieveUrl = () => {
+export const getNotificationsUnreadCountRetrieveUrl = () => {
 
 
   
@@ -1258,9 +1258,9 @@ export const getApiNotificationsUnreadCountRetrieveUrl = () => {
   return `/api/notifications/unread-count/`
 }
 
-export const apiNotificationsUnreadCountRetrieve = async ( options?: RequestInit): Promise<apiNotificationsUnreadCountRetrieveResponse> => {
+export const notificationsUnreadCountRetrieve = async ( options?: RequestInit): Promise<notificationsUnreadCountRetrieveResponse> => {
   
-  return fetcher<apiNotificationsUnreadCountRetrieveResponse>(getApiNotificationsUnreadCountRetrieveUrl(),
+  return fetcher<notificationsUnreadCountRetrieveResponse>(getNotificationsUnreadCountRetrieveUrl(),
   {      
     ...options,
     method: 'GET'
@@ -1318,19 +1318,19 @@ Filtering (django-filter):
                       deceased cases interleaved.
   ?page=N            paginated, PAGE_SIZE=10
  */
-export type apiPersonsListResponse200 = {
+export type personsListResponse200 = {
   data: PaginatedPersonListList
   status: 200
 }
     
-export type apiPersonsListResponseSuccess = (apiPersonsListResponse200) & {
+export type personsListResponseSuccess = (personsListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiPersonsListResponse = (apiPersonsListResponseSuccess)
+export type personsListResponse = (personsListResponseSuccess)
 
-export const getApiPersonsListUrl = (params?: ApiPersonsListParams,) => {
+export const getPersonsListUrl = (params?: PersonsListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -1353,9 +1353,9 @@ export const getApiPersonsListUrl = (params?: ApiPersonsListParams,) => {
   return stringifiedParams.length > 0 ? `/api/persons/?${stringifiedParams}` : `/api/persons/`
 }
 
-export const apiPersonsList = async (params?: ApiPersonsListParams, options?: RequestInit): Promise<apiPersonsListResponse> => {
+export const personsList = async (params?: PersonsListParams, options?: RequestInit): Promise<personsListResponse> => {
   
-  return fetcher<apiPersonsListResponse>(getApiPersonsListUrl(params),
+  return fetcher<personsListResponse>(getPersonsListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -1413,19 +1413,19 @@ Filtering (django-filter):
                       deceased cases interleaved.
   ?page=N            paginated, PAGE_SIZE=10
  */
-export type apiPersonsCreateResponse201 = {
+export type personsCreateResponse201 = {
   data: PersonWrite
   status: 201
 }
     
-export type apiPersonsCreateResponseSuccess = (apiPersonsCreateResponse201) & {
+export type personsCreateResponseSuccess = (personsCreateResponse201) & {
   headers: Headers;
 };
 ;
 
-export type apiPersonsCreateResponse = (apiPersonsCreateResponseSuccess)
+export type personsCreateResponse = (personsCreateResponseSuccess)
 
-export const getApiPersonsCreateUrl = () => {
+export const getPersonsCreateUrl = () => {
 
 
   
@@ -1433,9 +1433,9 @@ export const getApiPersonsCreateUrl = () => {
   return `/api/persons/`
 }
 
-export const apiPersonsCreate = async (personWriteRequest: PersonWriteRequest, options?: RequestInit): Promise<apiPersonsCreateResponse> => {
+export const personsCreate = async (personWriteRequest: PersonWriteRequest, options?: RequestInit): Promise<personsCreateResponse> => {
   
-  return fetcher<apiPersonsCreateResponse>(getApiPersonsCreateUrl(),
+  return fetcher<personsCreateResponse>(getPersonsCreateUrl(),
   {      
     ...options,
     method: 'POST',
@@ -1494,19 +1494,19 @@ Filtering (django-filter):
                       deceased cases interleaved.
   ?page=N            paginated, PAGE_SIZE=10
  */
-export type apiPersonsRetrieveResponse200 = {
+export type personsRetrieveResponse200 = {
   data: PersonDetail
   status: 200
 }
     
-export type apiPersonsRetrieveResponseSuccess = (apiPersonsRetrieveResponse200) & {
+export type personsRetrieveResponseSuccess = (personsRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiPersonsRetrieveResponse = (apiPersonsRetrieveResponseSuccess)
+export type personsRetrieveResponse = (personsRetrieveResponseSuccess)
 
-export const getApiPersonsRetrieveUrl = (id: number,) => {
+export const getPersonsRetrieveUrl = (id: number,) => {
 
 
   
@@ -1514,9 +1514,9 @@ export const getApiPersonsRetrieveUrl = (id: number,) => {
   return `/api/persons/${id}/`
 }
 
-export const apiPersonsRetrieve = async (id: number, options?: RequestInit): Promise<apiPersonsRetrieveResponse> => {
+export const personsRetrieve = async (id: number, options?: RequestInit): Promise<personsRetrieveResponse> => {
   
-  return fetcher<apiPersonsRetrieveResponse>(getApiPersonsRetrieveUrl(id),
+  return fetcher<personsRetrieveResponse>(getPersonsRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -1574,19 +1574,19 @@ Filtering (django-filter):
                       deceased cases interleaved.
   ?page=N            paginated, PAGE_SIZE=10
  */
-export type apiPersonsUpdateResponse200 = {
+export type personsUpdateResponse200 = {
   data: PersonWrite
   status: 200
 }
     
-export type apiPersonsUpdateResponseSuccess = (apiPersonsUpdateResponse200) & {
+export type personsUpdateResponseSuccess = (personsUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiPersonsUpdateResponse = (apiPersonsUpdateResponseSuccess)
+export type personsUpdateResponse = (personsUpdateResponseSuccess)
 
-export const getApiPersonsUpdateUrl = (id: number,) => {
+export const getPersonsUpdateUrl = (id: number,) => {
 
 
   
@@ -1594,10 +1594,10 @@ export const getApiPersonsUpdateUrl = (id: number,) => {
   return `/api/persons/${id}/`
 }
 
-export const apiPersonsUpdate = async (id: number,
-    personWriteRequest: PersonWriteRequest, options?: RequestInit): Promise<apiPersonsUpdateResponse> => {
+export const personsUpdate = async (id: number,
+    personWriteRequest: PersonWriteRequest, options?: RequestInit): Promise<personsUpdateResponse> => {
   
-  return fetcher<apiPersonsUpdateResponse>(getApiPersonsUpdateUrl(id),
+  return fetcher<personsUpdateResponse>(getPersonsUpdateUrl(id),
   {      
     ...options,
     method: 'PUT',
@@ -1656,19 +1656,19 @@ Filtering (django-filter):
                       deceased cases interleaved.
   ?page=N            paginated, PAGE_SIZE=10
  */
-export type apiPersonsPartialUpdateResponse200 = {
+export type personsPartialUpdateResponse200 = {
   data: PersonWrite
   status: 200
 }
     
-export type apiPersonsPartialUpdateResponseSuccess = (apiPersonsPartialUpdateResponse200) & {
+export type personsPartialUpdateResponseSuccess = (personsPartialUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiPersonsPartialUpdateResponse = (apiPersonsPartialUpdateResponseSuccess)
+export type personsPartialUpdateResponse = (personsPartialUpdateResponseSuccess)
 
-export const getApiPersonsPartialUpdateUrl = (id: number,) => {
+export const getPersonsPartialUpdateUrl = (id: number,) => {
 
 
   
@@ -1676,10 +1676,10 @@ export const getApiPersonsPartialUpdateUrl = (id: number,) => {
   return `/api/persons/${id}/`
 }
 
-export const apiPersonsPartialUpdate = async (id: number,
-    patchedPersonWriteRequest: PatchedPersonWriteRequest, options?: RequestInit): Promise<apiPersonsPartialUpdateResponse> => {
+export const personsPartialUpdate = async (id: number,
+    patchedPersonWriteRequest: PatchedPersonWriteRequest, options?: RequestInit): Promise<personsPartialUpdateResponse> => {
   
-  return fetcher<apiPersonsPartialUpdateResponse>(getApiPersonsPartialUpdateUrl(id),
+  return fetcher<personsPartialUpdateResponse>(getPersonsPartialUpdateUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -1738,19 +1738,19 @@ Filtering (django-filter):
                       deceased cases interleaved.
   ?page=N            paginated, PAGE_SIZE=10
  */
-export type apiPersonsDestroyResponse204 = {
+export type personsDestroyResponse204 = {
   data: void
   status: 204
 }
     
-export type apiPersonsDestroyResponseSuccess = (apiPersonsDestroyResponse204) & {
+export type personsDestroyResponseSuccess = (personsDestroyResponse204) & {
   headers: Headers;
 };
 ;
 
-export type apiPersonsDestroyResponse = (apiPersonsDestroyResponseSuccess)
+export type personsDestroyResponse = (personsDestroyResponseSuccess)
 
-export const getApiPersonsDestroyUrl = (id: number,) => {
+export const getPersonsDestroyUrl = (id: number,) => {
 
 
   
@@ -1758,9 +1758,9 @@ export const getApiPersonsDestroyUrl = (id: number,) => {
   return `/api/persons/${id}/`
 }
 
-export const apiPersonsDestroy = async (id: number, options?: RequestInit): Promise<apiPersonsDestroyResponse> => {
+export const personsDestroy = async (id: number, options?: RequestInit): Promise<personsDestroyResponse> => {
   
-  return fetcher<apiPersonsDestroyResponse>(getApiPersonsDestroyUrl(id),
+  return fetcher<personsDestroyResponse>(getPersonsDestroyUrl(id),
   {      
     ...options,
     method: 'DELETE'
@@ -1774,19 +1774,19 @@ export const apiPersonsDestroy = async (id: number, options?: RequestInit): Prom
 /**
  * Top related persons for the given person ID. Heuristic: published persons who share the same country OR at least one category with the target, ranked by shared-category count (descending), then same-country (descending), then most-recently-updated. The target person is excluded. Results are capped at 6.
  */
-export type apiPersonsRelatedRetrieveResponse200 = {
+export type personsRelatedRetrieveResponse200 = {
   data: RelatedPersonsResponse
   status: 200
 }
     
-export type apiPersonsRelatedRetrieveResponseSuccess = (apiPersonsRelatedRetrieveResponse200) & {
+export type personsRelatedRetrieveResponseSuccess = (personsRelatedRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiPersonsRelatedRetrieveResponse = (apiPersonsRelatedRetrieveResponseSuccess)
+export type personsRelatedRetrieveResponse = (personsRelatedRetrieveResponseSuccess)
 
-export const getApiPersonsRelatedRetrieveUrl = (id: number,) => {
+export const getPersonsRelatedRetrieveUrl = (id: number,) => {
 
 
   
@@ -1794,9 +1794,9 @@ export const getApiPersonsRelatedRetrieveUrl = (id: number,) => {
   return `/api/persons/${id}/related/`
 }
 
-export const apiPersonsRelatedRetrieve = async (id: number, options?: RequestInit): Promise<apiPersonsRelatedRetrieveResponse> => {
+export const personsRelatedRetrieve = async (id: number, options?: RequestInit): Promise<personsRelatedRetrieveResponse> => {
   
-  return fetcher<apiPersonsRelatedRetrieveResponse>(getApiPersonsRelatedRetrieveUrl(id),
+  return fetcher<personsRelatedRetrieveResponse>(getPersonsRelatedRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -1810,19 +1810,19 @@ export const apiPersonsRelatedRetrieve = async (id: number, options?: RequestIni
 /**
  * List of countries with case counts. Counts are dynamic — when other filters are present, counts reflect the filtered subset. The `country` filter itself is ignored (the dropdown always shows every country regardless of which is selected).
  */
-export type apiPersonsCountriesListResponse200 = {
+export type personsCountriesListResponse200 = {
   data: PaginatedCountryCountEntryList
   status: 200
 }
     
-export type apiPersonsCountriesListResponseSuccess = (apiPersonsCountriesListResponse200) & {
+export type personsCountriesListResponseSuccess = (personsCountriesListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiPersonsCountriesListResponse = (apiPersonsCountriesListResponseSuccess)
+export type personsCountriesListResponse = (personsCountriesListResponseSuccess)
 
-export const getApiPersonsCountriesListUrl = (params?: ApiPersonsCountriesListParams,) => {
+export const getPersonsCountriesListUrl = (params?: PersonsCountriesListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -1845,9 +1845,9 @@ export const getApiPersonsCountriesListUrl = (params?: ApiPersonsCountriesListPa
   return stringifiedParams.length > 0 ? `/api/persons/countries/?${stringifiedParams}` : `/api/persons/countries/`
 }
 
-export const apiPersonsCountriesList = async (params?: ApiPersonsCountriesListParams, options?: RequestInit): Promise<apiPersonsCountriesListResponse> => {
+export const personsCountriesList = async (params?: PersonsCountriesListParams, options?: RequestInit): Promise<personsCountriesListResponse> => {
   
-  return fetcher<apiPersonsCountriesListResponse>(getApiPersonsCountriesListUrl(params),
+  return fetcher<personsCountriesListResponse>(getPersonsCountriesListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -1861,19 +1861,19 @@ export const apiPersonsCountriesList = async (params?: ApiPersonsCountriesListPa
 /**
  * Aggregate statistics for dashboard.
  */
-export type apiPersonsStatisticsRetrieveResponse200 = {
+export type personsStatisticsRetrieveResponse200 = {
   data: StatisticsResponse
   status: 200
 }
     
-export type apiPersonsStatisticsRetrieveResponseSuccess = (apiPersonsStatisticsRetrieveResponse200) & {
+export type personsStatisticsRetrieveResponseSuccess = (personsStatisticsRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiPersonsStatisticsRetrieveResponse = (apiPersonsStatisticsRetrieveResponseSuccess)
+export type personsStatisticsRetrieveResponse = (personsStatisticsRetrieveResponseSuccess)
 
-export const getApiPersonsStatisticsRetrieveUrl = () => {
+export const getPersonsStatisticsRetrieveUrl = () => {
 
 
   
@@ -1881,9 +1881,9 @@ export const getApiPersonsStatisticsRetrieveUrl = () => {
   return `/api/persons/statistics/`
 }
 
-export const apiPersonsStatisticsRetrieve = async ( options?: RequestInit): Promise<apiPersonsStatisticsRetrieveResponse> => {
+export const personsStatisticsRetrieve = async ( options?: RequestInit): Promise<personsStatisticsRetrieveResponse> => {
   
-  return fetcher<apiPersonsStatisticsRetrieveResponse>(getApiPersonsStatisticsRetrieveUrl(),
+  return fetcher<personsStatisticsRetrieveResponse>(getPersonsStatisticsRetrieveUrl(),
   {      
     ...options,
     method: 'GET'
@@ -1897,19 +1897,19 @@ export const apiPersonsStatisticsRetrieve = async ( options?: RequestInit): Prom
 /**
  * Persons ordered by urgency — most stale first. Excludes `released` and `deceased` status. Limited to 50 rows.
  */
-export type apiPersonsWatchdogListResponse200 = {
+export type personsWatchdogListResponse200 = {
   data: PaginatedPersonListList
   status: 200
 }
     
-export type apiPersonsWatchdogListResponseSuccess = (apiPersonsWatchdogListResponse200) & {
+export type personsWatchdogListResponseSuccess = (personsWatchdogListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiPersonsWatchdogListResponse = (apiPersonsWatchdogListResponseSuccess)
+export type personsWatchdogListResponse = (personsWatchdogListResponseSuccess)
 
-export const getApiPersonsWatchdogListUrl = (params?: ApiPersonsWatchdogListParams,) => {
+export const getPersonsWatchdogListUrl = (params?: PersonsWatchdogListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -1932,9 +1932,9 @@ export const getApiPersonsWatchdogListUrl = (params?: ApiPersonsWatchdogListPara
   return stringifiedParams.length > 0 ? `/api/persons/watchdog/?${stringifiedParams}` : `/api/persons/watchdog/`
 }
 
-export const apiPersonsWatchdogList = async (params?: ApiPersonsWatchdogListParams, options?: RequestInit): Promise<apiPersonsWatchdogListResponse> => {
+export const personsWatchdogList = async (params?: PersonsWatchdogListParams, options?: RequestInit): Promise<personsWatchdogListResponse> => {
   
-  return fetcher<apiPersonsWatchdogListResponse>(getApiPersonsWatchdogListUrl(params),
+  return fetcher<personsWatchdogListResponse>(getPersonsWatchdogListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -1949,19 +1949,19 @@ export const apiPersonsWatchdogList = async (params?: ApiPersonsWatchdogListPara
  * One row per user; we look it up by `me` rather than pk so the
 client never has to know its preference row id.
  */
-export type apiPreferencesListResponse200 = {
+export type preferencesListResponse200 = {
   data: PaginatedUserPreferenceList
   status: 200
 }
     
-export type apiPreferencesListResponseSuccess = (apiPreferencesListResponse200) & {
+export type preferencesListResponseSuccess = (preferencesListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiPreferencesListResponse = (apiPreferencesListResponseSuccess)
+export type preferencesListResponse = (preferencesListResponseSuccess)
 
-export const getApiPreferencesListUrl = (params?: ApiPreferencesListParams,) => {
+export const getPreferencesListUrl = (params?: PreferencesListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -1976,9 +1976,9 @@ export const getApiPreferencesListUrl = (params?: ApiPreferencesListParams,) => 
   return stringifiedParams.length > 0 ? `/api/preferences/?${stringifiedParams}` : `/api/preferences/`
 }
 
-export const apiPreferencesList = async (params?: ApiPreferencesListParams, options?: RequestInit): Promise<apiPreferencesListResponse> => {
+export const preferencesList = async (params?: PreferencesListParams, options?: RequestInit): Promise<preferencesListResponse> => {
   
-  return fetcher<apiPreferencesListResponse>(getApiPreferencesListUrl(params),
+  return fetcher<preferencesListResponse>(getPreferencesListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -1993,19 +1993,19 @@ export const apiPreferencesList = async (params?: ApiPreferencesListParams, opti
  * One row per user; we look it up by `me` rather than pk so the
 client never has to know its preference row id.
  */
-export type apiPreferencesCreateResponse201 = {
+export type preferencesCreateResponse201 = {
   data: UserPreference
   status: 201
 }
     
-export type apiPreferencesCreateResponseSuccess = (apiPreferencesCreateResponse201) & {
+export type preferencesCreateResponseSuccess = (preferencesCreateResponse201) & {
   headers: Headers;
 };
 ;
 
-export type apiPreferencesCreateResponse = (apiPreferencesCreateResponseSuccess)
+export type preferencesCreateResponse = (preferencesCreateResponseSuccess)
 
-export const getApiPreferencesCreateUrl = () => {
+export const getPreferencesCreateUrl = () => {
 
 
   
@@ -2013,9 +2013,9 @@ export const getApiPreferencesCreateUrl = () => {
   return `/api/preferences/`
 }
 
-export const apiPreferencesCreate = async (userPreferenceRequest: UserPreferenceRequest, options?: RequestInit): Promise<apiPreferencesCreateResponse> => {
+export const preferencesCreate = async (userPreferenceRequest: UserPreferenceRequest, options?: RequestInit): Promise<preferencesCreateResponse> => {
   
-  return fetcher<apiPreferencesCreateResponse>(getApiPreferencesCreateUrl(),
+  return fetcher<preferencesCreateResponse>(getPreferencesCreateUrl(),
   {      
     ...options,
     method: 'POST',
@@ -2031,19 +2031,19 @@ export const apiPreferencesCreate = async (userPreferenceRequest: UserPreference
  * One row per user; we look it up by `me` rather than pk so the
 client never has to know its preference row id.
  */
-export type apiPreferencesRetrieveResponse200 = {
+export type preferencesRetrieveResponse200 = {
   data: UserPreference
   status: 200
 }
     
-export type apiPreferencesRetrieveResponseSuccess = (apiPreferencesRetrieveResponse200) & {
+export type preferencesRetrieveResponseSuccess = (preferencesRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiPreferencesRetrieveResponse = (apiPreferencesRetrieveResponseSuccess)
+export type preferencesRetrieveResponse = (preferencesRetrieveResponseSuccess)
 
-export const getApiPreferencesRetrieveUrl = (id: number,) => {
+export const getPreferencesRetrieveUrl = (id: number,) => {
 
 
   
@@ -2051,9 +2051,9 @@ export const getApiPreferencesRetrieveUrl = (id: number,) => {
   return `/api/preferences/${id}/`
 }
 
-export const apiPreferencesRetrieve = async (id: number, options?: RequestInit): Promise<apiPreferencesRetrieveResponse> => {
+export const preferencesRetrieve = async (id: number, options?: RequestInit): Promise<preferencesRetrieveResponse> => {
   
-  return fetcher<apiPreferencesRetrieveResponse>(getApiPreferencesRetrieveUrl(id),
+  return fetcher<preferencesRetrieveResponse>(getPreferencesRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -2068,19 +2068,19 @@ export const apiPreferencesRetrieve = async (id: number, options?: RequestInit):
  * One row per user; we look it up by `me` rather than pk so the
 client never has to know its preference row id.
  */
-export type apiPreferencesUpdateResponse200 = {
+export type preferencesUpdateResponse200 = {
   data: UserPreference
   status: 200
 }
     
-export type apiPreferencesUpdateResponseSuccess = (apiPreferencesUpdateResponse200) & {
+export type preferencesUpdateResponseSuccess = (preferencesUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiPreferencesUpdateResponse = (apiPreferencesUpdateResponseSuccess)
+export type preferencesUpdateResponse = (preferencesUpdateResponseSuccess)
 
-export const getApiPreferencesUpdateUrl = (id: number,) => {
+export const getPreferencesUpdateUrl = (id: number,) => {
 
 
   
@@ -2088,10 +2088,10 @@ export const getApiPreferencesUpdateUrl = (id: number,) => {
   return `/api/preferences/${id}/`
 }
 
-export const apiPreferencesUpdate = async (id: number,
-    userPreferenceRequest: UserPreferenceRequest, options?: RequestInit): Promise<apiPreferencesUpdateResponse> => {
+export const preferencesUpdate = async (id: number,
+    userPreferenceRequest: UserPreferenceRequest, options?: RequestInit): Promise<preferencesUpdateResponse> => {
   
-  return fetcher<apiPreferencesUpdateResponse>(getApiPreferencesUpdateUrl(id),
+  return fetcher<preferencesUpdateResponse>(getPreferencesUpdateUrl(id),
   {      
     ...options,
     method: 'PUT',
@@ -2107,19 +2107,19 @@ export const apiPreferencesUpdate = async (id: number,
  * One row per user; we look it up by `me` rather than pk so the
 client never has to know its preference row id.
  */
-export type apiPreferencesPartialUpdateResponse200 = {
+export type preferencesPartialUpdateResponse200 = {
   data: UserPreference
   status: 200
 }
     
-export type apiPreferencesPartialUpdateResponseSuccess = (apiPreferencesPartialUpdateResponse200) & {
+export type preferencesPartialUpdateResponseSuccess = (preferencesPartialUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiPreferencesPartialUpdateResponse = (apiPreferencesPartialUpdateResponseSuccess)
+export type preferencesPartialUpdateResponse = (preferencesPartialUpdateResponseSuccess)
 
-export const getApiPreferencesPartialUpdateUrl = (id: number,) => {
+export const getPreferencesPartialUpdateUrl = (id: number,) => {
 
 
   
@@ -2127,10 +2127,10 @@ export const getApiPreferencesPartialUpdateUrl = (id: number,) => {
   return `/api/preferences/${id}/`
 }
 
-export const apiPreferencesPartialUpdate = async (id: number,
-    patchedUserPreferenceRequest: PatchedUserPreferenceRequest, options?: RequestInit): Promise<apiPreferencesPartialUpdateResponse> => {
+export const preferencesPartialUpdate = async (id: number,
+    patchedUserPreferenceRequest: PatchedUserPreferenceRequest, options?: RequestInit): Promise<preferencesPartialUpdateResponse> => {
   
-  return fetcher<apiPreferencesPartialUpdateResponse>(getApiPreferencesPartialUpdateUrl(id),
+  return fetcher<preferencesPartialUpdateResponse>(getPreferencesPartialUpdateUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -2146,19 +2146,19 @@ export const apiPreferencesPartialUpdate = async (id: number,
  * One row per user; we look it up by `me` rather than pk so the
 client never has to know its preference row id.
  */
-export type apiPreferencesDestroyResponse204 = {
+export type preferencesDestroyResponse204 = {
   data: void
   status: 204
 }
     
-export type apiPreferencesDestroyResponseSuccess = (apiPreferencesDestroyResponse204) & {
+export type preferencesDestroyResponseSuccess = (preferencesDestroyResponse204) & {
   headers: Headers;
 };
 ;
 
-export type apiPreferencesDestroyResponse = (apiPreferencesDestroyResponseSuccess)
+export type preferencesDestroyResponse = (preferencesDestroyResponseSuccess)
 
-export const getApiPreferencesDestroyUrl = (id: number,) => {
+export const getPreferencesDestroyUrl = (id: number,) => {
 
 
   
@@ -2166,9 +2166,9 @@ export const getApiPreferencesDestroyUrl = (id: number,) => {
   return `/api/preferences/${id}/`
 }
 
-export const apiPreferencesDestroy = async (id: number, options?: RequestInit): Promise<apiPreferencesDestroyResponse> => {
+export const preferencesDestroy = async (id: number, options?: RequestInit): Promise<preferencesDestroyResponse> => {
   
-  return fetcher<apiPreferencesDestroyResponse>(getApiPreferencesDestroyUrl(id),
+  return fetcher<preferencesDestroyResponse>(getPreferencesDestroyUrl(id),
   {      
     ...options,
     method: 'DELETE'
@@ -2215,19 +2215,19 @@ family links at all, revert permission_classes back to
 `[permissions.IsAuthenticated, IsVolunteer]` and keep the
 queryset filter (a no-op for authed viewers).
  */
-export type apiRelationshipsListResponse200 = {
+export type relationshipsListResponse200 = {
   data: PaginatedFamilyRelationshipList
   status: 200
 }
     
-export type apiRelationshipsListResponseSuccess = (apiRelationshipsListResponse200) & {
+export type relationshipsListResponseSuccess = (relationshipsListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiRelationshipsListResponse = (apiRelationshipsListResponseSuccess)
+export type relationshipsListResponse = (relationshipsListResponseSuccess)
 
-export const getApiRelationshipsListUrl = (params?: ApiRelationshipsListParams,) => {
+export const getRelationshipsListUrl = (params?: RelationshipsListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -2242,9 +2242,9 @@ export const getApiRelationshipsListUrl = (params?: ApiRelationshipsListParams,)
   return stringifiedParams.length > 0 ? `/api/relationships/?${stringifiedParams}` : `/api/relationships/`
 }
 
-export const apiRelationshipsList = async (params?: ApiRelationshipsListParams, options?: RequestInit): Promise<apiRelationshipsListResponse> => {
+export const relationshipsList = async (params?: RelationshipsListParams, options?: RequestInit): Promise<relationshipsListResponse> => {
   
-  return fetcher<apiRelationshipsListResponse>(getApiRelationshipsListUrl(params),
+  return fetcher<relationshipsListResponse>(getRelationshipsListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -2291,19 +2291,19 @@ family links at all, revert permission_classes back to
 `[permissions.IsAuthenticated, IsVolunteer]` and keep the
 queryset filter (a no-op for authed viewers).
  */
-export type apiRelationshipsCreateResponse201 = {
+export type relationshipsCreateResponse201 = {
   data: FamilyRelationship
   status: 201
 }
     
-export type apiRelationshipsCreateResponseSuccess = (apiRelationshipsCreateResponse201) & {
+export type relationshipsCreateResponseSuccess = (relationshipsCreateResponse201) & {
   headers: Headers;
 };
 ;
 
-export type apiRelationshipsCreateResponse = (apiRelationshipsCreateResponseSuccess)
+export type relationshipsCreateResponse = (relationshipsCreateResponseSuccess)
 
-export const getApiRelationshipsCreateUrl = () => {
+export const getRelationshipsCreateUrl = () => {
 
 
   
@@ -2311,9 +2311,9 @@ export const getApiRelationshipsCreateUrl = () => {
   return `/api/relationships/`
 }
 
-export const apiRelationshipsCreate = async (familyRelationshipRequest: FamilyRelationshipRequest, options?: RequestInit): Promise<apiRelationshipsCreateResponse> => {
+export const relationshipsCreate = async (familyRelationshipRequest: FamilyRelationshipRequest, options?: RequestInit): Promise<relationshipsCreateResponse> => {
   
-  return fetcher<apiRelationshipsCreateResponse>(getApiRelationshipsCreateUrl(),
+  return fetcher<relationshipsCreateResponse>(getRelationshipsCreateUrl(),
   {      
     ...options,
     method: 'POST',
@@ -2361,19 +2361,19 @@ family links at all, revert permission_classes back to
 `[permissions.IsAuthenticated, IsVolunteer]` and keep the
 queryset filter (a no-op for authed viewers).
  */
-export type apiRelationshipsRetrieveResponse200 = {
+export type relationshipsRetrieveResponse200 = {
   data: FamilyRelationship
   status: 200
 }
     
-export type apiRelationshipsRetrieveResponseSuccess = (apiRelationshipsRetrieveResponse200) & {
+export type relationshipsRetrieveResponseSuccess = (relationshipsRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiRelationshipsRetrieveResponse = (apiRelationshipsRetrieveResponseSuccess)
+export type relationshipsRetrieveResponse = (relationshipsRetrieveResponseSuccess)
 
-export const getApiRelationshipsRetrieveUrl = (id: number,) => {
+export const getRelationshipsRetrieveUrl = (id: number,) => {
 
 
   
@@ -2381,9 +2381,9 @@ export const getApiRelationshipsRetrieveUrl = (id: number,) => {
   return `/api/relationships/${id}/`
 }
 
-export const apiRelationshipsRetrieve = async (id: number, options?: RequestInit): Promise<apiRelationshipsRetrieveResponse> => {
+export const relationshipsRetrieve = async (id: number, options?: RequestInit): Promise<relationshipsRetrieveResponse> => {
   
-  return fetcher<apiRelationshipsRetrieveResponse>(getApiRelationshipsRetrieveUrl(id),
+  return fetcher<relationshipsRetrieveResponse>(getRelationshipsRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -2430,19 +2430,19 @@ family links at all, revert permission_classes back to
 `[permissions.IsAuthenticated, IsVolunteer]` and keep the
 queryset filter (a no-op for authed viewers).
  */
-export type apiRelationshipsUpdateResponse200 = {
+export type relationshipsUpdateResponse200 = {
   data: FamilyRelationship
   status: 200
 }
     
-export type apiRelationshipsUpdateResponseSuccess = (apiRelationshipsUpdateResponse200) & {
+export type relationshipsUpdateResponseSuccess = (relationshipsUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiRelationshipsUpdateResponse = (apiRelationshipsUpdateResponseSuccess)
+export type relationshipsUpdateResponse = (relationshipsUpdateResponseSuccess)
 
-export const getApiRelationshipsUpdateUrl = (id: number,) => {
+export const getRelationshipsUpdateUrl = (id: number,) => {
 
 
   
@@ -2450,10 +2450,10 @@ export const getApiRelationshipsUpdateUrl = (id: number,) => {
   return `/api/relationships/${id}/`
 }
 
-export const apiRelationshipsUpdate = async (id: number,
-    familyRelationshipRequest: FamilyRelationshipRequest, options?: RequestInit): Promise<apiRelationshipsUpdateResponse> => {
+export const relationshipsUpdate = async (id: number,
+    familyRelationshipRequest: FamilyRelationshipRequest, options?: RequestInit): Promise<relationshipsUpdateResponse> => {
   
-  return fetcher<apiRelationshipsUpdateResponse>(getApiRelationshipsUpdateUrl(id),
+  return fetcher<relationshipsUpdateResponse>(getRelationshipsUpdateUrl(id),
   {      
     ...options,
     method: 'PUT',
@@ -2501,19 +2501,19 @@ family links at all, revert permission_classes back to
 `[permissions.IsAuthenticated, IsVolunteer]` and keep the
 queryset filter (a no-op for authed viewers).
  */
-export type apiRelationshipsPartialUpdateResponse200 = {
+export type relationshipsPartialUpdateResponse200 = {
   data: FamilyRelationship
   status: 200
 }
     
-export type apiRelationshipsPartialUpdateResponseSuccess = (apiRelationshipsPartialUpdateResponse200) & {
+export type relationshipsPartialUpdateResponseSuccess = (relationshipsPartialUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiRelationshipsPartialUpdateResponse = (apiRelationshipsPartialUpdateResponseSuccess)
+export type relationshipsPartialUpdateResponse = (relationshipsPartialUpdateResponseSuccess)
 
-export const getApiRelationshipsPartialUpdateUrl = (id: number,) => {
+export const getRelationshipsPartialUpdateUrl = (id: number,) => {
 
 
   
@@ -2521,10 +2521,10 @@ export const getApiRelationshipsPartialUpdateUrl = (id: number,) => {
   return `/api/relationships/${id}/`
 }
 
-export const apiRelationshipsPartialUpdate = async (id: number,
-    patchedFamilyRelationshipRequest: PatchedFamilyRelationshipRequest, options?: RequestInit): Promise<apiRelationshipsPartialUpdateResponse> => {
+export const relationshipsPartialUpdate = async (id: number,
+    patchedFamilyRelationshipRequest: PatchedFamilyRelationshipRequest, options?: RequestInit): Promise<relationshipsPartialUpdateResponse> => {
   
-  return fetcher<apiRelationshipsPartialUpdateResponse>(getApiRelationshipsPartialUpdateUrl(id),
+  return fetcher<relationshipsPartialUpdateResponse>(getRelationshipsPartialUpdateUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -2572,19 +2572,19 @@ family links at all, revert permission_classes back to
 `[permissions.IsAuthenticated, IsVolunteer]` and keep the
 queryset filter (a no-op for authed viewers).
  */
-export type apiRelationshipsDestroyResponse204 = {
+export type relationshipsDestroyResponse204 = {
   data: void
   status: 204
 }
     
-export type apiRelationshipsDestroyResponseSuccess = (apiRelationshipsDestroyResponse204) & {
+export type relationshipsDestroyResponseSuccess = (relationshipsDestroyResponse204) & {
   headers: Headers;
 };
 ;
 
-export type apiRelationshipsDestroyResponse = (apiRelationshipsDestroyResponseSuccess)
+export type relationshipsDestroyResponse = (relationshipsDestroyResponseSuccess)
 
-export const getApiRelationshipsDestroyUrl = (id: number,) => {
+export const getRelationshipsDestroyUrl = (id: number,) => {
 
 
   
@@ -2592,9 +2592,9 @@ export const getApiRelationshipsDestroyUrl = (id: number,) => {
   return `/api/relationships/${id}/`
 }
 
-export const apiRelationshipsDestroy = async (id: number, options?: RequestInit): Promise<apiRelationshipsDestroyResponse> => {
+export const relationshipsDestroy = async (id: number, options?: RequestInit): Promise<relationshipsDestroyResponse> => {
   
-  return fetcher<apiRelationshipsDestroyResponse>(getApiRelationshipsDestroyUrl(id),
+  return fetcher<relationshipsDestroyResponse>(getRelationshipsDestroyUrl(id),
   {      
     ...options,
     method: 'DELETE'
@@ -2629,19 +2629,19 @@ actor, the changed field list, and the request IP. Matches the
 privacy model in CLAUDE.md (reports are the canonical narrative and
 we want a paper trail of every correction).
  */
-export type apiReportsListResponse200 = {
+export type reportsListResponse200 = {
   data: PaginatedReportList
   status: 200
 }
     
-export type apiReportsListResponseSuccess = (apiReportsListResponse200) & {
+export type reportsListResponseSuccess = (reportsListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiReportsListResponse = (apiReportsListResponseSuccess)
+export type reportsListResponse = (reportsListResponseSuccess)
 
-export const getApiReportsListUrl = (params?: ApiReportsListParams,) => {
+export const getReportsListUrl = (params?: ReportsListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -2656,9 +2656,9 @@ export const getApiReportsListUrl = (params?: ApiReportsListParams,) => {
   return stringifiedParams.length > 0 ? `/api/reports/?${stringifiedParams}` : `/api/reports/`
 }
 
-export const apiReportsList = async (params?: ApiReportsListParams, options?: RequestInit): Promise<apiReportsListResponse> => {
+export const reportsList = async (params?: ReportsListParams, options?: RequestInit): Promise<reportsListResponse> => {
   
-  return fetcher<apiReportsListResponse>(getApiReportsListUrl(params),
+  return fetcher<reportsListResponse>(getReportsListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -2693,19 +2693,19 @@ actor, the changed field list, and the request IP. Matches the
 privacy model in CLAUDE.md (reports are the canonical narrative and
 we want a paper trail of every correction).
  */
-export type apiReportsCreateResponse201 = {
+export type reportsCreateResponse201 = {
   data: Report
   status: 201
 }
     
-export type apiReportsCreateResponseSuccess = (apiReportsCreateResponse201) & {
+export type reportsCreateResponseSuccess = (reportsCreateResponse201) & {
   headers: Headers;
 };
 ;
 
-export type apiReportsCreateResponse = (apiReportsCreateResponseSuccess)
+export type reportsCreateResponse = (reportsCreateResponseSuccess)
 
-export const getApiReportsCreateUrl = () => {
+export const getReportsCreateUrl = () => {
 
 
   
@@ -2713,9 +2713,9 @@ export const getApiReportsCreateUrl = () => {
   return `/api/reports/`
 }
 
-export const apiReportsCreate = async (reportRequest: ReportRequest, options?: RequestInit): Promise<apiReportsCreateResponse> => {
+export const reportsCreate = async (reportRequest: ReportRequest, options?: RequestInit): Promise<reportsCreateResponse> => {
   
-  return fetcher<apiReportsCreateResponse>(getApiReportsCreateUrl(),
+  return fetcher<reportsCreateResponse>(getReportsCreateUrl(),
   {      
     ...options,
     method: 'POST',
@@ -2751,19 +2751,19 @@ actor, the changed field list, and the request IP. Matches the
 privacy model in CLAUDE.md (reports are the canonical narrative and
 we want a paper trail of every correction).
  */
-export type apiReportsRetrieveResponse200 = {
+export type reportsRetrieveResponse200 = {
   data: Report
   status: 200
 }
     
-export type apiReportsRetrieveResponseSuccess = (apiReportsRetrieveResponse200) & {
+export type reportsRetrieveResponseSuccess = (reportsRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiReportsRetrieveResponse = (apiReportsRetrieveResponseSuccess)
+export type reportsRetrieveResponse = (reportsRetrieveResponseSuccess)
 
-export const getApiReportsRetrieveUrl = (id: number,) => {
+export const getReportsRetrieveUrl = (id: number,) => {
 
 
   
@@ -2771,9 +2771,9 @@ export const getApiReportsRetrieveUrl = (id: number,) => {
   return `/api/reports/${id}/`
 }
 
-export const apiReportsRetrieve = async (id: number, options?: RequestInit): Promise<apiReportsRetrieveResponse> => {
+export const reportsRetrieve = async (id: number, options?: RequestInit): Promise<reportsRetrieveResponse> => {
   
-  return fetcher<apiReportsRetrieveResponse>(getApiReportsRetrieveUrl(id),
+  return fetcher<reportsRetrieveResponse>(getReportsRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -2808,19 +2808,19 @@ actor, the changed field list, and the request IP. Matches the
 privacy model in CLAUDE.md (reports are the canonical narrative and
 we want a paper trail of every correction).
  */
-export type apiReportsUpdateResponse200 = {
+export type reportsUpdateResponse200 = {
   data: Report
   status: 200
 }
     
-export type apiReportsUpdateResponseSuccess = (apiReportsUpdateResponse200) & {
+export type reportsUpdateResponseSuccess = (reportsUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiReportsUpdateResponse = (apiReportsUpdateResponseSuccess)
+export type reportsUpdateResponse = (reportsUpdateResponseSuccess)
 
-export const getApiReportsUpdateUrl = (id: number,) => {
+export const getReportsUpdateUrl = (id: number,) => {
 
 
   
@@ -2828,10 +2828,10 @@ export const getApiReportsUpdateUrl = (id: number,) => {
   return `/api/reports/${id}/`
 }
 
-export const apiReportsUpdate = async (id: number,
-    reportRequest: ReportRequest, options?: RequestInit): Promise<apiReportsUpdateResponse> => {
+export const reportsUpdate = async (id: number,
+    reportRequest: ReportRequest, options?: RequestInit): Promise<reportsUpdateResponse> => {
   
-  return fetcher<apiReportsUpdateResponse>(getApiReportsUpdateUrl(id),
+  return fetcher<reportsUpdateResponse>(getReportsUpdateUrl(id),
   {      
     ...options,
     method: 'PUT',
@@ -2867,19 +2867,19 @@ actor, the changed field list, and the request IP. Matches the
 privacy model in CLAUDE.md (reports are the canonical narrative and
 we want a paper trail of every correction).
  */
-export type apiReportsPartialUpdateResponse200 = {
+export type reportsPartialUpdateResponse200 = {
   data: Report
   status: 200
 }
     
-export type apiReportsPartialUpdateResponseSuccess = (apiReportsPartialUpdateResponse200) & {
+export type reportsPartialUpdateResponseSuccess = (reportsPartialUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiReportsPartialUpdateResponse = (apiReportsPartialUpdateResponseSuccess)
+export type reportsPartialUpdateResponse = (reportsPartialUpdateResponseSuccess)
 
-export const getApiReportsPartialUpdateUrl = (id: number,) => {
+export const getReportsPartialUpdateUrl = (id: number,) => {
 
 
   
@@ -2887,10 +2887,10 @@ export const getApiReportsPartialUpdateUrl = (id: number,) => {
   return `/api/reports/${id}/`
 }
 
-export const apiReportsPartialUpdate = async (id: number,
-    patchedReportRequest: PatchedReportRequest, options?: RequestInit): Promise<apiReportsPartialUpdateResponse> => {
+export const reportsPartialUpdate = async (id: number,
+    patchedReportRequest: PatchedReportRequest, options?: RequestInit): Promise<reportsPartialUpdateResponse> => {
   
-  return fetcher<apiReportsPartialUpdateResponse>(getApiReportsPartialUpdateUrl(id),
+  return fetcher<reportsPartialUpdateResponse>(getReportsPartialUpdateUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -2926,19 +2926,19 @@ actor, the changed field list, and the request IP. Matches the
 privacy model in CLAUDE.md (reports are the canonical narrative and
 we want a paper trail of every correction).
  */
-export type apiReportsDestroyResponse204 = {
+export type reportsDestroyResponse204 = {
   data: void
   status: 204
 }
     
-export type apiReportsDestroyResponseSuccess = (apiReportsDestroyResponse204) & {
+export type reportsDestroyResponseSuccess = (reportsDestroyResponse204) & {
   headers: Headers;
 };
 ;
 
-export type apiReportsDestroyResponse = (apiReportsDestroyResponseSuccess)
+export type reportsDestroyResponse = (reportsDestroyResponseSuccess)
 
-export const getApiReportsDestroyUrl = (id: number,) => {
+export const getReportsDestroyUrl = (id: number,) => {
 
 
   
@@ -2946,9 +2946,9 @@ export const getApiReportsDestroyUrl = (id: number,) => {
   return `/api/reports/${id}/`
 }
 
-export const apiReportsDestroy = async (id: number, options?: RequestInit): Promise<apiReportsDestroyResponse> => {
+export const reportsDestroy = async (id: number, options?: RequestInit): Promise<reportsDestroyResponse> => {
   
-  return fetcher<apiReportsDestroyResponse>(getApiReportsDestroyUrl(id),
+  return fetcher<reportsDestroyResponse>(getReportsDestroyUrl(id),
   {      
     ...options,
     method: 'DELETE'
@@ -2972,19 +2972,19 @@ an existing source requires being the source's report author,
 Advocate, or staff (mirrors Report authorship gate). Reads on
 private sources are gated the same way Report reads are.
  */
-export type apiSourcesListResponse200 = {
+export type sourcesListResponse200 = {
   data: PaginatedSourceList
   status: 200
 }
     
-export type apiSourcesListResponseSuccess = (apiSourcesListResponse200) & {
+export type sourcesListResponseSuccess = (sourcesListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiSourcesListResponse = (apiSourcesListResponseSuccess)
+export type sourcesListResponse = (sourcesListResponseSuccess)
 
-export const getApiSourcesListUrl = (params?: ApiSourcesListParams,) => {
+export const getSourcesListUrl = (params?: SourcesListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -2999,9 +2999,9 @@ export const getApiSourcesListUrl = (params?: ApiSourcesListParams,) => {
   return stringifiedParams.length > 0 ? `/api/sources/?${stringifiedParams}` : `/api/sources/`
 }
 
-export const apiSourcesList = async (params?: ApiSourcesListParams, options?: RequestInit): Promise<apiSourcesListResponse> => {
+export const sourcesList = async (params?: SourcesListParams, options?: RequestInit): Promise<sourcesListResponse> => {
   
-  return fetcher<apiSourcesListResponse>(getApiSourcesListUrl(params),
+  return fetcher<sourcesListResponse>(getSourcesListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -3025,19 +3025,19 @@ an existing source requires being the source's report author,
 Advocate, or staff (mirrors Report authorship gate). Reads on
 private sources are gated the same way Report reads are.
  */
-export type apiSourcesCreateResponse201 = {
+export type sourcesCreateResponse201 = {
   data: Source
   status: 201
 }
     
-export type apiSourcesCreateResponseSuccess = (apiSourcesCreateResponse201) & {
+export type sourcesCreateResponseSuccess = (sourcesCreateResponse201) & {
   headers: Headers;
 };
 ;
 
-export type apiSourcesCreateResponse = (apiSourcesCreateResponseSuccess)
+export type sourcesCreateResponse = (sourcesCreateResponseSuccess)
 
-export const getApiSourcesCreateUrl = () => {
+export const getSourcesCreateUrl = () => {
 
 
   
@@ -3045,9 +3045,9 @@ export const getApiSourcesCreateUrl = () => {
   return `/api/sources/`
 }
 
-export const apiSourcesCreate = async (sourceRequest: SourceRequest, options?: RequestInit): Promise<apiSourcesCreateResponse> => {
+export const sourcesCreate = async (sourceRequest: SourceRequest, options?: RequestInit): Promise<sourcesCreateResponse> => {
   
-  return fetcher<apiSourcesCreateResponse>(getApiSourcesCreateUrl(),
+  return fetcher<sourcesCreateResponse>(getSourcesCreateUrl(),
   {      
     ...options,
     method: 'POST',
@@ -3072,19 +3072,19 @@ an existing source requires being the source's report author,
 Advocate, or staff (mirrors Report authorship gate). Reads on
 private sources are gated the same way Report reads are.
  */
-export type apiSourcesRetrieveResponse200 = {
+export type sourcesRetrieveResponse200 = {
   data: Source
   status: 200
 }
     
-export type apiSourcesRetrieveResponseSuccess = (apiSourcesRetrieveResponse200) & {
+export type sourcesRetrieveResponseSuccess = (sourcesRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiSourcesRetrieveResponse = (apiSourcesRetrieveResponseSuccess)
+export type sourcesRetrieveResponse = (sourcesRetrieveResponseSuccess)
 
-export const getApiSourcesRetrieveUrl = (id: number,) => {
+export const getSourcesRetrieveUrl = (id: number,) => {
 
 
   
@@ -3092,9 +3092,9 @@ export const getApiSourcesRetrieveUrl = (id: number,) => {
   return `/api/sources/${id}/`
 }
 
-export const apiSourcesRetrieve = async (id: number, options?: RequestInit): Promise<apiSourcesRetrieveResponse> => {
+export const sourcesRetrieve = async (id: number, options?: RequestInit): Promise<sourcesRetrieveResponse> => {
   
-  return fetcher<apiSourcesRetrieveResponse>(getApiSourcesRetrieveUrl(id),
+  return fetcher<sourcesRetrieveResponse>(getSourcesRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -3118,19 +3118,19 @@ an existing source requires being the source's report author,
 Advocate, or staff (mirrors Report authorship gate). Reads on
 private sources are gated the same way Report reads are.
  */
-export type apiSourcesUpdateResponse200 = {
+export type sourcesUpdateResponse200 = {
   data: Source
   status: 200
 }
     
-export type apiSourcesUpdateResponseSuccess = (apiSourcesUpdateResponse200) & {
+export type sourcesUpdateResponseSuccess = (sourcesUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiSourcesUpdateResponse = (apiSourcesUpdateResponseSuccess)
+export type sourcesUpdateResponse = (sourcesUpdateResponseSuccess)
 
-export const getApiSourcesUpdateUrl = (id: number,) => {
+export const getSourcesUpdateUrl = (id: number,) => {
 
 
   
@@ -3138,10 +3138,10 @@ export const getApiSourcesUpdateUrl = (id: number,) => {
   return `/api/sources/${id}/`
 }
 
-export const apiSourcesUpdate = async (id: number,
-    sourceRequest: SourceRequest, options?: RequestInit): Promise<apiSourcesUpdateResponse> => {
+export const sourcesUpdate = async (id: number,
+    sourceRequest: SourceRequest, options?: RequestInit): Promise<sourcesUpdateResponse> => {
   
-  return fetcher<apiSourcesUpdateResponse>(getApiSourcesUpdateUrl(id),
+  return fetcher<sourcesUpdateResponse>(getSourcesUpdateUrl(id),
   {      
     ...options,
     method: 'PUT',
@@ -3166,19 +3166,19 @@ an existing source requires being the source's report author,
 Advocate, or staff (mirrors Report authorship gate). Reads on
 private sources are gated the same way Report reads are.
  */
-export type apiSourcesPartialUpdateResponse200 = {
+export type sourcesPartialUpdateResponse200 = {
   data: Source
   status: 200
 }
     
-export type apiSourcesPartialUpdateResponseSuccess = (apiSourcesPartialUpdateResponse200) & {
+export type sourcesPartialUpdateResponseSuccess = (sourcesPartialUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiSourcesPartialUpdateResponse = (apiSourcesPartialUpdateResponseSuccess)
+export type sourcesPartialUpdateResponse = (sourcesPartialUpdateResponseSuccess)
 
-export const getApiSourcesPartialUpdateUrl = (id: number,) => {
+export const getSourcesPartialUpdateUrl = (id: number,) => {
 
 
   
@@ -3186,10 +3186,10 @@ export const getApiSourcesPartialUpdateUrl = (id: number,) => {
   return `/api/sources/${id}/`
 }
 
-export const apiSourcesPartialUpdate = async (id: number,
-    patchedSourceRequest: PatchedSourceRequest, options?: RequestInit): Promise<apiSourcesPartialUpdateResponse> => {
+export const sourcesPartialUpdate = async (id: number,
+    patchedSourceRequest: PatchedSourceRequest, options?: RequestInit): Promise<sourcesPartialUpdateResponse> => {
   
-  return fetcher<apiSourcesPartialUpdateResponse>(getApiSourcesPartialUpdateUrl(id),
+  return fetcher<sourcesPartialUpdateResponse>(getSourcesPartialUpdateUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -3214,19 +3214,19 @@ an existing source requires being the source's report author,
 Advocate, or staff (mirrors Report authorship gate). Reads on
 private sources are gated the same way Report reads are.
  */
-export type apiSourcesDestroyResponse204 = {
+export type sourcesDestroyResponse204 = {
   data: void
   status: 204
 }
     
-export type apiSourcesDestroyResponseSuccess = (apiSourcesDestroyResponse204) & {
+export type sourcesDestroyResponseSuccess = (sourcesDestroyResponse204) & {
   headers: Headers;
 };
 ;
 
-export type apiSourcesDestroyResponse = (apiSourcesDestroyResponseSuccess)
+export type sourcesDestroyResponse = (sourcesDestroyResponseSuccess)
 
-export const getApiSourcesDestroyUrl = (id: number,) => {
+export const getSourcesDestroyUrl = (id: number,) => {
 
 
   
@@ -3234,9 +3234,9 @@ export const getApiSourcesDestroyUrl = (id: number,) => {
   return `/api/sources/${id}/`
 }
 
-export const apiSourcesDestroy = async (id: number, options?: RequestInit): Promise<apiSourcesDestroyResponse> => {
+export const sourcesDestroy = async (id: number, options?: RequestInit): Promise<sourcesDestroyResponse> => {
   
-  return fetcher<apiSourcesDestroyResponse>(getApiSourcesDestroyUrl(id),
+  return fetcher<sourcesDestroyResponse>(getSourcesDestroyUrl(id),
   {      
     ...options,
     method: 'DELETE'
@@ -3256,19 +3256,19 @@ Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
 "server controls metadata" does, and creating a tag shouldn't be
 free for any random authenticated user).
  */
-export type apiTestimonialTagsListResponse200 = {
+export type testimonialTagsListResponse200 = {
   data: PaginatedTestimonialTagList
   status: 200
 }
     
-export type apiTestimonialTagsListResponseSuccess = (apiTestimonialTagsListResponse200) & {
+export type testimonialTagsListResponseSuccess = (testimonialTagsListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialTagsListResponse = (apiTestimonialTagsListResponseSuccess)
+export type testimonialTagsListResponse = (testimonialTagsListResponseSuccess)
 
-export const getApiTestimonialTagsListUrl = (params?: ApiTestimonialTagsListParams,) => {
+export const getTestimonialTagsListUrl = (params?: TestimonialTagsListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -3283,9 +3283,9 @@ export const getApiTestimonialTagsListUrl = (params?: ApiTestimonialTagsListPara
   return stringifiedParams.length > 0 ? `/api/testimonial-tags/?${stringifiedParams}` : `/api/testimonial-tags/`
 }
 
-export const apiTestimonialTagsList = async (params?: ApiTestimonialTagsListParams, options?: RequestInit): Promise<apiTestimonialTagsListResponse> => {
+export const testimonialTagsList = async (params?: TestimonialTagsListParams, options?: RequestInit): Promise<testimonialTagsListResponse> => {
   
-  return fetcher<apiTestimonialTagsListResponse>(getApiTestimonialTagsListUrl(params),
+  return fetcher<testimonialTagsListResponse>(getTestimonialTagsListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -3305,19 +3305,19 @@ Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
 "server controls metadata" does, and creating a tag shouldn't be
 free for any random authenticated user).
  */
-export type apiTestimonialTagsCreateResponse201 = {
+export type testimonialTagsCreateResponse201 = {
   data: TestimonialTag
   status: 201
 }
     
-export type apiTestimonialTagsCreateResponseSuccess = (apiTestimonialTagsCreateResponse201) & {
+export type testimonialTagsCreateResponseSuccess = (testimonialTagsCreateResponse201) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialTagsCreateResponse = (apiTestimonialTagsCreateResponseSuccess)
+export type testimonialTagsCreateResponse = (testimonialTagsCreateResponseSuccess)
 
-export const getApiTestimonialTagsCreateUrl = () => {
+export const getTestimonialTagsCreateUrl = () => {
 
 
   
@@ -3325,9 +3325,9 @@ export const getApiTestimonialTagsCreateUrl = () => {
   return `/api/testimonial-tags/`
 }
 
-export const apiTestimonialTagsCreate = async (testimonialTagRequest: TestimonialTagRequest, options?: RequestInit): Promise<apiTestimonialTagsCreateResponse> => {
+export const testimonialTagsCreate = async (testimonialTagRequest: TestimonialTagRequest, options?: RequestInit): Promise<testimonialTagsCreateResponse> => {
   
-  return fetcher<apiTestimonialTagsCreateResponse>(getApiTestimonialTagsCreateUrl(),
+  return fetcher<testimonialTagsCreateResponse>(getTestimonialTagsCreateUrl(),
   {      
     ...options,
     method: 'POST',
@@ -3348,19 +3348,19 @@ Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
 "server controls metadata" does, and creating a tag shouldn't be
 free for any random authenticated user).
  */
-export type apiTestimonialTagsRetrieveResponse200 = {
+export type testimonialTagsRetrieveResponse200 = {
   data: TestimonialTag
   status: 200
 }
     
-export type apiTestimonialTagsRetrieveResponseSuccess = (apiTestimonialTagsRetrieveResponse200) & {
+export type testimonialTagsRetrieveResponseSuccess = (testimonialTagsRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialTagsRetrieveResponse = (apiTestimonialTagsRetrieveResponseSuccess)
+export type testimonialTagsRetrieveResponse = (testimonialTagsRetrieveResponseSuccess)
 
-export const getApiTestimonialTagsRetrieveUrl = (id: number,) => {
+export const getTestimonialTagsRetrieveUrl = (id: number,) => {
 
 
   
@@ -3368,9 +3368,9 @@ export const getApiTestimonialTagsRetrieveUrl = (id: number,) => {
   return `/api/testimonial-tags/${id}/`
 }
 
-export const apiTestimonialTagsRetrieve = async (id: number, options?: RequestInit): Promise<apiTestimonialTagsRetrieveResponse> => {
+export const testimonialTagsRetrieve = async (id: number, options?: RequestInit): Promise<testimonialTagsRetrieveResponse> => {
   
-  return fetcher<apiTestimonialTagsRetrieveResponse>(getApiTestimonialTagsRetrieveUrl(id),
+  return fetcher<testimonialTagsRetrieveResponse>(getTestimonialTagsRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -3390,19 +3390,19 @@ Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
 "server controls metadata" does, and creating a tag shouldn't be
 free for any random authenticated user).
  */
-export type apiTestimonialTagsUpdateResponse200 = {
+export type testimonialTagsUpdateResponse200 = {
   data: TestimonialTag
   status: 200
 }
     
-export type apiTestimonialTagsUpdateResponseSuccess = (apiTestimonialTagsUpdateResponse200) & {
+export type testimonialTagsUpdateResponseSuccess = (testimonialTagsUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialTagsUpdateResponse = (apiTestimonialTagsUpdateResponseSuccess)
+export type testimonialTagsUpdateResponse = (testimonialTagsUpdateResponseSuccess)
 
-export const getApiTestimonialTagsUpdateUrl = (id: number,) => {
+export const getTestimonialTagsUpdateUrl = (id: number,) => {
 
 
   
@@ -3410,10 +3410,10 @@ export const getApiTestimonialTagsUpdateUrl = (id: number,) => {
   return `/api/testimonial-tags/${id}/`
 }
 
-export const apiTestimonialTagsUpdate = async (id: number,
-    testimonialTagRequest: TestimonialTagRequest, options?: RequestInit): Promise<apiTestimonialTagsUpdateResponse> => {
+export const testimonialTagsUpdate = async (id: number,
+    testimonialTagRequest: TestimonialTagRequest, options?: RequestInit): Promise<testimonialTagsUpdateResponse> => {
   
-  return fetcher<apiTestimonialTagsUpdateResponse>(getApiTestimonialTagsUpdateUrl(id),
+  return fetcher<testimonialTagsUpdateResponse>(getTestimonialTagsUpdateUrl(id),
   {      
     ...options,
     method: 'PUT',
@@ -3434,19 +3434,19 @@ Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
 "server controls metadata" does, and creating a tag shouldn't be
 free for any random authenticated user).
  */
-export type apiTestimonialTagsPartialUpdateResponse200 = {
+export type testimonialTagsPartialUpdateResponse200 = {
   data: TestimonialTag
   status: 200
 }
     
-export type apiTestimonialTagsPartialUpdateResponseSuccess = (apiTestimonialTagsPartialUpdateResponse200) & {
+export type testimonialTagsPartialUpdateResponseSuccess = (testimonialTagsPartialUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialTagsPartialUpdateResponse = (apiTestimonialTagsPartialUpdateResponseSuccess)
+export type testimonialTagsPartialUpdateResponse = (testimonialTagsPartialUpdateResponseSuccess)
 
-export const getApiTestimonialTagsPartialUpdateUrl = (id: number,) => {
+export const getTestimonialTagsPartialUpdateUrl = (id: number,) => {
 
 
   
@@ -3454,10 +3454,10 @@ export const getApiTestimonialTagsPartialUpdateUrl = (id: number,) => {
   return `/api/testimonial-tags/${id}/`
 }
 
-export const apiTestimonialTagsPartialUpdate = async (id: number,
-    patchedTestimonialTagRequest: PatchedTestimonialTagRequest, options?: RequestInit): Promise<apiTestimonialTagsPartialUpdateResponse> => {
+export const testimonialTagsPartialUpdate = async (id: number,
+    patchedTestimonialTagRequest: PatchedTestimonialTagRequest, options?: RequestInit): Promise<testimonialTagsPartialUpdateResponse> => {
   
-  return fetcher<apiTestimonialTagsPartialUpdateResponse>(getApiTestimonialTagsPartialUpdateUrl(id),
+  return fetcher<testimonialTagsPartialUpdateResponse>(getTestimonialTagsPartialUpdateUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -3478,19 +3478,19 @@ Advocate or staff (mass-assignment guard per SYSTEM_RULES §5 —
 "server controls metadata" does, and creating a tag shouldn't be
 free for any random authenticated user).
  */
-export type apiTestimonialTagsDestroyResponse204 = {
+export type testimonialTagsDestroyResponse204 = {
   data: void
   status: 204
 }
     
-export type apiTestimonialTagsDestroyResponseSuccess = (apiTestimonialTagsDestroyResponse204) & {
+export type testimonialTagsDestroyResponseSuccess = (testimonialTagsDestroyResponse204) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialTagsDestroyResponse = (apiTestimonialTagsDestroyResponseSuccess)
+export type testimonialTagsDestroyResponse = (testimonialTagsDestroyResponseSuccess)
 
-export const getApiTestimonialTagsDestroyUrl = (id: number,) => {
+export const getTestimonialTagsDestroyUrl = (id: number,) => {
 
 
   
@@ -3498,9 +3498,9 @@ export const getApiTestimonialTagsDestroyUrl = (id: number,) => {
   return `/api/testimonial-tags/${id}/`
 }
 
-export const apiTestimonialTagsDestroy = async (id: number, options?: RequestInit): Promise<apiTestimonialTagsDestroyResponse> => {
+export const testimonialTagsDestroy = async (id: number, options?: RequestInit): Promise<testimonialTagsDestroyResponse> => {
   
-  return fetcher<apiTestimonialTagsDestroyResponse>(getApiTestimonialTagsDestroyUrl(id),
+  return fetcher<testimonialTagsDestroyResponse>(getTestimonialTagsDestroyUrl(id),
   {      
     ...options,
     method: 'DELETE'
@@ -3531,19 +3531,19 @@ Permissions layered per action (see `get_permissions`):
   publish / archive           CanPublishTestimonial (Advocate+)
   source / precise_location   CanViewEncryptedSource (Advocate+)
  */
-export type apiTestimonialsListResponse200 = {
+export type testimonialsListResponse200 = {
   data: PaginatedTestimonialPublicList
   status: 200
 }
     
-export type apiTestimonialsListResponseSuccess = (apiTestimonialsListResponse200) & {
+export type testimonialsListResponseSuccess = (testimonialsListResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialsListResponse = (apiTestimonialsListResponseSuccess)
+export type testimonialsListResponse = (testimonialsListResponseSuccess)
 
-export const getApiTestimonialsListUrl = (params?: ApiTestimonialsListParams,) => {
+export const getTestimonialsListUrl = (params?: TestimonialsListParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -3558,9 +3558,9 @@ export const getApiTestimonialsListUrl = (params?: ApiTestimonialsListParams,) =
   return stringifiedParams.length > 0 ? `/api/testimonials/?${stringifiedParams}` : `/api/testimonials/`
 }
 
-export const apiTestimonialsList = async (params?: ApiTestimonialsListParams, options?: RequestInit): Promise<apiTestimonialsListResponse> => {
+export const testimonialsList = async (params?: TestimonialsListParams, options?: RequestInit): Promise<testimonialsListResponse> => {
   
-  return fetcher<apiTestimonialsListResponse>(getApiTestimonialsListUrl(params),
+  return fetcher<testimonialsListResponse>(getTestimonialsListUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -3591,19 +3591,19 @@ Permissions layered per action (see `get_permissions`):
   publish / archive           CanPublishTestimonial (Advocate+)
   source / precise_location   CanViewEncryptedSource (Advocate+)
  */
-export type apiTestimonialsCreateResponse201 = {
+export type testimonialsCreateResponse201 = {
   data: TestimonialWrite
   status: 201
 }
     
-export type apiTestimonialsCreateResponseSuccess = (apiTestimonialsCreateResponse201) & {
+export type testimonialsCreateResponseSuccess = (testimonialsCreateResponse201) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialsCreateResponse = (apiTestimonialsCreateResponseSuccess)
+export type testimonialsCreateResponse = (testimonialsCreateResponseSuccess)
 
-export const getApiTestimonialsCreateUrl = () => {
+export const getTestimonialsCreateUrl = () => {
 
 
   
@@ -3611,9 +3611,9 @@ export const getApiTestimonialsCreateUrl = () => {
   return `/api/testimonials/`
 }
 
-export const apiTestimonialsCreate = async (testimonialWriteRequest: TestimonialWriteRequest, options?: RequestInit): Promise<apiTestimonialsCreateResponse> => {
+export const testimonialsCreate = async (testimonialWriteRequest: TestimonialWriteRequest, options?: RequestInit): Promise<testimonialsCreateResponse> => {
   
-  return fetcher<apiTestimonialsCreateResponse>(getApiTestimonialsCreateUrl(),
+  return fetcher<testimonialsCreateResponse>(getTestimonialsCreateUrl(),
   {      
     ...options,
     method: 'POST',
@@ -3645,19 +3645,19 @@ Permissions layered per action (see `get_permissions`):
   publish / archive           CanPublishTestimonial (Advocate+)
   source / precise_location   CanViewEncryptedSource (Advocate+)
  */
-export type apiTestimonialsRetrieveResponse200 = {
+export type testimonialsRetrieveResponse200 = {
   data: TestimonialPublic
   status: 200
 }
     
-export type apiTestimonialsRetrieveResponseSuccess = (apiTestimonialsRetrieveResponse200) & {
+export type testimonialsRetrieveResponseSuccess = (testimonialsRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialsRetrieveResponse = (apiTestimonialsRetrieveResponseSuccess)
+export type testimonialsRetrieveResponse = (testimonialsRetrieveResponseSuccess)
 
-export const getApiTestimonialsRetrieveUrl = (id: number,) => {
+export const getTestimonialsRetrieveUrl = (id: number,) => {
 
 
   
@@ -3665,9 +3665,9 @@ export const getApiTestimonialsRetrieveUrl = (id: number,) => {
   return `/api/testimonials/${id}/`
 }
 
-export const apiTestimonialsRetrieve = async (id: number, options?: RequestInit): Promise<apiTestimonialsRetrieveResponse> => {
+export const testimonialsRetrieve = async (id: number, options?: RequestInit): Promise<testimonialsRetrieveResponse> => {
   
-  return fetcher<apiTestimonialsRetrieveResponse>(getApiTestimonialsRetrieveUrl(id),
+  return fetcher<testimonialsRetrieveResponse>(getTestimonialsRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -3698,19 +3698,19 @@ Permissions layered per action (see `get_permissions`):
   publish / archive           CanPublishTestimonial (Advocate+)
   source / precise_location   CanViewEncryptedSource (Advocate+)
  */
-export type apiTestimonialsUpdateResponse200 = {
+export type testimonialsUpdateResponse200 = {
   data: TestimonialWrite
   status: 200
 }
     
-export type apiTestimonialsUpdateResponseSuccess = (apiTestimonialsUpdateResponse200) & {
+export type testimonialsUpdateResponseSuccess = (testimonialsUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialsUpdateResponse = (apiTestimonialsUpdateResponseSuccess)
+export type testimonialsUpdateResponse = (testimonialsUpdateResponseSuccess)
 
-export const getApiTestimonialsUpdateUrl = (id: number,) => {
+export const getTestimonialsUpdateUrl = (id: number,) => {
 
 
   
@@ -3718,10 +3718,10 @@ export const getApiTestimonialsUpdateUrl = (id: number,) => {
   return `/api/testimonials/${id}/`
 }
 
-export const apiTestimonialsUpdate = async (id: number,
-    testimonialWriteRequest: TestimonialWriteRequest, options?: RequestInit): Promise<apiTestimonialsUpdateResponse> => {
+export const testimonialsUpdate = async (id: number,
+    testimonialWriteRequest: TestimonialWriteRequest, options?: RequestInit): Promise<testimonialsUpdateResponse> => {
   
-  return fetcher<apiTestimonialsUpdateResponse>(getApiTestimonialsUpdateUrl(id),
+  return fetcher<testimonialsUpdateResponse>(getTestimonialsUpdateUrl(id),
   {      
     ...options,
     method: 'PUT',
@@ -3753,19 +3753,19 @@ Permissions layered per action (see `get_permissions`):
   publish / archive           CanPublishTestimonial (Advocate+)
   source / precise_location   CanViewEncryptedSource (Advocate+)
  */
-export type apiTestimonialsPartialUpdateResponse200 = {
+export type testimonialsPartialUpdateResponse200 = {
   data: TestimonialWrite
   status: 200
 }
     
-export type apiTestimonialsPartialUpdateResponseSuccess = (apiTestimonialsPartialUpdateResponse200) & {
+export type testimonialsPartialUpdateResponseSuccess = (testimonialsPartialUpdateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialsPartialUpdateResponse = (apiTestimonialsPartialUpdateResponseSuccess)
+export type testimonialsPartialUpdateResponse = (testimonialsPartialUpdateResponseSuccess)
 
-export const getApiTestimonialsPartialUpdateUrl = (id: number,) => {
+export const getTestimonialsPartialUpdateUrl = (id: number,) => {
 
 
   
@@ -3773,10 +3773,10 @@ export const getApiTestimonialsPartialUpdateUrl = (id: number,) => {
   return `/api/testimonials/${id}/`
 }
 
-export const apiTestimonialsPartialUpdate = async (id: number,
-    patchedTestimonialWriteRequest: PatchedTestimonialWriteRequest, options?: RequestInit): Promise<apiTestimonialsPartialUpdateResponse> => {
+export const testimonialsPartialUpdate = async (id: number,
+    patchedTestimonialWriteRequest: PatchedTestimonialWriteRequest, options?: RequestInit): Promise<testimonialsPartialUpdateResponse> => {
   
-  return fetcher<apiTestimonialsPartialUpdateResponse>(getApiTestimonialsPartialUpdateUrl(id),
+  return fetcher<testimonialsPartialUpdateResponse>(getTestimonialsPartialUpdateUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -3808,19 +3808,19 @@ Permissions layered per action (see `get_permissions`):
   publish / archive           CanPublishTestimonial (Advocate+)
   source / precise_location   CanViewEncryptedSource (Advocate+)
  */
-export type apiTestimonialsDestroyResponse204 = {
+export type testimonialsDestroyResponse204 = {
   data: void
   status: 204
 }
     
-export type apiTestimonialsDestroyResponseSuccess = (apiTestimonialsDestroyResponse204) & {
+export type testimonialsDestroyResponseSuccess = (testimonialsDestroyResponse204) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialsDestroyResponse = (apiTestimonialsDestroyResponseSuccess)
+export type testimonialsDestroyResponse = (testimonialsDestroyResponseSuccess)
 
-export const getApiTestimonialsDestroyUrl = (id: number,) => {
+export const getTestimonialsDestroyUrl = (id: number,) => {
 
 
   
@@ -3828,9 +3828,9 @@ export const getApiTestimonialsDestroyUrl = (id: number,) => {
   return `/api/testimonials/${id}/`
 }
 
-export const apiTestimonialsDestroy = async (id: number, options?: RequestInit): Promise<apiTestimonialsDestroyResponse> => {
+export const testimonialsDestroy = async (id: number, options?: RequestInit): Promise<testimonialsDestroyResponse> => {
   
-  return fetcher<apiTestimonialsDestroyResponse>(getApiTestimonialsDestroyUrl(id),
+  return fetcher<testimonialsDestroyResponse>(getTestimonialsDestroyUrl(id),
   {      
     ...options,
     method: 'DELETE'
@@ -3857,19 +3857,19 @@ Stamps reviewed_by / reviewed_at (the review decision) AND
 published_by / published_at (the publication stamp) in the
 same transition so the audit trail records both.
  */
-export type apiTestimonialsApproveCreateResponse200 = {
+export type testimonialsApproveCreateResponse200 = {
   data: TestimonialPublic
   status: 200
 }
     
-export type apiTestimonialsApproveCreateResponseSuccess = (apiTestimonialsApproveCreateResponse200) & {
+export type testimonialsApproveCreateResponseSuccess = (testimonialsApproveCreateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialsApproveCreateResponse = (apiTestimonialsApproveCreateResponseSuccess)
+export type testimonialsApproveCreateResponse = (testimonialsApproveCreateResponseSuccess)
 
-export const getApiTestimonialsApproveCreateUrl = (id: number,) => {
+export const getTestimonialsApproveCreateUrl = (id: number,) => {
 
 
   
@@ -3877,9 +3877,9 @@ export const getApiTestimonialsApproveCreateUrl = (id: number,) => {
   return `/api/testimonials/${id}/approve/`
 }
 
-export const apiTestimonialsApproveCreate = async (id: number, options?: RequestInit): Promise<apiTestimonialsApproveCreateResponse> => {
+export const testimonialsApproveCreate = async (id: number, options?: RequestInit): Promise<testimonialsApproveCreateResponse> => {
   
-  return fetcher<apiTestimonialsApproveCreateResponse>(getApiTestimonialsApproveCreateUrl(id),
+  return fetcher<testimonialsApproveCreateResponse>(getTestimonialsApproveCreateUrl(id),
   {      
     ...options,
     method: 'POST'
@@ -3893,19 +3893,19 @@ export const apiTestimonialsApproveCreate = async (id: number, options?: Request
 /**
  * published → archived. Soft-delete (row stays).
  */
-export type apiTestimonialsArchiveCreateResponse200 = {
+export type testimonialsArchiveCreateResponse200 = {
   data: TestimonialPublic
   status: 200
 }
     
-export type apiTestimonialsArchiveCreateResponseSuccess = (apiTestimonialsArchiveCreateResponse200) & {
+export type testimonialsArchiveCreateResponseSuccess = (testimonialsArchiveCreateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialsArchiveCreateResponse = (apiTestimonialsArchiveCreateResponseSuccess)
+export type testimonialsArchiveCreateResponse = (testimonialsArchiveCreateResponseSuccess)
 
-export const getApiTestimonialsArchiveCreateUrl = (id: number,) => {
+export const getTestimonialsArchiveCreateUrl = (id: number,) => {
 
 
   
@@ -3913,9 +3913,9 @@ export const getApiTestimonialsArchiveCreateUrl = (id: number,) => {
   return `/api/testimonials/${id}/archive/`
 }
 
-export const apiTestimonialsArchiveCreate = async (id: number, options?: RequestInit): Promise<apiTestimonialsArchiveCreateResponse> => {
+export const testimonialsArchiveCreate = async (id: number, options?: RequestInit): Promise<testimonialsArchiveCreateResponse> => {
   
-  return fetcher<apiTestimonialsArchiveCreateResponse>(getApiTestimonialsArchiveCreateUrl(id),
+  return fetcher<testimonialsArchiveCreateResponse>(getTestimonialsArchiveCreateUrl(id),
   {      
     ...options,
     method: 'POST'
@@ -3931,19 +3931,19 @@ export const apiTestimonialsArchiveCreate = async (id: number, options?: Request
 
 Same audit-on-read posture as the source endpoint.
  */
-export type apiTestimonialsPreciseLocationRetrieveResponse200 = {
+export type testimonialsPreciseLocationRetrieveResponse200 = {
   data: TestimonialPublic
   status: 200
 }
     
-export type apiTestimonialsPreciseLocationRetrieveResponseSuccess = (apiTestimonialsPreciseLocationRetrieveResponse200) & {
+export type testimonialsPreciseLocationRetrieveResponseSuccess = (testimonialsPreciseLocationRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialsPreciseLocationRetrieveResponse = (apiTestimonialsPreciseLocationRetrieveResponseSuccess)
+export type testimonialsPreciseLocationRetrieveResponse = (testimonialsPreciseLocationRetrieveResponseSuccess)
 
-export const getApiTestimonialsPreciseLocationRetrieveUrl = (id: number,) => {
+export const getTestimonialsPreciseLocationRetrieveUrl = (id: number,) => {
 
 
   
@@ -3951,9 +3951,9 @@ export const getApiTestimonialsPreciseLocationRetrieveUrl = (id: number,) => {
   return `/api/testimonials/${id}/precise_location/`
 }
 
-export const apiTestimonialsPreciseLocationRetrieve = async (id: number, options?: RequestInit): Promise<apiTestimonialsPreciseLocationRetrieveResponse> => {
+export const testimonialsPreciseLocationRetrieve = async (id: number, options?: RequestInit): Promise<testimonialsPreciseLocationRetrieveResponse> => {
   
-  return fetcher<apiTestimonialsPreciseLocationRetrieveResponse>(getApiTestimonialsPreciseLocationRetrieveUrl(id),
+  return fetcher<testimonialsPreciseLocationRetrieveResponse>(getTestimonialsPreciseLocationRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -3967,19 +3967,19 @@ export const apiTestimonialsPreciseLocationRetrieve = async (id: number, options
 /**
  * under_review → rejected. Notes required (reason).
  */
-export type apiTestimonialsRejectCreateResponse200 = {
+export type testimonialsRejectCreateResponse200 = {
   data: TestimonialPublic
   status: 200
 }
     
-export type apiTestimonialsRejectCreateResponseSuccess = (apiTestimonialsRejectCreateResponse200) & {
+export type testimonialsRejectCreateResponseSuccess = (testimonialsRejectCreateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialsRejectCreateResponse = (apiTestimonialsRejectCreateResponseSuccess)
+export type testimonialsRejectCreateResponse = (testimonialsRejectCreateResponseSuccess)
 
-export const getApiTestimonialsRejectCreateUrl = (id: number,) => {
+export const getTestimonialsRejectCreateUrl = (id: number,) => {
 
 
   
@@ -3987,9 +3987,9 @@ export const getApiTestimonialsRejectCreateUrl = (id: number,) => {
   return `/api/testimonials/${id}/reject/`
 }
 
-export const apiTestimonialsRejectCreate = async (id: number, options?: RequestInit): Promise<apiTestimonialsRejectCreateResponse> => {
+export const testimonialsRejectCreate = async (id: number, options?: RequestInit): Promise<testimonialsRejectCreateResponse> => {
   
-  return fetcher<apiTestimonialsRejectCreateResponse>(getApiTestimonialsRejectCreateUrl(id),
+  return fetcher<testimonialsRejectCreateResponse>(getTestimonialsRejectCreateUrl(id),
   {      
     ...options,
     method: 'POST'
@@ -4007,19 +4007,19 @@ Audit-logged on read — even Advocate+ accesses leave a trace
 because the real source identity is the most sensitive datum
 on this row.
  */
-export type apiTestimonialsSourceRetrieveResponse200 = {
+export type testimonialsSourceRetrieveResponse200 = {
   data: TestimonialPublic
   status: 200
 }
     
-export type apiTestimonialsSourceRetrieveResponseSuccess = (apiTestimonialsSourceRetrieveResponse200) & {
+export type testimonialsSourceRetrieveResponseSuccess = (testimonialsSourceRetrieveResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialsSourceRetrieveResponse = (apiTestimonialsSourceRetrieveResponseSuccess)
+export type testimonialsSourceRetrieveResponse = (testimonialsSourceRetrieveResponseSuccess)
 
-export const getApiTestimonialsSourceRetrieveUrl = (id: number,) => {
+export const getTestimonialsSourceRetrieveUrl = (id: number,) => {
 
 
   
@@ -4027,9 +4027,9 @@ export const getApiTestimonialsSourceRetrieveUrl = (id: number,) => {
   return `/api/testimonials/${id}/source/`
 }
 
-export const apiTestimonialsSourceRetrieve = async (id: number, options?: RequestInit): Promise<apiTestimonialsSourceRetrieveResponse> => {
+export const testimonialsSourceRetrieve = async (id: number, options?: RequestInit): Promise<testimonialsSourceRetrieveResponse> => {
   
-  return fetcher<apiTestimonialsSourceRetrieveResponse>(getApiTestimonialsSourceRetrieveUrl(id),
+  return fetcher<testimonialsSourceRetrieveResponse>(getTestimonialsSourceRetrieveUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -4043,19 +4043,19 @@ export const apiTestimonialsSourceRetrieve = async (id: number, options?: Reques
 /**
  * draft → under_review (or rejected → under_review for re-submit).
  */
-export type apiTestimonialsSubmitCreateResponse200 = {
+export type testimonialsSubmitCreateResponse200 = {
   data: TestimonialPublic
   status: 200
 }
     
-export type apiTestimonialsSubmitCreateResponseSuccess = (apiTestimonialsSubmitCreateResponse200) & {
+export type testimonialsSubmitCreateResponseSuccess = (testimonialsSubmitCreateResponse200) & {
   headers: Headers;
 };
 ;
 
-export type apiTestimonialsSubmitCreateResponse = (apiTestimonialsSubmitCreateResponseSuccess)
+export type testimonialsSubmitCreateResponse = (testimonialsSubmitCreateResponseSuccess)
 
-export const getApiTestimonialsSubmitCreateUrl = (id: number,) => {
+export const getTestimonialsSubmitCreateUrl = (id: number,) => {
 
 
   
@@ -4063,9 +4063,9 @@ export const getApiTestimonialsSubmitCreateUrl = (id: number,) => {
   return `/api/testimonials/${id}/submit/`
 }
 
-export const apiTestimonialsSubmitCreate = async (id: number, options?: RequestInit): Promise<apiTestimonialsSubmitCreateResponse> => {
+export const testimonialsSubmitCreate = async (id: number, options?: RequestInit): Promise<testimonialsSubmitCreateResponse> => {
   
-  return fetcher<apiTestimonialsSubmitCreateResponse>(getApiTestimonialsSubmitCreateUrl(id),
+  return fetcher<testimonialsSubmitCreateResponse>(getTestimonialsSubmitCreateUrl(id),
   {      
     ...options,
     method: 'POST'

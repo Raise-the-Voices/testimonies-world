@@ -30,7 +30,6 @@ class CaseworkRecordViewSet(viewsets.ModelViewSet):
     # casework narratives — including Notes / Next Steps that often
     # contain PII about family contacts and un-redacted sources.
     permission_classes = [permissions.IsAuthenticated, IsAdvocate]
-    permission_classes = [permissions.IsAuthenticated]
     # Casework records are advocate-only and rarely created
     # (1-3 per case). Mutation cap is generous for real workflows,
     # tight enough to block a runaway script.

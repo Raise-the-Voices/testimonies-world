@@ -46,12 +46,7 @@ record tomorrow.
 | API root | https://demos.linkedtrust.us/testimonies/api/ |
 | Production (live) | https://cases.raisethevoices.org |
 
-Demo admin credentials (non-production):
-
-```
-user: admin
-pass: tw-admin-2026
-```
+Demo admin credentials: see the operator onboarding doc (1Password / sealed gist). Do not commit credentials to this repo.
 
 ---
 

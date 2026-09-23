@@ -2,7 +2,7 @@
  * Universal load for /dashboard/audit-logs/.
  *
  * Reads URL search params (deep-linking + reload preserves filters),
- * calls `apiAuditLogsList()` from the generated client, and returns the
+ * calls `auditLogsList()` from the generated client, and returns the
  * paginated response plus a normalized filters object the page uses
  * to keep the form state in sync with the URL.
  *
@@ -19,7 +19,7 @@
  * the shape and surface any failure as `error`.
  */
 import type { PageLoad } from './$types';
-import { apiAuditLogsList } from '$lib/api/generated/endpoints';
+import { auditLogsList } from '$lib/api/generated/endpoints';
 import type { AuditLog } from '$lib/api/generated/endpoints.schemas';
 import { ApiError } from '$lib/api';
 import { asPaginated } from '$lib/api/drfCompat';
@@ -83,7 +83,7 @@ export const load: PageLoad = async ({ url }) => {
 		// `response.data` which is `undefined` at runtime, and the
 		// page renders the "response was not in the expected format"
 		// error even on a perfectly normal 200 OK.
-		const response = await apiAuditLogsList(params);
+		const response = await auditLogsList(params);
 		const body = asPaginated<AuditLog>(response);
 		if (!hasPaginatedShape<AuditLog>(body)) {
 			// 2xx but the body isn't a paginated envelope. Almost
