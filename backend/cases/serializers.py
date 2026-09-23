@@ -194,13 +194,38 @@ class SourceSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializ
     # pages or exports; sanitize like Report's narrative.
     text_fields = ['narrative', 'source_attribution']
 
+    # `report` is writable so the standalone /sources/ endpoint
+    # actually works for staff/Advocate (was read-only in the prior
+    # version, which made the endpoint unusable AND matched the
+    # audit's H-4 concern by side effect — a volunteer couldn't
+    # bind a foreign report, but no one could bind anything). The
+    # queryset is filtered per-request below so a volunteer can only
+    # point at reports they authored.
+    report = serializers.PrimaryKeyRelatedField(queryset=Report.objects.none())
+
     class Meta:
         model = Source
         fields = [
             'id', 'report', 'source_type', 'source_attribution',
             'date_start', 'narrative', 'is_private', 'created_at',
         ]
-        read_only_fields = ['id', 'report', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Audit H-4: the report field's queryset is filtered per-request
+        # to what the user is allowed to attach sources to. Staff /
+        # Advocate group may attach to any report. Volunteers may
+        # attach only to reports they authored. A volunteer POSTing
+        # {report: <foreign>} gets 400 with "invalid pk" — clearer
+        # than a 403 + leaked existence.
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            user = request.user
+            qs = Report.objects.all()
+            if not (user.is_staff or user.groups.filter(name='Advocate').exists()):
+                qs = qs.filter(created_by=user)
+            self.fields['report'].queryset = qs
 
 
 class ReportSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
