@@ -49,6 +49,7 @@
 	import { ApiError, createReport, getReport, request, updateReport } from '$lib/api';
 	import { focusFirstFormError } from '$lib/formFocus';
 	import PersonPicker from '$lib/PersonPicker.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import SourcesField from '$lib/SourcesField.svelte';
 	import type { SourceEntry } from '$lib/SourcesField.svelte';
 	import MediaField from '$lib/MediaField.svelte';
@@ -517,12 +518,7 @@
 					<label for="rf-reporter-name">
 						Reporter name
 						<span class="badge-private" title="Hidden from public view">
-							<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
-								<path
-									fill="currentColor"
-									d="M4 7V5a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h1zm2 0h4V5a2 2 0 1 0-4 0v2z"
-								/>
-							</svg>
+							<Icon name="lock-fill" size={11} filled />
 							private
 						</span>
 					</label>
@@ -542,12 +538,7 @@
 					<label for="rf-reporter-contact">
 						Reporter contact
 						<span class="badge-private" title="Hidden from public view">
-							<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
-								<path
-									fill="currentColor"
-									d="M4 7V5a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h1zm2 0h4V5a2 2 0 1 0-4 0v2z"
-								/>
-							</svg>
+							<Icon name="lock-fill" size={11} filled />
 							private
 						</span>
 					</label>
@@ -699,12 +690,7 @@
 		<fieldset class="form-section">
 			<legend class="section-legend">
 				<span class="section-icon" aria-hidden="true">
-					<svg viewBox="0 0 16 16" width="14" height="14">
-						<path
-							fill="currentColor"
-							d="M4 7V5a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h1zm2 0h4V5a2 2 0 1 0-4 0v2z"
-						/>
-					</svg>
+					<Icon name="lock-fill" size={14} filled />
 				</span>
 				Privacy
 			</legend>
@@ -1035,7 +1021,6 @@
 	}
 	.badge-public { background: #c6f6d5; color: #22543d; }
 	.badge-private { background: #fefcbf; color: #744210; }
-	.badge-private svg { display: inline-block; }
 
 	/* Required / optional markers */
 	.required-mark { color: var(--color-danger); font-weight: 700; }

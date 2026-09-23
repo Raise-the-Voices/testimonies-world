@@ -4,7 +4,7 @@
 	import { getStatistics } from '$lib/api';
 	import { handleApiError } from '$lib/api/handleError';
 	import Icon from '$lib/Icon.svelte';
-	import StatisticsCard from '$lib/StatisticsCard.svelte';
+	import StatsBar from '$lib/StatsBar.svelte';
 	import type { PageData } from './$types';
 	import type { Statistics } from '$lib/types';
 
@@ -103,29 +103,13 @@
 
 <div class="home">
 	<h1 class="sr-only">Testimonies.world — person-centered casework for people facing oppression</h1>
-	{#if statsLoading}
-		<section class="stats-bar" aria-busy="true" aria-label="Loading platform statistics">
-			{#each counters as c (c.label)}
-				<StatisticsCard variant="skeleton" />
-			{/each}
-		</section>
-	{:else if statsError}
-		<section class="stats-bar stats-bar-error" role="alert" aria-label="Statistics unavailable">
-			<div class="stats-error-content">
-				<Icon name="help" size={18} />
-				<span>Could not load platform statistics. <button type="button" class="stats-retry" onclick={loadStats}>Retry</button></span>
-			</div>
-		</section>
-	{:else if stats && stats.total > 0}
-		<section class="stats-bar" aria-label="Platform statistics">
-			{#each counters as c, i (c.label)}
-				{#if i > 0}<span class="stat-divider" aria-hidden="true"></span>{/if}
-				<div class="stat-item">
-					<span class="stat-number">{c.value()}</span>
-					<span class="stat-label">{c.label}</span>
-				</div>
-			{/each}
-		</section>
+	{#if statsLoading || statsError || (stats && stats.total > 0)}
+		<StatsBar
+			items={counters}
+			loading={statsLoading}
+			error={statsError}
+			onRetry={loadStats}
+		/>
 	{/if}
 
 	<section class="hero-card">
@@ -185,46 +169,7 @@
 		gap: 2rem;
 	}
 
-	/* === 1. Stats bar — inline typographic row (no icons, no card grid) === */
-	.stats-bar {
-		background: var(--color-bg-white);
-		border: 1px solid var(--color-border-light);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-card);
-		padding: var(--card-padding);
-		display: flex;
-		align-items: baseline;
-		justify-content: space-around;
-		gap: 1rem;
-		flex-wrap: wrap;
-		animation: fadeSlideUp 0.4s ease both;
-	}
-	.stat-item {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		min-width: 0;
-		padding: 0.25rem 0.5rem;
-	}
-	.stat-number {
-		font-size: 1.5rem;
-		font-weight: 700;
-		color: var(--color-primary);
-		line-height: 1.1;
-		font-variant-numeric: tabular-nums;
-	}
-	.stat-label {
-		font-size: 0.78rem;
-		color: var(--color-text-muted);
-		text-transform: uppercase;
-		letter-spacing: 0.06rem;
-		margin-top: 0.15rem;
-	}
-	.stat-divider {
-		width: 1px;
-		align-self: stretch;
-		background: var(--color-border-light);
-	}
+	/* === 1. Stats bar — see $lib/StatsBar.svelte === */
 
 	/* === 2. Hero card === */
 	.hero-card {
@@ -338,20 +283,6 @@
 
 	/* Responsive */
 	@media (max-width: 700px) {
-		.stats-bar {
-			flex-direction: column;
-			align-items: stretch;
-			gap: 0.75rem;
-		}
-		.stat-divider {
-			width: auto;
-			height: 1px;
-		}
-		.stat-item {
-			flex-direction: row;
-			justify-content: space-between;
-			padding: 0.15rem 0.25rem;
-		}
 		.hero-card {
 			padding: 1.5rem 1.25rem;
 		}
@@ -361,7 +292,6 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.stats-bar,
 		.hero-card,
 		.help-item {
 			animation: none;
@@ -369,41 +299,5 @@
 		.btn-lg:hover {
 			transform: none;
 		}
-	}
-
-	.stats-bar-error {
-		background: var(--color-bg-white);
-		border: 1px solid var(--color-border-light);
-		border-left: 3px solid var(--color-danger);
-	}
-	.stats-error-content {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		color: var(--color-text-muted);
-		font-size: 0.9rem;
-		padding: 0.5rem 0;
-	}
-	.stats-error-content :global(svg) {
-		color: var(--color-danger);
-	}
-	.stats-retry {
-		background: transparent;
-		border: none;
-		color: var(--color-primary);
-		font-weight: 600;
-		text-decoration: underline;
-		cursor: pointer;
-		padding: 0;
-		font: inherit;
-	}
-	.stats-retry:hover {
-		color: var(--color-primary-light);
-	}
-	.stats-retry:focus-visible {
-		outline: 2px solid var(--color-primary);
-		outline-offset: 2px;
-		border-radius: 3px;
 	}
 </style>
