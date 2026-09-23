@@ -2,9 +2,9 @@
 	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { base } from '$app/paths';
-	import { apiTestimonialsList } from '$lib/api/generated/endpoints';
+	import { testimonialsList } from '$lib/api/generated/endpoints';
 	import {
-		ApiTestimonialsListStatus,
+		TestimonialsListStatus,
 		type TestimonialPublic,
 	} from '$lib/api/generated/endpoints.schemas';
 	import { asPaginated } from '$lib/api/drfCompat';
@@ -55,9 +55,9 @@
 	   --------------------------------------------------------------------------- */
 	type ClientTabKey = Exclude<TabKey, 'published'>;
 	type ClientTabStatus =
-		| typeof ApiTestimonialsListStatus.draft
-		| typeof ApiTestimonialsListStatus.under_review
-		| typeof ApiTestimonialsListStatus.rejected;
+		| typeof TestimonialsListStatus.draft
+		| typeof TestimonialsListStatus.under_review
+		| typeof TestimonialsListStatus.rejected;
 
 	type TestimonialWithWorkflow = TestimonialPublic & {
 		readonly review_notes?: string;
@@ -91,7 +91,7 @@
 		{
 			key: 'mine',
 			label: 'My drafts',
-			status: ApiTestimonialsListStatus.draft,
+			status: TestimonialsListStatus.draft,
 			visible: currentUser.authenticated,
 			errorMessage: 'Could not load your drafts',
 			emptyMessage: "You don't have any drafts yet.",
@@ -100,7 +100,7 @@
 		{
 			key: 'review',
 			label: 'Review queue',
-			status: ApiTestimonialsListStatus.under_review,
+			status: TestimonialsListStatus.under_review,
 			visible: canReview,
 			errorMessage: 'Could not load the review queue',
 			emptyMessage: 'The queue is empty. Nothing pending review.',
@@ -108,7 +108,7 @@
 		{
 			key: 'rejected',
 			label: 'Rejected',
-			status: ApiTestimonialsListStatus.rejected,
+			status: TestimonialsListStatus.rejected,
 			visible: currentUser.authenticated,
 			errorMessage: 'Could not load rejected testimonials',
 			emptyMessage: 'Nothing has been rejected yet.',
@@ -154,7 +154,7 @@
 		try {
 			// orval-vs-DRF shape mismatch handled in drfCompat —
 			// see $lib/api/drfCompat.ts for the rationale.
-			const res = await apiTestimonialsList({ status: tab.status });
+			const res = await testimonialsList({ status: tab.status });
 			const body = asPaginated<TestimonialWithWorkflow>(res).results ?? [];
 			s.list = body;
 		} catch (e) {

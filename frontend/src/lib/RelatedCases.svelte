@@ -14,7 +14,7 @@
 -->
 <script lang="ts">
 	import { ApiError } from '$lib/api';
-	import { apiPersonsRelatedRetrieve } from '$lib/api/generated/endpoints';
+	import { personsRelatedRetrieve } from '$lib/api/generated/endpoints';
 	import type { PersonList } from '$lib/api/generated/endpoints.schemas';
 	import StatusBadge from '$lib/StatusBadge.svelte';
 
@@ -33,7 +33,7 @@
 		loading = true;
 		errored = false;
 		try {
-			const res = await apiPersonsRelatedRetrieve(personId);
+			const res = await personsRelatedRetrieve(personId);
 			// The generated client returns { data: { results: PersonList[] } }
 			// because the @extend_schema declares a `results` field on
 			// the inline RelatedPersonsResponse serializer. Normalize

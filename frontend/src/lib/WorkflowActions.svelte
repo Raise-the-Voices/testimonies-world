@@ -21,11 +21,11 @@
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import {
-		apiTestimonialsSubmitCreate,
-		apiTestimonialsApproveCreate,
-		apiTestimonialsRejectCreate,
-		apiTestimonialsArchiveCreate,
-		apiTestimonialsRetrieve,
+		testimonialsSubmitCreate,
+		testimonialsApproveCreate,
+		testimonialsRejectCreate,
+		testimonialsArchiveCreate,
+		testimonialsRetrieve,
 	} from '$lib/api/generated/endpoints';
 	import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
 	import { isAdvocate } from '$lib/session';
@@ -197,13 +197,13 @@
 		try {
 			switch (action) {
 				case 'submit':
-					await apiTestimonialsSubmitCreate(id, {});
+					await testimonialsSubmitCreate(id, {});
 					break;
 				case 'approve':
-					await apiTestimonialsApproveCreate(id, {});
+					await testimonialsApproveCreate(id, {});
 					break;
 				case 'archive':
-					await apiTestimonialsArchiveCreate(id, {});
+					await testimonialsArchiveCreate(id, {});
 					break;
 			}
 			await refreshRow();
@@ -233,7 +233,7 @@
 		rejectSaving = true;
 		actionError = null;
 		try {
-			await apiTestimonialsRejectCreate(id, {
+			await testimonialsRejectCreate(id, {
 				method: 'POST',
 				body: JSON.stringify({ review_notes: notes }),
 				headers: { 'Content-Type': 'application/json' },
@@ -267,7 +267,7 @@
 	   approved_at, etc. — that the response shape might not surface
 	   on every transition). */
 	async function refreshRow(): Promise<TestimonialPublic & WorkflowFields> {
-		const fresh = await apiTestimonialsRetrieve(id);
+		const fresh = await testimonialsRetrieve(id);
 		const row = fresh as unknown as TestimonialPublic & WorkflowFields;
 		// Notify the parent with the refreshed row so its `derived`
 		// binding can re-render with the new fields. Svelte 5 props
