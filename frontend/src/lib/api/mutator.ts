@@ -73,27 +73,26 @@ export async function fetcher<T>(url: string, options: RequestInit = {}): Promis
 	}
 
 	if (!res.ok) {
-		let body: unknown = null;
-		try {
-			body = await res.json();
-		} catch {
-			/* not JSON */
-		}
-		const message =
-			(body && typeof body === 'object' && 'detail' in body && typeof body.detail === 'string')
-				? body.detail
-				: `Request failed (${res.status} ${res.statusText})`;
-		const fieldErrors: Record<string, string[]> = {};
-		if (body && typeof body === 'object') {
-			for (const [k, v] of Object.entries(body as Record<string, unknown>)) {
-				if (Array.isArray(v) && v.every((x) => typeof x === 'string')) {
-					fieldErrors[k] = v as string[];
-				}
-			}
-		}
+		// Mirror `request()` in api.ts — share the same parser so
+		// orval-generated clients and hand-rolled `request()` callers
+		// see an identical `ApiError` contract.
 		// Lazy import to avoid circular dep at module load time.
-		const mod = await import('../api');
-		throw new mod.ApiError(message, res.status, res.statusText, fieldErrors, body);
+		const errMod = await import('./errors');
+		const { body, contentType } = await errMod.readErrorBody(res);
+		const { message, fieldErrors, messages } = errMod.parseApiErrorBody(
+			body,
+			res.status,
+			res.statusText,
+		);
+		throw new errMod.ApiError(
+			message,
+			res.status,
+			res.statusText,
+			fieldErrors,
+			body,
+			messages,
+			contentType,
+		);
 	}
 
 	// 204 No Content — orval types this as `void` in generated clients.

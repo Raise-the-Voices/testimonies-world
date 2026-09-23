@@ -18,7 +18,7 @@
  *   - 401, 403           → 'warning'  (often a session race, not user fault)
  *   - 4xx, 5xx, unknown  → 'error'    (action-required feedback)
  */
-import { ApiError } from '../api';
+import { ApiError } from './errors';
 import { showToast, type ToastVariant } from '../toast';
 
 /**
@@ -34,6 +34,12 @@ export interface NormalisedError {
 	message: string;
 	/** Per-field validation messages, if the server returned any. */
 	fieldErrors: FieldErrors;
+	/**
+	 * Every individual message extracted from the server body, in the
+	 * order they appeared. Useful when callers want to render a list
+	 * of reasons rather than the headline.
+	 */
+	messages: string[];
 	/** Toast variant the dispatcher will use (unless silent). */
 	variant: ToastVariant;
 	/** True when the failure was a network / CORS / offline error. */
@@ -55,6 +61,7 @@ export function normaliseError(err: unknown): NormalisedError {
 			status: err.status,
 			message: err.message,
 			fieldErrors: err.fieldErrors,
+			messages: err.messages,
 			variant: variantForStatus(err.status),
 			isNetwork: false,
 		};
@@ -67,6 +74,7 @@ export function normaliseError(err: unknown): NormalisedError {
 			status: 0,
 			message: err.message,
 			fieldErrors: {},
+			messages: [err.message],
 			variant: 'error',
 			isNetwork: false,
 		};
@@ -75,6 +83,7 @@ export function normaliseError(err: unknown): NormalisedError {
 		status: 0,
 		message: 'Something went wrong.',
 		fieldErrors: {},
+		messages: [],
 		variant: 'error',
 		isNetwork: false,
 	};
