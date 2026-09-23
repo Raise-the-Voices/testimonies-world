@@ -853,6 +853,7 @@
 					<button
 						type="button"
 						class="draft-discard-btn"
+						data-testid="submit-discard-draft"
 						onclick={discardDraft}
 						aria-label="Discard saved draft and clear the form"
 					>
