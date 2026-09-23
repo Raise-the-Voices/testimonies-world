@@ -332,6 +332,185 @@ test.describe('Form audit — UX & feedback', () => {
       await page.waitForTimeout(2_000);
       await expect(page.locator('text=/could not save draft/i')).toBeVisible();
     });
+
+    test('auto-restore: valid draft pre-fills form silently on mount', async ({
+      page,
+    }) => {
+      // Seed localStorage with a valid draft, then mount the page — same
+      // observable effect as "close tab and come back" without relying
+      // on page.reload() (which hits Vite dev-server resource limits
+      // under headless Playwright). The form should mount with fields
+      // pre-filled, no Restore button required.
+      await page.goto('/testimonies/');
+      const username = await page.evaluate(async () => {
+        const r = await fetch('/testimonies/api/session/');
+        const d = await r.json();
+        return d.username ?? '';
+      }).catch(() => '');
+      expect(username).toBeTruthy();
+
+      const draft = {
+        schemaVersion: 2,
+        username,
+        savedAt: new Date().toISOString(),
+        payload: {
+          name: 'Restored Person',
+          legalName: '',
+          aliasesRaw: '',
+          country: 'Tunisia',
+          currentStatus: 'unknown',
+          medicalStatus: 'unknown',
+          roughLocation: '',
+          preciseLocation: '',
+          lastKnownDate: '',
+          ethnicity: '',
+          gender: '',
+          ageAtIncident: '',
+          occupation: '',
+          qualityTier: '',
+          profileImageCleared: false,
+          medicalNotes: '',
+          authoritativeSource: '',
+          authoritativeUrl: '',
+          isPublished: true,
+          selectedCategories: [],
+          summaryNarrative: '',
+          sourceType: 'firsthand',
+          sourceAttribution: '',
+          reporterName: '',
+          reporterContact: '',
+          reportDateStart: '',
+          reportRoughLocation: '',
+          narrative: 'Recovered narrative from the last session.',
+          suspectedReason: '',
+          officialReason: '',
+          sourceEntries: [],
+          mediaEntries: [],
+        },
+      };
+      await page.evaluate(
+        ([k, v]) => window.localStorage.setItem(k, v),
+        [`submit_form_draft_${username}`, JSON.stringify(draft)] as const,
+      );
+
+      await goToSubmitCase(page);
+      await expect(page.locator('#name')).toHaveValue('Restored Person');
+      await expect(page.locator('#country')).toHaveValue('Tunisia');
+      await expect(page.locator('#narrative')).toHaveValue(
+        'Recovered narrative from the last session.',
+      );
+      // Old manual-restore controls must be gone.
+      await expect(page.getByRole('button', { name: /^restore$/i })).toHaveCount(0);
+      // Cleanup so other tests start fresh.
+      await page.evaluate(
+        ([k]) => window.localStorage.removeItem(k),
+        [`submit_form_draft_${username}`] as const,
+      );
+    });
+
+    test('auto-restore: shows "Draft restored" flash, then steady pill', async ({
+      page,
+    }) => {
+      await page.goto('/testimonies/');
+      const username = await page.evaluate(async () => {
+        const r = await fetch('/testimonies/api/session/');
+        const d = await r.json();
+        return d.username ?? '';
+      }).catch(() => '');
+      expect(username).toBeTruthy();
+
+      const draft = {
+        schemaVersion: 2,
+        username,
+        savedAt: new Date().toISOString(),
+        payload: {
+          name: 'Flash Person',
+          country: 'Egypt',
+          narrative: '',
+          currentStatus: 'unknown',
+          medicalStatus: 'unknown',
+          isPublished: true,
+          selectedCategories: [],
+          sourceEntries: [],
+          mediaEntries: [],
+          profileImageCleared: false,
+        },
+      };
+      await page.evaluate(
+        ([k, v]) => window.localStorage.setItem(k, v),
+        [`submit_form_draft_${username}`, JSON.stringify(draft)] as const,
+      );
+
+      await goToSubmitCase(page);
+      // The flash pill is the first thing visible post-mount.
+      await expect(
+        page.locator('text=/draft restored from your last session/i'),
+      ).toBeVisible({ timeout: 5_000 });
+      // After the 6s window it falls back to the steady-state pill.
+      await expect(
+        page.locator('text=/draft restored from your last session/i'),
+      ).toHaveCount(0, { timeout: 9_000 });
+      await expect(
+        page.locator('text=/saved.*ago|saved just now/i'),
+      ).toBeVisible();
+
+      // Cleanup.
+      await page.evaluate(
+        ([k]) => window.localStorage.removeItem(k),
+        [`submit_form_draft_${username}`] as const,
+      );
+    });
+
+    test('discard draft: button clears form + localStorage', async ({ page }) => {
+      // Seed a draft via localStorage so the page mount triggers
+      // auto-restore (avoids the page.reload() path that hits Vite
+      // dev-server resource limits under headless Playwright).
+      await page.goto('/testimonies/');
+      const username = await page.evaluate(async () => {
+        const r = await fetch('/testimonies/api/session/');
+        const d = await r.json();
+        return d.username ?? '';
+      }).catch(() => '');
+      expect(username).toBeTruthy();
+      const draft = {
+        schemaVersion: 2,
+        username,
+        savedAt: new Date().toISOString(),
+        payload: {
+          name: 'Discard Me',
+          country: 'Sudan',
+          currentStatus: 'unknown',
+          medicalStatus: 'unknown',
+          isPublished: true,
+          selectedCategories: [],
+          sourceEntries: [],
+          mediaEntries: [],
+          profileImageCleared: false,
+        },
+      };
+      await page.evaluate(
+        ([k, v]) => window.localStorage.setItem(k, v),
+        [`submit_form_draft_${username}`, JSON.stringify(draft)] as const,
+      );
+
+      await goToSubmitCase(page);
+      await expect(page.locator('#name')).toHaveValue('Discard Me');
+
+      await page.getByTestId('submit-discard-draft').click();
+
+      // Every form field resets; the steady-state pill goes away.
+      await expect(page.locator('#name')).toHaveValue('');
+      await expect(page.locator('#country')).toHaveValue('');
+      await expect(
+        page.locator('text=/saved.*ago|saved just now/i'),
+      ).toHaveCount(0);
+      // localStorage key for this user is gone.
+      const stillThere = await page.evaluate(() => {
+        const keys = Object.keys(window.localStorage);
+        return keys.some((k) => k.startsWith('submit_form_draft_'));
+      });
+      expect(stillThere).toBe(false);
+    });
   });
 
   /* ===========================================================
