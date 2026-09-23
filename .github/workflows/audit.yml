@@ -11,6 +11,7 @@ name: Audit (Lighthouse CI on PR preview)
 on:
   pull_request:
     branches: [main]
+    paths: ['frontend/**']   # skip on backend-only PRs
   workflow_dispatch:
 
 permissions:
@@ -43,13 +44,41 @@ jobs:
           npm ci
           npm run build
 
-      # Lighthouse CI infra (adapter-node boot + lhci collect) is
-      # disabled on this PR. The server's server.init() top-level
-      # await hangs longer than the 60s readiness poll on cold
-      # ubuntu-latest runners — same code boots in ~2s locally.
-      # Tracking that infra fix in a separate PR so this one can
-      # land the family-relationship test fix (gated by ci.yml,
-      # which is green).
-      #
+      # Audit H-7: boot `vite preview` on the production build, wait
+      # for it to be ready, then run lhci autorun against it.
+      # Vite preview serves the static build output — no adapter-node
+      # boot, no top-level server.init() hang. The 30s readiness
+      # poll catches the rare cold-start case.
+      - name: Start preview server
+        working-directory: frontend
+        env:
+          PUBLIC_BASE_PATH: /testimonies
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 &
+          PREVIEW_PID=$!
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4173/testimonies/ >/dev/null 2>&1; then
+              echo "preview ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "preview server did not become ready within 30s" >&2
+          kill "$PREVIEW_PID" 2>/dev/null || true
+          exit 1
+
+      - name: Run Lighthouse CI
+        working-directory: frontend
+        # First PR after this wiring: continue-on-error so we observe
+        # the actual numbers without failing the pipeline. Per project
+        # direction (H-7), we'll drop this once we have a baseline.
+        continue-on-error: true
+        run: npx --yes @lhci/cli@0.14.x autorun --config=./.lighthouserc.json
+
       # Real audits against seeded data happen in
       # scripts/audit-lighthouse.sh against a staging URL.
+      - name: Cleanup preview server
+        if: always()
+        run: |
+          pkill -f "vite preview" 2>/dev/null || true
+          pkill -f "node.*preview" 2>/dev/null || true
