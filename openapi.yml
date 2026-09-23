@@ -2126,8 +2126,13 @@ paths:
       description: |-
         Family-relationship CRUD.
 
-        Read access: anyone (anonymous included) — the family list is part
-        of every person-detail response.
+        Read access: anonymous visitors can read relationships whose
+        BOTH persons are published — the public case-detail page renders
+        the family section for these rows. Anon reads are also gated
+        server-side in `get_queryset`, so unpublished persons' family
+        links never leak via this endpoint.
+
+        Authenticated volunteers / advocates / staff read everything.
 
         Write access (create / update / destroy):
             - Must be authenticated (`IsAuthenticatedOrReadOnly`).
@@ -2142,6 +2147,17 @@ paths:
         pair (see `FamilyRelationshipSerializer.validate`). Schema-level
         validation only — no business logic in the viewset beyond the
         gate + audit trail.
+
+        History note (C6 + M1, reverted 2026-09-22): the previous tighten
+        to `IsAuthenticated` blocked the public case-detail page from
+        rendering the family sidebar. UX was chosen over the original
+        C6+M1 anon-tightening; defense-in-depth is preserved by the
+        `is_published=True` filter on both sides in `get_queryset`, so
+        relationships involving unpublished persons remain invisible to
+        anon. Operators reviewing this tradeoff: if anon should not see
+        family links at all, revert permission_classes back to
+        `[permissions.IsAuthenticated, IsVolunteer]` and keep the
+        queryset filter (a no-op for authed viewers).
       parameters:
       - name: ordering
         required: false
@@ -2185,6 +2201,7 @@ paths:
       - api
       security:
       - cookieAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -2197,8 +2214,13 @@ paths:
       description: |-
         Family-relationship CRUD.
 
-        Read access: anyone (anonymous included) — the family list is part
-        of every person-detail response.
+        Read access: anonymous visitors can read relationships whose
+        BOTH persons are published — the public case-detail page renders
+        the family section for these rows. Anon reads are also gated
+        server-side in `get_queryset`, so unpublished persons' family
+        links never leak via this endpoint.
+
+        Authenticated volunteers / advocates / staff read everything.
 
         Write access (create / update / destroy):
             - Must be authenticated (`IsAuthenticatedOrReadOnly`).
@@ -2213,6 +2235,17 @@ paths:
         pair (see `FamilyRelationshipSerializer.validate`). Schema-level
         validation only — no business logic in the viewset beyond the
         gate + audit trail.
+
+        History note (C6 + M1, reverted 2026-09-22): the previous tighten
+        to `IsAuthenticated` blocked the public case-detail page from
+        rendering the family sidebar. UX was chosen over the original
+        C6+M1 anon-tightening; defense-in-depth is preserved by the
+        `is_published=True` filter on both sides in `get_queryset`, so
+        relationships involving unpublished persons remain invisible to
+        anon. Operators reviewing this tradeoff: if anon should not see
+        family links at all, revert permission_classes back to
+        `[permissions.IsAuthenticated, IsVolunteer]` and keep the
+        queryset filter (a no-op for authed viewers).
       tags:
       - api
       requestBody:
@@ -2242,8 +2275,13 @@ paths:
       description: |-
         Family-relationship CRUD.
 
-        Read access: anyone (anonymous included) — the family list is part
-        of every person-detail response.
+        Read access: anonymous visitors can read relationships whose
+        BOTH persons are published — the public case-detail page renders
+        the family section for these rows. Anon reads are also gated
+        server-side in `get_queryset`, so unpublished persons' family
+        links never leak via this endpoint.
+
+        Authenticated volunteers / advocates / staff read everything.
 
         Write access (create / update / destroy):
             - Must be authenticated (`IsAuthenticatedOrReadOnly`).
@@ -2258,6 +2296,17 @@ paths:
         pair (see `FamilyRelationshipSerializer.validate`). Schema-level
         validation only — no business logic in the viewset beyond the
         gate + audit trail.
+
+        History note (C6 + M1, reverted 2026-09-22): the previous tighten
+        to `IsAuthenticated` blocked the public case-detail page from
+        rendering the family sidebar. UX was chosen over the original
+        C6+M1 anon-tightening; defense-in-depth is preserved by the
+        `is_published=True` filter on both sides in `get_queryset`, so
+        relationships involving unpublished persons remain invisible to
+        anon. Operators reviewing this tradeoff: if anon should not see
+        family links at all, revert permission_classes back to
+        `[permissions.IsAuthenticated, IsVolunteer]` and keep the
+        queryset filter (a no-op for authed viewers).
       parameters:
       - in: path
         name: id
@@ -2269,6 +2318,7 @@ paths:
       - api
       security:
       - cookieAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -2281,8 +2331,13 @@ paths:
       description: |-
         Family-relationship CRUD.
 
-        Read access: anyone (anonymous included) — the family list is part
-        of every person-detail response.
+        Read access: anonymous visitors can read relationships whose
+        BOTH persons are published — the public case-detail page renders
+        the family section for these rows. Anon reads are also gated
+        server-side in `get_queryset`, so unpublished persons' family
+        links never leak via this endpoint.
+
+        Authenticated volunteers / advocates / staff read everything.
 
         Write access (create / update / destroy):
             - Must be authenticated (`IsAuthenticatedOrReadOnly`).
@@ -2297,6 +2352,17 @@ paths:
         pair (see `FamilyRelationshipSerializer.validate`). Schema-level
         validation only — no business logic in the viewset beyond the
         gate + audit trail.
+
+        History note (C6 + M1, reverted 2026-09-22): the previous tighten
+        to `IsAuthenticated` blocked the public case-detail page from
+        rendering the family sidebar. UX was chosen over the original
+        C6+M1 anon-tightening; defense-in-depth is preserved by the
+        `is_published=True` filter on both sides in `get_queryset`, so
+        relationships involving unpublished persons remain invisible to
+        anon. Operators reviewing this tradeoff: if anon should not see
+        family links at all, revert permission_classes back to
+        `[permissions.IsAuthenticated, IsVolunteer]` and keep the
+        queryset filter (a no-op for authed viewers).
       parameters:
       - in: path
         name: id
@@ -2332,8 +2398,13 @@ paths:
       description: |-
         Family-relationship CRUD.
 
-        Read access: anyone (anonymous included) — the family list is part
-        of every person-detail response.
+        Read access: anonymous visitors can read relationships whose
+        BOTH persons are published — the public case-detail page renders
+        the family section for these rows. Anon reads are also gated
+        server-side in `get_queryset`, so unpublished persons' family
+        links never leak via this endpoint.
+
+        Authenticated volunteers / advocates / staff read everything.
 
         Write access (create / update / destroy):
             - Must be authenticated (`IsAuthenticatedOrReadOnly`).
@@ -2348,6 +2419,17 @@ paths:
         pair (see `FamilyRelationshipSerializer.validate`). Schema-level
         validation only — no business logic in the viewset beyond the
         gate + audit trail.
+
+        History note (C6 + M1, reverted 2026-09-22): the previous tighten
+        to `IsAuthenticated` blocked the public case-detail page from
+        rendering the family sidebar. UX was chosen over the original
+        C6+M1 anon-tightening; defense-in-depth is preserved by the
+        `is_published=True` filter on both sides in `get_queryset`, so
+        relationships involving unpublished persons remain invisible to
+        anon. Operators reviewing this tradeoff: if anon should not see
+        family links at all, revert permission_classes back to
+        `[permissions.IsAuthenticated, IsVolunteer]` and keep the
+        queryset filter (a no-op for authed viewers).
       parameters:
       - in: path
         name: id
@@ -2382,8 +2464,13 @@ paths:
       description: |-
         Family-relationship CRUD.
 
-        Read access: anyone (anonymous included) — the family list is part
-        of every person-detail response.
+        Read access: anonymous visitors can read relationships whose
+        BOTH persons are published — the public case-detail page renders
+        the family section for these rows. Anon reads are also gated
+        server-side in `get_queryset`, so unpublished persons' family
+        links never leak via this endpoint.
+
+        Authenticated volunteers / advocates / staff read everything.
 
         Write access (create / update / destroy):
             - Must be authenticated (`IsAuthenticatedOrReadOnly`).
@@ -2398,6 +2485,17 @@ paths:
         pair (see `FamilyRelationshipSerializer.validate`). Schema-level
         validation only — no business logic in the viewset beyond the
         gate + audit trail.
+
+        History note (C6 + M1, reverted 2026-09-22): the previous tighten
+        to `IsAuthenticated` blocked the public case-detail page from
+        rendering the family sidebar. UX was chosen over the original
+        C6+M1 anon-tightening; defense-in-depth is preserved by the
+        `is_published=True` filter on both sides in `get_queryset`, so
+        relationships involving unpublished persons remain invisible to
+        anon. Operators reviewing this tradeoff: if anon should not see
+        family links at all, revert permission_classes back to
+        `[permissions.IsAuthenticated, IsVolunteer]` and keep the
+        queryset filter (a no-op for authed viewers).
       parameters:
       - in: path
         name: id
@@ -4213,7 +4311,7 @@ components:
             - `person_a != person_b` — no self-link.
             - One row per ordered `(person_a, person_b)` pair, regardless
               of type — the model already enforces this via
-              `unique_together = ['person_a', 'person_b']` but we drop
+              `UniqueConstraint(fields=['person_a','person_b'])` but we drop
               DRF's auto-validator (see `get_unique_together_validators`)
               so the volunteer sees a friendlier message.
             - For undirected types (`sibling`, `spouse`, `other`), the
@@ -4262,7 +4360,7 @@ components:
             - `person_a != person_b` — no self-link.
             - One row per ordered `(person_a, person_b)` pair, regardless
               of type — the model already enforces this via
-              `unique_together = ['person_a', 'person_b']` but we drop
+              `UniqueConstraint(fields=['person_a','person_b'])` but we drop
               DRF's auto-validator (see `get_unique_together_validators`)
               so the volunteer sees a friendlier message.
             - For undirected types (`sibling`, `spouse`, `other`), the
@@ -4951,7 +5049,7 @@ components:
             - `person_a != person_b` — no self-link.
             - One row per ordered `(person_a, person_b)` pair, regardless
               of type — the model already enforces this via
-              `unique_together = ['person_a', 'person_b']` but we drop
+              `UniqueConstraint(fields=['person_a','person_b'])` but we drop
               DRF's auto-validator (see `get_unique_together_validators`)
               so the volunteer sees a friendlier message.
             - For undirected types (`sibling`, `spouse`, `other`), the

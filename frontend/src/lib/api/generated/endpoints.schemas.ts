@@ -1001,7 +1001,7 @@ Validation (see `validate`):
     - `person_a != person_b` — no self-link.
     - One row per ordered `(person_a, person_b)` pair, regardless
       of type — the model already enforces this via
-      `unique_together = ['person_a', 'person_b']` but we drop
+      `UniqueConstraint(fields=['person_a','person_b'])` but we drop
       DRF's auto-validator (see `get_unique_together_validators`)
       so the volunteer sees a friendlier message.
     - For undirected types (`sibling`, `spouse`, `other`), the
@@ -1034,7 +1034,7 @@ Validation (see `validate`):
     - `person_a != person_b` — no self-link.
     - One row per ordered `(person_a, person_b)` pair, regardless
       of type — the model already enforces this via
-      `unique_together = ['person_a', 'person_b']` but we drop
+      `UniqueConstraint(fields=['person_a','person_b'])` but we drop
       DRF's auto-validator (see `get_unique_together_validators`)
       so the volunteer sees a friendlier message.
     - For undirected types (`sibling`, `spouse`, `other`), the
@@ -1408,7 +1408,7 @@ Validation (see `validate`):
     - `person_a != person_b` — no self-link.
     - One row per ordered `(person_a, person_b)` pair, regardless
       of type — the model already enforces this via
-      `unique_together = ['person_a', 'person_b']` but we drop
+      `UniqueConstraint(fields=['person_a','person_b'])` but we drop
       DRF's auto-validator (see `get_unique_together_validators`)
       so the volunteer sees a friendlier message.
     - For undirected types (`sibling`, `spouse`, `other`), the

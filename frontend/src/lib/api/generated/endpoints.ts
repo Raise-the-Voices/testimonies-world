@@ -2182,8 +2182,13 @@ export const apiPreferencesDestroy = async (id: number, options?: RequestInit): 
 /**
  * Family-relationship CRUD.
 
-Read access: anyone (anonymous included) — the family list is part
-of every person-detail response.
+Read access: anonymous visitors can read relationships whose
+BOTH persons are published — the public case-detail page renders
+the family section for these rows. Anon reads are also gated
+server-side in `get_queryset`, so unpublished persons' family
+links never leak via this endpoint.
+
+Authenticated volunteers / advocates / staff read everything.
 
 Write access (create / update / destroy):
     - Must be authenticated (`IsAuthenticatedOrReadOnly`).
@@ -2198,6 +2203,17 @@ Validation: the serializer enforces no-self-link and no-duplicate-
 pair (see `FamilyRelationshipSerializer.validate`). Schema-level
 validation only — no business logic in the viewset beyond the
 gate + audit trail.
+
+History note (C6 + M1, reverted 2026-09-22): the previous tighten
+to `IsAuthenticated` blocked the public case-detail page from
+rendering the family sidebar. UX was chosen over the original
+C6+M1 anon-tightening; defense-in-depth is preserved by the
+`is_published=True` filter on both sides in `get_queryset`, so
+relationships involving unpublished persons remain invisible to
+anon. Operators reviewing this tradeoff: if anon should not see
+family links at all, revert permission_classes back to
+`[permissions.IsAuthenticated, IsVolunteer]` and keep the
+queryset filter (a no-op for authed viewers).
  */
 export type apiRelationshipsListResponse200 = {
   data: PaginatedFamilyRelationshipList
@@ -2242,8 +2258,13 @@ export const apiRelationshipsList = async (params?: ApiRelationshipsListParams, 
 /**
  * Family-relationship CRUD.
 
-Read access: anyone (anonymous included) — the family list is part
-of every person-detail response.
+Read access: anonymous visitors can read relationships whose
+BOTH persons are published — the public case-detail page renders
+the family section for these rows. Anon reads are also gated
+server-side in `get_queryset`, so unpublished persons' family
+links never leak via this endpoint.
+
+Authenticated volunteers / advocates / staff read everything.
 
 Write access (create / update / destroy):
     - Must be authenticated (`IsAuthenticatedOrReadOnly`).
@@ -2258,6 +2279,17 @@ Validation: the serializer enforces no-self-link and no-duplicate-
 pair (see `FamilyRelationshipSerializer.validate`). Schema-level
 validation only — no business logic in the viewset beyond the
 gate + audit trail.
+
+History note (C6 + M1, reverted 2026-09-22): the previous tighten
+to `IsAuthenticated` blocked the public case-detail page from
+rendering the family sidebar. UX was chosen over the original
+C6+M1 anon-tightening; defense-in-depth is preserved by the
+`is_published=True` filter on both sides in `get_queryset`, so
+relationships involving unpublished persons remain invisible to
+anon. Operators reviewing this tradeoff: if anon should not see
+family links at all, revert permission_classes back to
+`[permissions.IsAuthenticated, IsVolunteer]` and keep the
+queryset filter (a no-op for authed viewers).
  */
 export type apiRelationshipsCreateResponse201 = {
   data: FamilyRelationship
@@ -2296,8 +2328,13 @@ export const apiRelationshipsCreate = async (familyRelationshipRequest: FamilyRe
 /**
  * Family-relationship CRUD.
 
-Read access: anyone (anonymous included) — the family list is part
-of every person-detail response.
+Read access: anonymous visitors can read relationships whose
+BOTH persons are published — the public case-detail page renders
+the family section for these rows. Anon reads are also gated
+server-side in `get_queryset`, so unpublished persons' family
+links never leak via this endpoint.
+
+Authenticated volunteers / advocates / staff read everything.
 
 Write access (create / update / destroy):
     - Must be authenticated (`IsAuthenticatedOrReadOnly`).
@@ -2312,6 +2349,17 @@ Validation: the serializer enforces no-self-link and no-duplicate-
 pair (see `FamilyRelationshipSerializer.validate`). Schema-level
 validation only — no business logic in the viewset beyond the
 gate + audit trail.
+
+History note (C6 + M1, reverted 2026-09-22): the previous tighten
+to `IsAuthenticated` blocked the public case-detail page from
+rendering the family sidebar. UX was chosen over the original
+C6+M1 anon-tightening; defense-in-depth is preserved by the
+`is_published=True` filter on both sides in `get_queryset`, so
+relationships involving unpublished persons remain invisible to
+anon. Operators reviewing this tradeoff: if anon should not see
+family links at all, revert permission_classes back to
+`[permissions.IsAuthenticated, IsVolunteer]` and keep the
+queryset filter (a no-op for authed viewers).
  */
 export type apiRelationshipsRetrieveResponse200 = {
   data: FamilyRelationship
@@ -2349,8 +2397,13 @@ export const apiRelationshipsRetrieve = async (id: number, options?: RequestInit
 /**
  * Family-relationship CRUD.
 
-Read access: anyone (anonymous included) — the family list is part
-of every person-detail response.
+Read access: anonymous visitors can read relationships whose
+BOTH persons are published — the public case-detail page renders
+the family section for these rows. Anon reads are also gated
+server-side in `get_queryset`, so unpublished persons' family
+links never leak via this endpoint.
+
+Authenticated volunteers / advocates / staff read everything.
 
 Write access (create / update / destroy):
     - Must be authenticated (`IsAuthenticatedOrReadOnly`).
@@ -2365,6 +2418,17 @@ Validation: the serializer enforces no-self-link and no-duplicate-
 pair (see `FamilyRelationshipSerializer.validate`). Schema-level
 validation only — no business logic in the viewset beyond the
 gate + audit trail.
+
+History note (C6 + M1, reverted 2026-09-22): the previous tighten
+to `IsAuthenticated` blocked the public case-detail page from
+rendering the family sidebar. UX was chosen over the original
+C6+M1 anon-tightening; defense-in-depth is preserved by the
+`is_published=True` filter on both sides in `get_queryset`, so
+relationships involving unpublished persons remain invisible to
+anon. Operators reviewing this tradeoff: if anon should not see
+family links at all, revert permission_classes back to
+`[permissions.IsAuthenticated, IsVolunteer]` and keep the
+queryset filter (a no-op for authed viewers).
  */
 export type apiRelationshipsUpdateResponse200 = {
   data: FamilyRelationship
@@ -2404,8 +2468,13 @@ export const apiRelationshipsUpdate = async (id: number,
 /**
  * Family-relationship CRUD.
 
-Read access: anyone (anonymous included) — the family list is part
-of every person-detail response.
+Read access: anonymous visitors can read relationships whose
+BOTH persons are published — the public case-detail page renders
+the family section for these rows. Anon reads are also gated
+server-side in `get_queryset`, so unpublished persons' family
+links never leak via this endpoint.
+
+Authenticated volunteers / advocates / staff read everything.
 
 Write access (create / update / destroy):
     - Must be authenticated (`IsAuthenticatedOrReadOnly`).
@@ -2420,6 +2489,17 @@ Validation: the serializer enforces no-self-link and no-duplicate-
 pair (see `FamilyRelationshipSerializer.validate`). Schema-level
 validation only — no business logic in the viewset beyond the
 gate + audit trail.
+
+History note (C6 + M1, reverted 2026-09-22): the previous tighten
+to `IsAuthenticated` blocked the public case-detail page from
+rendering the family sidebar. UX was chosen over the original
+C6+M1 anon-tightening; defense-in-depth is preserved by the
+`is_published=True` filter on both sides in `get_queryset`, so
+relationships involving unpublished persons remain invisible to
+anon. Operators reviewing this tradeoff: if anon should not see
+family links at all, revert permission_classes back to
+`[permissions.IsAuthenticated, IsVolunteer]` and keep the
+queryset filter (a no-op for authed viewers).
  */
 export type apiRelationshipsPartialUpdateResponse200 = {
   data: FamilyRelationship
@@ -2459,8 +2539,13 @@ export const apiRelationshipsPartialUpdate = async (id: number,
 /**
  * Family-relationship CRUD.
 
-Read access: anyone (anonymous included) — the family list is part
-of every person-detail response.
+Read access: anonymous visitors can read relationships whose
+BOTH persons are published — the public case-detail page renders
+the family section for these rows. Anon reads are also gated
+server-side in `get_queryset`, so unpublished persons' family
+links never leak via this endpoint.
+
+Authenticated volunteers / advocates / staff read everything.
 
 Write access (create / update / destroy):
     - Must be authenticated (`IsAuthenticatedOrReadOnly`).
@@ -2475,6 +2560,17 @@ Validation: the serializer enforces no-self-link and no-duplicate-
 pair (see `FamilyRelationshipSerializer.validate`). Schema-level
 validation only — no business logic in the viewset beyond the
 gate + audit trail.
+
+History note (C6 + M1, reverted 2026-09-22): the previous tighten
+to `IsAuthenticated` blocked the public case-detail page from
+rendering the family sidebar. UX was chosen over the original
+C6+M1 anon-tightening; defense-in-depth is preserved by the
+`is_published=True` filter on both sides in `get_queryset`, so
+relationships involving unpublished persons remain invisible to
+anon. Operators reviewing this tradeoff: if anon should not see
+family links at all, revert permission_classes back to
+`[permissions.IsAuthenticated, IsVolunteer]` and keep the
+queryset filter (a no-op for authed viewers).
  */
 export type apiRelationshipsDestroyResponse204 = {
   data: void
