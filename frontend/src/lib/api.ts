@@ -27,6 +27,20 @@ export type {
 
 const API_BASE = `${base}/api`;
 
+/**
+ * Default per-request timeout. Prevents a hung server from hanging
+ * the UI indefinitely — every form's 4-way catch maps `status: 0` to
+ * a friendly network / server error message, so a timeout shows up
+ * to the user as "The server took too long to respond…" rather than
+ * a frozen spinner.
+ *
+ * 30s is generous enough for slow connections / large payloads
+ * (media uploads typically complete in 5-15s; we expect <5s for JSON
+ * CRUD). Long-running uploads can override per-call via
+ * `request(path, { timeoutMs: 0 })` to disable.
+ */
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
 // Error parsing is pure and SvelteKit-free — it lives in `api/errors.ts`
 // so vitest can import it in node mode and the orval `fetcher()` in
 // `api/mutator.ts` can share it. Re-exported here for callers that
@@ -65,7 +79,20 @@ function getCsrfToken(): string {
 
 export async function request<T>(
 	path: string,
-	options: RequestInit & { fetch?: typeof globalThis.fetch } = {},
+	options: RequestInit & {
+		fetch?: typeof globalThis.fetch;
+		/**
+		 * Hard timeout in milliseconds. If the server doesn't respond
+		 * within this window the request is aborted and an `ApiError`
+		 * with `status: 0`, `statusText: 'timeout'` is thrown — caught
+		 * by the existing 4-way switch in every form as a network /
+		 * server failure.
+		 *
+		 * Default: `DEFAULT_REQUEST_TIMEOUT_MS` (30s). Pass `0` to
+		 * disable the timeout for long-running uploads.
+		 */
+		timeoutMs?: number;
+	} = {},
 ): Promise<T> {
 	const url = `${API_BASE}${path}`;
 
@@ -96,14 +123,48 @@ export async function request<T>(
 	// `credentials: 'include'` already handles cookies.
 	const doFetch = options.fetch ?? globalThis.fetch.bind(globalThis);
 
+	// Timeout: race the fetch against a setTimeout. Aborting causes
+	// doFetch to reject with an AbortError, which we re-throw as a
+	// timeout ApiError below. `timeoutMs === 0` disables (used for
+	// long-running uploads where 30s isn't enough).
+	const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+	const timeoutController =
+		timeoutMs > 0 ? new AbortController() : null;
+	const timeoutId = timeoutController
+		? setTimeout(() => timeoutController.abort(), timeoutMs)
+		: null;
+
 	let res: Response;
 	try {
 		res = await doFetch(url, {
 			credentials: 'include',
 			headers,
 			...options,
+			signal: timeoutController?.signal,
 		});
 	} catch (e) {
+		if (timeoutId) clearTimeout(timeoutId);
+		// Timeout aborts land here as DOMException('AbortError').
+		// Distinguish from a caller-supplied AbortSignal: if the
+		// timeout fired, surface as a friendly timeout message;
+		// otherwise (e.g. unmount-time abort) re-throw a generic
+		// network error.
+		const isTimeout =
+			timeoutController !== null &&
+			timeoutController.signal.aborted &&
+			e instanceof DOMException &&
+			e.name === 'AbortError';
+		if (isTimeout) {
+			throw new ApiError(
+				`The server took too long to respond (over ${Math.round(timeoutMs / 1000)}s). Please try again.`,
+				0,
+				'timeout',
+				{},
+				null,
+				[],
+				'',
+			);
+		}
 		// Network / CORS / offline
 		throw new ApiError(
 			"Couldn't reach the server — check your connection and try again.",
@@ -115,6 +176,7 @@ export async function request<T>(
 			'',
 		);
 	}
+	if (timeoutId) clearTimeout(timeoutId);
 
 	if (res.ok) {
 		// DELETE responses are usually 204 No Content (empty body). Calling
