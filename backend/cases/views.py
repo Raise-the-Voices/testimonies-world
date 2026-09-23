@@ -392,7 +392,12 @@ class PersonViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not (user.is_staff or user.groups.filter(name='Advocate').exists()):
             serializer.validated_data.pop('is_published', None)
-        serializer.save(created_by=user)
+        instance = serializer.save(created_by=user)
+        # Audit-log the create (audit H-2). The other CRUD ops
+        # (update, destroy, retrieve-private) were already wired;
+        # create was the missing piece. Co-located with the save so a
+        # DB failure on either side surfaces as a 500 to the client.
+        self._audit(AuditLog.Action.EDITED, instance, 'created')
 
     def perform_update(self, serializer):
         # Same `is_published` guard as perform_create. A volunteer
@@ -430,6 +435,10 @@ class PersonViewSet(viewsets.ModelViewSet):
                         source='auto',
                         created_by=user,
                     )
+            # Audit-log the update (audit H-2). Inside the atomic block
+            # so the audit + CaseEvent rows either both land or both
+            # roll back together with the save.
+            self._audit(AuditLog.Action.EDITED, instance, 'updated')
 
     def retrieve(self, request, *args, **kwargs):
         # Audit-log every detail view of a Person. Anonymous retrievals are
@@ -990,12 +999,31 @@ class MediaViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         self._check_sensitive_upload(serializer)
-        serializer.save(uploaded_by=self.request.user)
+        instance = serializer.save(uploaded_by=self.request.user)
+        # Audit-log the create (audit H-2). Co-located with the save
+        # so a DB failure on either side surfaces as a 500.
+        self._audit(AuditLog.Action.EDITED, instance, 'created')
 
     def perform_update(self, serializer):
         self._check_sensitive_upload(serializer)
         # Don't overwrite uploaded_by on edit.
-        serializer.save()
+        instance = serializer.save()
+        # Audit-log the update (audit H-2).
+        self._audit(AuditLog.Action.EDITED, instance, 'updated')
+
+    def perform_destroy(self, instance):
+        # Audit-log the destroy (audit H-2). The default DRF destroy
+        # was silent — no paper trail when a media row was removed.
+        # Capture provenance BEFORE the delete so this audit row is
+        # the only surviving trace after the cascade. Mirrors the
+        # shape used by PersonViewSet.perform_destroy.
+        details = (
+            f'visibility={instance.visibility}; '
+            f'person_id={instance.person_id}; '
+            f'report_id={instance.report_id}'
+        )
+        self._audit(AuditLog.Action.DELETED, instance, details)
+        instance.delete()
 
 
 class CaseCategoryViewSet(viewsets.ReadOnlyModelViewSet):
