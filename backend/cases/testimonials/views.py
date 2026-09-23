@@ -273,9 +273,21 @@ class TestimonialViewSet(viewsets.ModelViewSet):
 
     # -- Workflow transitions -------------------------------------------
 
-    @action(detail=True, methods=['post'])
+    @action(
+        detail=True, methods=['post'],
+        permission_classes=[CanSubmitTestimonial],
+    )
     def submit(self, request, pk=None):
-        """draft → under_review (or rejected → under_review for re-submit)."""
+        """draft → under_review (or rejected → under_review for re-submit).
+
+        Audit H-3: previously had no permission_classes declared, so
+        it fell back to the viewset default IsAuthenticatedOrReadOnly.
+        Any logged-in volunteer could submit any other volunteer's
+        draft. Now gated by CanSubmitTestimonial (authenticated role)
+        AND an object-level authorship check inside _transition
+        (volunteer can submit only their own draft; staff/Advocate
+        can submit any draft for migration / cleanup workflows).
+        """
         return self._transition(
             request, pk,
             from_states=[Testimonial.Status.DRAFT,
@@ -386,6 +398,24 @@ class TestimonialViewSet(viewsets.ModelViewSet):
                               f'"{instance.status}". Allowed: '
                               f'{", ".join(from_states)}.',
                 })
+
+            # Audit H-3: object-level authorship check on the submit
+            # path. A volunteer may submit only their own draft.
+            # Staff and Advocate group members may submit any draft
+            # (so an admin can rescue an orphaned draft, or an
+            # Advocate can re-submit on behalf of an unreachable
+            # volunteer). Approve/reject/archive keep their own
+            # reviewer-only gate and do not enforce authorship here.
+            if action_name == 'submit':
+                user = request.user
+                is_staff_or_advocate = (
+                    user.is_staff
+                    or user.groups.filter(name='Advocate').exists()
+                )
+                if not is_staff_or_advocate and instance.created_by_id != user.id:
+                    raise PermissionDenied(
+                        'You can only submit drafts you authored.'
+                    )
 
             previous = instance.status
             instance.status = to_state

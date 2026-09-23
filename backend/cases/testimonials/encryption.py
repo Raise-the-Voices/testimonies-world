@@ -89,6 +89,20 @@ def get_fernet() -> Fernet | MultiFernet:
             'the env file.',
             RuntimeWarning, stacklevel=2,
         )
+        # Audit H-6: emit a separate DeprecationWarning alongside the
+        # RuntimeWarning so dev sees a clear "this is going away"
+        # signal. Kept the original RuntimeWarning unchanged so the
+        # existing pin in tests.py keeps passing. The DeprecationWarning
+        # will surface in any dev tooling that filters for it; the
+        # grace period is ~4 weeks from this commit, after which the
+        # fallback path itself goes away (separate commit).
+        warnings.warn(
+            'cases.testimonials.dev_key fallback is DEPRECATED and '
+            'will be removed (audit H-6). Generate a real key with '
+            '`./scripts/gen-dev-key.sh` and set TESTIMONIALS_FERNET_KEY '
+            'in your .env.',
+            DeprecationWarning, stacklevel=2,
+        )
         return _key_to_fernet(TESTIMONIALS_DEV_FALLBACK_KEY)
 
     raise ImproperlyConfigured(
