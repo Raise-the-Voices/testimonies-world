@@ -2840,6 +2840,83 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/reports/{id}/internal/:
+    put:
+      operationId: reports_internal_update
+      description: |-
+        PATCH/PUT Section M fields. Staff or Advocate group only.
+
+        Body: any subset of {risk_level, risk_concerns,
+        risk_concerns_other, internal_notes}. Returns the updated row
+        via the full ReportSerializer (the same read shape an
+        Advocate sees from /api/reports/<id>/).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this report.
+        required: true
+      tags:
+      - reports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportInternalWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReportInternalWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReportInternalWriteRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportInternalWrite'
+          description: ''
+    patch:
+      operationId: reports_internal_partial_update
+      description: |-
+        PATCH/PUT Section M fields. Staff or Advocate group only.
+
+        Body: any subset of {risk_level, risk_concerns,
+        risk_concerns_other, internal_notes}. Returns the updated row
+        via the full ReportSerializer (the same read shape an
+        Advocate sees from /api/reports/<id>/).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this report.
+        required: true
+      tags:
+      - reports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedReportInternalWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedReportInternalWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedReportInternalWriteRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportInternalWrite'
+          description: ''
   /api/sources/:
     get:
       operationId: sources_list
@@ -2935,6 +3012,7 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/SourceRequest'
+        required: true
       security:
       - cookieAuth: []
       responses:
@@ -3012,6 +3090,7 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/SourceRequest'
+        required: true
       security:
       - cookieAuth: []
       responses:
@@ -3724,7 +3803,16 @@ paths:
   /api/testimonials/{id}/submit/:
     post:
       operationId: testimonials_submit_create
-      description: draft → under_review (or rejected → under_review for re-submit).
+      description: |-
+        draft → under_review (or rejected → under_review for re-submit).
+
+        Audit H-3: previously had no permission_classes declared, so
+        it fell back to the viewset default IsAuthenticatedOrReadOnly.
+        Any logged-in volunteer could submit any other volunteer's
+        draft. Now gated by CanSubmitTestimonial (authenticated role)
+        AND an object-level authorship check inside _transition
+        (volunteer can submit only their own draft; staff/Advocate
+        can submit any draft for migration / cleanup workflows).
       parameters:
       - in: path
         name: id
@@ -5381,6 +5469,48 @@ components:
         final_reviewer:
           type: integer
           nullable: true
+    PatchedReportInternalWriteRequest:
+      type: object
+      description: |-
+        Dedicated write serializer for the Section M (risk + internal
+        notes) fields. Used by ReportViewSet.internal_update — a
+        separate endpoint gated to IsAdvocate (staff or Advocate group).
+
+        Audit H-5: these fields were previously writable by any
+        authenticated user via the volunteer ReportSerializer, even though
+        the read side already stripped them for non-Advocates. Asymmetric
+        gate. The new endpoint makes the rule symmetric and audit-clear:
+
+          volunteer:     /api/reports/<id>/  PATCH  →  403 (Section M not writable)
+          staff/advocate: /api/reports/<id>/internal/  PATCH  →  allowed
+
+        Same model, same fields. Only Section M (risk_level,
+        risk_concerns, risk_concerns_other, internal_notes) is writable
+        here; the volunteer-facing fields are still in
+        read_only_fields so this serializer is a strict superset of
+        what the volunteer serializer accepts.
+      properties:
+        risk_level:
+          description: |-
+            INTERNAL — Section M. Never exposed via public API.
+
+            * `low` - Low
+            * `moderate` - Moderate
+            * `high` - High
+            * `critical` - Critical
+            * `not_assessed` - Not assessed
+          oneOf:
+          - $ref: '#/components/schemas/RiskLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        risk_concerns:
+          description: INTERNAL — Section M checklist.
+        risk_concerns_other:
+          type: string
+          description: INTERNAL — free-text when "other" is selected.
+          maxLength: 255
+        internal_notes:
+          type: string
+          description: INTERNAL — Section M. Stripped from public API always.
     PatchedReportRequest:
       type: object
       properties:
@@ -5645,27 +5775,6 @@ components:
         unverified_information_remaining:
           type: string
           description: Information that remains unverified (Section L).
-        risk_level:
-          description: |-
-            INTERNAL — Section M. Never exposed via public API.
-
-            * `low` - Low
-            * `moderate` - Moderate
-            * `high` - High
-            * `critical` - Critical
-            * `not_assessed` - Not assessed
-          oneOf:
-          - $ref: '#/components/schemas/RiskLevelEnum'
-          - $ref: '#/components/schemas/BlankEnum'
-        risk_concerns:
-          description: INTERNAL — Section M checklist.
-        risk_concerns_other:
-          type: string
-          description: INTERNAL — free-text when "other" is selected.
-          maxLength: 255
-        internal_notes:
-          type: string
-          description: INTERNAL — Section M. Stripped from public API always.
         qc_name_checked:
           type: boolean
         qc_duplicate_check_completed:
@@ -5716,6 +5825,8 @@ components:
         Report source_* fields so the volunteer form doesn't need to teach
         two vocabularies.
       properties:
+        report:
+          type: integer
         source_type:
           $ref: '#/components/schemas/SourceTypeEnum'
         source_attribution:
@@ -7340,6 +7451,9 @@ components:
           type: string
           description: Information that remains unverified (Section L).
         risk_level:
+          allOf:
+          - $ref: '#/components/schemas/RiskLevelEnum'
+          readOnly: true
           description: |-
             INTERNAL — Section M. Never exposed via public API.
 
@@ -7348,17 +7462,16 @@ components:
             * `high` - High
             * `critical` - Critical
             * `not_assessed` - Not assessed
-          oneOf:
-          - $ref: '#/components/schemas/RiskLevelEnum'
-          - $ref: '#/components/schemas/BlankEnum'
         risk_concerns:
+          readOnly: true
           description: INTERNAL — Section M checklist.
         risk_concerns_other:
           type: string
+          readOnly: true
           description: INTERNAL — free-text when "other" is selected.
-          maxLength: 255
         internal_notes:
           type: string
+          readOnly: true
           description: INTERNAL — Section M. Stripped from public API always.
         qc_name_checked:
           type: boolean
@@ -7407,10 +7520,98 @@ components:
       - created_at
       - created_by
       - id
+      - internal_notes
       - media_files
       - narrative
       - person
+      - risk_concerns
+      - risk_concerns_other
+      - risk_level
       - updated_at
+    ReportInternalWrite:
+      type: object
+      description: |-
+        Dedicated write serializer for the Section M (risk + internal
+        notes) fields. Used by ReportViewSet.internal_update — a
+        separate endpoint gated to IsAdvocate (staff or Advocate group).
+
+        Audit H-5: these fields were previously writable by any
+        authenticated user via the volunteer ReportSerializer, even though
+        the read side already stripped them for non-Advocates. Asymmetric
+        gate. The new endpoint makes the rule symmetric and audit-clear:
+
+          volunteer:     /api/reports/<id>/  PATCH  →  403 (Section M not writable)
+          staff/advocate: /api/reports/<id>/internal/  PATCH  →  allowed
+
+        Same model, same fields. Only Section M (risk_level,
+        risk_concerns, risk_concerns_other, internal_notes) is writable
+        here; the volunteer-facing fields are still in
+        read_only_fields so this serializer is a strict superset of
+        what the volunteer serializer accepts.
+      properties:
+        risk_level:
+          description: |-
+            INTERNAL — Section M. Never exposed via public API.
+
+            * `low` - Low
+            * `moderate` - Moderate
+            * `high` - High
+            * `critical` - Critical
+            * `not_assessed` - Not assessed
+          oneOf:
+          - $ref: '#/components/schemas/RiskLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        risk_concerns:
+          description: INTERNAL — Section M checklist.
+        risk_concerns_other:
+          type: string
+          description: INTERNAL — free-text when "other" is selected.
+          maxLength: 255
+        internal_notes:
+          type: string
+          description: INTERNAL — Section M. Stripped from public API always.
+    ReportInternalWriteRequest:
+      type: object
+      description: |-
+        Dedicated write serializer for the Section M (risk + internal
+        notes) fields. Used by ReportViewSet.internal_update — a
+        separate endpoint gated to IsAdvocate (staff or Advocate group).
+
+        Audit H-5: these fields were previously writable by any
+        authenticated user via the volunteer ReportSerializer, even though
+        the read side already stripped them for non-Advocates. Asymmetric
+        gate. The new endpoint makes the rule symmetric and audit-clear:
+
+          volunteer:     /api/reports/<id>/  PATCH  →  403 (Section M not writable)
+          staff/advocate: /api/reports/<id>/internal/  PATCH  →  allowed
+
+        Same model, same fields. Only Section M (risk_level,
+        risk_concerns, risk_concerns_other, internal_notes) is writable
+        here; the volunteer-facing fields are still in
+        read_only_fields so this serializer is a strict superset of
+        what the volunteer serializer accepts.
+      properties:
+        risk_level:
+          description: |-
+            INTERNAL — Section M. Never exposed via public API.
+
+            * `low` - Low
+            * `moderate` - Moderate
+            * `high` - High
+            * `critical` - Critical
+            * `not_assessed` - Not assessed
+          oneOf:
+          - $ref: '#/components/schemas/RiskLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        risk_concerns:
+          description: INTERNAL — Section M checklist.
+        risk_concerns_other:
+          type: string
+          description: INTERNAL — free-text when "other" is selected.
+          maxLength: 255
+        internal_notes:
+          type: string
+          description: INTERNAL — Section M. Stripped from public API always.
     ReportRequest:
       type: object
       properties:
@@ -7675,27 +7876,6 @@ components:
         unverified_information_remaining:
           type: string
           description: Information that remains unverified (Section L).
-        risk_level:
-          description: |-
-            INTERNAL — Section M. Never exposed via public API.
-
-            * `low` - Low
-            * `moderate` - Moderate
-            * `high` - High
-            * `critical` - Critical
-            * `not_assessed` - Not assessed
-          oneOf:
-          - $ref: '#/components/schemas/RiskLevelEnum'
-          - $ref: '#/components/schemas/BlankEnum'
-        risk_concerns:
-          description: INTERNAL — Section M checklist.
-        risk_concerns_other:
-          type: string
-          description: INTERNAL — free-text when "other" is selected.
-          maxLength: 255
-        internal_notes:
-          type: string
-          description: INTERNAL — Section M. Stripped from public API always.
         qc_name_checked:
           type: boolean
         qc_duplicate_check_completed:
@@ -7812,7 +7992,6 @@ components:
           readOnly: true
         report:
           type: integer
-          readOnly: true
         source_type:
           $ref: '#/components/schemas/SourceTypeEnum'
         source_attribution:
@@ -7859,6 +8038,8 @@ components:
         Report source_* fields so the volunteer form doesn't need to teach
         two vocabularies.
       properties:
+        report:
+          type: integer
         source_type:
           $ref: '#/components/schemas/SourceTypeEnum'
         source_attribution:
@@ -7874,6 +8055,8 @@ components:
         is_private:
           type: boolean
           description: Hide this source from public reads.
+      required:
+      - report
     SourceTypeEnum:
       enum:
       - firsthand

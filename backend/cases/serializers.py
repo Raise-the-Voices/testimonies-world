@@ -257,7 +257,17 @@ class ReportSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializ
     class Meta:
         model = Report
         fields = '__all__'
-        read_only_fields = ['created_by', 'created_at', 'updated_at']
+        # Audit H-5: Section M (risk_level, risk_concerns,
+        # risk_concerns_other, internal_notes) is moved to a dedicated
+        # admin-only endpoint (ReportViewSet.internal_update, gated to
+        # IsAdvocate). On the volunteer-facing serializer these fields
+        # are read-only — silently dropped on PATCH. Staff and
+        # Advocate group members use the dedicated endpoint instead.
+        read_only_fields = [
+            'created_by', 'created_at', 'updated_at',
+            'risk_level', 'risk_concerns', 'risk_concerns_other',
+            'internal_notes',
+        ]
 
     def create(self, validated_data):
         # Writable `sources` requires an explicit `.create()` — DRF's
@@ -293,6 +303,36 @@ class ReportSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializ
                 data.pop(field, None)
 
         return data
+
+
+class ReportInternalWriteSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
+    """Dedicated write serializer for the Section M (risk + internal
+    notes) fields. Used by ReportViewSet.internal_update — a
+    separate endpoint gated to IsAdvocate (staff or Advocate group).
+
+    Audit H-5: these fields were previously writable by any
+    authenticated user via the volunteer ReportSerializer, even though
+    the read side already stripped them for non-Advocates. Asymmetric
+    gate. The new endpoint makes the rule symmetric and audit-clear:
+
+      volunteer:     /api/reports/<id>/  PATCH  →  403 (Section M not writable)
+      staff/advocate: /api/reports/<id>/internal/  PATCH  →  allowed
+
+    Same model, same fields. Only Section M (risk_level,
+    risk_concerns, risk_concerns_other, internal_notes) is writable
+    here; the volunteer-facing fields are still in
+    read_only_fields so this serializer is a strict superset of
+    what the volunteer serializer accepts.
+    """
+    text_fields = ['internal_notes']
+
+    class Meta:
+        model = Report
+        fields = [
+            'risk_level', 'risk_concerns', 'risk_concerns_other',
+            'internal_notes',
+        ]
+        read_only_fields = []
 
 
 class PersonListSerializer(serializers.ModelSerializer):

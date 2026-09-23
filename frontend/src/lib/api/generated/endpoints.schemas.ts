@@ -580,11 +580,11 @@ export const ReportResponseType = {...ResponseTypeEnum,...BlankEnum,} as const
 
 export const ReportRequestResponseType = {...ResponseTypeEnum,...BlankEnum,} as const
 
-export const PatchedReportRequestRiskLevel = {...RiskLevelEnum,...BlankEnum,} as const
+export const PatchedReportInternalWriteRequestRiskLevel = {...RiskLevelEnum,...BlankEnum,} as const
 
-export const ReportRiskLevel = {...RiskLevelEnum,...BlankEnum,} as const
+export const ReportInternalWriteRiskLevel = {...RiskLevelEnum,...BlankEnum,} as const
 
-export const ReportRequestRiskLevel = {...RiskLevelEnum,...BlankEnum,} as const
+export const ReportInternalWriteRequestRiskLevel = {...RiskLevelEnum,...BlankEnum,} as const
 
 export const PatchedReportRequestSourceConsistency = {...SourceConsistencyEnum,...BlankEnum,} as const
 
@@ -1698,6 +1698,45 @@ export interface PatchedPersonWriteRequest {
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
+/**
+ * Dedicated write serializer for the Section M (risk + internal
+notes) fields. Used by ReportViewSet.internal_update — a
+separate endpoint gated to IsAdvocate (staff or Advocate group).
+
+Audit H-5: these fields were previously writable by any
+authenticated user via the volunteer ReportSerializer, even though
+the read side already stripped them for non-Advocates. Asymmetric
+gate. The new endpoint makes the rule symmetric and audit-clear:
+
+  volunteer:     /api/reports/<id>/  PATCH  →  403 (Section M not writable)
+  staff/advocate: /api/reports/<id>/internal/  PATCH  →  allowed
+
+Same model, same fields. Only Section M (risk_level,
+risk_concerns, risk_concerns_other, internal_notes) is writable
+here; the volunteer-facing fields are still in
+read_only_fields so this serializer is a strict superset of
+what the volunteer serializer accepts.
+ */
+export interface PatchedReportInternalWriteRequest {
+  /** INTERNAL — Section M. Never exposed via public API.
+
+* `low` - Low
+* `moderate` - Moderate
+* `high` - High
+* `critical` - Critical
+* `not_assessed` - Not assessed */
+  risk_level?: typeof PatchedReportInternalWriteRequestRiskLevel[keyof typeof PatchedReportInternalWriteRequestRiskLevel] ;
+  /** INTERNAL — Section M checklist. */
+  risk_concerns?: unknown;
+  /**
+   * INTERNAL — free-text when "other" is selected.
+   * @maxLength 255
+   */
+  risk_concerns_other?: string;
+  /** INTERNAL — Section M. Stripped from public API always. */
+  internal_notes?: string;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -1909,23 +1948,6 @@ export interface PatchedReportRequest {
   verification_reason?: string;
   /** Information that remains unverified (Section L). */
   unverified_information_remaining?: string;
-  /** INTERNAL — Section M. Never exposed via public API.
-
-* `low` - Low
-* `moderate` - Moderate
-* `high` - High
-* `critical` - Critical
-* `not_assessed` - Not assessed */
-  risk_level?: typeof PatchedReportRequestRiskLevel[keyof typeof PatchedReportRequestRiskLevel] ;
-  /** INTERNAL — Section M checklist. */
-  risk_concerns?: unknown;
-  /**
-   * INTERNAL — free-text when "other" is selected.
-   * @maxLength 255
-   */
-  risk_concerns_other?: string;
-  /** INTERNAL — Section M. Stripped from public API always. */
-  internal_notes?: string;
   qc_name_checked?: boolean;
   qc_duplicate_check_completed?: boolean;
   qc_date_checked?: boolean;
@@ -1957,6 +1979,7 @@ Report source_* fields so the volunteer form doesn't need to teach
 two vocabularies.
  */
 export interface PatchedSourceRequest {
+  report?: number;
   source_type?: SourceTypeEnum;
   /**
    * Public attribution — e.g. "family member", "BBC report"
@@ -3056,8 +3079,6 @@ export type RelationshipTypeEnum = typeof RelationshipTypeEnum[keyof typeof Rela
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-
 export interface Report {
   readonly id: number;
   readonly media_files: readonly Media[];
@@ -3245,16 +3266,13 @@ export interface Report {
 * `high` - High
 * `critical` - Critical
 * `not_assessed` - Not assessed */
-  risk_level?: typeof ReportRiskLevel[keyof typeof ReportRiskLevel] ;
+  readonly risk_level: RiskLevelEnum;
   /** INTERNAL — Section M checklist. */
-  risk_concerns?: unknown;
-  /**
-   * INTERNAL — free-text when "other" is selected.
-   * @maxLength 255
-   */
-  risk_concerns_other?: string;
+  readonly risk_concerns: unknown;
+  /** INTERNAL — free-text when "other" is selected. */
+  readonly risk_concerns_other: string;
   /** INTERNAL — Section M. Stripped from public API always. */
-  internal_notes?: string;
+  readonly internal_notes: string;
   qc_name_checked?: boolean;
   qc_duplicate_check_completed?: boolean;
   qc_date_checked?: boolean;
@@ -3279,6 +3297,86 @@ export interface Report {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
+
+/**
+ * Dedicated write serializer for the Section M (risk + internal
+notes) fields. Used by ReportViewSet.internal_update — a
+separate endpoint gated to IsAdvocate (staff or Advocate group).
+
+Audit H-5: these fields were previously writable by any
+authenticated user via the volunteer ReportSerializer, even though
+the read side already stripped them for non-Advocates. Asymmetric
+gate. The new endpoint makes the rule symmetric and audit-clear:
+
+  volunteer:     /api/reports/<id>/  PATCH  →  403 (Section M not writable)
+  staff/advocate: /api/reports/<id>/internal/  PATCH  →  allowed
+
+Same model, same fields. Only Section M (risk_level,
+risk_concerns, risk_concerns_other, internal_notes) is writable
+here; the volunteer-facing fields are still in
+read_only_fields so this serializer is a strict superset of
+what the volunteer serializer accepts.
+ */
+export interface ReportInternalWrite {
+  /** INTERNAL — Section M. Never exposed via public API.
+
+* `low` - Low
+* `moderate` - Moderate
+* `high` - High
+* `critical` - Critical
+* `not_assessed` - Not assessed */
+  risk_level?: typeof ReportInternalWriteRiskLevel[keyof typeof ReportInternalWriteRiskLevel] ;
+  /** INTERNAL — Section M checklist. */
+  risk_concerns?: unknown;
+  /**
+   * INTERNAL — free-text when "other" is selected.
+   * @maxLength 255
+   */
+  risk_concerns_other?: string;
+  /** INTERNAL — Section M. Stripped from public API always. */
+  internal_notes?: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+
+/**
+ * Dedicated write serializer for the Section M (risk + internal
+notes) fields. Used by ReportViewSet.internal_update — a
+separate endpoint gated to IsAdvocate (staff or Advocate group).
+
+Audit H-5: these fields were previously writable by any
+authenticated user via the volunteer ReportSerializer, even though
+the read side already stripped them for non-Advocates. Asymmetric
+gate. The new endpoint makes the rule symmetric and audit-clear:
+
+  volunteer:     /api/reports/<id>/  PATCH  →  403 (Section M not writable)
+  staff/advocate: /api/reports/<id>/internal/  PATCH  →  allowed
+
+Same model, same fields. Only Section M (risk_level,
+risk_concerns, risk_concerns_other, internal_notes) is writable
+here; the volunteer-facing fields are still in
+read_only_fields so this serializer is a strict superset of
+what the volunteer serializer accepts.
+ */
+export interface ReportInternalWriteRequest {
+  /** INTERNAL — Section M. Never exposed via public API.
+
+* `low` - Low
+* `moderate` - Moderate
+* `high` - High
+* `critical` - Critical
+* `not_assessed` - Not assessed */
+  risk_level?: typeof ReportInternalWriteRequestRiskLevel[keyof typeof ReportInternalWriteRequestRiskLevel] ;
+  /** INTERNAL — Section M checklist. */
+  risk_concerns?: unknown;
+  /**
+   * INTERNAL — free-text when "other" is selected.
+   * @maxLength 255
+   */
+  risk_concerns_other?: string;
+  /** INTERNAL — Section M. Stripped from public API always. */
+  internal_notes?: string;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
@@ -3491,23 +3589,6 @@ export interface ReportRequest {
   verification_reason?: string;
   /** Information that remains unverified (Section L). */
   unverified_information_remaining?: string;
-  /** INTERNAL — Section M. Never exposed via public API.
-
-* `low` - Low
-* `moderate` - Moderate
-* `high` - High
-* `critical` - Critical
-* `not_assessed` - Not assessed */
-  risk_level?: typeof ReportRequestRiskLevel[keyof typeof ReportRequestRiskLevel] ;
-  /** INTERNAL — Section M checklist. */
-  risk_concerns?: unknown;
-  /**
-   * INTERNAL — free-text when "other" is selected.
-   * @maxLength 255
-   */
-  risk_concerns_other?: string;
-  /** INTERNAL — Section M. Stripped from public API always. */
-  internal_notes?: string;
   qc_name_checked?: boolean;
   qc_duplicate_check_completed?: boolean;
   qc_date_checked?: boolean;
@@ -3585,7 +3666,7 @@ two vocabularies.
  */
 export interface Source {
   readonly id: number;
-  readonly report: number;
+  report: number;
   source_type?: SourceTypeEnum;
   /**
    * Public attribution — e.g. "family member", "BBC report"
@@ -3620,6 +3701,7 @@ Report source_* fields so the volunteer form doesn't need to teach
 two vocabularies.
  */
 export interface SourceRequest {
+  report: number;
   source_type?: SourceTypeEnum;
   /**
    * Public attribution — e.g. "family member", "BBC report"

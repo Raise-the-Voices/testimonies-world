@@ -46,6 +46,7 @@ import type {
   PatchedFamilyRelationshipRequest,
   PatchedMediaRequest,
   PatchedPersonWriteRequest,
+  PatchedReportInternalWriteRequest,
   PatchedReportRequest,
   PatchedSourceRequest,
   PatchedTestimonialTagRequest,
@@ -62,6 +63,8 @@ import type {
   RelatedPersonsResponse,
   RelationshipsListParams,
   Report,
+  ReportInternalWrite,
+  ReportInternalWriteRequest,
   ReportRequest,
   ReportsListParams,
   Source,
@@ -2960,6 +2963,92 @@ export const reportsDestroy = async (id: number, options?: RequestInit): Promise
 
 
 /**
+ * PATCH/PUT Section M fields. Staff or Advocate group only.
+
+Body: any subset of {risk_level, risk_concerns,
+risk_concerns_other, internal_notes}. Returns the updated row
+via the full ReportSerializer (the same read shape an
+Advocate sees from /api/reports/<id>/).
+ */
+export type reportsInternalUpdateResponse200 = {
+  data: ReportInternalWrite
+  status: 200
+}
+    
+export type reportsInternalUpdateResponseSuccess = (reportsInternalUpdateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type reportsInternalUpdateResponse = (reportsInternalUpdateResponseSuccess)
+
+export const getReportsInternalUpdateUrl = (id: number,) => {
+
+
+  
+
+  return `/api/reports/${id}/internal/`
+}
+
+export const reportsInternalUpdate = async (id: number,
+    reportInternalWriteRequest: ReportInternalWriteRequest, options?: RequestInit): Promise<reportsInternalUpdateResponse> => {
+  
+  return fetcher<reportsInternalUpdateResponse>(getReportsInternalUpdateUrl(id),
+  {      
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      reportInternalWriteRequest,)
+  }
+);}
+
+
+
+/**
+ * PATCH/PUT Section M fields. Staff or Advocate group only.
+
+Body: any subset of {risk_level, risk_concerns,
+risk_concerns_other, internal_notes}. Returns the updated row
+via the full ReportSerializer (the same read shape an
+Advocate sees from /api/reports/<id>/).
+ */
+export type reportsInternalPartialUpdateResponse200 = {
+  data: ReportInternalWrite
+  status: 200
+}
+    
+export type reportsInternalPartialUpdateResponseSuccess = (reportsInternalPartialUpdateResponse200) & {
+  headers: Headers;
+};
+;
+
+export type reportsInternalPartialUpdateResponse = (reportsInternalPartialUpdateResponseSuccess)
+
+export const getReportsInternalPartialUpdateUrl = (id: number,) => {
+
+
+  
+
+  return `/api/reports/${id}/internal/`
+}
+
+export const reportsInternalPartialUpdate = async (id: number,
+    patchedReportInternalWriteRequest: PatchedReportInternalWriteRequest, options?: RequestInit): Promise<reportsInternalPartialUpdateResponse> => {
+  
+  return fetcher<reportsInternalPartialUpdateResponse>(getReportsInternalPartialUpdateUrl(id),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      patchedReportInternalWriteRequest,)
+  }
+);}
+
+
+
+/**
  * Standalone CRUD for Report sources.
 
 Most sources are created via the nested `ReportSerializer.sources`
@@ -4042,6 +4131,14 @@ export const testimonialsSourceRetrieve = async (id: number, options?: RequestIn
 
 /**
  * draft → under_review (or rejected → under_review for re-submit).
+
+Audit H-3: previously had no permission_classes declared, so
+it fell back to the viewset default IsAuthenticatedOrReadOnly.
+Any logged-in volunteer could submit any other volunteer's
+draft. Now gated by CanSubmitTestimonial (authenticated role)
+AND an object-level authorship check inside _transition
+(volunteer can submit only their own draft; staff/Advocate
+can submit any draft for migration / cleanup workflows).
  */
 export type testimonialsSubmitCreateResponse200 = {
   data: TestimonialPublic
