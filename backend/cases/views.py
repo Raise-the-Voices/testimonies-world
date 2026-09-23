@@ -17,6 +17,7 @@ from rest_framework.response import Response
 
 from .models import AuditLog, CaseCategory, CaseEvent, FamilyRelationship, Media, Person, Report, Source
 from .permissions import IsVolunteer
+from contacts.permissions import IsAdvocate
 from .throttles import ActionScopedThrottle
 from .serializers import (
     AuditLogSerializer,
@@ -26,6 +27,7 @@ from .serializers import (
     PersonDetailSerializer,
     PersonListSerializer,
     PersonWriteSerializer,
+    ReportInternalWriteSerializer,
     ReportSerializer,
     SourceSerializer,
 )
@@ -822,6 +824,62 @@ class ReportViewSet(viewsets.ModelViewSet):
         person_id = instance.person_id
         self._audit(AuditLog.Action.DELETED, instance, f'person_id={person_id}')
         instance.delete()
+
+    # --- Section M (internal) update endpoint (audit H-5) --------------
+    #
+    # Section M fields (risk_level, risk_concerns, risk_concerns_other,
+    # internal_notes) are the operator-only risk + internal-notes
+    # columns. They were previously writable by any authenticated user
+    # via the volunteer ReportSerializer even though the read side
+    # stripped them for non-Advocates (asymmetric gate).
+    #
+    # This dedicated endpoint moves the write side to a route that is
+    # explicitly gated to IsAdvocate (staff or Advocate group). The
+    # volunteer ReportSerializer now has those fields in
+    # read_only_fields so a volunteer PATCH silently drops them — the
+    # same pattern used for `is_published`.
+    @action(
+        detail=True, methods=['patch', 'put'],
+        permission_classes=[IsAdvocate],
+        serializer_class=ReportInternalWriteSerializer,
+        url_path='internal',
+    )
+    def internal_update(self, request, pk=None):
+        """PATCH/PUT Section M fields. Staff or Advocate group only.
+
+        Body: any subset of {risk_level, risk_concerns,
+        risk_concerns_other, internal_notes}. Returns the updated row
+        via the full ReportSerializer (the same read shape an
+        Advocate sees from /api/reports/<id>/).
+        """
+        instance = self.get_object()
+        serializer = ReportInternalWriteSerializer(
+            instance, data=request.data, partial=True,
+            context={'request': request},
+        )
+        serializer.is_valid(raise_exception=True)
+        updated = serializer.save()
+
+        # Audit-log the Section M change separately from the main
+        # Report update path, so the trail is explicit. Diff against
+        # the prior state so the audit row carries what changed, not
+        # just that something did (mirrors ReportViewSet.perform_update).
+        before = {
+            f: getattr(instance, f)
+            for f in ReportInternalWriteSerializer.Meta.fields
+        }
+        # `updated` is the saved instance after our serializer wrote
+        # its subset of fields — re-read to compare.
+        after = {f: getattr(updated, f) for f in before}
+        changed = [
+            f for f in before if str(before[f]) != str(after[f])
+        ]
+        details = f'updated fields: {", ".join(changed) or "(none)"}'
+        self._audit(AuditLog.Action.EDITED, updated, details)
+
+        # Return the full report shape so the caller sees the Section
+        # M fields they just wrote.
+        return Response(ReportSerializer(updated, context={'request': request}).data)
 
 
 class SourceViewSet(viewsets.ModelViewSet):
