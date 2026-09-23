@@ -17,7 +17,7 @@ Person-centered casework platform for people facing oppression — enforced disa
 
 ## Dev access
 - URL: `demos.linkedtrust.us/testimonies/`
-- Django admin: `demos.linkedtrust.us/testimonies/admin/` (admin / tw-admin-2026)
+- Django admin: `demos.linkedtrust.us/testimonies/admin/` — credentials in the operator onboarding doc (1Password / sealed gist). Do not commit credentials to this repo.
 - API root: `demos.linkedtrust.us/testimonies/api/`
 
 ## Project structure
