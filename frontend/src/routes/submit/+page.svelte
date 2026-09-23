@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { beforeNavigate, goto, invalidateAll } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { user, isVolunteer, isAdvocate, isAdmin, loadSession } from '$lib/session';
 	import { createPerson, createReport, getCategories, request, ApiError } from '$lib/api';
@@ -19,6 +19,7 @@
 		type SubmitDraft,
 	} from '$lib/submitDraft';
 	import { focusFirstFormError } from '$lib/formFocus';
+	import ErrorCard from '$lib/ErrorCard.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -63,6 +64,14 @@
 	let restoredSnapshot: string | null = null;
 	let restoreClearTimer: ReturnType<typeof setTimeout> | null = null;
 	let draftSaveError = $state(false);
+	// Resets to "" once a submit succeeds — gates the beforeNavigate
+	// guard so the post-submit goto() doesn't trigger the unsaved-changes
+	// prompt. Set to true after handleSubmit() resolves successfully.
+	let submitted = $state(false);
+	// Dirty-tracking: captured once on mount (after restoreFromDraft, if
+	// any). The form is "dirty" iff the current serialized payload
+	// diverges from this snapshot. Drives the beforeNavigate prompt.
+	let initialSnapshot = '';
 	// Per-call guard: the helper APIs need a non-undefined username,
 	// but TS can't narrow `currentUser.username` through the
 	// `authenticated` check alone. Empty string makes loadDraft /
@@ -374,15 +383,54 @@
 				// post-restore behavior the manual banner used to do.
 				saveDraft(draftKey, buildDraftPayload());
 				draftSavedAt = new Date().toISOString();
-				restoredSnapshot = JSON.stringify(buildDraftPayload());
+				const snapshot = JSON.stringify(buildDraftPayload());
+				restoredSnapshot = snapshot;
+				initialSnapshot = snapshot;
 				justRestored = true;
 				if (restoreClearTimer) clearTimeout(restoreClearTimer);
 				restoreClearTimer = setTimeout(() => {
 					justRestored = false;
 					restoreClearTimer = null;
 				}, 6_000);
+			} else {
+				initialSnapshot = JSON.stringify(buildDraftPayload());
 			}
+		} else {
+			initialSnapshot = JSON.stringify(buildDraftPayload());
 		}
+	});
+
+	// beforeNavigate — prompts on in-app navigation away from the form
+	// when the user has typed something the server hasn't seen yet.
+	// Skipped when:
+	//   - submitted successfully (post-submit goto() is intentional)
+	//   - form is unchanged from the initial / restored state
+	//   - the navigation is 'form' (SvelteKit's form-action submit; not a leave)
+	beforeNavigate(({ cancel, type }) => {
+		if (submitted) return;
+		if (type === 'form') return;
+		const current = JSON.stringify(buildDraftPayload());
+		if (current === initialSnapshot) return;
+		if (!confirm('You have unsaved changes. Leave anyway?')) {
+			cancel();
+		}
+	});
+
+	// beforeunload — same protection for tab close / hard refresh.
+	// Modern browsers ignore the return value and just show their own
+	// "Leave site?" dialog; setting returnValue is the cross-browser
+	// hint that triggers it. Skip when submitted or when clean.
+	$effect(() => {
+		const handler = (e: BeforeUnloadEvent) => {
+			if (submitted) return;
+			const current = JSON.stringify(buildDraftPayload());
+			if (current === initialSnapshot) return;
+			e.preventDefault();
+			// Deprecated but required for some browsers.
+			e.returnValue = '';
+		};
+		window.addEventListener('beforeunload', handler);
+		return () => window.removeEventListener('beforeunload', handler);
 	});
 
 	function toggleCategory(id: number) {
@@ -736,6 +784,9 @@
 			// Capture the server-generated case_id for the toast details.
 			const submittedCaseId = person.case_id ?? null;
 			mediaFailures = failures;
+			// Mark submitted so beforeNavigate / beforeunload skip the
+			// unsaved-changes prompt on the post-submit goto() below.
+			submitted = true;
 
 			// Fire the success toast BEFORE the navigation. The toast
 			// store is module-scope — renders on the destination page.
@@ -933,6 +984,9 @@
 			</div>
 		{/if}
 
+		<svelte:boundary
+			onerror={(e) => console.error('[submit] form section failed:', e)}
+		>
 		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} novalidate>
 			<!-- ============== Section 1: Person Information ============== -->
 			<section class="form-section" aria-labelledby="sec-person">
@@ -1650,6 +1704,17 @@
 				</button>
 			</div>
 		</form>
+			{#snippet failed(error, reset)}
+				<div class="form-section" style="padding: 1.5rem 0;">
+					<ErrorCard
+						title="Couldn't render part of the form"
+						message="A section of the form failed to render. Your typed data is safe — it's been auto-saved to localStorage and the page will reload with everything intact."
+						kind="server"
+						retry={reset}
+					/>
+				</div>
+			{/snippet}
+		</svelte:boundary>
 	{/if}
 </div>
 
