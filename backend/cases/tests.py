@@ -1596,11 +1596,21 @@ class DashboardTests(BaseTestCase):
 
     # --- Summary tiles ---------------------------------------------------
 
-    def test_open_cases_counts_published_persons(self):
+    def test_open_cases_counts_all_persons_including_drafts(self):
+        """The "Total cases" tile mirrors the Cases page header count,
+        which for an authenticated user is Person.objects.count()
+        (no is_published filter — see PersonViewSet.get_queryset,
+        cases/views.py:319). This test pins that contract: drafts are
+        included. Add a 4th unpublished person and assert the tile
+        reflects it."""
+        # Draft (unpublished) person. setUp only seeds 3 published.
+        Person.objects.create(
+            name='DraftCase', country='Sudan', is_published=False,
+        )
         self.client.force_login(self.volunteer)
         data = self.client.get(self.URL).json()
-        # All 3 published persons (Released counts as open_cases).
-        self.assertEqual(data['summary']['open_cases'], 3)
+        # 3 published + 1 draft = 4 total. Released counts as open_cases.
+        self.assertEqual(data['summary']['open_cases'], 4)
 
     def test_stale_cases_excludes_released(self):
         self.client.force_login(self.volunteer)
