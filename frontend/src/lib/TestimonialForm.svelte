@@ -5,11 +5,11 @@
 	(/testimonials/[id]/edit) can reuse the exact same validation,
 	sanitization, and submit lifecycle. Two modes:
 
-	  - `mode="create"` — POSTs apiTestimonialsCreate(), optionally
-	    transitions draft → under_review via apiTestimonialsSubmitCreate.
+	  - `mode="create"` — POSTs testimonialsCreate(), optionally
+	    transitions draft → under_review via testimonialsSubmitCreate.
 	    After a successful create the form resets to a fresh blank
 	    entry (the create flow's "save another" affordance).
-	  - `mode="edit"`   — PATCHes apiTestimonialsUpdate(id, body). Only
+	  - `mode="edit"`   — PATCHes testimonialsUpdate(id, body). Only
 	    callable on rows where the current viewer can edit (the
 	    backend's CanEditOwnOrReview gate). Published/archived rows
 	    are immutable from the volunteer side — the edit page should
@@ -26,9 +26,9 @@
 	import { base } from '$app/paths';
 	import { extractCreatedId } from '$lib/api/drfCompat';
 	import {
-		apiTestimonialsCreate,
-		apiTestimonialsSubmitCreate,
-		apiTestimonialsUpdate,
+		testimonialsCreate,
+		testimonialsSubmitCreate,
+		testimonialsUpdate,
 	} from '$lib/api/generated/endpoints';
 	import { user } from '$lib/session';
 	import { focusFirstFormError } from '$lib/formFocus';
@@ -203,7 +203,7 @@
 
 		try {
 			if (mode === 'edit' && testimonial) {
-				await apiTestimonialsUpdate(
+				await testimonialsUpdate(
 					testimonial.id,
 					buildBody() as TestimonialWriteRequest,
 					{ method: 'PATCH' },
@@ -216,7 +216,7 @@
 			// Create mode.
 			let id: number;
 			try {
-				id = extractCreatedId(await apiTestimonialsCreate(buildBody()));
+				id = extractCreatedId(await testimonialsCreate(buildBody()));
 			} catch (e: unknown) {
 				formError =
 					e instanceof Error ? e.message : 'Could not create the testimonial.';
@@ -241,7 +241,7 @@
 				return;
 			}
 			try {
-				await apiTestimonialsSubmitCreate(id, {});
+				await testimonialsSubmitCreate(id, {});
 			} catch (e: unknown) {
 				formError =
 					e instanceof Error
