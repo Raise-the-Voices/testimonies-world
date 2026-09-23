@@ -21,7 +21,7 @@
  *   - The toast duration is 12s so the user has time to read the
  *     server's message before auto-dismiss.
  */
-import { ApiError } from './api';
+import { ApiError } from './api/errors';
 import { showToast } from './toast';
 
 /**
@@ -41,6 +41,12 @@ export interface FormErrorShape {
 	 * `aria-invalid` + `role="alert"` UI still works.
 	 */
 	fieldErrors?: Record<string, string>;
+	/**
+	 * Every individual message extracted from the server body. Forms
+	 * with a "list of reasons" UI can render this directly; the
+	 * existing inline-error callers can ignore it.
+	 */
+	messages?: string[];
 }
 
 /**
@@ -56,25 +62,26 @@ export function classifyFormError(e: unknown): FormErrorShape {
 			for (const [field, msgs] of Object.entries(e.fieldErrors)) {
 				if (msgs.length > 0) flat[field] = msgs[0];
 			}
-			return { kind: 'validation', message: e.message, fieldErrors: flat };
+			return { kind: 'validation', message: e.message, fieldErrors: flat, messages: e.messages };
 		}
 		// Auth — 401/403. Always actionable (refresh session or log in).
 		if (e.isUnauthorized) {
 			return {
 				kind: 'auth',
 				message: 'Your session has expired. Please refresh and try again.',
+				messages: e.messages,
 			};
 		}
 		// Network — status 0 is the api.ts:170 sentinel for offline/CORS.
 		if (e.status === 0) {
-			return { kind: 'network', message: e.message };
+			return { kind: 'network', message: e.message, messages: e.messages };
 		}
 		// Server — 5xx.
 		if (e.isServer) {
-			return { kind: 'server', message: e.message };
+			return { kind: 'server', message: e.message, messages: e.messages };
 		}
 		// Other ApiError (e.g. 404 with a custom detail).
-		return { kind: 'generic', message: e.message };
+		return { kind: 'generic', message: e.message, messages: e.messages };
 	}
 	// Plain Error or unknown — fall back to a safe generic message.
 	if (e instanceof Error) {

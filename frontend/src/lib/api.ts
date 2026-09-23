@@ -27,89 +27,27 @@ export type {
 
 const API_BASE = `${base}/api`;
 
-/**
- * Error thrown by `request()` when the API returns a non-2xx response.
- * Carries enough context for callers to map server errors back to fields
- * (DRF sends `{ field: ["msg", ...] }` for 400s) and to write copy
- * tailored to auth failures.
- */
-export class ApiError extends Error {
-	status: number;
-	statusText: string;
-	fieldErrors: Record<string, string[]>;
-	body: unknown;
+// Error parsing is pure and SvelteKit-free — it lives in `api/errors.ts`
+// so vitest can import it in node mode and the orval `fetcher()` in
+// `api/mutator.ts` can share it. Re-exported here for callers that
+// import `ApiError` from `$lib/api` directly (every existing call site
+// does — don't break that).
+export {
+	ApiError,
+	STATUS_FALLBACK,
+	parseApiErrorBody,
+	readErrorBody,
+	collectMessages,
+	extractFieldErrors,
+	type FieldErrors,
+} from './api/errors';
 
-	constructor(
-		message: string,
-		status: number,
-		statusText: string,
-		fieldErrors: Record<string, string[]> = {},
-		body: unknown = null,
-	) {
-		super(message);
-		this.name = 'ApiError';
-		this.status = status;
-		this.statusText = statusText;
-		this.fieldErrors = fieldErrors;
-		this.body = body;
-	}
-
-	get isUnauthorized(): boolean {
-		return this.status === 401 || this.status === 403;
-	}
-	get isServer(): boolean {
-		return this.status >= 500;
-	}
-	get isValidation(): boolean {
-		return this.status === 400 || this.status === 422;
-	}
-}
-
-/**
- * Pick the first human-readable message from a DRF error body.
- * Falls back to a status-based message if the body isn't shaped like a
- * `{ field: [strings] }` or `{ detail: string }` object.
- */
-function flattenDrfError(body: unknown, status: number, statusText: string): {
-	message: string;
-	fieldErrors: Record<string, string[]>;
-} {
-	const fieldErrors: Record<string, string[]> = {};
-	if (body && typeof body === 'object') {
-		const obj = body as Record<string, unknown>;
-		for (const [key, value] of Object.entries(obj)) {
-			if (Array.isArray(value) && value.every((v) => typeof v === 'string')) {
-				fieldErrors[key] = value as string[];
-			} else if (typeof value === 'string') {
-				fieldErrors[key] = [value];
-			}
-		}
-	}
-
-	if (Object.keys(fieldErrors).length > 0) {
-		const firstField = Object.keys(fieldErrors)[0];
-		const firstMsg = fieldErrors[firstField][0];
-		return { message: `${firstField}: ${firstMsg}`, fieldErrors };
-	}
-	if (body && typeof body === 'object' && 'detail' in body && typeof (body as any).detail === 'string') {
-		return { message: (body as any).detail as string, fieldErrors };
-	}
-
-	const fallback: Record<number, string> = {
-		400: 'Some fields look off — please review and try again.',
-		401: 'You need to log in to do that.',
-		403: "You don't have permission to do that.",
-		404: "We couldn't find what you were looking for.",
-		500: 'The server hit a snag. Please try again in a moment.',
-		502: 'The server is temporarily unreachable. Please try again.',
-		503: 'The server is temporarily unreachable. Please try again.',
-		504: 'The server took too long to respond. Please try again.',
-	};
-	return {
-		message: fallback[status] ?? `Request failed (${status} ${statusText}).`,
-		fieldErrors,
-	};
-}
+import {
+	ApiError,
+	parseApiErrorBody,
+	readErrorBody,
+	type FieldErrors,
+} from './api/errors';
 
 /**
  * Read Django's `csrftoken` cookie. Django sets it on the first safe
@@ -173,6 +111,8 @@ export async function request<T>(
 			'network',
 			{},
 			null,
+			[],
+			'',
 		);
 	}
 
@@ -185,15 +125,17 @@ export async function request<T>(
 		return (text ? JSON.parse(text) : undefined) as T;
 	}
 
-	let body: unknown = null;
-	try {
-		body = await res.json();
-	} catch {
-		// body wasn't JSON
-	}
-
-	const { message, fieldErrors } = flattenDrfError(body, res.status, res.statusText);
-	throw new ApiError(message, res.status, res.statusText, fieldErrors, body);
+	const { body, contentType } = await readErrorBody(res);
+	const { message, fieldErrors, messages } = parseApiErrorBody(body, res.status, res.statusText);
+	throw new ApiError(
+		message,
+		res.status,
+		res.statusText,
+		fieldErrors,
+		body,
+		messages,
+		contentType,
+	);
 }
 
 export async function getSession(
