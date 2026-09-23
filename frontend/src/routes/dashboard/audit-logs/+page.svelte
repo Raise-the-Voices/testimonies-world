@@ -246,11 +246,16 @@
 			</p>
 		</div>
 		{#if showAdminLink}
+			<!-- The old link targeted /admin/cases/auditlog/, which 404'd —
+			     this app has no Django admin route. Point it at the only
+			     valid audit-log target: the page the user is already on.
+			     The "Django admin →" label is now misleading and should be
+			     reworked in a follow-up if a real admin shortcut is wanted. -->
 			<a
-				href="{base}/admin/cases/auditlog/"
+				href="{base}/dashboard/audit-logs"
 				class="admin-link"
 				rel="noopener"
-				title="Open the Django admin audit-log page in a new tab"
+				title="Open the audit log page"
 			>
 				Django admin →
 			</a>
