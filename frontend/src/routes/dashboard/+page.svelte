@@ -213,9 +213,9 @@
 					<section class="summary-row" aria-label="Platform summary">
 						<StatisticsCard
 							variant="kpi"
-							label="Open cases"
+							label="Total cases"
 							value={data.data.summary.open_cases}
-							hint="Published persons, any status."
+							hint="All persons, including drafts."
 							href="{base}/persons"
 						/>
 						<StatisticsCard
