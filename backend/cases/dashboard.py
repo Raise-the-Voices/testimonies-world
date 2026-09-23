@@ -214,8 +214,12 @@ class DashboardViewSet(viewsets.GenericViewSet):
         user = request.user
 
         # Summary tiles ------------------------------------------------------------
+        # "Total cases" tile mirrors the Cases page header count, which
+        # for an authenticated user includes drafts (no is_published
+        # filter applied to the authenticated queryset in
+        # PersonViewSet.get_queryset, cases/views.py:319).
+        open_cases = Person.objects.count()
         published_qs = Person.objects.filter(is_published=True)
-        open_cases = published_qs.count()
 
         my_open_casework = _casework_qs(user).filter(
             status__in=[CaseworkRecord.Status.OPEN, CaseworkRecord.Status.IN_PROGRESS],

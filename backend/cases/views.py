@@ -498,7 +498,13 @@ class PersonViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def statistics(self, request):
         """Aggregate statistics for dashboard."""
-        qs = Person.objects.filter(is_published=True)
+        # Total counts every Person (matches the Cases page header for
+        # authenticated users — see PersonViewSet.get_queryset,
+        # cases/views.py:319, which only filters is_published=True when
+        # the request is anonymous). The `by_*` breakdowns stay scoped
+        # to published persons because they describe the *public*
+        # catalog, a different concept from the operator's "total".
+        qs = Person.objects.all()
         return Response({
             'total': qs.count(),
             'by_status': dict(

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { user, isVolunteer, isAdvocate, isAdmin, loadSession } from '$lib/session';
 	import { createPerson, createReport, getCategories, request, ApiError } from '$lib/api';
@@ -51,15 +51,17 @@
 	let errors = $state<Record<string, string>>({});
 
 	// `draftSavedAt` drives the "Saved Xm ago" status pill in the header.
-	// `pendingDraft` holds the draft that the user can choose to restore
-	// — auto-restore would be surprising, so we always require an explicit
-	// click. `showRestoreBanner` is the visibility flag for the banner.
+	// `justRestored` shows the transient "Draft restored from your last
+	// session" pill for ~6s after mount-time auto-restore, then falls
+	// back to the steady pill. `restoredSnapshot` is the payload JSON
+	// captured at restore, used by the auto-save $effect to detect the
+	// first user edit and dismiss the flash.
 	// `draftSaveError` surfaces localStorage quota / private-mode
 	// failures in the same pill (silent failure is worse than no draft).
 	let draftSavedAt = $state<string | null>(null);
-
-	let pendingDraft = $state<SubmitDraft | null>(null);
-	let showRestoreBanner = $state(false);
+	let justRestored = $state(false);
+	let restoredSnapshot: string | null = null;
+	let restoreClearTimer: ReturnType<typeof setTimeout> | null = null;
 	let draftSaveError = $state(false);
 	// Per-call guard: the helper APIs need a non-undefined username,
 	// but TS can't narrow `currentUser.username` through the
@@ -271,27 +273,42 @@
 		}
 	}
 
+	function clearRestoredFlash() {
+		justRestored = false;
+		restoredSnapshot = null;
+		if (restoreClearTimer) {
+			clearTimeout(restoreClearTimer);
+			restoreClearTimer = null;
+		}
+	}
+
 	function discardDraft() {
 		if (!currentUser.authenticated) return;
 		clearDraft(draftKey);
-		pendingDraft = null;
-		showRestoreBanner = false;
-		draftSavedAt = null;
-	}
+		clearRestoredFlash();
 
-	function acceptDraft() {
-		if (!pendingDraft) return;
-		restoreFromDraft(pendingDraft);
-		draftSavedAt = pendingDraft.savedAt;
-		pendingDraft = null;
-		showRestoreBanner = false;
-		// Re-save immediately so the saved-at timestamp reflects "now
-		// after restore", not the old draft's age. Otherwise the
-		// status pill would say "saved 3 days ago" forever.
-		if (currentUser.authenticated) {
-			saveDraft(draftKey, buildDraftPayload());
-			draftSavedAt = new Date().toISOString();
-		}
+		// Reset every form field to its initial state. Same defaults as
+		// the `let ... = $state(...)` declarations above. Without this
+		// the form stays pre-filled after Discard — the manual banner
+		// era never had this problem because the form started empty.
+		name = ''; legalName = ''; aliasesRaw = ''; country = '';
+		currentStatus = 'unknown'; medicalStatus = 'unknown';
+		roughLocation = ''; preciseLocation = ''; lastKnownDate = '';
+		ethnicity = ''; gender = ''; ageAtIncident = ''; occupation = '';
+		qualityTier = ''; profileImageFile = null;
+		profileImagePreview = null; profileImageCleared = false;
+		medicalNotes = ''; authoritativeSource = '';
+		authoritativeUrl = ''; isPublished = true;
+		selectedCategories = [];
+		summaryNarrative = '';
+		sourceType = 'firsthand'; sourceAttribution = '';
+		reporterName = ''; reporterContact = '';
+		reportDateStart = ''; reportRoughLocation = '';
+		narrative = ''; suspectedReason = ''; officialReason = '';
+		sourceEntries = []; mediaEntries = [];
+		errors = {};
+
+		draftSavedAt = null;
 	}
 
 	// --- Auto-save $effect ------------------------------------------------
@@ -315,6 +332,13 @@
 		if (!currentUser.authenticated) return;
 		if (serialized === lastSerialized) return;
 		lastSerialized = serialized;
+		// First user edit after auto-restore: dismiss the "Draft
+		// restored" flash pill. The snapshot is captured right after
+		// restoreFromDraft() in onMount, so any divergence means the
+		// user touched something.
+		if (restoredSnapshot !== null && serialized !== restoredSnapshot) {
+			clearRestoredFlash();
+		}
 		if (saveTimer) clearTimeout(saveTimer);
 		saveTimer = setTimeout(() => {
 			try {
@@ -335,17 +359,28 @@
 			console.error(e);
 		}
 
-		// Draft check runs once on mount. Only show the restore banner
-		// if (a) the user is authenticated, (b) a valid draft exists,
-		// and (c) the draft's payload actually differs from the current
-		// (empty) form — otherwise we'd show a useless "found a draft"
-		// banner for an empty initial visit.
+		// Draft check runs once on mount. If a valid draft exists,
+		// restore its fields silently — the user gets the same effect as
+		// Google Docs: reopen the page, your work is there. A subtle
+		// pill ("Draft restored from your last session") confirms what
+		// just happened, then fades to the steady "Draft saved Xm ago"
+		// pill.
 		if (currentUser.authenticated && hasDraft(draftKey)) {
 			const draft = loadDraft(draftKey);
 			if (draft) {
-				pendingDraft = draft;
-				showRestoreBanner = true;
-				draftSavedAt = draft.savedAt;
+				restoreFromDraft(draft);
+				// Re-save immediately so the steady pill reads "Saved
+				// just now" instead of the stale draft age. Mirrors the
+				// post-restore behavior the manual banner used to do.
+				saveDraft(draftKey, buildDraftPayload());
+				draftSavedAt = new Date().toISOString();
+				restoredSnapshot = JSON.stringify(buildDraftPayload());
+				justRestored = true;
+				if (restoreClearTimer) clearTimeout(restoreClearTimer);
+				restoreClearTimer = setTimeout(() => {
+					justRestored = false;
+					restoreClearTimer = null;
+				}, 6_000);
 			}
 		}
 	});
@@ -724,6 +759,9 @@
 
 			// replaceState so Back from the case page doesn't return to
 			// a stale form with the case we just submitted.
+			// invalidateAll() busts any cached loads so the destination
+			// page and the next Dashboard / Statistics visit show the new count.
+			await invalidateAll();
 			void goto(`${base}/persons/${person.id}`, { replaceState: true });
 		} catch (e: unknown) {
 			if (e instanceof ApiError) {
@@ -780,33 +818,46 @@
 		<header class="form-header">
 			<div class="form-header-row">
 				<h1>Submit a Case</h1>
-				<!-- Draft status pill. Two states:
-				     - "Saved Xm ago" (positive, with a tiny sync glyph)
-				     - "Could not save draft" (error, no glyph, alerts the
-				       user that the safety net isn't working)
-				     Hidden when there's no draft yet (initial visit, fresh
-				     submit) and no error. -->
+				<!-- Draft status pill. Three states:
+				     - error:  "Could not save draft" (localStorage failed)
+				     - flash:  "Draft restored from your last session"
+				       (just auto-restored on mount; success-tinted,
+				       auto-clears in ~6s or on first user edit)
+				     - steady: "Draft saved Xm ago"
+				       (default; pill is hidden when there's no draft yet
+				       and no error) -->
 				{#if draftSaveError}
 					<span class="draft-pill draft-pill-error" role="status">
 						Could not save draft
 					</span>
+				{:else if justRestored}
+					<span
+						class="draft-pill draft-pill-restored"
+						role="status"
+						aria-live="polite"
+					>
+						<Icon name="clock" size={12} ariaHidden={true} />
+						Draft restored from your last session
+					</span>
 				{:else if draftSavedAt}
 					<span class="draft-pill" role="status" aria-live="polite">
-						<svg
-							class="draft-pill-icon"
-							xmlns="http://www.w3.org/2000/svg"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							aria-hidden="true"
-						>
-							<path d="M20 6L9 17l-5-5" />
-						</svg>
+						<Icon name="clock" size={12} ariaHidden={true} />
 						Draft saved {formatDraftAge(draftSavedAt)}
 					</span>
+				{/if}
+				<!-- Discreet Discard control. Always available whenever a
+				     draft exists; clears localStorage AND resets every
+				     form field. Sits next to the pill in the header so
+				     it's discoverable but doesn't draw the eye. -->
+				{#if draftSavedAt && !draftSaveError}
+					<button
+						type="button"
+						class="draft-discard-btn"
+						onclick={discardDraft}
+						aria-label="Discard saved draft and clear the form"
+					>
+						Discard draft
+					</button>
 				{/if}
 			</div>
 			<p class="form-intro">
@@ -882,39 +933,6 @@
 		{/if}
 
 		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} novalidate>
-			<!-- ============== Restore-from-draft banner ============== -->
-			<!-- Shown only when a draft was found on mount and the user
-			     hasn't yet accepted or discarded it. Auto-restore would
-			     surprise users; we always require an explicit click. -->
-			{#if showRestoreBanner && pendingDraft}
-				<div class="draft-restore-banner" role="status" aria-live="polite">
-					<div class="draft-restore-body">
-						<p class="draft-restore-title">We found a saved draft.</p>
-						<p class="draft-restore-desc">
-							Saved {formatDraftAge(pendingDraft.savedAt)}. Profile and
-							media file uploads aren't saved — re-select files
-							before submitting.
-						</p>
-					</div>
-					<div class="draft-restore-actions">
-						<button
-							type="button"
-							class="btn btn-primary"
-							onclick={acceptDraft}
-						>
-							Restore
-						</button>
-						<button
-							type="button"
-							class="btn btn-secondary"
-							onclick={discardDraft}
-						>
-							Discard
-						</button>
-					</div>
-				</div>
-			{/if}
-
 			<!-- ============== Section 1: Person Information ============== -->
 			<section class="form-section" aria-labelledby="sec-person">
 				<h2 id="sec-person" class="form-section-title">
@@ -2263,7 +2281,10 @@
 	   - .form-header-row: header pill next to the H1
 	   - .draft-pill: small status indicator (Saved Xm ago)
 	   - .draft-pill-error: error variant when localStorage fails
-	   - .draft-restore-banner: top-of-form card offering restore/discard
+	   - .draft-pill-restored: transient success-tinted variant shown
+	     for ~6s after auto-restore on mount
+	   - .draft-discard-btn: discreet text-link button to wipe the
+	     saved draft and reset the form
 	   ================================================================ */
 
 	.form-header-row {
@@ -2299,49 +2320,30 @@
 		color: var(--color-danger);
 		font-weight: 700;
 	}
-
-	.draft-restore-banner {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 1rem;
-		flex-wrap: wrap;
-		padding: 0.9rem 1.1rem;
-		margin-bottom: 1.25rem;
-		background: var(--color-surface);
-		border: 1px solid var(--color-primary-light);
-		border-left: 3px solid var(--color-primary);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-card);
-	}
-	.draft-restore-body {
-		min-width: 0;
-		flex: 1 1 280px;
-	}
-	.draft-restore-title {
-		margin: 0;
+	.draft-pill-restored {
+		background: var(--color-success-bg);
+		color: var(--color-success-text);
 		font-weight: 700;
-		color: var(--color-text);
-		font-size: 0.95rem;
 	}
-	.draft-restore-desc {
-		margin: 0.2rem 0 0 0;
-		font-size: 0.82rem;
+
+	.draft-discard-btn {
+		background: transparent;
+		border: 0;
+		padding: 0.2rem 0.4rem;
+		font-size: 0.78rem;
 		color: var(--color-text-muted);
-		line-height: 1.4;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		cursor: pointer;
+		border-radius: 4px;
+		font-family: inherit;
 	}
-	.draft-restore-actions {
-		display: flex;
-		gap: 0.5rem;
-		flex-shrink: 0;
+	.draft-discard-btn:hover {
+		color: var(--color-text);
 	}
-	@media (max-width: 600px) {
-		.draft-restore-actions {
-			width: 100%;
-		}
-		.draft-restore-actions .btn {
-			flex: 1;
-		}
+	.draft-discard-btn:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px var(--color-primary-tint);
 	}
 
 	/* === Media partial-failure banner (page-level) ===
