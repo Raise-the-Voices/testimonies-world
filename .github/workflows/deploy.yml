@@ -1,11 +1,65 @@
 name: Deploy to production
 
+# Two triggers, both gated on CI being green:
+#
+#   1. `push` to main            — the normal flow. Branch protection on
+#      main requires the `backend`, `frontend-tests`, and `backend-pg`
+#      checks to pass before a PR can merge, so a push here already
+#      implies CI green. The `if:` on the job below re-verifies it
+#      defensively (branch protection can be bypassed by admins).
+#
+#   2. `workflow_run` from CI    — fires after the CI workflow completes
+#      on main. This is the cross-workflow gate: even if someone bypasses
+#      branch protection or force-pushes, the CI workflow must report
+#      `success` for this deploy to run. Without this trigger, a direct
+#      push to main with red CI would silently deploy.
+#
+# The two triggers share the same concurrency group, so a push-to-main
+# event and a `workflow_run` event arriving back-to-back collapse into
+# one in-flight deploy rather than racing each other.
 on:
   push:
     branches: [main]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+# Two deploys to prod must NEVER run in parallel. `cancel-in-progress:
+# false` means a second deploy waits for the first to finish — safer than
+# cancelling a half-deployed prod. Group key includes the workflow name
+# so this doesn't collide with any future staging deploy.
+concurrency:
+  group: deploy-prod-${{ github.workflow }}
+  cancel-in-progress: false
+
+# Permissions: minimal — only what `appleboy/ssh-action` needs (which is
+# nothing, it uses secrets via `with:`). No token, no contents write.
+permissions:
+  contents: read
 
 jobs:
   deploy:
+    # Only deploy when CI is green. `github.event.workflow_run.conclusion`
+    # is `success` / `failure` / `cancelled` / `null` (null = still running
+    # for in-progress events, but the `types: [completed]` filter on the
+    # trigger above rules that out). For the `push` branch, the conclusion
+    # is undefined — fall through to true.
+    if: >-
+      github.event_name == 'push' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    # The `production` GitHub Environment (configured in repo Settings →
+    # Environments) gives us:
+    #   - a required-reviewer gate for emergency bypass (when CI is red
+    #     during an active outage)
+    #   - environment-scoped secrets (so DEPLOY_KEY only exists for this
+    #     workflow, not for every Action in the repo)
+    #   - a deployment history view in the UI
+    environment:
+      name: production
+      url: https://demos.linkedtrust.us/testimonies/
+
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH

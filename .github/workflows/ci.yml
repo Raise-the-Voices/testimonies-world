@@ -209,3 +209,76 @@ jobs:
             exit 1
           fi
           echo 'No drift. openapi.yml and src/lib/api/generated/ match what CI just generated.'
+
+  # -------------------------------------------------------------------------
+  # Backend (Postgres + prod-config) — closes the SQLite-vs-Postgres gap
+  # and exercises the DEBUG=False code paths (Fernet key, SECRET_KEY,
+  # `manage.py check --deploy`). The fast `backend` job above stays
+  # SQLite for quick PR feedback; this one is the prod-shaped validator.
+  #
+  # Required secrets (set in repo Settings → Secrets → Actions):
+  #   CI_DJANGO_SECRET_KEY       — generated via get_random_secret_key()
+  #   CI_TESTIMONIALS_FERNET_KEY — generated via Fernet.generate_key()
+  # Neither ships to production. They exist so this job runs with the
+  # same fail-closed posture as a real prod deploy — a missing key here
+  # surfaces as `ImproperlyConfigured` in CI, not as a silent fallback.
+  #
+  # Always runs on PRs and push. Service-container Postgres adds ~5–10s
+  # to job startup; the test suite itself is the same one the SQLite
+  # job runs, so wall-clock impact is bounded.
+  # -------------------------------------------------------------------------
+  backend-pg:
+    name: Backend (Postgres + prod-config)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: testimonies_ci
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ci -d testimonies_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DEBUG: 'False'
+      DJANGO_SECRET_KEY: ${{ secrets.CI_DJANGO_SECRET_KEY }}
+      TESTIMONIALS_FERNET_KEY: ${{ secrets.CI_TESTIMONIALS_FERNET_KEY }}
+      USE_POSTGRES_FOR_TESTS: '1'
+      PG_DB: testimonies_ci
+      PG_USER: ci
+      PG_PASSWORD: ci
+      PG_HOST: localhost
+      PG_PORT: '5432'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install Python deps
+        run: cd backend && pip install --no-cache-dir -r requirements.txt
+
+      # `--deploy` only fires the prod-config checks when DEBUG=False,
+      # which is why this lives in the prod-config job and not in the
+      # fast `backend` job above. No DB needed for this command.
+      - name: Django deploy-config check
+        run: cd backend && python manage.py check --deploy
+
+      - name: Migration drift check
+        run: cd backend && python manage.py makemigrations --check --dry-run
+
+      - name: Apply migrations
+        run: cd backend && python manage.py migrate --noinput
+
+      # No `--keepdb` here: the service container is ephemeral per job,
+      # so reusing state across runs is impossible by construction.
+      # `--parallel` would help on a bigger suite; today's 22 test
+      # classes run sequentially in well under a minute.
+      - name: Run tests
+        run: cd backend && python manage.py test --noinput --verbosity=2
