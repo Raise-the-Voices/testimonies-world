@@ -161,8 +161,18 @@ jobs:
       - name: Install frontend deps + orval sanity check
         run: |
           cd frontend
-          npm ci
-          npx orval --version
+          # `--include=dev` is explicit because the backend job's
+          # runner image may default to NODE_ENV=production, which
+          # would make `npm ci` skip devDependencies. Without this
+          # flag, orval falls back to `npx`-installing "latest"
+          # (orval@8.37.0) — which produces a 4,500-line diff
+          # against the committed orval@7.21.0 output even when
+          # no serializer changed. Pinning the npx invocation to
+          # `@^7.21.0` is belt-and-braces: even if npm ci still
+          # skipped orval somehow, npx would install the same
+          # 7.x line that local + committed use.
+          npm ci --include=dev
+          npx orval@^7.21.0 --version
 
       - name: Regenerate OpenAPI + TS client
         run: cd frontend && npm run gen:api
