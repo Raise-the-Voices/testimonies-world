@@ -576,6 +576,21 @@ CSRF_TRUSTED_ORIGINS = config(
     default='http://localhost:3040,http://127.0.0.1:3040,https://demos.linkedtrust.us,https://cases.raisethevoices.org'
 ).split(',')
 
+# Belt-and-braces: production origins are ALWAYS trusted, even if a
+# per-host .env overrides CSRF_TRUSTED_ORIGINS without listing them.
+# Without this, a stale or typo'd .env silently locks every production
+# user out of /accounts/login/ with a 403 CSRF — observed on 2026-09-25
+# for Nazir on cases.raisethevoices.org. The .env value still wins for
+# any *additional* origins (e.g. a staging deployment); this only
+# guarantees the production host can never be removed.
+if not DEBUG:
+    for _origin in (
+        'https://cases.raisethevoices.org',
+        'https://www.cases.raisethevoices.org',
+    ):
+        if _origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_origin)
+
 # Auth — allauth with Google OAuth
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
