@@ -208,9 +208,10 @@ export async function getSession(
 
 export async function getPersons(
 	params: Record<string, string> = {},
+	opts: { signal?: AbortSignal } = {},
 ): Promise<Paginated<Person>> {
 	const qs = new URLSearchParams(params).toString();
-	return request<Paginated<Person>>(`/persons/${qs ? '?' + qs : ''}`);
+	return request<Paginated<Person>>(`/persons/${qs ? '?' + qs : ''}`, { signal: opts.signal });
 }
 
 export async function getPerson(
