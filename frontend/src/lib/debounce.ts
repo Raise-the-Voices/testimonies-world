@@ -5,12 +5,17 @@
  *   const onSearch = debounce(() => applyFilters(), 300);
  *   <input oninput={onSearch} />
  *
- * Returns a wrapper that also exposes `.flush()` to invoke the pending
- * call immediately (useful right before a navigation, to avoid dropping
- * the last keystroke). If no call is pending, `.flush()` is a no-op.
+ * Returns a wrapper that exposes:
+ *   .flush()  — invoke the pending call immediately (useful right
+ *               before a navigation, to avoid dropping the last
+ *               keystroke). No-op if nothing is pending.
+ *   .cancel() — drop the pending call without firing. Use this when
+ *               a synchronous handler (form submit, button click)
+ *               supersedes the debounced one so you don't double-fire.
  */
 export type Debounced<T extends (...args: any[]) => void> = ((...args: Parameters<T>) => void) & {
 	flush: () => void;
+	cancel: () => void;
 };
 
 export function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): Debounced<T> {
@@ -29,6 +34,13 @@ export function debounce<T extends (...args: any[]) => void>(fn: T, delay: numbe
 			clearTimeout(timer);
 			timer = null;
 			fn();
+		}
+	};
+
+	wrapped.cancel = () => {
+		if (timer) {
+			clearTimeout(timer);
+			timer = null;
 		}
 	};
 

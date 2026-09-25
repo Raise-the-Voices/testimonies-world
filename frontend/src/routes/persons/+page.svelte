@@ -15,7 +15,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
-	import { afterNavigate, goto, replaceState } from '$app/navigation';
+	import { afterNavigate, replaceState } from '$app/navigation';
 	import { getPersons, getCountries, getCategories } from '$lib/api';
 	import { statusLabels } from '$lib/StatusBadge.svelte';
 	import { debounce } from '$lib/debounce';
@@ -59,6 +59,22 @@
 	let error: string | null = $state(untrack(() => data.error));
 	let totalCount = $state(untrack(() => data.personsCount ?? 0));
 	let currentPage = $state(1);
+	// Becomes true after the first loadPersons() settles. The skeleton
+	// only renders on the very first load (when we have nothing to show);
+	// every subsequent search goes straight from "loading" to either
+	// results or the empty state. This stops the "search gibberish →
+	// skeleton forever" loop, and also prevents the skeleton from
+	// flickering over already-loaded results when the user keeps typing.
+	let initialLoadComplete = $state(false);
+
+	// Single counter for loadPersons; bumped on every load() and on
+	// unmount. Any async path that captured the previous value sees
+	// `myToken !== loadToken` and bails. Together with the
+	// AbortController below this stops an older in-flight request from
+	// clobbering a newer one when the user types fast (the source of
+	// "results flicker" between consecutive searches).
+	let loadToken = 0;
+	let loadController: AbortController | null = null;
 
 	// Initialize filter state from URL so the controls reflect the deep
 	// link. Without this, a user landing on /persons?country=USA would
@@ -97,11 +113,13 @@
 		{ value: '365', label: 'Inactive 1y+' },
 	];
 
-	// Sync the URL to the current filter state. replaceState keeps
-	// Back/Forward history clean (each filter change doesn't add a
-	// new entry); noScroll + keepFocus preserve scroll position and
-	// which control the user was interacting with. Called by every
-	// state change that affects applyFilters.
+	// Sync the URL to the current filter state. replaceState updates the
+	// address bar WITHOUT re-running load() — every keystroke used to
+	// call goto(), which re-fetched /api/persons on the server,
+	// re-rendered the page, and stole focus from the search input
+	// (the "double-Enter / focus loss" bug). replaceState keeps the
+	// SearchInput DOM node alive and skips the redundant server
+	// round-trip on every keystroke.
 	async function syncUrl() {
 		const sp = new URLSearchParams();
 		if (search) sp.set('search', search);
@@ -112,10 +130,10 @@
 		if (sort && sort !== DEFAULT_SORT) sp.set('ordering', sort);
 		const qs = sp.toString();
 		const target = qs ? `?${qs}` : page.url.pathname;
-		// Only navigate if the URL would actually change — avoids
+		// Only update if the URL would actually change — avoids
 		// unnecessary history churn when re-renders fire.
 		if (target !== page.url.pathname + page.url.search) {
-			await goto(target, { replaceState: true, noScroll: true, keepFocus: true });
+			await replaceState(target, {});
 		}
 	}
 
@@ -179,23 +197,37 @@
 		params: Record<string, string> = {},
 		page: number = currentPage,
 	) {
+		const myToken = ++loadToken;
+		loadController?.abort();
+		loadController = new AbortController();
+		const { signal } = loadController;
+
 		loading = true;
 		error = null;
 		try {
 			const pageParams = { ...params, page: String(page) };
-			const data: Paginated<Person> = await getPersons(pageParams);
+			const data: Paginated<Person> = await getPersons(pageParams, { signal });
+			// If a newer load() (or unmount) has happened, drop the result.
+			if (myToken !== loadToken) return;
 			persons = data.results;
 			totalCount = data.count;
 			currentPage = page;
 			if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
 		} catch (e: unknown) {
+			// AbortError is the expected outcome of cancellation; the caller
+			// (and the user) treat it the same as a dropped result so we
+			// don't render an error banner for a request they've moved past.
+			if (e instanceof DOMException && e.name === 'AbortError') return;
 			console.error(e);
 			error =
 				e instanceof Error
 					? `Could not load cases: ${e.message}`
 					: 'Could not load cases. Please try again.';
 		} finally {
-			loading = false;
+			// Only flip loading=false if we're still the latest request; an
+			// in-flight newer one owns the spinner.
+			if (myToken === loadToken) loading = false;
+			initialLoadComplete = true;
 		}
 	}
 
@@ -224,6 +256,11 @@
 	}
 
 	async function applyFilters() {
+		// Drop any pending debounced search so a synchronous submit
+		// (Enter / Search button / filter select) doesn't fire again 300ms
+		// later with stale args. No-op when called from the debounce
+		// itself (timer is already null by then).
+		debouncedSearch.cancel();
 		await loadPersons(currentFilterParams(), 1);
 		const newKey = JSON.stringify(
 			Object.entries(currentCountryParams()).sort(([a], [b]) => a.localeCompare(b)),
@@ -233,8 +270,8 @@
 			loadCountries(currentCountryParams());
 		}
 		// Mirror filter state → URL so users can share/bookmark.
-		// replaceState + noScroll + keepFocus avoids scroll jumps
-		// and keeps focus on the control the user just clicked.
+		// replaceState avoids re-running load() and re-rendering the page,
+		// which was the source of the focus-loss bug.
 		await syncUrl();
 	}
 
@@ -318,7 +355,7 @@
 	<header class="catalog-header">
 		<h1>Cases</h1>
 		<p class="muted">
-			{#if loading && persons.length === 0}
+			{#if !initialLoadComplete && loading}
 				<Skeleton variant="text" width="8rem" />
 			{:else}
 				{totalCount} case{totalCount !== 1 ? 's' : ''} recorded
@@ -381,7 +418,7 @@
 		</div>
 	</div>
 
-	{#if loading && persons.length === 0}
+	{#if !initialLoadComplete && loading}
 		{#if viewMode === 'list'}
 			<div class="cases-table-wrap" aria-busy="true" aria-label="Loading cases">
 				<div class="cases-table-skeleton">
@@ -398,7 +435,14 @@
 			</div>
 		{/if}
 	{:else if persons.length === 0}
-		<div class="empty-state">
+		<!--
+			Empty state — covers both "no cases exist yet" and
+			"search returned nothing". The Clear-filters CTA only shows
+			when the user has applied filters; otherwise it would be a
+			dead button. role="status" + aria-live="polite" so screen
+			readers announce the transition once the search settles.
+		-->
+		<div class="empty-state" role="status" aria-live="polite">
 			<Icon name="cases" size={48} />
 			<p>No cases found matching your criteria.</p>
 			{#if hasActiveFilters}
