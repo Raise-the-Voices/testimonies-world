@@ -6,7 +6,7 @@ Person-centered casework platform for people facing oppression — enforced disa
 - **Backend**: Django 6.0 + DRF, gunicorn on :8040
 - **Frontend**: SvelteKit (adapter-node) on :3040
 - **Database**: PostgreSQL `testimonies_world` on VM 100 (10.0.0.100:5432)
-- **Deployment**: Ansible to dedicated VM (TBD)
+- **Deployment**: `scripts/deploy.sh` via GitHub Actions (`.github/workflows/deploy.yml`) to dedicated VM
 
 ## Backup policy
 - **RPO (Recovery Point Objective)**: 24 hours — `rtv-cases-db-backup.timer` runs `pg_dump` daily at 03:00 UTC; `Persistent=true` on the timer catches up missed runs after VM downtime.
@@ -36,7 +36,6 @@ backend/               Django project
 frontend/              SvelteKit project
   src/routes/          Pages
   src/lib/             Components, stores, API client
-ansible/               Deployment playbooks (TBD)
 ```
 
 ## Key commands

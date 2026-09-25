@@ -59,7 +59,7 @@ Demo admin credentials: see the operator onboarding doc (1Password / sealed gist
 | Database | **PostgreSQL** (`testimonies_world`) | remote at `10.0.0.100:5432`, shared with other VM tenants |
 | Auth | django-allauth (Google OAuth in production) | role info surfaced via `/api/session/` |
 | Static assets | whiteNoise (Django) + nginx (frontend) | built `frontend/build/client/_app/` served at the doc root |
-| CI / CD | GitHub Actions → `scripts/deploy.sh` | single-host prod, Ansible migration planned |
+| CI / CD | GitHub Actions → `scripts/deploy.sh` | single-host prod |
 
 Dev port map:
 
@@ -495,9 +495,6 @@ Single-host production deployment, orchestrated by `scripts/deploy.sh`:
     AND the API returns 200. Retries up to 10× with 3 s backoff.
 
 CI (`.github/workflows/deploy.yml`) triggers this on push to `main`.
-
-Future direction: convert to an **Ansible playbook** (referenced in
-`CLAUDE.md`, not yet built).
 
 ### Logs
 
