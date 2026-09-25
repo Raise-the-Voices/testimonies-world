@@ -96,8 +96,8 @@ backend must be running first. For a different backend, set
 ### Run both via systemd (on the demo VM)
 
 ```bash
-sudo systemctl start tmp-testimonies-backend tmp-testimonies-frontend
-sudo journalctl -u tmp-testimonies-backend -f
+sudo systemctl start rtv-cases-backend rtv-cases-frontend
+sudo journalctl -u rtv-cases-backend -f
 ```
 
 ### First-time setup checklist

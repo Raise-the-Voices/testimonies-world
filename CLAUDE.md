@@ -52,7 +52,7 @@ cd /opt/shared/repos/testimonies-world/frontend
 PUBLIC_BASE_PATH=/testimonies npm run dev -- --host 0.0.0.0 --port 3040
 
 # Both via systemd
-sudo systemctl start tmp-testimonies-backend tmp-testimonies-frontend
+sudo systemctl start rtv-cases-backend rtv-cases-frontend
 ```
 
 ## Data model

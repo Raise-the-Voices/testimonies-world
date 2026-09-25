@@ -51,8 +51,8 @@ command -v curl >/dev/null                   || { bad "curl missing"; exit 2; }
 if [ "${START_APP:-0}" = "1" ]; then
     step "Layer 0 / Starting app (opt-in)"
     if command -v systemctl >/dev/null && \
-       systemctl --user is-active tmp-testimonies-backend >/dev/null 2>&1; then
-        note "tmp-testimonies-backend + tmp-testimonies-frontend already active"
+       systemctl --user is-active rtv-cases-backend >/dev/null 2>&1; then
+        note "rtv-cases-backend + rtv-cases-frontend already active"
     else
         (cd frontend && PUBLIC_BASE_PATH=/testimonies \
             nohup npm run dev -- --host 0.0.0.0 --port 3040 \
