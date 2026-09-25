@@ -168,19 +168,19 @@
 		<nav class="main-navigation" aria-label="Primary">
 			<ul>
 				{#if currentUser.authenticated}
-					<li><a href="{base}/dashboard" class:active={$page.url.pathname.startsWith(`${base}/dashboard`)} aria-current={$page.url.pathname.startsWith(`${base}/dashboard`) ? "page" : undefined}>Dashboard</a></li>
+					<li><a href="{base}/dashboard" class:active={$page.url.pathname.startsWith(`${base}/dashboard`)} aria-current={$page.url.pathname.startsWith(`${base}/dashboard`) ? "page" : undefined} data-sveltekit-preload-data="hover">Dashboard</a></li>
 				{/if}
-				<li><a href="{base}/persons" class:active={$page.url.pathname.startsWith(`${base}/persons`)} aria-current={$page.url.pathname.startsWith(`${base}/persons`) ? "page" : undefined}>Cases</a></li>
-				<li><a href="{base}/statistics" class:active={$page.url.pathname.startsWith(`${base}/statistics`)} aria-current={$page.url.pathname.startsWith(`${base}/statistics`) ? "page" : undefined}>Statistics</a></li>
-				<li><a href="{base}/testimonials" class:active={$page.url.pathname.startsWith(`${base}/testimonials`)} aria-current={$page.url.pathname.startsWith(`${base}/testimonials`) ? "page" : undefined}>Testimonials</a></li>
+				<li><a href="{base}/persons" class:active={$page.url.pathname.startsWith(`${base}/persons`)} aria-current={$page.url.pathname.startsWith(`${base}/persons`) ? "page" : undefined} data-sveltekit-preload-data="hover">Cases</a></li>
+				<li><a href="{base}/statistics" class:active={$page.url.pathname.startsWith(`${base}/statistics`)} aria-current={$page.url.pathname.startsWith(`${base}/statistics`) ? "page" : undefined} data-sveltekit-preload-data="hover">Statistics</a></li>
+				<li><a href="{base}/testimonials" class:active={$page.url.pathname.startsWith(`${base}/testimonials`)} aria-current={$page.url.pathname.startsWith(`${base}/testimonials`) ? "page" : undefined} data-sveltekit-preload-data="hover">Testimonials</a></li>
 				{#if isVolunteer(currentUser)}
-					<li><a href="{base}/submit" class:active={$page.url.pathname.startsWith(`${base}/submit`)} aria-current={$page.url.pathname.startsWith(`${base}/submit`) ? "page" : undefined}>Submit</a></li>
-					<li><a href="{base}/reports" class:active={$page.url.pathname.startsWith(`${base}/reports`)} aria-current={$page.url.pathname.startsWith(`${base}/reports`) ? "page" : undefined}>Reports</a></li>
-					<li><a href="{base}/watchdog" class:active={$page.url.pathname.startsWith(`${base}/watchdog`)} aria-current={$page.url.pathname.startsWith(`${base}/watchdog`) ? "page" : undefined}>Watchdog</a></li>
+					<li><a href="{base}/submit" class:active={$page.url.pathname.startsWith(`${base}/submit`)} aria-current={$page.url.pathname.startsWith(`${base}/submit`) ? "page" : undefined} data-sveltekit-preload-data="hover">Submit</a></li>
+					<li><a href="{base}/reports" class:active={$page.url.pathname.startsWith(`${base}/reports`)} aria-current={$page.url.pathname.startsWith(`${base}/reports`) ? "page" : undefined} data-sveltekit-preload-data="hover">Reports</a></li>
+					<li><a href="{base}/watchdog" class:active={$page.url.pathname.startsWith(`${base}/watchdog`)} aria-current={$page.url.pathname.startsWith(`${base}/watchdog`) ? "page" : undefined} data-sveltekit-preload-data="hover">Watchdog</a></li>
 				{/if}
 				{#if isAdvocate(currentUser)}
-					<li><a href="{base}/casework" class:active={$page.url.pathname.startsWith(`${base}/casework`)} aria-current={$page.url.pathname.startsWith(`${base}/casework`) ? "page" : undefined}>Casework</a></li>
-					<li><a href="{base}/contacts" class:active={$page.url.pathname.startsWith(`${base}/contacts`)} aria-current={$page.url.pathname.startsWith(`${base}/contacts`) ? "page" : undefined}>Contacts</a></li>
+					<li><a href="{base}/casework" class:active={$page.url.pathname.startsWith(`${base}/casework`)} aria-current={$page.url.pathname.startsWith(`${base}/casework`) ? "page" : undefined} data-sveltekit-preload-data="hover">Casework</a></li>
+					<li><a href="{base}/contacts" class:active={$page.url.pathname.startsWith(`${base}/contacts`)} aria-current={$page.url.pathname.startsWith(`${base}/contacts`) ? "page" : undefined} data-sveltekit-preload-data="hover">Contacts</a></li>
 				{/if}
 			</ul>
 		</nav>
@@ -218,25 +218,25 @@
 >
 	<ul>
 		{#if currentUser.authenticated}
-			<li><a href="{base}/dashboard" class:active={$page.url.pathname.startsWith(`${base}/dashboard`)} aria-current={$page.url.pathname.startsWith(`${base}/dashboard`) ? "page" : undefined} onclick={closeDrawer}>Dashboard</a></li>
+			<li><a href="{base}/dashboard" class:active={$page.url.pathname.startsWith(`${base}/dashboard`)} aria-current={$page.url.pathname.startsWith(`${base}/dashboard`) ? "page" : undefined} onclick={closeDrawer} data-sveltekit-preload-data="hover">Dashboard</a></li>
 		{/if}
-		<li><a href="{base}/persons" class:active={$page.url.pathname.startsWith(`${base}/persons`)} aria-current={$page.url.pathname.startsWith(`${base}/persons`) ? "page" : undefined} onclick={closeDrawer}>Cases</a></li>
-		<li><a href="{base}/statistics" class:active={$page.url.pathname.startsWith(`${base}/statistics`)} aria-current={$page.url.pathname.startsWith(`${base}/statistics`) ? "page" : undefined} onclick={closeDrawer}>Statistics</a></li>
-		<li><a href="{base}/testimonials" class:active={$page.url.pathname.startsWith(`${base}/testimonials`)} aria-current={$page.url.pathname.startsWith(`${base}/testimonials`) ? "page" : undefined} onclick={closeDrawer}>Testimonials</a></li>
+		<li><a href="{base}/persons" class:active={$page.url.pathname.startsWith(`${base}/persons`)} aria-current={$page.url.pathname.startsWith(`${base}/persons`) ? "page" : undefined} onclick={closeDrawer} data-sveltekit-preload-data="hover">Cases</a></li>
+		<li><a href="{base}/statistics" class:active={$page.url.pathname.startsWith(`${base}/statistics`)} aria-current={$page.url.pathname.startsWith(`${base}/statistics`) ? "page" : undefined} onclick={closeDrawer} data-sveltekit-preload-data="hover">Statistics</a></li>
+		<li><a href="{base}/testimonials" class:active={$page.url.pathname.startsWith(`${base}/testimonials`)} aria-current={$page.url.pathname.startsWith(`${base}/testimonials`) ? "page" : undefined} onclick={closeDrawer} data-sveltekit-preload-data="hover">Testimonials</a></li>
 		{#if isVolunteer(currentUser)}
-			<li><a href="{base}/submit" class:active={$page.url.pathname.startsWith(`${base}/submit`)} aria-current={$page.url.pathname.startsWith(`${base}/submit`) ? "page" : undefined} onclick={closeDrawer}>Submit</a></li>
-			<li><a href="{base}/reports" class:active={$page.url.pathname.startsWith(`${base}/reports`)} aria-current={$page.url.pathname.startsWith(`${base}/reports`) ? "page" : undefined} onclick={closeDrawer}>Reports</a></li>
-			<li><a href="{base}/watchdog" class:active={$page.url.pathname.startsWith(`${base}/watchdog`)} aria-current={$page.url.pathname.startsWith(`${base}/watchdog`) ? "page" : undefined} onclick={closeDrawer}>Watchdog</a></li>
+			<li><a href="{base}/submit" class:active={$page.url.pathname.startsWith(`${base}/submit`)} aria-current={$page.url.pathname.startsWith(`${base}/submit`) ? "page" : undefined} onclick={closeDrawer} data-sveltekit-preload-data="hover">Submit</a></li>
+			<li><a href="{base}/reports" class:active={$page.url.pathname.startsWith(`${base}/reports`)} aria-current={$page.url.pathname.startsWith(`${base}/reports`) ? "page" : undefined} onclick={closeDrawer} data-sveltekit-preload-data="hover">Reports</a></li>
+			<li><a href="{base}/watchdog" class:active={$page.url.pathname.startsWith(`${base}/watchdog`)} aria-current={$page.url.pathname.startsWith(`${base}/watchdog`) ? "page" : undefined} onclick={closeDrawer} data-sveltekit-preload-data="hover">Watchdog</a></li>
 		{/if}
 		{#if isAdvocate(currentUser)}
-			<li><a href="{base}/casework" class:active={$page.url.pathname.startsWith(`${base}/casework`)} aria-current={$page.url.pathname.startsWith(`${base}/casework`) ? "page" : undefined} onclick={closeDrawer}>Casework</a></li>
-			<li><a href="{base}/contacts" class:active={$page.url.pathname.startsWith(`${base}/contacts`)} aria-current={$page.url.pathname.startsWith(`${base}/contacts`) ? "page" : undefined} onclick={closeDrawer}>Contacts</a></li>
+			<li><a href="{base}/casework" class:active={$page.url.pathname.startsWith(`${base}/casework`)} aria-current={$page.url.pathname.startsWith(`${base}/casework`) ? "page" : undefined} onclick={closeDrawer} data-sveltekit-preload-data="hover">Casework</a></li>
+			<li><a href="{base}/contacts" class:active={$page.url.pathname.startsWith(`${base}/contacts`)} aria-current={$page.url.pathname.startsWith(`${base}/contacts`) ? "page" : undefined} onclick={closeDrawer} data-sveltekit-preload-data="hover">Contacts</a></li>
 		{/if}
 		{#if currentUser.authenticated}
 			<li class="nav-bell"><Bell /></li>
 			<li><span class="nav-avatar" title={currentUser.username}>{currentUser.username?.charAt(0).toUpperCase()}</span></li>
 		{:else}
-			<li><a href="{base}/accounts/google/login/?next={base}/" onclick={closeDrawer}>Login</a></li>
+			<li><a href="{base}/accounts/google/login/?next={base}/" onclick={closeDrawer} data-sveltekit-preload-data="hover">Login</a></li>
 		{/if}
 	</ul>
 </nav>
