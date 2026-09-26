@@ -31,3 +31,5 @@ ansible/.vault_pass
 # Local dev only — not part of the project
 SYSTEM_RULES.md
 backend/cases/management/commands/seed_demo.py
+
+.env

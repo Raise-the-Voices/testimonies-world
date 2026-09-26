@@ -259,7 +259,7 @@
 	{#if !isAdvocate(currentUser)}
 		<p class="muted">
 			You must be logged in as an advocate to {isEdit ? 'edit' : 'create'} casework records.
-			<a href="{base}/api/auth/login/?next={base}/casework">Login</a>
+			<a href="{base}/accounts/google/login/?next={base}/casework">Login</a>
 		</p>
 	{:else if loading}
 		<header class="form-header">
@@ -311,7 +311,7 @@
 								{refreshing ? 'Refreshing…' : 'Refresh session'}
 							</button>
 							<a
-								href="{base}/api/auth/login/?next={base}/casework/new"
+								href="{base}/accounts/google/login/?next={base}/casework/new"
 								class="btn btn-primary btn-sm"
 							>
 								Log in again

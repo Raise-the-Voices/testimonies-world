@@ -366,7 +366,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 	{:else if !isVolunteer(currentUser)}
 		<p class="muted">
 			You must be logged in as a volunteer to edit cases.
-			<a href="{base}/api/auth/login/?next={base}/persons/{personId}/edit">Login</a>
+			<a href="{base}/accounts/google/login/?next={base}/persons/{personId}/edit">Login</a>
 		</p>
 	{:else}
 		<header class="form-header">
@@ -397,7 +397,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 								onclick={doRefreshSession}
 								disabled={refreshing}
 							>{refreshing ? 'Refreshing…' : 'Refresh session'}</button>
-							<a href="{base}/api/auth/login/?next={base}/persons/{personId}/edit" class="btn btn-primary btn-sm">
+							<a href="{base}/accounts/google/login/?next={base}/persons/{personId}/edit" class="btn btn-primary btn-sm">
 								Log in again
 							</a>
 						</div>

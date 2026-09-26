@@ -177,6 +177,41 @@ server {
         try_files $uri =404;
     }
 
+    # ---- /testimonies/_app/ mirror ----
+    # The canonical rsync in deploy.sh strips the `testimonies/` prefix and
+    # puts client assets directly at /var/www/cases/_app/, which the block
+    # above serves. If an operator instead runs `rsync build/client/
+    # /var/www/cases/` (forgetting the prefix), files land at
+    # /var/www/cases/testimonies/_app/ and the /_app/ block above won't
+    # match /testimonies/_app/... URLs — those fall through to the node
+    # upstream, which serves a 404 with `text/plain`, triggering the
+    # "Refused to apply style ... MIME type ('text/plain')" errors and
+    # 404s on every JS chunk. This block is the belt-and-braces fallback:
+    # `alias` strips /testimonies/ and serves the files at the prefixed
+    # layout. Mirror security headers exactly as /_app/ does — nginx
+    # drops parent add_header when a child block declares its own.
+    location /testimonies/_app/ {
+        alias /var/www/cases/testimonies/_app/;
+        access_log off;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header X-Frame-Options            "DENY" always;
+        add_header X-Content-Type-Options     "nosniff" always;
+        add_header X-XSS-Protection           "0" always;
+        add_header Referrer-Policy            "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy         "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy   "default-src 'self'; img-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' https://accounts.google.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://accounts.google.com; frame-src https://accounts.google.com; frame-ancestors 'none'; form-action 'self' https://accounts.google.com; base-uri 'self'; object-src 'none'" always;
+        try_files $uri =404;
+    }
+
+    # /testimonies/robots.txt + /testimonies/sitemap.xml mirrors. Same
+    # rationale as /testimonies/_app/ — the prefixed layout puts these at
+    # /var/www/cases/testimonies/ when the wrong rsync runs, and the
+    # SvelteKit HTML references them under /testimonies/ when base is set.
+    location = /testimonies/robots.txt  { access_log off; alias /var/www/cases/testimonies/robots.txt; try_files $uri =404; }
+    location = /testimonies/sitemap.xml { access_log off; alias /var/www/cases/testimonies/sitemap.xml; try_files $uri =404; }
+
     location = /favicon.ico { access_log off; try_files $uri =404; }
     location = /robots.txt  { access_log off; try_files $uri =404; }
 
