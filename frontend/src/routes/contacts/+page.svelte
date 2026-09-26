@@ -182,7 +182,7 @@
 	{#if !isAdvocate(currentUser)}
 		<p class="muted">
 			You must be logged in as an advocate to view contacts.
-			<a href="{base}/api/auth/login/?next={base}/contacts">Login</a>
+			<a href="{base}/accounts/google/login/?next={base}/contacts">Login</a>
 		</p>
 	{:else}
 		<header class="contacts-header">

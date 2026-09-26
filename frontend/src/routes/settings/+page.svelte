@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { user } from '$lib/session';
 	import { getPreferences, updatePreferences, type UserPreferences } from '$lib/notification';
@@ -62,7 +63,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 	</header>
 
 	{#if !(data.user?.authenticated ?? $user.authenticated)}
-		<p class="muted">Please <a href="/accounts/google/login/?next=/settings">log in</a> to manage settings.</p>
+		<p class="muted">Please <a href="{base}/accounts/google/login/?next={base}/settings">log in</a> to manage settings.</p>
 	{:else if loading}
 		<div class="settings-skeleton" aria-label="Loading preferences">
 			<Skeleton variant="rect" width="100%" height="4rem" />

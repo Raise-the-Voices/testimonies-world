@@ -131,7 +131,7 @@
 {:else if !isVolunteer(currentUser)}
 	<p class="muted">
 		You must be logged in as a volunteer to add reports.
-		<a href="{base}/api/auth/login/?next={base}/persons/{page.params.id}/report">Login</a>
+		<a href="{base}/accounts/google/login/?next={base}/persons/{page.params.id}/report">Login</a>
 	</p>
 {:else if person}
 	<header class="report-page-header">
