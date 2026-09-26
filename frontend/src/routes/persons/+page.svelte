@@ -31,6 +31,12 @@
 	let { data }: { data: PageData } = $props();
 
 	const SEARCH_DEBOUNCE_MS = 300;
+	// Mirror of PersonSearchFilter.MIN_LENGTH on the backend. Below this,
+	// `?search=` would return 0 results regardless — so we suppress the
+	// fetch entirely and surface a "keep typing" hint instead, keeping
+	// the previous results + URL on screen until the user crosses the
+	// threshold or clears the input.
+	const MIN_SEARCH_LENGTH = 3;
 	const PAGE_SIZE = 12;
 	const SKELETON_CARD_COUNT = 12;
 
@@ -233,7 +239,11 @@
 
 	function currentFilterParams(): Record<string, string> {
 		const params: Record<string, string> = {};
-		if (search) params.search = search;
+		// Below MIN_SEARCH_LENGTH the backend returns nothing regardless,
+		// so suppress the key entirely (defensive — applyFilters also
+		// early-returns for short queries, but a direct filter-select
+		// change could still land here).
+		if (search && search.length >= MIN_SEARCH_LENGTH) params.search = search;
 		if (filterCountry) params.country = filterCountry;
 		if (filterStatus) params.current_status = filterStatus;
 		if (filterCategory) params.category = filterCategory;
@@ -261,6 +271,14 @@
 		// later with stale args. No-op when called from the debounce
 		// itself (timer is already null by then).
 		debouncedSearch.cancel();
+		// Mid-type guard: while the query is below MIN_SEARCH_LENGTH the
+		// backend would return nothing, so don't fire a fetch, don't
+		// touch the URL, and don't re-run the countries dropdown — just
+		// keep the previous list + URL on screen until the user crosses
+		// the threshold (or clears the input). The "Keep typing — search
+		// needs at least 3 characters" hint in the template makes the
+		// state visible.
+		if (search.length > 0 && search.length < MIN_SEARCH_LENGTH) return;
 		await loadPersons(currentFilterParams(), 1);
 		const newKey = JSON.stringify(
 			Object.entries(currentCountryParams()).sort(([a], [b]) => a.localeCompare(b)),
@@ -361,6 +379,17 @@
 				{totalCount} case{totalCount !== 1 ? 's' : ''} recorded
 			{/if}
 		</p>
+		{#if search.length > 0 && search.length < MIN_SEARCH_LENGTH}
+			<!--
+				Mid-type guard hint. Tells the user the search isn't
+				firing yet, which matches what they're seeing (the list
+				stays on the previous results). role="status" + polite
+				live region so screen readers announce the transition.
+			-->
+			<p class="muted small search-hint" role="status" aria-live="polite">
+				Keep typing — search needs at least {MIN_SEARCH_LENGTH} characters.
+			</p>
+		{/if}
 	</header>
 
 	{#if bannerMsg}

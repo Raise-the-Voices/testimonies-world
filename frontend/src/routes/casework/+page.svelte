@@ -242,7 +242,7 @@
 	{#if !isAdvocate(currentUser)}
 		<p class="muted">
 			You must be logged in as an advocate to view casework.
-			<a href="{base}/api/auth/login/?next={base}/casework">Login</a>
+			<a href="{base}/accounts/google/login/?next={base}/casework">Login</a>
 		</p>
 	{:else}
 		<header class="page-header">

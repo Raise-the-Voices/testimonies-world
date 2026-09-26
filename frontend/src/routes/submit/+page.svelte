@@ -863,7 +863,7 @@
 	{#if !isVolunteer(currentUser)}
 		<p class="muted">
 			You must be logged in as a volunteer to submit cases.
-			<a href="{base}/api/auth/login/?next={base}/submit">Login</a>
+			<a href="{base}/accounts/google/login/?next={base}/submit">Login</a>
 		</p>
 	{:else}
 		<header class="form-header">
@@ -937,7 +937,7 @@
 								{refreshing ? 'Refreshing…' : 'Refresh session'}
 							</button>
 							<a
-								href="{base}/api/auth/login/?next={base}/submit"
+								href="{base}/accounts/google/login/?next={base}/submit"
 								class="btn btn-primary btn-sm"
 							>
 								Log in again
