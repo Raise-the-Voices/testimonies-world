@@ -162,6 +162,71 @@
 	<meta name="twitter:description" content="Operator command center — open cases, your work, recent activity, and quick actions across the platform." />
 </svelte:head>
 
+<!-- Per-section fallback snippets for `<svelte:boundary>`. Declared at the
+     top of the template so each snippet is a single hoisted declaration
+     in the component scope (which is what the boundary's `failed={...}`
+     prop references). The alternative — declaring `{#snippet failed}`
+     directly inside each boundary — collides at parse time because
+     Svelte hoists snippet declarations to the component scope; declaring
+     the reserved `failed` name six times in the same component trips
+     rollup's "Identifier 'failed' has already been declared". See the
+     summary section comment for the full rationale. -->
+{#snippet failed_summary(error, reset)}
+	<div class="dashboard-section summary-section">
+		<ErrorCard
+			title="Couldn't render the summary"
+			message="This section hit an unexpected error. The rest of the dashboard is still working."
+			kind="server"
+			retry={reset}
+		/>
+	</div>
+{/snippet}
+{#snippet failed_actions(error, reset)}
+	<div class="dashboard-section quick-actions-section">
+		<ErrorCard
+			title="Couldn't render quick actions"
+			kind="server"
+			retry={reset}
+		/>
+	</div>
+{/snippet}
+{#snippet failed_activity(error, reset)}
+	<div class="dashboard-section activity-section">
+		<ErrorCard
+			title="Couldn't render recent activity"
+			kind="server"
+			retry={reset}
+		/>
+	</div>
+{/snippet}
+{#snippet failed_status(error, reset)}
+	<div class="dashboard-section status-section">
+		<ErrorCard
+			title="Couldn't render the status breakdown"
+			kind="server"
+			retry={reset}
+		/>
+	</div>
+{/snippet}
+{#snippet failed_recent_persons(error, reset)}
+	<div class="dashboard-section recent-persons-section">
+		<ErrorCard
+			title="Couldn't render recently updated cases"
+			kind="server"
+			retry={reset}
+		/>
+	</div>
+{/snippet}
+{#snippet failed_recent_casework(error, reset)}
+	<div class="dashboard-section recent-casework-section">
+		<ErrorCard
+			title="Couldn't render recent casework"
+			kind="server"
+			retry={reset}
+		/>
+	</div>
+{/snippet}
+
 <div class="dashboard-page">
 	<header class="page-header">
 		<div>
@@ -201,8 +266,20 @@
 		     min-height matches the real KPI tile geometry so the swap
 		     doesn't reflow. Wrapped in svelte:boundary so a render-time
 		     crash in this section (e.g. a malformed `value` prop) doesn't
-		     take down the rest of the dashboard. -->
+		     take down the rest of the dashboard.
+
+		     The fallback snippet is named `failed_summary` (not the
+		     reserved `failed`) because Svelte 5 hoists snippet
+		     declarations to the component scope; declaring `failed`
+		     inside multiple `<svelte:boundary>` blocks in the same
+		     component collides at parse time (rollup
+		     "Identifier 'failed' has already been declared"). Pass the
+		     snippet as a `failed` prop instead — `<svelte:boundary>`
+		     accepts any snippet reference via that prop. See
+		     `node_modules/svelte/src/compiler/phases/3-transform/client/visitors/SvelteBoundary.js`
+		     for the special-case. -->
 		<svelte:boundary
+			failed={failed_summary}
 			onerror={(e) => console.error('[dashboard] summary section failed:', e)}
 		>
 			<div class="dashboard-section summary-section">
@@ -258,23 +335,17 @@
 					</div>
 				{/if}
 			</div>
-			{#snippet failed(error, reset)}
-				<div class="dashboard-section summary-section">
-					<ErrorCard
-						title="Couldn't render the summary"
-						message="This section hit an unexpected error. The rest of the dashboard is still working."
-						kind="server"
-						retry={reset}
-					/>
-				</div>
-			{/snippet}
 		</svelte:boundary>
 
 		<!-- === SECTION: Quick actions ===
 		     min-height matches the QuickActions grid (2 rows × ~3.5rem
 		     action tiles + card chrome). Wrapped in svelte:boundary so a
-		     crash in QuickActions.svelte doesn't kill the whole page. -->
+		     crash in QuickActions.svelte doesn't kill the whole page.
+		     See the summary section above for why the fallback is
+		     passed as a prop rather than declared as a `failed`
+		     snippet inside the boundary. -->
 		<svelte:boundary
+			failed={failed_actions}
 			onerror={(e) => console.error('[dashboard] quick-actions section failed:', e)}
 		>
 			<div class="dashboard-section quick-actions-section">
@@ -300,22 +371,15 @@
 					</div>
 				{/if}
 			</div>
-			{#snippet failed(error, reset)}
-				<div class="dashboard-section quick-actions-section">
-					<ErrorCard
-						title="Couldn't render quick actions"
-						kind="server"
-						retry={reset}
-					/>
-				</div>
-			{/snippet}
 		</svelte:boundary>
 
 		<!-- === SECTION: Recent activity ===
 		     min-height matches ~5 activity rows + card chrome.
 		     Wrapped in svelte:boundary so a crash here doesn't kill
-		     the other dashboard sections. -->
+		     the other dashboard sections. See the summary section for
+		     why the fallback is passed as a prop. -->
 		<svelte:boundary
+			failed={failed_activity}
 			onerror={(e) => console.error('[dashboard] activity section failed:', e)}
 		>
 		<div class="dashboard-section activity-section">
@@ -368,21 +432,14 @@
 				</div>
 			{/if}
 		</div>
-			{#snippet failed(error, reset)}
-				<div class="dashboard-section activity-section">
-					<ErrorCard
-						title="Couldn't render recent activity"
-						kind="server"
-						retry={reset}
-					/>
-				</div>
-			{/snippet}
 		</svelte:boundary>
 
 		<!-- === SECTION: Status breakdown ===
 		     min-height matches the chart bar + legend grid.
-		     Wrapped in svelte:boundary. -->
+		     Wrapped in svelte:boundary. See the summary section for
+		     why the fallback is passed as a prop. -->
 		<svelte:boundary
+			failed={failed_status}
 			onerror={(e) => console.error('[dashboard] status-breakdown section failed:', e)}
 		>
 		<div class="dashboard-section status-section">
@@ -407,21 +464,14 @@
 				</div>
 			{/if}
 		</div>
-			{#snippet failed(error, reset)}
-				<div class="dashboard-section status-section">
-					<ErrorCard
-						title="Couldn't render the status breakdown"
-						kind="server"
-						retry={reset}
-					/>
-				</div>
-			{/snippet}
 		</svelte:boundary>
 
 		<!-- === SECTION: Recently updated cases ===
 		     min-height matches ~5 person rows + card chrome.
-		     Wrapped in svelte:boundary. -->
+		     Wrapped in svelte:boundary. See the summary section for
+		     why the fallback is passed as a prop. -->
 		<svelte:boundary
+			failed={failed_recent_persons}
 			onerror={(e) => console.error('[dashboard] recent-persons section failed:', e)}
 		>
 		<div class="dashboard-section recent-persons-section">
@@ -463,15 +513,6 @@
 				</div>
 			{/if}
 		</div>
-			{#snippet failed(error, reset)}
-				<div class="dashboard-section recent-persons-section">
-					<ErrorCard
-						title="Couldn't render recently updated cases"
-						kind="server"
-						retry={reset}
-					/>
-				</div>
-			{/snippet}
 		</svelte:boundary>
 
 		<!-- === SECTION: Recent casework (Advocate / Admin only) ===
@@ -481,6 +522,7 @@
 		     Wrapped in svelte:boundary. -->
 		{#if showCaseworkSection}
 		<svelte:boundary
+			failed={failed_recent_casework}
 			onerror={(e) => console.error('[dashboard] recent-casework section failed:', e)}
 		>
 			<div class="dashboard-section recent-casework-section">
@@ -532,15 +574,6 @@
 					</div>
 				{/if}
 			</div>
-			{#snippet failed(error, reset)}
-				<div class="dashboard-section recent-casework-section">
-					<ErrorCard
-						title="Couldn't render recent casework"
-						kind="server"
-						retry={reset}
-					/>
-				</div>
-			{/snippet}
 		</svelte:boundary>
 		{/if}
 	{/if}

@@ -223,7 +223,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 	{#if !isAdvocate(currentUser)}
 		<p class="muted">
 			You must be logged in as an advocate to manage contacts.
-			<a href="{base}/api/auth/login/?next={base}/contacts">Login</a>
+			<a href="{base}/accounts/google/login/?next={base}/contacts">Login</a>
 		</p>
 	{:else if loading}
 		<div class="contact-skeleton" aria-label="Loading contact">
@@ -261,7 +261,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 							<button type="button" class="form-error-refresh" onclick={() => location.reload()}>
 								Refresh session
 							</button>
-							<a href="{base}/api/auth/login/?next={base}/contacts/new">
+							<a href="{base}/accounts/google/login/?next={base}/contacts/new">
 								Log in again
 							</a>
 						</div>

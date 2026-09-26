@@ -189,6 +189,21 @@ fi
 # Publish the client bundle to the nginx document root. nginx serves /_app/
 # and /robots.txt straight off disk from here and falls back to the node
 # service if a file is missing — see /etc/nginx/sites-available/rtv-cases.
+#
+# Guard: vite emits the bundle inside `build/client/testimonies/` when
+# PUBLIC_BASE_PATH=/testimonies. If that directory doesn't exist, the
+# build was either skipped or run without the env var — bail loudly
+# instead of rsyncing an empty source (which leaves /var/www/cases in a
+# half-deployed state and the site 404s on every /testimonies/_app/
+# chunk). The corresponding belt-and-braces nginx location for the
+# prefixed layout lives at scripts/nginx/rtv-cases:184.
+if [ ! -d build/client/testimonies ]; then
+    echo "DEPLOY FAILED: build/client/testimonies/ is missing." >&2
+    echo "  This usually means PUBLIC_BASE_PATH=/testimonies was not set" >&2
+    echo "  during 'npm run build' (svelte.config.js reads it at build time" >&2
+    echo "  to set paths.base). Re-run the build with the env var." >&2
+    exit 1
+fi
 sudo mkdir -p /var/www/cases
 sudo rsync -a --delete build/client/testimonies/ /var/www/cases/
 sudo chown -R www-data:www-data /var/www/cases

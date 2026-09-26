@@ -175,8 +175,17 @@ class PersonViewSet(viewsets.ModelViewSet):
     the Person row is gone.
 
     Filtering (django-filter):
-      ?search=           text search over name, legal_name, aliases,
-                          country, summary_narrative
+      ?search=           field-weighted text search over identity fields
+                          only — name, legal_name, aliases. Each match
+                          is scored (name=100/25, legal_name=80/20,
+                          aliases=60, exact vs substring); results are
+                          ordered by `-search_score, deceased_rank,
+                          -created_at`. Minimum 3 characters. `country`
+                          has its own dropdown filter; `summary_narrative`
+                          has its own FTS path (cases/search.py,
+                          migration 0022). Searching for short substrings
+                          like `pakis` or `moh` no longer leaks into the
+                          country / narrative columns.
       ?country=          exact match (case-insensitive)
       ?current_status=   exact match
       ?medical_status=   exact match
@@ -195,13 +204,24 @@ class PersonViewSet(viewsets.ModelViewSet):
                           then newest-submitted first. An explicit
                           ?ordering= replaces both keys — a caller who
                           asks for `name` gets a pure A-Z list with
-                          deceased cases interleaved.
+                          deceased cases interleaved. NOTE: when
+                          ?search= is set, the viewset overrides the
+                          ordering with `search_score, deceased_rank,
+                          -created_at` (see PersonSearchFilter).
       ?page=N            paginated, PAGE_SIZE=10
     """
 
     filterset_class = PersonFilter
-    search_fields = ['name', 'legal_name', 'aliases', 'country',
-                     'summary_narrative']
+    # Override the project-default `SearchFilter` (which would search
+    # country + summary_narrative too) with our field-weighted filter
+    # that only scores identity fields. OrderingFilter is preserved
+    # for non-search calls; PersonSearchFilter takes over ordering
+    # when `?search=` is present.
+    filter_backends = [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'cases.search.PersonSearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ]
     ordering_fields = ['name', 'country', 'current_status',
                        'updated_at', 'created_at']
     # Default ordering for the catalog. `deceased_rank` (annotated in
