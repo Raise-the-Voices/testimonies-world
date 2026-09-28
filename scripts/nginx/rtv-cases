@@ -177,21 +177,24 @@ server {
         try_files $uri =404;
     }
 
-    # ---- /testimonies/_app/ mirror ----
-    # The canonical rsync in deploy.sh strips the `testimonies/` prefix and
-    # puts client assets directly at /var/www/cases/_app/, which the block
-    # above serves. If an operator instead runs `rsync build/client/
-    # /var/www/cases/` (forgetting the prefix), files land at
-    # /var/www/cases/testimonies/_app/ and the /_app/ block above won't
-    # match /testimonies/_app/... URLs — those fall through to the node
-    # upstream, which serves a 404 with `text/plain`, triggering the
-    # "Refused to apply style ... MIME type ('text/plain')" errors and
-    # 404s on every JS chunk. This block is the belt-and-braces fallback:
-    # `alias` strips /testimonies/ and serves the files at the prefixed
-    # layout. Mirror security headers exactly as /_app/ does — nginx
-    # drops parent add_header when a child block declares its own.
+    # ---- /testimonies/_app/ ----
+    # SvelteKit emits HTML with relative asset paths (`<link
+    # href="./_app/...">`). When the page URL is /testimonies/, the
+    # browser resolves these to /testimonies/_app/... — NOT /_app/...
+    # So this is the URL the browser actually fetches, and the /_app/
+    # block above never matches the browser's requests.
+    #
+    # The canonical rsync in deploy.sh strips the `testimonies/` prefix
+    # and puts files at /var/www/cases/_app/, so we alias to that same
+    # dir. (The earlier alias pointed at /var/www/cases/testimonies/_app/
+    # which doesn't exist after a canonical rsync — every JS chunk 404'd
+    # and the smoke test missed it because the test fetched /_app/...
+    # instead of the prefixed URL the browser actually asks for.)
+    #
+    # Mirror security headers exactly as /_app/ does — nginx drops
+    # parent add_header when a child block declares its own.
     location /testimonies/_app/ {
-        alias /var/www/cases/testimonies/_app/;
+        alias /var/www/cases/_app/;
         access_log off;
         expires 1y;
         add_header Cache-Control "public, immutable";
