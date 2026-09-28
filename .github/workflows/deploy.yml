@@ -155,6 +155,15 @@ jobs:
 
             cd /opt/rtv-cases
 
+            # Take ownership of /opt/rtv-cases for this run. The SSH
+            # user (DEPLOY_USER) does not own the repo on prod — so
+            # `git fetch`/`git checkout` would otherwise fail with
+            # "Permission denied" on .git/FETCH_HEAD or any tracked
+            # file in the checkout list below. sudo is passwordless
+            # for this user. Idempotent — a no-op once ownership
+            # already matches.
+            sudo chown -R "$(whoami)" /opt/rtv-cases
+
             # Mark the deploy checkout as a safe.directory for whatever
             # user we end up as. Git 2.35.2+ refuses to operate on a
             # repo owned by a different UID unless explicitly
