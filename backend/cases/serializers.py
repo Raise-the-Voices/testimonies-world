@@ -228,6 +228,23 @@ class SourceSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializ
             self.fields['report'].queryset = qs
 
 
+class _NestedSourceSerializer(SourceSerializer):
+    """SourceSerializer variant used only inside ReportSerializer.sources.
+
+    The parent ReportSerializer.create() auto-binds `report` to each
+    row inside the same transaction (see ReportSerializer.create). The
+    client cannot know the report id at submission time, so the nested
+    payload omits the FK. Making `report` required here would 400 every
+    nested submit even though the parent is going to set it anyway.
+
+    Standalone POST /api/sources/ still uses the strict SourceSerializer
+    where `report` remains required.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['report'].required = False
+
+
 class ReportSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
     # `narrative` is the canonical human-rights testimony; `reporter_*`
     # and `precise_location` are private. All are free-text and could
@@ -252,7 +269,9 @@ class ReportSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializ
     # Writable nested: volunteers can submit N sources alongside the
     # report in one POST. Standalone /sources/ endpoint also works for
     # adding more sources later. Atomic — see `create()` below.
-    sources = SourceSerializer(many=True, required=False)
+    # Uses _NestedSourceSerializer (not SourceSerializer) because the
+    # parent auto-binds `report` in create() — see the subclass docstring.
+    sources = _NestedSourceSerializer(many=True, required=False)
 
     class Meta:
         model = Report
