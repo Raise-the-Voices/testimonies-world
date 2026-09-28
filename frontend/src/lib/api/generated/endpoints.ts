@@ -1298,8 +1298,17 @@ Every delete writes a single `AuditLog` row capturing the snapshot
 the Person row is gone.
 
 Filtering (django-filter):
-  ?search=           text search over name, legal_name, aliases,
-                      country, summary_narrative
+  ?search=           field-weighted text search over identity fields
+                      only — name, legal_name, aliases. Each match
+                      is scored (name=100/25, legal_name=80/20,
+                      aliases=60, exact vs substring); results are
+                      ordered by `-search_score, deceased_rank,
+                      -created_at`. Minimum 3 characters. `country`
+                      has its own dropdown filter; `summary_narrative`
+                      has its own FTS path (cases/search.py,
+                      migration 0022). Searching for short substrings
+                      like `pakis` or `moh` no longer leaks into the
+                      country / narrative columns.
   ?country=          exact match (case-insensitive)
   ?current_status=   exact match
   ?medical_status=   exact match
@@ -1318,7 +1327,10 @@ Filtering (django-filter):
                       then newest-submitted first. An explicit
                       ?ordering= replaces both keys — a caller who
                       asks for `name` gets a pure A-Z list with
-                      deceased cases interleaved.
+                      deceased cases interleaved. NOTE: when
+                      ?search= is set, the viewset overrides the
+                      ordering with `search_score, deceased_rank,
+                      -created_at` (see PersonSearchFilter).
   ?page=N            paginated, PAGE_SIZE=10
  */
 export type personsListResponse200 = {
@@ -1393,8 +1405,17 @@ Every delete writes a single `AuditLog` row capturing the snapshot
 the Person row is gone.
 
 Filtering (django-filter):
-  ?search=           text search over name, legal_name, aliases,
-                      country, summary_narrative
+  ?search=           field-weighted text search over identity fields
+                      only — name, legal_name, aliases. Each match
+                      is scored (name=100/25, legal_name=80/20,
+                      aliases=60, exact vs substring); results are
+                      ordered by `-search_score, deceased_rank,
+                      -created_at`. Minimum 3 characters. `country`
+                      has its own dropdown filter; `summary_narrative`
+                      has its own FTS path (cases/search.py,
+                      migration 0022). Searching for short substrings
+                      like `pakis` or `moh` no longer leaks into the
+                      country / narrative columns.
   ?country=          exact match (case-insensitive)
   ?current_status=   exact match
   ?medical_status=   exact match
@@ -1413,7 +1434,10 @@ Filtering (django-filter):
                       then newest-submitted first. An explicit
                       ?ordering= replaces both keys — a caller who
                       asks for `name` gets a pure A-Z list with
-                      deceased cases interleaved.
+                      deceased cases interleaved. NOTE: when
+                      ?search= is set, the viewset overrides the
+                      ordering with `search_score, deceased_rank,
+                      -created_at` (see PersonSearchFilter).
   ?page=N            paginated, PAGE_SIZE=10
  */
 export type personsCreateResponse201 = {
@@ -1474,8 +1498,17 @@ Every delete writes a single `AuditLog` row capturing the snapshot
 the Person row is gone.
 
 Filtering (django-filter):
-  ?search=           text search over name, legal_name, aliases,
-                      country, summary_narrative
+  ?search=           field-weighted text search over identity fields
+                      only — name, legal_name, aliases. Each match
+                      is scored (name=100/25, legal_name=80/20,
+                      aliases=60, exact vs substring); results are
+                      ordered by `-search_score, deceased_rank,
+                      -created_at`. Minimum 3 characters. `country`
+                      has its own dropdown filter; `summary_narrative`
+                      has its own FTS path (cases/search.py,
+                      migration 0022). Searching for short substrings
+                      like `pakis` or `moh` no longer leaks into the
+                      country / narrative columns.
   ?country=          exact match (case-insensitive)
   ?current_status=   exact match
   ?medical_status=   exact match
@@ -1494,7 +1527,10 @@ Filtering (django-filter):
                       then newest-submitted first. An explicit
                       ?ordering= replaces both keys — a caller who
                       asks for `name` gets a pure A-Z list with
-                      deceased cases interleaved.
+                      deceased cases interleaved. NOTE: when
+                      ?search= is set, the viewset overrides the
+                      ordering with `search_score, deceased_rank,
+                      -created_at` (see PersonSearchFilter).
   ?page=N            paginated, PAGE_SIZE=10
  */
 export type personsRetrieveResponse200 = {
@@ -1554,8 +1590,17 @@ Every delete writes a single `AuditLog` row capturing the snapshot
 the Person row is gone.
 
 Filtering (django-filter):
-  ?search=           text search over name, legal_name, aliases,
-                      country, summary_narrative
+  ?search=           field-weighted text search over identity fields
+                      only — name, legal_name, aliases. Each match
+                      is scored (name=100/25, legal_name=80/20,
+                      aliases=60, exact vs substring); results are
+                      ordered by `-search_score, deceased_rank,
+                      -created_at`. Minimum 3 characters. `country`
+                      has its own dropdown filter; `summary_narrative`
+                      has its own FTS path (cases/search.py,
+                      migration 0022). Searching for short substrings
+                      like `pakis` or `moh` no longer leaks into the
+                      country / narrative columns.
   ?country=          exact match (case-insensitive)
   ?current_status=   exact match
   ?medical_status=   exact match
@@ -1574,7 +1619,10 @@ Filtering (django-filter):
                       then newest-submitted first. An explicit
                       ?ordering= replaces both keys — a caller who
                       asks for `name` gets a pure A-Z list with
-                      deceased cases interleaved.
+                      deceased cases interleaved. NOTE: when
+                      ?search= is set, the viewset overrides the
+                      ordering with `search_score, deceased_rank,
+                      -created_at` (see PersonSearchFilter).
   ?page=N            paginated, PAGE_SIZE=10
  */
 export type personsUpdateResponse200 = {
@@ -1636,8 +1684,17 @@ Every delete writes a single `AuditLog` row capturing the snapshot
 the Person row is gone.
 
 Filtering (django-filter):
-  ?search=           text search over name, legal_name, aliases,
-                      country, summary_narrative
+  ?search=           field-weighted text search over identity fields
+                      only — name, legal_name, aliases. Each match
+                      is scored (name=100/25, legal_name=80/20,
+                      aliases=60, exact vs substring); results are
+                      ordered by `-search_score, deceased_rank,
+                      -created_at`. Minimum 3 characters. `country`
+                      has its own dropdown filter; `summary_narrative`
+                      has its own FTS path (cases/search.py,
+                      migration 0022). Searching for short substrings
+                      like `pakis` or `moh` no longer leaks into the
+                      country / narrative columns.
   ?country=          exact match (case-insensitive)
   ?current_status=   exact match
   ?medical_status=   exact match
@@ -1656,7 +1713,10 @@ Filtering (django-filter):
                       then newest-submitted first. An explicit
                       ?ordering= replaces both keys — a caller who
                       asks for `name` gets a pure A-Z list with
-                      deceased cases interleaved.
+                      deceased cases interleaved. NOTE: when
+                      ?search= is set, the viewset overrides the
+                      ordering with `search_score, deceased_rank,
+                      -created_at` (see PersonSearchFilter).
   ?page=N            paginated, PAGE_SIZE=10
  */
 export type personsPartialUpdateResponse200 = {
@@ -1718,8 +1778,17 @@ Every delete writes a single `AuditLog` row capturing the snapshot
 the Person row is gone.
 
 Filtering (django-filter):
-  ?search=           text search over name, legal_name, aliases,
-                      country, summary_narrative
+  ?search=           field-weighted text search over identity fields
+                      only — name, legal_name, aliases. Each match
+                      is scored (name=100/25, legal_name=80/20,
+                      aliases=60, exact vs substring); results are
+                      ordered by `-search_score, deceased_rank,
+                      -created_at`. Minimum 3 characters. `country`
+                      has its own dropdown filter; `summary_narrative`
+                      has its own FTS path (cases/search.py,
+                      migration 0022). Searching for short substrings
+                      like `pakis` or `moh` no longer leaks into the
+                      country / narrative columns.
   ?country=          exact match (case-insensitive)
   ?current_status=   exact match
   ?medical_status=   exact match
@@ -1738,7 +1807,10 @@ Filtering (django-filter):
                       then newest-submitted first. An explicit
                       ?ordering= replaces both keys — a caller who
                       asks for `name` gets a pure A-Z list with
-                      deceased cases interleaved.
+                      deceased cases interleaved. NOTE: when
+                      ?search= is set, the viewset overrides the
+                      ordering with `search_score, deceased_rank,
+                      -created_at` (see PersonSearchFilter).
   ?page=N            paginated, PAGE_SIZE=10
  */
 export type personsDestroyResponse204 = {
