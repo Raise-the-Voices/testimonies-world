@@ -225,6 +225,24 @@ sudo systemctl restart rtv-cases-backend 2>/dev/null || true
 sudo systemctl restart rtv-cases-frontend 2>/dev/null || true
 sleep 3
 
+# --- Diagnostics (temporary — remove once 3000-binding failure is solved) ---
+# Without these, a failed smoke test leaves no breadcrumb (just "nothing
+# listening on :3000"). Capture: service state, last 30 journal lines,
+# whether build/index.js + the chunks symlink exist, who owns the build
+# dir, and whether anything is bound on the port. Cheap; runs in <1s.
+echo "  --- frontend diagnostics ---"
+echo "  service state: $(sudo systemctl is-active rtv-cases-frontend 2>&1)"
+echo "  sub-state:     $(sudo systemctl show rtv-cases-frontend -p SubState --value 2>&1)"
+echo "  main PID:      $(sudo systemctl show rtv-cases-frontend -p MainPID --value 2>&1)"
+echo "  build/index.js exists: $([ -f /opt/rtv-cases/frontend/build/index.js ] && echo yes || echo NO)"
+echo "  build/owner:   $(stat -c '%U:%G' /opt/rtv-cases/frontend/build 2>&1)"
+echo "  symlink chunks/client: $(ls -la /opt/rtv-cases/frontend/build/server/chunks/client 2>&1)"
+echo "  symlink target resolvable: $(cd /opt/rtv-cases/frontend/build/server/chunks && [ -e client/testimonies ] && echo yes || echo NO)"
+echo "  ss :3000:      $(ss -tlnpH 2>/dev/null | grep ':3000' | head -1 || echo 'nothing')"
+echo "  journal tail:"
+sudo journalctl -u rtv-cases-frontend -n 15 --no-pager 2>&1 | sed 's/^/    /' || true
+echo "  node version:  $(sudo -u deploy /usr/bin/node -v 2>&1 || echo 'unavailable')"
+
 # --- Backend fallback: detached gunicorn if systemd didn't bring it up -----
 # We only fire this if neither systemd says the service is active nor :8040
 # is listening. Without this, a broken systemd unit on prod keeps the
