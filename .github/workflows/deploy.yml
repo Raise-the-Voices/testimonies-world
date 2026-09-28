@@ -83,7 +83,7 @@ jobs:
       - name: Build SvelteKit with prod base path
         run: cd frontend && PUBLIC_BASE_PATH=/testimonies npm run build
 
-      # `if-no-artifact-found: error` makes a missing build fail loudly
+      # `if-no-files-found: error` makes a missing build fail loudly
       # instead of producing an empty scp payload that would 404 every
       # /testimonies/_app/ request on prod. Retention 7d matches the
       # typical rollback window — old artifacts are deleted by GitHub
@@ -93,7 +93,7 @@ jobs:
           name: frontend-build
           path: frontend/build
           retention-days: 7
-          if-no-artifact-found: error
+          if-no-files-found: error
 
   # ----- deploy ----------------------------------------------------------
   # Pulls the build artifact, scps it to the VM, then runs deploy.sh.
@@ -128,12 +128,20 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
           port: ${{ secrets.DEPLOY_PORT }}
+          # /tmp/<dir> instead of /opt/<dir>: the SSH user (DEPLOY_USER)
+          # can't `mkdir -p` under /opt/ on prod without sudo, and the
+          # scp-action attempts `create folder` on the target BEFORE the
+          # SSH step that could sudo. /tmp is world-writable so the dir
+          # is created cleanly with zero per-machine setup. The artifact
+          # only needs to live for the duration of one SSH step (sub-
+          # second), so /tmp's volatility is a non-issue.
+          #
           # Trailing slash on target is significant: it makes scp copy
-          # the directory's CONTENTS into /opt/rtv-cases-deploy/ rather
-          # than nesting under a frontend-build/ subdir. Without it the
-          # deploy script's $INCOMING_FRONTEND lookup would 404.
+          # the directory's CONTENTS into the target rather than nesting
+          # under a frontend-build/ subdir. The deploy script's
+          # $INCOMING_FRONTEND lookup expects the contents directly.
           source: "dist/frontend-build"
-          target: "/opt/rtv-cases-deploy/"
+          target: "/tmp/frontend-build-incoming/"
 
       - name: Run deploy.sh on VM
         uses: appleboy/ssh-action@v1
@@ -146,13 +154,6 @@ jobs:
             set -e
 
             cd /opt/rtv-cases
-
-            # The scp step above may have left files owned by the
-            # appleboy/ssh-action user (typically `runner` or `deploy`).
-            # Normalize to the current user so `git fetch`/`git
-            # checkout` (which write into ./) don't hit "dubious
-            # ownership" or "Permission denied". Idempotent.
-            sudo chown -R "$(whoami)" /opt/rtv-cases-deploy
 
             # Mark the deploy checkout as a safe.directory for whatever
             # user we end up as. Git 2.35.2+ refuses to operate on a

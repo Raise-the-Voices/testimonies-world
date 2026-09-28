@@ -38,7 +38,15 @@ SITE="https://cases.raisethevoices.org"
 # scp's `frontend/build/` to this exact path before invoking this
 # script. Override via env var to test locally (e.g. with a manual
 # `npm run build`).
-INCOMING_FRONTEND="${INCOMING_FRONTEND:-/opt/rtv-cases-deploy/frontend-build}"
+#
+# /tmp/ (not /opt/) because the SSH user can't `mkdir -p` under /opt/
+# without sudo, and the scp step runs BEFORE this script can sudo. The
+# scp-action's "create folder" step needs a path the deploy user can
+# create on first deploy — /tmp is world-writable so it always works
+# with zero per-machine setup. The artifact only needs to live for the
+# duration of this script (~30s); /tmp's volatility between deploys is
+# a non-issue.
+INCOMING_FRONTEND="${INCOMING_FRONTEND:-/tmp/frontend-build-incoming}"
 
 # Verify the inbound artifact looks right. Without this check, a
 # partial scp or stale path silently deploys an empty /var/www/cases —
