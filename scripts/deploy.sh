@@ -343,12 +343,15 @@ for attempt in 1 2 3 4 5 6 7 8 9 10; do
         continue
     fi
 
-    # 4. HTML's entry hash must exist on disk under /var/www/cases/
-    disk_entry=$(ls /var/www/cases/_app/immutable/entry/ 2>/dev/null \
-        | grep -oE 'start\.[A-Za-z0-9_-]+\.js' \
-        | head -1 || true)
-    if [ "$entry" != "$disk_entry" ]; then
-        echo "  attempt $attempt: HTML refs $entry but disk has $disk_entry — node stale, restart needed"
+    # 4. HTML's entry hash must exist on disk under /var/www/cases/.
+    # Check EXISTENCE of the specific hash HTML references, not equality
+    # with whatever file ls happens to return first — multiple hashes
+    # can coexist on disk during manual + CI deploy interleavings
+    # (rsync --delete is correct, but operator-initiated local rebuilds
+    # add new hashes on top). The presence of HTML's hash is what
+    # guarantees the user's browser can fetch it.
+    if [ -n "$entry" ] && [ ! -f "/var/www/cases/_app/immutable/entry/$entry" ]; then
+        echo "  attempt $attempt: HTML refs $entry but disk has no such file — rsync didn't copy new chunks"
         sleep 3
         continue
     fi
