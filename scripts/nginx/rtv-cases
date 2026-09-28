@@ -268,5 +268,40 @@ server {
         proxy_set_header Upgrade    $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 60s;
+
+        # HTML must revalidate on every request. Without this, the
+        # browser caches index.html from the previous build, and on the
+        # next deploy the cached HTML still references the OLD asset
+        # hashes. The OLD chunks have been rsync --delete'd off disk
+        # → 404 HTML page → MIME type error → hydration fails → broken
+        # UI with a stuck skeleton. (This is the failure that hit prod
+        # on 2026-09-28 after the Sentry-removal rebuild.)
+        #
+        # `private` keeps any upstream CDN (Cloudflare) from caching
+        # per-user SSR responses across visitors. `no-cache` lets the
+        # browser keep the body cached but forces an If-None-Match
+        # revalidation; SvelteKit's adapter-node emits ETags, so a
+        # warm-cache visit costs a 304 (cheap). `must-revalidate` is
+        # the offline-fallback guard: once stale, the browser must
+        # never serve a cached copy without talking to the server.
+        #
+        # `/_app/` stays immutable (1y) above — every build's chunks
+        # are a different URL because the hash is in the filename, so
+        # the browser never asks the server for a stale chunk. Only
+        # the HTML needs revalidation.
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "private, no-cache, must-revalidate" always;
+
+        # nginx drops parent add_header when a child block declares
+        # ANY add_header — re-declare every security header from the
+        # server block above so HTML responses keep HSTS / CSP /
+        # X-Frame-Options / etc.
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header X-Frame-Options            "DENY" always;
+        add_header X-Content-Type-Options     "nosniff" always;
+        add_header X-XSS-Protection           "0" always;
+        add_header Referrer-Policy            "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy         "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' https://accounts.google.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://accounts.google.com; frame-src https://accounts.google.com; frame-ancestors 'none'; form-action 'self' https://accounts.google.com; base-uri 'self'; object-src 'none'" always;
     }
 }
