@@ -136,11 +136,14 @@ jobs:
           # only needs to live for the duration of one SSH step (sub-
           # second), so /tmp's volatility is a non-issue.
           #
-          # Trailing slash on target is significant: it makes scp copy
-          # the directory's CONTENTS into the target rather than nesting
-          # under a frontend-build/ subdir. The deploy script's
-          # $INCOMING_FRONTEND lookup expects the contents directly.
-          source: "dist/frontend-build"
+          # Trailing slashes on BOTH source and target are significant:
+          # they tell rsync (the scp-action backend) to copy the
+          # directory's CONTENTS into the target, not nest the source
+          # directory under it. Without the source slash, files landed
+          # at /tmp/frontend-build-incoming/frontend-build/... and
+          # deploy.sh's INCOMING_FRONTEND lookup failed (run
+          # #36441619050, 2026-09-28).
+          source: "dist/frontend-build/"
           target: "/tmp/frontend-build-incoming/"
 
       - name: Run deploy.sh on VM
