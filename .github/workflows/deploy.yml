@@ -136,15 +136,18 @@ jobs:
           # only needs to live for the duration of one SSH step (sub-
           # second), so /tmp's volatility is a non-issue.
           #
-          # Trailing slashes on BOTH source and target are significant:
-          # they tell rsync (the scp-action backend) to copy the
-          # directory's CONTENTS into the target, not nest the source
-          # directory under it. Without the source slash, files landed
-          # at /tmp/frontend-build-incoming/frontend-build/... and
-          # deploy.sh's INCOMING_FRONTEND lookup failed (run
-          # #36441619050, 2026-09-28).
-          source: "dist/frontend-build/"
+          # drone-scp (the scp-action backend) tars with
+          # `tar -zcf out.tar.gz <source>` — the archive always contains
+          # a top-level directory matching the source name, regardless
+          # of trailing slashes. So with source=dist/frontend-build the
+          # archive holds frontend-build/client/.../; extracted as-is
+          # that becomes /tmp/frontend-build-incoming/frontend-build/...
+          # and deploy.sh's INCOMING_FRONTEND check fails. `strip_components:
+          # 1` tells the untar step to drop that top dir, so files land
+          # at /tmp/frontend-build-incoming/client/... directly.
+          source: "dist/frontend-build"
           target: "/tmp/frontend-build-incoming/"
+          strip_components: 1
 
       - name: Run deploy.sh on VM
         uses: appleboy/ssh-action@v1
