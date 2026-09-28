@@ -1,147 +1,90 @@
 #!/bin/bash
 set -eo pipefail
 
-cd /opt/rtv-cases
-PROJECT_ROOT="$(pwd)"   # Used by the nohup fallbacks below to return here
-                        # after `cd`ing into backend/ or frontend/.
+# rtv-cases deploy — run by .github/workflows/deploy.yml over SSH.
+#
+# Architecture:
+#   - The frontend SvelteKit build runs in GitHub Actions (Node 22) and
+#     arrives at $INCOMING_FRONTEND via `appleboy/scp-action@v0.1.4`
+#     before this script runs. We do NOT run `npm ci` or `npm run build`
+#     here.
+#   - The source refresh below is a NARROW `git checkout origin/main
+#     -- <paths>` — never `git reset --hard`. Untracked host files
+#     (backend/.env, vetted per-host tweaks) survive.
+#   - backend/testimonies/    — IS in the checkout list. Per-host
+#     configuration belongs in backend/.env (read by the systemd
+#     unit's EnvironmentFile=), not in settings.py. The directory
+#     checkout will refuse to overwrite a tracked-modified
+#     settings.py without `-f` — that refusal is the operator's
+#     signal to move any hand-edit into .env and re-run.
+#   - The 6-attempt smoke test at the end (entry-asset hash on disk
+#     must match what's served) catches the half-deployed class of
+#     failures that were the recurring cause of recent 500/502s.
 
-# Mark the deploy checkout as a safe.directory for whatever user the
-# appleboy/ssh-action runs as. Git 2.35.2+ refuses to operate on a
-# repo owned by a different UID unless explicitly allowlisted — the
-# SSH-action user (typically `runner` or `deploy`) doesn't own
-# /opt/rtv-cases on prod, so `git fetch`/`git reset` would otherwise
-# fail with "detected dubious ownership" and the deploy aborts in 1s
-# (run #216, 2026-09-21). Targeted path instead of `*` keeps the
-# allowlist as narrow as possible.
+cd /opt/rtv-cases
+PROJECT_ROOT="$(pwd)"
+
+# Mark the deploy checkout as a safe.directory. Git 2.35.2+ refuses to
+# operate on a repo owned by a different UID unless explicitly
+# allowlisted — the deploy user (typically `deploy`) doesn't own
+# /opt/rtv-cases on prod, so `git fetch` would otherwise fail with
+# "detected dubious ownership" (run #216, 2026-09-21). Targeted path
+# keeps the allowlist as narrow as possible.
 git config --global --add safe.directory /opt/rtv-cases
 
 SITE="https://cases.raisethevoices.org"
 
-# --- Ensure Node >= 22.18.0 is available before `npm ci` ---
-# orval@7.21.0 is a devDependency, but `npm ci --omit=dev` on npm 10.x
-# still validates engine metadata for ALL lockfile entries during the
-# resolution phase, before --omit is applied. With engine-strict=true
-# in frontend/.npmrc, this means a target VM with Node 20 aborts the
-# deploy even though orval is never executed here (`npm run build` is
-# just `vite build`). The CI fix in commit 4d27f0d bumped the runner to
-# Node 22; this block brings the deploy target into the same state.
-#
-# Idempotent: if node is already >=22.18.0, do nothing. Otherwise
-# install Node 22 LTS via NodeSource (apt-based, requires sudo).
-# NodeSource is the only channel that ships Node 22 on Ubuntu 24.04 —
-# the universe `nodejs` package is still on Node 20 LTS.
-if command -v node >/dev/null 2>&1; then
-    current_node=$(node -v 2>/dev/null | sed 's/^v//' || echo "0")
-else
-    current_node="0"
-fi
-required_major=22
-required_minor=18
-node_major=$(printf '%s' "$current_node" | cut -d. -f1)
-node_minor=$(printf '%s' "$current_node" | cut -d. -f2)
-if [ "${node_major:-0}" -lt "$required_major" ] \
-   || { [ "${node_major:-0}" -eq "$required_major" ] && [ "${node_minor:-0}" -lt "$required_minor" ]; }; then
-    echo "Node ${current_node:-missing} is below ${required_major}.${required_minor}; installing Node ${required_major} LTS via NodeSource."
-    # Pin the distro so the bootstrap script picks the right repo even
-    # if $lsb_release is unavailable (e.g. inside containers). The
-    # setup_22.x script is idempotent — re-running on an already-pinned
-    # host is a no-op aside from a `Hit:` apt line.
-    sudo -E bash -c '
-        if ! command -v node >/dev/null 2>&1 || [ "$(node -v | sed "s/^v//" | cut -d. -f1)" -lt 22 ]; then
-            curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-            apt-get install -y nodejs
-        fi
-    '
-    # Refresh PATH so the just-installed nodejs is picked up by the
-    # `npm ci` later in this script. /usr/bin is already on PATH, but
-    # NodeSource also installs into /etc/profile.d and we want the new
-    # /usr/bin/node to win regardless of how the ssh-action injected
-    # the original PATH.
-    hash -r
-    if ! command -v node >/dev/null 2>&1 || [ "$(node -v | sed 's/^v//' | cut -d. -f1)" -lt 22 ]; then
-        echo "DEPLOY FAILED: NodeSource bootstrap did not yield Node >=22 on PATH ($PATH)" >&2
-        exit 1
-    fi
-    echo "Node bootstrap complete: $(node -v), npm $(npm -v)"
-else
-    echo "Node $(node -v) satisfies >=${required_major}.${required_minor}; no upgrade needed."
+# Inbound frontend build directory. The GitHub Actions `deploy` job
+# scp's `frontend/build/` to this exact path before invoking this
+# script. Override via env var to test locally (e.g. with a manual
+# `npm run build`).
+INCOMING_FRONTEND="${INCOMING_FRONTEND:-/opt/rtv-cases-deploy/frontend-build}"
+
+# Verify the inbound artifact looks right. Without this check, a
+# partial scp or stale path silently deploys an empty /var/www/cases —
+# every /testimonies/_app/ request 404s.
+if [ ! -d "$INCOMING_FRONTEND/client/testimonies/_app" ]; then
+    echo "DEPLOY FAILED: $INCOMING_FRONTEND/client/testimonies/_app is missing." >&2
+    echo "  The deploy workflow scps frontend/build/ here before running deploy.sh." >&2
+    echo "  Re-run the deploy workflow, or set INCOMING_FRONTEND to a directory containing the build." >&2
+    exit 1
 fi
 
-# Tag before deploy for rollback
-git tag deploy-$(date +%Y%m%d-%H%M%S)
+# Verify backend/.env exists — the systemd unit's EnvironmentFile=
+# silently degrades to a partial config if the file is missing, and
+# gunicorn then refuses to start. Fail loudly here, not at the smoke
+# test.
+if [ ! -f "$PROJECT_ROOT/backend/.env" ]; then
+    echo "DEPLOY FAILED: $PROJECT_ROOT/backend/.env is missing." >&2
+    echo "  The systemd unit EnvironmentFile= this; without it gunicorn cannot start." >&2
+    exit 1
+fi
 
-# Stash any locally-modified tracked files and untracked files so the
-# pull can apply cleanly. Some files (settings.py, .env) are managed
-# per-host by design — see commit 58da23a. If there's nothing to stash,
-# this is a no-op.
-git stash push -u -m "deploy-autostash-$(date +%s)" || true
-
-# Pull latest. Use `fetch + reset --hard` rather than `pull` so this
-# stays correct after a force-push (pull would error with "divergent
-# branches" if origin/main was rewritten). Local-only files (settings.py,
-# .env, etc.) are preserved by the autostash above.
+# --- Source refresh — narrow, NEVER `git reset --hard` ---
+# Pulls latest tracked files for the paths we actually deploy. The
+# narrow list excludes:
+#   - frontend/build/         — gitignored, overwritten by the artifact
+#   - backend/.env            — gitignored, OS-level source of truth
+#   - backend/testimonies/    — see note at file top: this directory IS
+#     in the checkout list, so settings.py propagates from main. Any
+#     operator hand-edit to settings.py will be REJECTED by `git
+#     checkout` (no `-f`); move the change to backend/.env (the
+#     supported surface) and re-run.
+# `git checkout` refuses to overwrite tracked-modified files unless
+# `-f` is passed. That's intentional: we will NOT silently clobber an
+# operator's hand-edit. The owner of that hand-edit resolves the
+# conflict (commit, stash, or drop the local change and re-run).
 git fetch origin main
-git reset --hard origin/main
+git checkout origin/main -- \
+    backend/requirements.txt \
+    backend/cases/ \
+    backend/testimonies/ \
+    backend/manage.py \
+    scripts/deploy.sh \
+    scripts/nginx/rtv-cases \
+    scripts/systemd/
 
-# Re-apply local customizations. ABORT on conflict — better than
-# shipping half-merged source. The old code did `git stash pop ||
-# echo "WARNING: ..."` which masked the failure: under `set -e`,
-# the `||` defang made the script continue into `pip install` /
-# `migrate` / `npm run build` against a half-merged tree, which is
-# the worst-case failure mode (a successful-looking deploy that's
-# silently inconsistent).
-#
-# Auto-recovery for settings.py only: when the hotfix (commit
-# bff87fd) lifted LOGGING/CACHES/Sentry out of settings.py into
-# testimonies/ops.py, the VM's locally-tweaked settings.py could
-# no longer auto-merge with the new minimal settings.py. Take
-# main's version (theirs) and warn the operator — any
-# per-host setting the operator wants must be in .env (which is
-# gitignored), not settings.py. The .env recovery (manual)
-# stays as the fallback.
-if ! git stash pop; then
-    # `git stash pop` returns non-zero in two cases:
-    #   1. There's no stash to pop ("No stash entries found.")
-    #      The VM had nothing to autostash, so this is a no-op —
-    #      the deploy can continue with main's tree.
-    #   2. The pop hit a real conflict. Auto-recover if it's the
-    #      known-safe settings.py-only kind, otherwise bail.
-    conflicted=$(git diff --name-only --diff-filter=U 2>/dev/null || true)
-    if [ -z "$conflicted" ]; then
-        # No unmerged paths = no real conflict. The non-zero exit
-        # was "no stash to pop", which is fine — the VM had no
-        # local customizations to preserve.
-        echo "deploy.sh: no stash to pop — continuing." >&2
-    elif [ "$(echo "$conflicted" | wc -l)" = "1" ] && [ "$conflicted" = "backend/testimonies/settings.py" ]; then
-        # AUTO-RECOVERY for the known settings.py-only path. The
-        # hotfix (commit bff87fd) lifted LOGGING/CACHES/Sentry
-        # out of settings.py into testimonies/ops.py, so the VM's
-        # locally-tweaked settings.py can't auto-merge with the
-        # new minimal settings.py. Take main's version and warn the
-        # operator — per-host tweaks should be in .env anyway.
-        echo "deploy.sh: auto-resolving settings.py conflict by taking main's version." >&2
-        echo "  (per-host tweaks should be in backend/.env, which is gitignored.)" >&2
-        # In `git stash pop`, --ours = HEAD/main (the new minimal
-        # settings.py that uses ops.py), --theirs = the stash (the
-        # old inline-LOGGING version). We want main's version.
-        git checkout --ours backend/testimonies/settings.py
-        # Mark the file resolved and finish the merge. The
-        # remaining bits of the stash (if any) drop silently —
-        # we only care about .env and the deploy proceeds with
-        # main's settings.py.
-        git add backend/testimonies/settings.py
-        git stash drop || true
-    else
-        echo "DEPLOY FAILED: 'git stash pop' had conflicts - refusing to deploy half-merged code." >&2
-        echo "Conflicted paths:" >&2
-        echo "$conflicted" | sed 's/^/  /' >&2
-        echo "Inspect with: git status" >&2
-        echo "Recovery:  git checkout --theirs backend/.env && git stash drop && bash scripts/deploy.sh" >&2
-        exit 1
-    fi
-fi
-
-# Backend
+# --- Backend ---
 cd backend
 source .venv/bin/activate
 pip install -r requirements.txt --quiet
@@ -163,61 +106,43 @@ deactivate
 # on whatever umask the service happened to start with.
 sudo chmod -R u+rwX,g+rX,o+rX "$PROJECT_ROOT/backend/public_media"
 
-# Frontend
-cd ../frontend
-npm ci --omit=dev
-# PUBLIC_BASE_PATH controls both the runtime base + the build's
-# output directory layout. With /testimonies set, vite emits the
-# client bundle to build/client/testimonies/ — which the rsync
-# below (0b0f3e0) strips so nginx serves /_app/* from
-#/var/www/cases/_app/. Without it, the rsync source doesn't
-# exist and the deploy dies at "change_dir ... failed" (run
-# #35598625731, 2026-09-21).
-PUBLIC_BASE_PATH=/testimonies npm run build
-
-# @sveltejs/adapter-node 5.5.x under @sveltejs/kit 2.66 / vite 7 emits the
-# server runtime into build/server/chunks/ rather than build/. The runtime
-# locates its static asset directory relative to its own module URL, so it
-# looks for build/server/chunks/client, finds nothing, and mounts no static
-# middleware at all — every /_app/* and /robots.txt request falls through to
-# SSR and 404s. The symlink puts the real client bundle where the runtime
-# expects it. Harmless once a future adapter release fixes the layout.
-if [ -d build/server/chunks ] && [ -d build/client ]; then
-    ln -sfn ../../client build/server/chunks/client
+# --- Frontend ---
+# Apply the adapter-node 5.5.x symlink workaround to the inbound build.
+# @sveltejs/adapter-node 5.5.x under @sveltejs/kit 2.50+ / vite 7 emits
+# the server runtime into build/server/chunks/ rather than build/. The
+# runtime locates its static asset directory relative to its own module
+# URL, so it looks for build/server/chunks/client, finds nothing, and
+# mounts no static middleware at all — every /_app/* and /robots.txt
+# request falls through to SSR and 404s. The symlink puts the real
+# client bundle where the runtime expects it. Pinning the adapter
+# version in package.json is the long-term fix; this carve-out survives
+# until then.
+if [ -d "$INCOMING_FRONTEND/server/chunks" ] && [ -d "$INCOMING_FRONTEND/client" ]; then
+    ln -sfn ../../client "$INCOMING_FRONTEND/server/chunks/client"
 fi
 
-# Publish the client bundle to the nginx document root. nginx serves /_app/
-# and /robots.txt straight off disk from here and falls back to the node
-# service if a file is missing — see /etc/nginx/sites-available/rtv-cases.
-#
-# Guard: vite emits the bundle inside `build/client/testimonies/` when
-# PUBLIC_BASE_PATH=/testimonies. If that directory doesn't exist, the
-# build was either skipped or run without the env var — bail loudly
-# instead of rsyncing an empty source (which leaves /var/www/cases in a
-# half-deployed state and the site 404s on every /testimonies/_app/
-# chunk). The corresponding belt-and-braces nginx location for the
-# prefixed layout lives at scripts/nginx/rtv-cases:184.
-if [ ! -d build/client/testimonies ]; then
-    echo "DEPLOY FAILED: build/client/testimonies/ is missing." >&2
-    echo "  This usually means PUBLIC_BASE_PATH=/testimonies was not set" >&2
-    echo "  during 'npm run build' (svelte.config.js reads it at build time" >&2
-    echo "  to set paths.base). Re-run the build with the env var." >&2
-    exit 1
-fi
+# Refresh the on-disk frontend/build/ from the inbound artifact.
+# frontend/build/ is gitignored, so this rsync is the *only* way
+# frontend assets land on the VM. --delete keeps stale hashed chunks
+# from accumulating across deploys.
+sudo rsync -a --delete "$INCOMING_FRONTEND/" "$PROJECT_ROOT/frontend/build/"
+
+# Publish the client bundle to the nginx document root. nginx serves
+# /_app/ and /robots.txt straight off disk from here and falls back to
+# the node service if a file is missing — see /etc/nginx/sites-available/rtv-cases.
 sudo mkdir -p /var/www/cases
-sudo rsync -a --delete build/client/testimonies/ /var/www/cases/
+sudo rsync -a --delete "$INCOMING_FRONTEND/client/testimonies/" /var/www/cases/
 sudo chown -R www-data:www-data /var/www/cases
 sudo chmod -R u+rwX,g+rX,o+rX /var/www/cases
 
-# Sync the canonical nginx site config from the repo to the host. Without
-# this, the deployed config drifts from `scripts/nginx/rtv-cases` and every
-# Django route that isn't explicitly listed in the on-disk file falls
-# through to the SvelteKit catch-all — which is how /media/ 404s for local
-# profile images and /admin/ sometimes lands on the wrong upstream.
-#
-# Back up any existing file before overwriting, only install + reload if
-# the config actually changed, and validate with `nginx -t` before
-# applying so a syntax error doesn't take the whole site down.
+# --- Sync canonical nginx site config from the repo ---
+# Without this, the deployed config drifts from `scripts/nginx/rtv-cases`
+# and every Django route that isn't explicitly listed in the on-disk
+# file falls through to the SvelteKit catch-all — which is how
+# /media/ 404s for local profile images and /admin/ sometimes lands on
+# the wrong upstream. Idempotent: install only if the on-disk file is
+# stale, validate with `nginx -t` before reloading so a syntax error
+# doesn't take the whole site down.
 SITE_CONF_SRC="$PROJECT_ROOT/scripts/nginx/rtv-cases"
 SITE_CONF_DST="/etc/nginx/sites-available/rtv-cases"
 SITE_LINK="/etc/nginx/sites-enabled/rtv-cases"
@@ -226,7 +151,6 @@ SITE_BAK="/etc/nginx/sites-available/rtv-cases.bak-$(date +%Y%m%d-%H%M%S)"
 if [ ! -f "$SITE_CONF_SRC" ]; then
     echo "  WARN: $SITE_CONF_SRC not found in repo — skipping nginx sync"
 else
-    # Back up the existing file if it differs from what we'd install.
     if [ -f "$SITE_CONF_DST" ] && ! sudo cmp -s "$SITE_CONF_SRC" "$SITE_CONF_DST"; then
         sudo cp -a "$SITE_CONF_DST" "$SITE_BAK"
         echo "  backed up existing config to $SITE_BAK"
@@ -234,6 +158,7 @@ else
 
     if [ ! -f "$SITE_CONF_DST" ] || ! sudo cmp -s "$SITE_CONF_SRC" "$SITE_CONF_DST"; then
         sudo install -m 644 "$SITE_CONF_SRC" "$SITE_CONF_DST"
+        sudo install -d -m 0755 /etc/nginx/sites-enabled
         sudo ln -sfn "$SITE_CONF_DST" "$SITE_LINK"
 
         if sudo nginx -t; then
@@ -272,23 +197,20 @@ for unit in rtv-cases-backend.service rtv-cases-frontend.service; do
 done
 sudo systemctl daemon-reload
 
-# Restart the app services. This is not optional: both processes hold their
-# build in memory, so without a restart the node service keeps emitting HTML
-# that references the *previous* build's asset hashes, and every one of those
-# assets 404s. Django likewise keeps running the old code.
-#
-# Defensive restart sequence: systemd may have the unit in a failed state
-# from earlier deploys, or the unit file may have drifted on the host.
-# `reset-failed` clears the failure flag; if the unit still won't come
-# up, we fall back to nohup so the deploy can self-heal instead of
-# leaving prod 502.
+# Restart the app services. This is not optional: both processes hold
+# their build in memory, so without a restart the node service keeps
+# emitting HTML that references the *previous* build's asset hashes,
+# and every one of those assets 404s. Django likewise keeps running
+# the old code.
 sudo systemctl reset-failed rtv-cases-backend 2>/dev/null || true
 sudo systemctl reset-failed rtv-cases-frontend 2>/dev/null || true
 
 # Kill any stray gunicorn / Node processes from previous deploys that
-# might be holding port 8040 / 3000.
-pkill -f 'gunicorn.*testimonies.wsgi' 2>/dev/null || true
-pkill -f 'node .*build/index.js' 2>/dev/null || true
+# might be holding port 8040 / 3000. The patterns are tightened to
+# match only THIS project's processes — `pkill -f 'node'` is far too
+# broad and has been removed.
+pkill -f 'gunicorn.*testimonies\.wsgi.*--bind 127\.0\.0\.1:8040' 2>/dev/null || true
+pkill -f 'node .*/frontend/build/index\.js' 2>/dev/null || true
 sleep 1
 
 sudo systemctl restart rtv-cases-backend 2>/dev/null || true
@@ -315,8 +237,6 @@ fi
 if [ "$backend_up" != 1 ]; then
     echo "  systemd restart did not bring up the backend; falling back to detached gunicorn"
     cd /opt/rtv-cases/backend
-    # Activate the venv in a subshell so PATH leaks don't propagate, and
-    # exec gunicorn under sudo -u deploy (the systemd unit's User=).
     sudo -u deploy /opt/rtv-cases/backend/.venv/bin/gunicorn \
         testimonies.wsgi:application \
         --bind 127.0.0.1:8040 \
@@ -327,95 +247,51 @@ if [ "$backend_up" != 1 ]; then
         --error-logfile /tmp/cases-backend.err.log
     cd "$PROJECT_ROOT"
 
-    # Verify it actually came up before declaring victory.
     sleep 3
     if curl -s -o /dev/null --max-time 3 http://127.0.0.1:8040/api/persons/; then
         echo "  fallback gunicorn up on :8040"
     else
         echo "  ERROR: fallback gunicorn did not bind :8040" >&2
-        echo "  See /tmp/cases-backend.err.log" >&2
+        echo "  See /tmp/cases-backend.err.log:" >&2
         tail -20 /tmp/cases-backend.err.log >&2 2>/dev/null || true
     fi
 fi
 
-# --- Frontend fallback: detached node if systemd didn't bring it up ----
-# Two checks in series: systemd says active AND :3000 actually responds.
-# We do NOT trust a `curl :3000` test alone — a stale node from a previous
-# deploy can satisfy it, masking a missed restart. The smoke test below
-# catches stale-node + fresh-bundle mismatches at the very end.
-#
-# Run as the deploying user (who has read access to /opt/rtv-cases/frontend).
-# Don't `sudo -u deploy` — that user may not have read access on this
-# host and the failure is silent (we hit this on 2026-09-21).
-frontend_up=0
-if sudo systemctl is-active --quiet rtv-cases-frontend 2>/dev/null \
-   && curl -s -o /dev/null --max-time 2 http://127.0.0.1:3000/; then
-    frontend_up=1
-fi
-if [ "$frontend_up" != 1 ]; then
-    echo "  systemd did not bring up the frontend; restarting node directly"
-
-    # Kill any stragglers from previous deploys — must do this BEFORE the
-    # :3000 reachability check below, otherwise a stale node satisfies it.
-    pkill -f 'node.*build/index' 2>/dev/null || true
-    sleep 1
-
-    cd /opt/rtv-cases/frontend
-    nohup env PORT="${PORT:-3000}" HOST=127.0.0.1 \
-        PUBLIC_BASE_PATH=/testimonies \
-        ORIGIN=https://cases.raisethevoices.org \
-        node build/index.js > /tmp/cases-frontend.log 2>&1 &
-    disown
-
-    sleep 3
-    if curl -s -o /dev/null --max-time 3 http://127.0.0.1:3000/; then
-        echo "  fallback node up on :3000 (PID=$(pgrep -f 'node.*build/index' | head -1))"
-    else
-        echo "  ERROR: fallback node did not bind :3000" >&2
-        echo "  See /tmp/cases-frontend.log:" >&2
-        tail -20 /tmp/cases-frontend.log >&2 2>/dev/null || true
-        exit 1
-    fi
-fi
-
-# Install the canonical nginx site config from the repo. This is the file
-# that was missing the /accounts/ block on 2026-08-27, locking admins out.
-# Writing directly to sites-enabled so the typical `include sites-enabled/*;`
-# directive picks it up regardless of whether sites-available is also used.
-sudo install -d -m 0755 /etc/nginx/sites-enabled
-sudo install -m 0644 "$PROJECT_ROOT/scripts/nginx/rtv-cases" /etc/nginx/sites-enabled/rtv-cases
-
-# Reload nginx so it picks up the new bundle without dropping connections.
-# `nginx -t` validates the config first — if the file we just installed has
-# a syntax error, this aborts before the reload and the smoke test below
-# will catch the issue.
-sudo nginx -t && sudo nginx -s reload
+# --- Frontend: rely on systemd + Restart=always ---
+# The systemd unit (scripts/systemd/rtv-cases-frontend.service) already
+# carries the production env (PUBLIC_BASE_PATH, ORIGIN, HOST, PORT) and
+# `Restart=always` with `RestartSec=5` + `StartLimitBurst=10`. The old
+# nohup/disown fallback ran node under /tmp/cases-frontend.log with
+# env vars duplicated from the unit — when the unit's env drifted, the
+# fallback served a different (often 404'd) response than the unit.
+# Removing the fallback eliminates that drift; if systemd genuinely
+# fails to bring the unit back, the smoke test below will reject the
+# deploy and the operator investigates the unit.
 
 # Sanity check that the installed nginx site config exposes the routes
-# Django actually serves. We check the file we just installed rather than
-# running `sudo nginx -T`, because `nginx -T` on a host where the master
-# is already bound to :80 can race against the master for the port — its
-# internal bind test fails, nothing is written to stdout, and (without
-# 2>/dev/null) you'd see the real error instead of a misleading
-# "missing location block" report. With the previous 2>/dev/null, the
-# failure mode was: deploy aborts with the wrong message even though the
-# config is fine.
+# Django actually serves. We check the file we just installed rather
+# than running `sudo nginx -T`, because `nginx -T` on a host where the
+# master is already bound to :80 can race against the master for the
+# port — its internal bind test fails, nothing is written to stdout,
+# and (without 2>/dev/null) you'd see the real error instead of a
+# misleading "missing location block" report. With the previous
+# 2>/dev/null, the failure mode was: deploy aborts with the wrong
+# message even though the config is fine.
 #
 # The file we just installed IS the source of truth on disk: `nginx -t`
 # above already validated that the include chain parses, and
 # `nginx -s reload` already applied it. The smoke test below curl-checks
 # the routes against the live URL — that's what catches real routing
-# problems (e.g. someone editing /etc/nginx/nginx.conf to drop the
-# sites-enabled include). This check is just an early guard against the
-# deploy script itself installing a broken file.
+# problems. This check is just an early guard against the deploy
+# script itself installing a broken file.
 if ! grep -qE 'location[[:space:]]+/(accounts|admin|api)/[[:space:]]' /etc/nginx/sites-enabled/rtv-cases; then
     echo "DEPLOY FAILED: /etc/nginx/sites-enabled/rtv-cases is missing a location block for /accounts/, /admin/, or /api/." >&2
     echo "See scripts/nginx/rtv-cases for the canonical site config." >&2
     exit 1
 fi
 
-# Smoke test. Verifies five things atomically — each catches a different
-# failure mode we hit on 2026-09-21:
+# --- Smoke test. Verifies five things atomically — each catches a
+# different failure mode we hit on 2026-09-21:
 #
 #   1. node is bound on :3000 (not the OLD node from a previous deploy)
 #   2. /testimonies/ returns 200 (or 308 redirect — both = node responding)
@@ -427,9 +303,8 @@ fi
 #   6. bare-host root redirects (302) — proves fix/nginx-root-redirect
 #      is in the deployed nginx config
 #
-# All six must pass on the same attempt, otherwise the deploy is rejected
-# (the script exits 1 and the operator must roll back to the last good
-# deploy-* — see the "Roll back" line at the bottom).
+# All six must pass on the same attempt, otherwise the deploy is
+# rejected.
 
 echo 'Verifying deploy...'
 ok=0
@@ -495,7 +370,6 @@ if [ "$ok" != 1 ]; then
     echo "        ls -la /opt/rtv-cases/frontend/build/server/chunks/client" >&2
     echo "        ls /var/www/cases/_app/immutable/entry/" >&2
     echo "        sudo journalctl -u rtv-cases-frontend -n 30" >&2
-    echo "Roll back with:  git checkout \$(git tag -l 'deploy-*' | tail -2 | head -1)" >&2
     exit 1
 fi
 
