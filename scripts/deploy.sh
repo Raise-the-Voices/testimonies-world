@@ -356,8 +356,14 @@ for attempt in 1 2 3 4 5 6 7 8 9 10; do
         continue
     fi
 
-    # 5. fetch the asset
-    asset_url="$SITE/_app/immutable/entry/$entry"
+    # 5. fetch the asset via the URL the browser actually requests.
+    # SvelteKit's HTML uses relative paths (`./_app/...`), so the
+    # browser resolves to /testimonies/_app/... — not /_app/... .
+    # The previous URL ($SITE/_app/...) matched the /_app/ nginx
+    # block which served OK, but the browser never asked for that
+    # URL — it asked for the prefixed one and got a 404. Always
+    # assert against the URL a user-facing client uses.
+    asset_url="$SITE/testimonies/_app/immutable/entry/$entry"
     code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$asset_url" || true)
 
     # 6. bare-host root must redirect to /testimonies/ (proves nginx
