@@ -361,10 +361,29 @@ for attempt in 1 2 3 4 5 6 7 8 9 10; do
     # config from fix/nginx-root-redirect is live, not the old 404 page)
     root=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/" || true)
 
+    # 7. HTML response must carry a no-cache (or no-store) Cache-Control.
+    # Without this, the browser caches index.html across deploys, and
+    # the cached HTML references asset hashes from the previous build
+    # that no longer exist on disk after rsync --delete — every chunk
+    # 404s and hydration fails. The `location /` block in
+    # scripts/nginx/rtv-cases is responsible; this check fails the
+    # deploy before that regression can take the site down again.
+    html_headers=$(curl -sI --max-time 15 "$SITE/testimonies/" || true)
+    html_cache=$(printf '%s' "$html_headers" | tr -d '\r' | grep -i '^cache-control:' | head -1 | sed 's/^[^:]*: *//')
+    case "$html_cache" in
+        *no-cache*|*no-store*) ;;
+        *)
+            echo "  attempt $attempt: HTML Cache-Control missing no-cache (got: ${html_cache:-<none>})"
+            sleep 3
+            continue
+            ;;
+    esac
+
     if [ "$code" = 200 ] && [ "$root" = 302 ]; then
         echo "  entry asset OK: $asset_url"
         echo "  HTML/disk hash match: $entry"
         echo "  bare-host redirects: $root"
+        echo "  HTML Cache-Control: $html_cache"
         ok=1
         break
     fi
