@@ -171,7 +171,7 @@
      the reserved `failed` name six times in the same component trips
      rollup's "Identifier 'failed' has already been declared". See the
      summary section comment for the full rationale. -->
-{#snippet failed_summary(error, reset)}
+{#snippet failed_summary(error: unknown, reset: () => void)}
 	<div class="dashboard-section summary-section">
 		<ErrorCard
 			title="Couldn't render the summary"
@@ -181,7 +181,7 @@
 		/>
 	</div>
 {/snippet}
-{#snippet failed_actions(error, reset)}
+{#snippet failed_actions(error: unknown, reset: () => void)}
 	<div class="dashboard-section quick-actions-section">
 		<ErrorCard
 			title="Couldn't render quick actions"
@@ -190,7 +190,7 @@
 		/>
 	</div>
 {/snippet}
-{#snippet failed_activity(error, reset)}
+{#snippet failed_activity(error: unknown, reset: () => void)}
 	<div class="dashboard-section activity-section">
 		<ErrorCard
 			title="Couldn't render recent activity"
@@ -199,7 +199,7 @@
 		/>
 	</div>
 {/snippet}
-{#snippet failed_status(error, reset)}
+{#snippet failed_status(error: unknown, reset: () => void)}
 	<div class="dashboard-section status-section">
 		<ErrorCard
 			title="Couldn't render the status breakdown"
@@ -208,7 +208,7 @@
 		/>
 	</div>
 {/snippet}
-{#snippet failed_recent_persons(error, reset)}
+{#snippet failed_recent_persons(error: unknown, reset: () => void)}
 	<div class="dashboard-section recent-persons-section">
 		<ErrorCard
 			title="Couldn't render recently updated cases"
@@ -217,7 +217,7 @@
 		/>
 	</div>
 {/snippet}
-{#snippet failed_recent_casework(error, reset)}
+{#snippet failed_recent_casework(error: unknown, reset: () => void)}
 	<div class="dashboard-section recent-casework-section">
 		<ErrorCard
 			title="Couldn't render recent casework"

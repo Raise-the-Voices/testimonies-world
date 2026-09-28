@@ -8,12 +8,16 @@ from django.http import (
 )
 from django.utils import timezone
 from django_filters import rest_framework as filters
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 from rest_framework import generics, permissions, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.filters import OrderingFilter
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
+
+from .search import PersonSearchFilter
 
 from .models import AuditLog, CaseCategory, CaseEvent, FamilyRelationship, Media, Person, Report, Source
 from .permissions import IsVolunteer
@@ -217,11 +221,14 @@ class PersonViewSet(viewsets.ModelViewSet):
     # that only scores identity fields. OrderingFilter is preserved
     # for non-search calls; PersonSearchFilter takes over ordering
     # when `?search=` is present.
-    filter_backends = [
-        'django_filters.rest_framework.DjangoFilterBackend',
-        'cases.search.PersonSearchFilter',
-        'rest_framework.filters.OrderingFilter',
-    ]
+    #
+    # Class references, not dotted-path strings: DRF auto-resolves
+    # strings only on `api_settings.DEFAULT_FILTER_BACKENDS`. A string
+    # value here is iterated as-is in `filter_queryset`, and the
+    # subsequent `backend()` call raises `TypeError: 'str' object is
+    # not callable` — which is exactly the failure mode on 2026-09-28
+    # where every `/api/persons/` request 500'd.
+    filter_backends = [DjangoFilterBackend, PersonSearchFilter, OrderingFilter]
     ordering_fields = ['name', 'country', 'current_status',
                        'updated_at', 'created_at']
     # Default ordering for the catalog. `deceased_rank` (annotated in
