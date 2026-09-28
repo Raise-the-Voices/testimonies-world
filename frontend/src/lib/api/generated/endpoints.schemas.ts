@@ -1772,7 +1772,7 @@ export interface PatchedReportInternalWriteRequest {
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
 export interface PatchedReportRequest {
-  sources?: SourceRequest[];
+  sources?: _NestedSourceRequest[];
   source_type?: SourceTypeEnum;
   /**
    * Public attribution — e.g. "family member", "BBC report"
@@ -3082,7 +3082,7 @@ export type RelationshipTypeEnum = typeof RelationshipTypeEnum[keyof typeof Rela
 export interface Report {
   readonly id: number;
   readonly media_files: readonly Media[];
-  sources?: Source[];
+  sources?: _NestedSource[];
   source_type?: SourceTypeEnum;
   /**
    * Public attribution — e.g. "family member", "BBC report"
@@ -3413,7 +3413,7 @@ export interface ReportInternalWriteRequest {
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
 export interface ReportRequest {
-  sources?: SourceRequest[];
+  sources?: _NestedSourceRequest[];
   source_type?: SourceTypeEnum;
   /**
    * Public attribution — e.g. "family member", "BBC report"
@@ -4010,6 +4010,62 @@ export type YesNoUnknownEnum = typeof YesNoUnknownEnum[keyof typeof YesNoUnknown
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 
+/**
+ * SourceSerializer variant used only inside ReportSerializer.sources.
+
+The parent ReportSerializer.create() auto-binds `report` to each
+row inside the same transaction (see ReportSerializer.create). The
+client cannot know the report id at submission time, so the nested
+payload omits the FK. Making `report` required here would 400 every
+nested submit even though the parent is going to set it anyway.
+
+Standalone POST /api/sources/ still uses the strict SourceSerializer
+where `report` remains required.
+ */
+export interface _NestedSource {
+  readonly id: number;
+  report?: number;
+  source_type?: SourceTypeEnum;
+  /**
+   * Public attribution — e.g. "family member", "BBC report"
+   * @maxLength 500
+   */
+  source_attribution?: string;
+  /** @nullable */
+  date_start?: string | null;
+  narrative?: string;
+  /** Hide this source from public reads. */
+  is_private?: boolean;
+  readonly created_at: string;
+}
+
+/**
+ * SourceSerializer variant used only inside ReportSerializer.sources.
+
+The parent ReportSerializer.create() auto-binds `report` to each
+row inside the same transaction (see ReportSerializer.create). The
+client cannot know the report id at submission time, so the nested
+payload omits the FK. Making `report` required here would 400 every
+nested submit even though the parent is going to set it anyway.
+
+Standalone POST /api/sources/ still uses the strict SourceSerializer
+where `report` remains required.
+ */
+export interface _NestedSourceRequest {
+  report?: number;
+  source_type?: SourceTypeEnum;
+  /**
+   * Public attribution — e.g. "family member", "BBC report"
+   * @maxLength 500
+   */
+  source_attribution?: string;
+  /** @nullable */
+  date_start?: string | null;
+  narrative?: string;
+  /** Hide this source from public reads. */
+  is_private?: boolean;
+}
+
 export type AuditLogsListParams = {
 /**
  * * `viewed` - Viewed
@@ -4270,10 +4326,6 @@ quality?: number;
  * @nullable
  */
 quality_tier?: PersonsListQualityTier;
-/**
- * A search term.
- */
-search?: string;
 stale?: string;
 status?: string;
 updated_after?: string;
@@ -4348,10 +4400,6 @@ quality?: number;
  * @nullable
  */
 quality_tier?: PersonsCountriesListQualityTier;
-/**
- * A search term.
- */
-search?: string;
 stale?: string;
 status?: string;
 updated_after?: string;
@@ -4426,10 +4474,6 @@ quality?: number;
  * @nullable
  */
 quality_tier?: PersonsWatchdogListQualityTier;
-/**
- * A search term.
- */
-search?: string;
 stale?: string;
 status?: string;
 updated_after?: string;
