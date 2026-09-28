@@ -33,36 +33,109 @@ concurrency:
   group: deploy-prod-${{ github.workflow }}
   cancel-in-progress: false
 
-# Permissions: minimal — only what `appleboy/ssh-action` needs (which is
-# nothing, it uses secrets via `with:`). No token, no contents write.
+# Permissions: minimal — only what `appleboy/scp-action` +
+# `appleboy/ssh-action` need (which is nothing, they use secrets via
+# `with:`). No token, no contents write.
 permissions:
   contents: read
 
 jobs:
-  deploy:
-    # Only deploy when CI is green. `github.event.workflow_run.conclusion`
-    # is `success` / `failure` / `cancelled` / `null` (null = still running
-    # for in-progress events, but the `types: [completed]` filter on the
-    # trigger above rules that out). For the `push` branch, the conclusion
-    # is undefined — fall through to true.
+  # ----- build -----------------------------------------------------------
+  # Builds the SvelteKit frontend in CI instead of on the prod VM. CI is
+  # already Node 22; pushing the build off-host removes the Node-version
+  # bootstrap, the `npm ci` cost, and the orval/engine-strict class of
+  # deploy failures that hit prod in 2026-09.
+  build:
     if: >-
       github.event_name == 'push' ||
       github.event.workflow_run.conclusion == 'success'
 
     # The `production` GitHub Environment (configured in repo Settings →
-    # Environments) gives us:
-    #   - a required-reviewer gate for emergency bypass (when CI is red
-    #     during an active outage)
-    #   - environment-scoped secrets (so DEPLOY_KEY only exists for this
-    #     workflow, not for every Action in the repo)
-    #   - a deployment history view in the UI
+    # Environments) gives us a required-reviewer gate for emergency
+    # bypass (when CI is red during an active outage) and environment-
+    # scoped secrets. Build doesn't need secrets, but pinning the env
+    # here ties deploys to the same required-review workflow for both
+    # jobs.
     environment:
       name: production
       url: https://demos.linkedtrust.us/testimonies/
 
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy via SSH
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      # PUBLIC_BASE_PATH controls both the runtime base + the build's
+      # output directory layout (svelte.config.js reads it at config-
+      # load time and sets `paths.base`). Without /testimonies set,
+      # vite emits the bundle at build/client/_app/ — not
+      # build/client/testimonies/_app/, which is the layout deploy.sh
+      # rsyncs to /var/www/cases/. Mirrors the systemd unit's env so
+      # the dev URL prod-builds identically.
+      - name: Build SvelteKit with prod base path
+        run: cd frontend && PUBLIC_BASE_PATH=/testimonies npm run build
+
+      # `if-no-artifact-found: error` makes a missing build fail loudly
+      # instead of producing an empty scp payload that would 404 every
+      # /testimonies/_app/ request on prod. Retention 7d matches the
+      # typical rollback window — old artifacts are deleted by GitHub
+      # automatically.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/build
+          retention-days: 7
+          if-no-artifact-found: error
+
+  # ----- deploy ----------------------------------------------------------
+  # Pulls the build artifact, scps it to the VM, then runs deploy.sh.
+  # The SSH step mirrors what was inline before: a narrowly-scoped
+  # `git checkout origin/main -- <paths>` refreshes the source on the
+  # VM without `git reset --hard` (which is the structural cause of
+  # the autostash + settings.py-merge-conflict class of failures). We
+  # do NOT touch frontend/build/ on the VM via git — it's gitignored;
+  # the artifact is the source of truth.
+  deploy:
+    needs: build
+    if: >-
+      github.event_name == 'push' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    environment:
+      name: production
+      url: https://demos.linkedtrust.us/testimonies/
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download frontend build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: dist/frontend-build
+
+      - name: Push build to VM via SCP
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          # Trailing slash on target is significant: it makes scp copy
+          # the directory's CONTENTS into /opt/rtv-cases-deploy/ rather
+          # than nesting under a frontend-build/ subdir. Without it the
+          # deploy script's $INCOMING_FRONTEND lookup would 404.
+          source: "dist/frontend-build"
+          target: "/opt/rtv-cases-deploy/"
+
+      - name: Run deploy.sh on VM
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -71,26 +144,38 @@ jobs:
           port: ${{ secrets.DEPLOY_PORT }}
           script: |
             set -e
+
             cd /opt/rtv-cases
 
-            # Take ownership of /opt/rtv-cases for this run. The
-            # appleboy/ssh-action user (DEPLOY_USER) does not own the
-            # repo on prod — so `git fetch` errors with
-            # "cannot open .git/FETCH_HEAD: Permission denied"
-            # (run #218, 2026-09-21 11:49 UTC) once the upstream
-            # safe.directory check is satisfied. The SSH user has
-            # passwordless sudo on prod (deploy.sh uses it for
-            # systemctl + nginx), so this is safe. Idempotent: a
-            # no-op when ownership already matches.
-            sudo chown -R "$(whoami)" /opt/rtv-cases
+            # The scp step above may have left files owned by the
+            # appleboy/ssh-action user (typically `runner` or `deploy`).
+            # Normalize to the current user so `git fetch`/`git
+            # checkout` (which write into ./) don't hit "dubious
+            # ownership" or "Permission denied". Idempotent.
+            sudo chown -R "$(whoami)" /opt/rtv-cases-deploy
 
-            # Bootstrap deploy.sh to the latest tracked version.
-            # The workflow can't depend on the host's deploy.sh being
-            # up to date — otherwise an out-of-date script can fail
-            # the very pull that would have fixed it.
+            # Mark the deploy checkout as a safe.directory for whatever
+            # user we end up as. Git 2.35.2+ refuses to operate on a
+            # repo owned by a different UID unless explicitly
+            # allowlisted — the deploy user doesn't own
+            # /opt/rtv-cases on prod, so `git fetch`/`git reset` would
+            # otherwise fail with "detected dubious ownership" (run
+            # #216, 2026-09-21). Narrow path keeps the allowlist
+            # minimal.
+            git config --global --add safe.directory /opt/rtv-cases
+
+            # Source refresh: narrow, never `reset --hard`. Untracked
+            # host files (backend/.env, any vetted per-host tweaks)
+            # are preserved. frontend/build/ is gitignored and is
+            # overwritten by the artifact scp step, not by git.
             git fetch origin main
-            git checkout origin/main -- scripts/deploy.sh
+            git checkout origin/main -- \
+              backend/requirements.txt \
+              backend/cases/ \
+              backend/testimonies/ \
+              backend/manage.py \
+              scripts/deploy.sh \
+              scripts/nginx/rtv-cases \
+              scripts/systemd/
 
-            # Now run the (latest) deploy.sh, which autostashes local
-            # edits before pulling.
             bash scripts/deploy.sh
