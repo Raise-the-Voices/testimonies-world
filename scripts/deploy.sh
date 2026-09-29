@@ -217,8 +217,17 @@ sudo systemctl reset-failed rtv-cases-frontend 2>/dev/null || true
 # might be holding port 8040 / 3000. The patterns are tightened to
 # match only THIS project's processes — `pkill -f 'node'` is far too
 # broad and has been removed.
-pkill -f 'gunicorn.*testimonies\.wsgi.*--bind 127\.0\.0\.1:8040' 2>/dev/null || true
-pkill -f 'node .*/frontend/build/index\.js' 2>/dev/null || true
+# Kill anything bound to the app ports, regardless of argv. The old
+# pattern-based pkill (`pkill -f 'node .*/frontend/build/index\.js'`)
+# silently missed the moment ExecStart args drifted (e.g. an operator
+# adds --max-old-space-size to debug an OOM), so the stale node kept
+# serving the previous build's HTML while systemd reported a failed
+# bind on :3000. Reading the kernel's listener table directly is
+# robust to argv changes.
+BACKEND_PID=$(ss -tlnpH 2>/dev/null | awk '/:8040/ {match($0,/pid=([0-9]+)/,a); print a[1]; exit}')
+[ -n "$BACKEND_PID" ] && kill "$BACKEND_PID" 2>/dev/null || true
+NODE_PID=$(ss -tlnpH 2>/dev/null | awk '/:3000/ {match($0,/pid=([0-9]+)/,a); print a[1]; exit}')
+[ -n "$NODE_PID" ] && kill "$NODE_PID" 2>/dev/null || true
 sleep 1
 
 sudo systemctl restart rtv-cases-backend 2>/dev/null || true
