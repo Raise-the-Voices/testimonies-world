@@ -201,6 +201,7 @@ jobs:
               backend/cases/ \
               backend/testimonies/ \
               backend/manage.py \
+              frontend/.env.production \
               scripts/deploy.sh \
               scripts/nginx/rtv-cases \
               scripts/systemd/
