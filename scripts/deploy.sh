@@ -448,6 +448,7 @@ WD_DST_DIR="/etc/systemd/system"
 
 if [ -d "$WD_SRC_DIR" ]; then
     for unit in rtv-cases-backend-watchdog.service rtv-cases-backend-watchdog.timer \
+               rtv-cases-frontend-watchdog.service rtv-cases-frontend-watchdog.timer \
                rtv-cases-db-backup.service rtv-cases-db-backup.timer; do
         src="$WD_SRC_DIR/$unit"
         dst="$WD_DST_DIR/$unit"
@@ -464,10 +465,13 @@ if [ -d "$WD_SRC_DIR" ]; then
     sudo systemctl daemon-reload
     sudo systemctl enable rtv-cases-backend-watchdog.timer >/dev/null 2>&1 || true
     sudo systemctl restart rtv-cases-backend-watchdog.timer >/dev/null 2>&1 || true
+    sudo systemctl enable rtv-cases-frontend-watchdog.timer >/dev/null 2>&1 || true
+    sudo systemctl restart rtv-cases-frontend-watchdog.timer >/dev/null 2>&1 || true
     sudo systemctl enable rtv-cases-db-backup.timer >/dev/null 2>&1 || true
     sudo systemctl restart rtv-cases-db-backup.timer >/dev/null 2>&1 || true
-    echo "  watchdog timer enabled: $(sudo systemctl is-active rtv-cases-backend-watchdog.timer)"
-    echo "  db-backup timer enabled: $(sudo systemctl is-active rtv-cases-db-backup.timer)"
+    echo "  backend-watchdog timer: $(sudo systemctl is-active rtv-cases-backend-watchdog.timer)"
+    echo "  frontend-watchdog timer: $(sudo systemctl is-active rtv-cases-frontend-watchdog.timer)"
+    echo "  db-backup timer: $(sudo systemctl is-active rtv-cases-db-backup.timer)"
 else
     echo "  WARN: $WD_SRC_DIR not found — skipping watchdog install"
 fi

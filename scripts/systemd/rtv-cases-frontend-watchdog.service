@@ -1,0 +1,47 @@
+[Unit]
+Description=rtv-cases frontend healthcheck — restarts node if :3000 is dead
+Documentation=https://github.com/Raise-the-Voices/testimonies-world
+# Run AFTER the main frontend unit has had a chance to start on boot.
+After=rtv-cases-frontend.service network-online.target
+Wants=network-online.target
+# Restart-storm cap. systemd.unit(5) requires StartLimit* under [Unit];
+# under [Service] they are silently ignored. This is a safety-net
+# timer, so the envelope is tighter than the main unit's 10/5min.
+StartLimitIntervalSec=60s
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+
+# 1. If something is already serving /testimonies/ on :3000, do nothing.
+# 2. Otherwise, ask systemd to bring the main unit back up. We
+#    deliberately do NOT inline `node build/index.js &` like the
+#    backend watchdog does for gunicorn: Node has no --daemon flag,
+#    so a backgrounded node process would either be reaped when the
+#    watchdog's cgroup is torn down OR conflict with systemd's own
+#    Restart=always on port 3000. `reset-failed` clears the
+#    StartLimitBurst counter (which systemd enforces under [Unit])
+#    before restart, so this also recovers the case where systemd
+#    has already given up after 10 crashes in 5 minutes.
+#
+#    `curl --max-time 2` means a hung frontend (event loop blocked,
+#    all workers spinning, but TCP still accepting) is treated as
+#    "down" after 2s — which is what we want, since the alternative
+#    is waiting for nginx to 504 first.
+ExecStart=/bin/sh -c '\
+  if curl -sf --max-time 2 http://127.0.0.1:3000/testimonies/ >/dev/null; then \
+    exit 0; \
+  fi; \
+  echo "$(date -Is) watchdog: :3000 not responding, restarting rtv-cases-frontend" \
+    >> /tmp/cases-frontend-watchdog.log; \
+  sudo -n /bin/systemctl reset-failed rtv-cases-frontend.service && \
+  sudo -n /bin/systemctl restart rtv-cases-frontend.service'
+
+# Don't let a failed start loop forever — if the start command itself
+# fails (missing binary, bad path, etc.), systemd will retry per
+# Restart= below. The StartLimit envelope lives in [Unit] above.
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

@@ -13,6 +13,17 @@
  */
 import type { Handle, HandleServerError } from '@sveltejs/kit';
 
+// adapter-node emits `sveltekit:shutdown` after the HTTP server fully
+// closes during SIGTERM/SIGINT/SHUTDOWN_TIMEOUT-driven shutdown
+// (see node_modules/@sveltejs/adapter-node/files/index.js:272, emitted
+// at build/index.js:280). Listening here gives operators a single,
+// grep-able journald line that says "we shut down cleanly and why".
+// When Sentry is re-wired per docs/sentry.md, Sentry.flush(2000) slots
+// into this same listener with no further plumbing.
+process.on('sveltekit:shutdown', (reason) => {
+    console.info(`sveltekit:shutdown reason=${reason ?? 'unknown'}`);
+});
+
 export const handle: Handle = ({ event, resolve }) => resolve(event);
 
 export const handleError: HandleServerError = ({ error }) => {
