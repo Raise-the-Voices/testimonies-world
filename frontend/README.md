@@ -46,7 +46,7 @@ The backend must be reachable for `/api/*` calls — either the live backend or 
 
 | Variable | Used at | Default | Purpose |
 |---|---|---|---|
-| `PUBLIC_BASE_PATH` | build (`svelte.config.js`) | `""` | SvelteKit `paths.base`. Set to `/testimonies` for the demo VM deploy, leave empty for the production root deploy. |
+| `PUBLIC_BASE_PATH` | build (`svelte.config.js`) | `frontend/.env.production` | SvelteKit `paths.base`. Single source of truth; CI exports it from `.env.production` before `npm run build`, and the systemd unit reads it via `EnvironmentFile=`. |
 | `ORIGIN` | prod server (`build/index.js`) | — | CSRF / cookie scoping. Must match the public origin (`https://cases.raisethevoices.org` in prod). |
 | `VITE_API_PROXY_TARGET` | dev (`vite.config.ts`) | `https://cases.raisethevoices.org` | Where the dev server proxies `/testimonies/api/*` and `/testimonies/accounts/*`. Set to `http://127.0.0.1:8040` to run against a local backend. |
 | `PUBLIC_SENTRY_DSN` | runtime (`hooks.server.ts`, `hooks.client.ts`) | `""` | Sentry project DSN. Empty disables Sentry (no-op init). |
@@ -176,12 +176,12 @@ When you change a serializer in the backend:
 ## Production build
 
 ```bash
-PUBLIC_BASE_PATH="" \
+PUBLIC_BASE_PATH="$(grep -E '^PUBLIC_BASE_PATH=' frontend/.env.production | cut -d= -f2-)" \
 ORIGIN=https://cases.raisethevoices.org \
   npm run build
 ```
 
-`PUBLIC_BASE_PATH=""` for the root-domain prod deploy (`/testimonies` for the demo VM). `ORIGIN` must match the public origin so CSRF + cookies scope correctly. `scripts/deploy.sh` runs the build with these vars set and rsyncs `./build/client/testimonies/` (with the `./build/server/chunks/client` symlink trick for `@sveltejs/adapter-node 5.5.x`) to `/var/www/cases/`.
+`PUBLIC_BASE_PATH` comes from `frontend/.env.production` (single source of truth; also read by the systemd unit via `EnvironmentFile=`). `ORIGIN` must match the public origin so CSRF + cookies scope correctly. `scripts/deploy.sh` runs the build with these vars set and rsyncs `./build/client/testimonies/` (with the `./build/server/chunks/client` symlink trick for `@sveltejs/adapter-node 5.5.x`) to `/var/www/cases/`.
 
 ---
 

@@ -75,13 +75,25 @@ jobs:
 
       # PUBLIC_BASE_PATH controls both the runtime base + the build's
       # output directory layout (svelte.config.js reads it at config-
-      # load time and sets `paths.base`). Without /testimonies set,
-      # vite emits the bundle at build/client/_app/ — not
-      # build/client/testimonies/_app/, which is the layout deploy.sh
-      # rsyncs to /var/www/cases/. Mirrors the systemd unit's env so
-      # the dev URL prod-builds identically.
+      # load time and sets `paths.base`). The value comes from
+      # frontend/.env.production (single source of truth; also read by
+      # the systemd unit via EnvironmentFile=). We export it here so
+      # svelte.config.js sees it during its pre-Vite load. If the file
+      # is missing or empty, fail loudly — silent drift has caused
+      # repeated 404 storms.
       - name: Build SvelteKit with prod base path
-        run: cd frontend && PUBLIC_BASE_PATH=/testimonies npm run build
+        run: |
+          cd frontend
+          if [ ! -s .env.production ]; then
+            echo "::error::frontend/.env.production missing or empty"
+            exit 1
+          fi
+          export PUBLIC_BASE_PATH="$(grep -E '^PUBLIC_BASE_PATH=' .env.production | cut -d= -f2- | tr -d '"')"
+          if [ -z "$PUBLIC_BASE_PATH" ]; then
+            echo "::error::PUBLIC_BASE_PATH not set in frontend/.env.production"
+            exit 1
+          fi
+          npm run build
 
       # `if-no-files-found: error` makes a missing build fail loudly
       # instead of producing an empty scp payload that would 404 every
