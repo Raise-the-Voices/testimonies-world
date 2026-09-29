@@ -68,15 +68,15 @@ if [ ! -f "$PROJECT_ROOT/backend/.env" ]; then
     exit 1
 fi
 
-# Verify frontend/.env.production exists — the single source of truth
-# for PUBLIC_BASE_PATH. Without it, svelte.config.js reads empty, vite
-# emits a root-path build, and every /testimonies/_app/* 404s. Same
-# fail-fast contract as backend/.env above.
-if [ ! -s "$PROJECT_ROOT/frontend/.env.production" ]; then
-    echo "DEPLOY FAILED: $PROJECT_ROOT/frontend/.env.production is missing or empty." >&2
-    echo "  The systemd unit EnvironmentFile= this; without it the node runtime has no base path." >&2
-    exit 1
-fi
+# NOTE: frontend/.env.production is intentionally NOT pre-checked here.
+# It is tracked in git (added in 71d2520; .gitignore has an exception
+# for it) and is fetched from origin/main by the git checkout below.
+# A pre-check before that fetch would fire on any host where the file
+# is absent (fresh VM, drifted checkout) and refuse to run, even
+# though the subsequent `git checkout` would have populated it from
+# origin/main. The existence check moves to right AFTER the checkout
+# for the same fail-fast intent. See "Verify frontend/.env.production
+# exists" below.
 
 # --- Source refresh — narrow, NEVER `git reset --hard` ---
 # Pulls latest tracked files for the paths we actually deploy. The
@@ -102,6 +102,20 @@ git checkout origin/main -- \
     scripts/deploy.sh \
     scripts/nginx/rtv-cases \
     scripts/systemd/
+
+# Verify frontend/.env.production exists — the single source of truth
+# for PUBLIC_BASE_PATH. Without it, svelte.config.js reads empty, vite
+# emits a root-path build, and every /testimonies/_app/* 404s. The
+# check sits AFTER the git checkout above so a missing file on a fresh
+# or drifted host is recovered from origin/main instead of aborting
+# the deploy. If it's still missing here, origin/main no longer tracks
+# it — that's the real failure mode and worth failing loudly.
+if [ ! -s "$PROJECT_ROOT/frontend/.env.production" ]; then
+    echo "DEPLOY FAILED: $PROJECT_ROOT/frontend/.env.production is missing or empty after git checkout." >&2
+    echo "  The systemd unit EnvironmentFile= this; without it the node runtime has no base path." >&2
+    echo "  Likely cause: frontend/.env.production was removed from origin/main." >&2
+    exit 1
+fi
 
 # --- Backend ---
 cd backend
