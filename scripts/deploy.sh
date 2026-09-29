@@ -168,9 +168,19 @@ sudo rsync -a --delete "$INCOMING_FRONTEND/client/testimonies/" /var/www/cases/
 sudo chown -R www-data:www-data /var/www/cases
 sudo chmod -R u+rwX,g+rX,o+rX /var/www/cases
 # Publish the .env.production that the systemd unit EnvironmentFile=
-# consumes. Without this, the unit keeps reading a stale (or absent)
-# file and PUBLIC_BASE_PATH drifts from the build value.
-sudo install -m0644 "$PROJECT_ROOT/frontend/.env.production" /opt/rtv-cases/frontend/.env.production
+# consumes. The git checkout above already writes it to the systemd
+# unit's path ($PROJECT_ROOT == /opt/rtv-cases on prod), so `install`
+# is a same-file op that GNU install refuses with "'SRC' and 'DST' are
+# the same file". Only copy when src/dst actually differ; always
+# normalize perms (0644) so the systemd unit can read it regardless of
+# which path the file landed on.
+ENV_PROD_SRC="$PROJECT_ROOT/frontend/.env.production"
+ENV_PROD_DST="/opt/rtv-cases/frontend/.env.production"
+if [ "$ENV_PROD_SRC" != "$ENV_PROD_DST" ]; then
+    sudo install -m0644 "$ENV_PROD_SRC" "$ENV_PROD_DST"
+else
+    sudo chmod 0644 "$ENV_PROD_DST"
+fi
 
 # --- Sync canonical nginx site config from the repo ---
 # Without this, the deployed config drifts from `scripts/nginx/rtv-cases`
