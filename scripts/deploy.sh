@@ -68,6 +68,16 @@ if [ ! -f "$PROJECT_ROOT/backend/.env" ]; then
     exit 1
 fi
 
+# Verify frontend/.env.production exists — the single source of truth
+# for PUBLIC_BASE_PATH. Without it, svelte.config.js reads empty, vite
+# emits a root-path build, and every /testimonies/_app/* 404s. Same
+# fail-fast contract as backend/.env above.
+if [ ! -s "$PROJECT_ROOT/frontend/.env.production" ]; then
+    echo "DEPLOY FAILED: $PROJECT_ROOT/frontend/.env.production is missing or empty." >&2
+    echo "  The systemd unit EnvironmentFile= this; without it the node runtime has no base path." >&2
+    exit 1
+fi
+
 # --- Source refresh — narrow, NEVER `git reset --hard` ---
 # Pulls latest tracked files for the paths we actually deploy. The
 # narrow list excludes:
@@ -88,6 +98,7 @@ git checkout origin/main -- \
     backend/cases/ \
     backend/testimonies/ \
     backend/manage.py \
+    frontend/.env.production \
     scripts/deploy.sh \
     scripts/nginx/rtv-cases \
     scripts/systemd/
@@ -142,6 +153,10 @@ sudo mkdir -p /var/www/cases
 sudo rsync -a --delete "$INCOMING_FRONTEND/client/testimonies/" /var/www/cases/
 sudo chown -R www-data:www-data /var/www/cases
 sudo chmod -R u+rwX,g+rX,o+rX /var/www/cases
+# Publish the .env.production that the systemd unit EnvironmentFile=
+# consumes. Without this, the unit keeps reading a stale (or absent)
+# file and PUBLIC_BASE_PATH drifts from the build value.
+sudo install -m0644 "$PROJECT_ROOT/frontend/.env.production" /opt/rtv-cases/frontend/.env.production
 
 # --- Sync canonical nginx site config from the repo ---
 # Without this, the deployed config drifts from `scripts/nginx/rtv-cases`
