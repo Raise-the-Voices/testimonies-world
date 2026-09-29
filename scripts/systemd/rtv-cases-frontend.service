@@ -32,6 +32,14 @@ Environment=NODE_ENV=production
 ExecStart=/usr/bin/node build/index.js
 Restart=always
 RestartSec=5
+
+# Graceful shutdown: send SIGTERM, let adapter-node drain in-flight
+# requests for up to 30s, then SIGKILL. adapter-node (kit ≥ 2.x) ships
+# a SIGTERM handler that closes the HTTP server before exiting; the 30s
+# ceiling covers a worst-case SSR render of a slow /api/ roundtrip.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
 # Same restart-storm guard as the backend. SvelteKit's Node adapter
 # is more resilient than gunicorn but a Node crash loop is still
 # expensive; cap the same way.
