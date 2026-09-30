@@ -20,7 +20,7 @@ from rest_framework.test import APIClient
 
 from testimonies.test_base import BaseTestCase
 
-from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report
+from .models import AuditLog, CaseCategory, FamilyRelationship, Media, Person, Report, Source
 
 
 User = get_user_model()
@@ -470,6 +470,114 @@ class ReportPermissionTests(BaseTestCase):
         res = self.client.get('/api/reports/')
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()['results'], [])
+
+
+class SourcePermissionTests(BaseTestCase):
+    """Authorship gate on SourceViewSet — audit H-4.
+
+    Without the gate in `perform_create`, a volunteer could POST
+    `{report: <any_report_id>, ...}` and attach a Source to any
+    report on the platform. `perform_update` and `perform_destroy`
+    were already gated; this test pins the create-side gate.
+
+    The matrix mirrors `ReportPermissionTests`:
+      - Outsider (no Volunteer group): no writes, period.
+      - Volunteer: can attach to own report only.
+      - Advocate / staff: can attach to any report.
+    """
+
+    def setUp(self):
+        self.advocate = make_user('aisha', in_group='Advocate')
+        self.staff = make_user('admin', is_staff=True)
+        self.volunteer = make_user('vol', in_group='Volunteer')
+        self.other_volunteer = make_user('vol2', in_group='Volunteer')
+        self.outsider = make_user('random')
+        self.author = make_user('author', in_group='Volunteer')
+        self.person = _make_published_person()
+        self.client = APIClient()
+
+    def _make_report(self, author_user):
+        return Report.objects.create(
+            person=self.person,
+            source_type=Report.SourceType.FIRSTHAND,
+            narrative='baseline',
+            created_by=author_user,
+        )
+
+    def _base_payload(self, report):
+        return {
+            'report': report.id,
+            'source_type': 'firsthand',
+            'source_attribution': 'test attribution',
+            'narrative': 'test narrative',
+            'is_private': False,
+        }
+
+    def test_outsider_cannot_attach_source_to_any_report(self):
+        report = self._make_report(self.author)
+        self.client.force_login(self.outsider)
+        res = self.client.post(
+            '/api/sources/', self._base_payload(report), format='json',
+        )
+        # IsVolunteer fails first → 403, not the authorship check.
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(Source.objects.count(), 0)
+
+    def test_other_volunteer_cannot_attach_source_to_someone_elses_report(self):
+        report = self._make_report(self.author)
+        self.client.force_login(self.other_volunteer)
+        res = self.client.post(
+            '/api/sources/', self._base_payload(report), format='json',
+        )
+        # The SourceSerializer narrows its `report` FK queryset to
+        # the requester's own reports for non-Advocate/non-staff
+        # users — a 400 with "invalid pk" reaches the client
+        # before the view-level gate in perform_create. Both gates
+        # exist on purpose: the view-level check is defense-in-depth
+        # for callers that bypass the serializer (e.g. programmatic
+        # DRF client construction without `request` in context).
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('report', res.json())
+        self.assertEqual(Source.objects.count(), 0)
+
+    def test_author_can_attach_source_to_own_report(self):
+        report = self._make_report(self.author)
+        self.client.force_login(self.author)
+        res = self.client.post(
+            '/api/sources/', self._base_payload(report), format='json',
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(Source.objects.count(), 1)
+
+    def test_advocate_can_attach_source_to_any_report(self):
+        report = self._make_report(self.author)
+        self.client.force_login(self.advocate)
+        res = self.client.post(
+            '/api/sources/', self._base_payload(report), format='json',
+        )
+        self.assertEqual(res.status_code, 201)
+
+    def test_staff_can_attach_source_to_any_report(self):
+        report = self._make_report(self.author)
+        self.client.force_login(self.staff)
+        res = self.client.post(
+            '/api/sources/', self._base_payload(report), format='json',
+        )
+        self.assertEqual(res.status_code, 201)
+
+    def test_create_audit_row_records_authorised_attach(self):
+        report = self._make_report(self.author)
+        self.client.force_login(self.author)
+        res = self.client.post(
+            '/api/sources/', self._base_payload(report), format='json',
+        )
+        self.assertEqual(res.status_code, 201)
+        log = AuditLog.objects.filter(
+            target_type='source', target_id=res.json()['id'],
+        ).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.user, self.author)
+        self.assertEqual(log.details, 'created')
 
 
 class PersonDetailAnonymousTests(BaseTestCase):
