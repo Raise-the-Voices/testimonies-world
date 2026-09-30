@@ -21,6 +21,7 @@
 	import { base } from '$app/paths';
 	import Icon from './Icon.svelte';
 	import StatusBadge from './StatusBadge.svelte';
+	import MediaImage from './MediaImage.svelte';
 	import { formatMonthYear } from './dateFormat';
 	import type { Person } from '$lib/types';
 
@@ -53,7 +54,7 @@
 <article class="person-card" style="animation-delay: {delayMs}ms">
 	<a class="card-media" {href} aria-label="View details for {person.name}">
 		{#if person.profile_image_url}
-			<img
+			<MediaImage
 				src={person.profile_image_url}
 				alt={person.name}
 				loading="lazy"
@@ -126,11 +127,14 @@
 		background: var(--color-section-bg);
 		overflow: hidden;
 	}
-	.card-media :global(img) {
+	.card-media :global(img),
+	.card-media :global(.media-fallback) {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-		display: block;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.card-media-placeholder {

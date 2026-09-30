@@ -43,6 +43,9 @@
 		class?: string;
 		loading?: 'lazy' | 'eager';
 		decoding?: 'async' | 'sync' | 'auto';
+		/** Hint to the browser about which images to prioritize. Maps to
+		 *  the `fetchpriority` HTML attribute (auto | high | low). */
+		fetchpriority?: 'auto' | 'high' | 'low';
 		width?: string | number;
 		height?: string | number;
 		/** Optional override for the hostile-host check. */
@@ -56,6 +59,7 @@
 		class: klass = '',
 		loading = 'lazy',
 		decoding = 'async',
+		fetchpriority,
 		width,
 		height,
 		fallbackHosts,
@@ -128,6 +132,7 @@
 		class={klass}
 		{loading}
 		{decoding}
+		{fetchpriority}
 		{width}
 		{height}
 		onerror={handleError}
