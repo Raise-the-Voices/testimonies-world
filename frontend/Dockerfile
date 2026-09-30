@@ -55,6 +55,14 @@ COPY --from=builder /app/build /app/build
 COPY --from=builder /app/package.json /app/package.json
 COPY --from=builder /app/node_modules /app/node_modules
 
+# Audit H-9: drop to a non-root user before ENTRYPOINT. The Node
+# adapter runs as `app` (uid 1001); if a Node CVE lands, the
+# attacker lands in the container as a non-privileged user rather
+# than root. Mirrors backend/Dockerfile which uses `app`.
+RUN addgroup -S app && adduser -S app -G app \
+    && chown -R app:app /app
+USER app
+
 # Preserve the deploy.sh:115-117 symlink trick. The runtime
 # image re-applies the symlink at start (scripts/docker/
 # entrypoint-frontend.sh), but we also apply it at build
