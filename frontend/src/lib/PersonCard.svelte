@@ -21,6 +21,7 @@
 	import { base } from '$app/paths';
 	import Icon from './Icon.svelte';
 	import StatusBadge from './StatusBadge.svelte';
+	import { formatMonthYear } from './dateFormat';
 
 	let {
 		person,
@@ -30,22 +31,8 @@
 		delayMs?: number;
 	} = $props();
 
-	// Local date formatting — keeps the card self-contained.
-	function formatDate(iso: string | null | undefined): string {
-		if (!iso) return '';
-		try {
-			return new Date(iso).toLocaleDateString('en-US', {
-				year: 'numeric',
-				month: 'short',
-				day: 'numeric',
-			});
-		} catch {
-			return iso;
-		}
-	}
-
 	let href = $derived(`${base}/persons/${person.id}`);
-	let formattedLastSeen = $derived(formatDate(person.last_known_date));
+	let formattedLastSeen = $derived(formatMonthYear(person.last_known_date));
 	let hasReportCount = $derived(Number(person.report_count) > 0);
 
 	// Build a single inline metadata string: "Country · Last seen DATE · N reports"

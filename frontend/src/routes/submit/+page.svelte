@@ -19,6 +19,7 @@
 		type SubmitDraft,
 	} from '$lib/submitDraft';
 	import { focusFirstFormError } from '$lib/formFocus';
+	import { monthYearToIsoDate } from '$lib/dateFormat';
 	import ErrorCard from '$lib/ErrorCard.svelte';
 	import type { PageData } from './$types';
 
@@ -98,6 +99,9 @@
 	let roughLocation = $state('');
 	let preciseLocation = $state('');
 	let lastKnownDate = $state('');
+	// Form holds YYYY-MM; wire (DateField) needs YYYY-MM-DD. Derive once
+	// so both multipart and JSON submit paths stay in sync.
+	let lastKnownDateIso = $derived(monthYearToIsoDate(lastKnownDate));
 	let ethnicity = $state('');
 	let gender = $state('');
 	// Age at the time of the incident (replaces Date of Birth — we
@@ -528,7 +532,7 @@
 			e.official_reason = `Keep this under ${MAX_NARRATIVE.toLocaleString()} characters.`;
 
 		if (lastKnownDate) {
-			if (Number.isNaN(new Date(lastKnownDate).getTime())) e.last_known_date = 'That doesn’t look like a valid date.';
+			if (!/^\d{4}-\d{2}$/.test(lastKnownDate)) e.last_known_date = 'That doesn’t look like a valid month and year.';
 		}
 		// ageAtIncident: optional, but if the user typed something it
 		// must be a positive integer in the 0-150 range. Empty string
@@ -620,7 +624,7 @@
 				fd.append('summary_narrative', summaryNarrative.trim());
 				fd.append('ethnicity', ethnicity.trim());
 				if (gender) fd.append('gender', gender);
-				if (lastKnownDate) fd.append('last_known_date', lastKnownDate);
+				if (lastKnownDateIso) fd.append('last_known_date', lastKnownDateIso);
 				// age_at_incident is optional + server-validated to 0-150.
 				if (ageAtIncident !== '' && ageAtIncident !== null && ageAtIncident !== undefined) {
 					fd.append('age_at_incident', String(ageAtIncident));
@@ -650,7 +654,7 @@
 					gender: gender || undefined,
 					category_ids: selectedCategories,
 				};
-				if (lastKnownDate) payload.last_known_date = lastKnownDate;
+				if (lastKnownDateIso) payload.last_known_date = lastKnownDateIso;
 				if (ageAtIncident !== '' && ageAtIncident !== null && ageAtIncident !== undefined) {
 					payload.age_at_incident = ageAtIncident;
 				}
@@ -1199,7 +1203,15 @@
 
 					<div class="field">
 						<label for="last_known_date">Last Known Date</label>
-						<input id="last_known_date" type="date" bind:value={lastKnownDate} />
+						<input
+							id="last_known_date"
+							type="month"
+							bind:value={lastKnownDate}
+							aria-describedby="last_known_date-help"
+						/>
+						<p class="field-help" id="last_known_date-help">
+							Month and year only — the exact day is rarely known.
+						</p>
 					</div>
 
 					<div class="field">
