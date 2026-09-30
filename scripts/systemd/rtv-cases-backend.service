@@ -46,5 +46,16 @@ StandardError=journal
 MemoryMax=512M
 CPUQuota=100%
 
+# Audit M-12: systemd hardening, mirroring rtv-cases-db-backup.service.
+#   - NoNewPrivileges: refuse setuid/setgid binary execution.
+#   - PrivateTmp: nothing in /tmp leaks across processes.
+#   - ProtectSystem=strict: the filesystem is read-only except for
+#     /dev (PTY, etc.) and explicit ReadWritePaths=.
+#   - ProtectHome: the home dir tree is invisible to the service.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
 [Install]
 WantedBy=multi-user.target
