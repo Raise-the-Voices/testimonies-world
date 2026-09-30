@@ -12,7 +12,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 from rest_framework import generics, permissions, serializers, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.filters import OrderingFilter
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
@@ -945,16 +945,26 @@ class SourceViewSet(viewsets.ModelViewSet):
             self._audit(AuditLog.Action.VIEWED, instance, 'private')
         return super().retrieve(request, *args, **kwargs)
 
-    def _user_can_modify_source(self, user, instance: Source) -> bool:
+    def _user_can_modify_source(self, user, report) -> bool:
         """Authorship gate: only the report's author, Advocate, or staff
-        can modify a Source row. Mirrors ReportViewSet._user_can_modify."""
+        can modify (or attach) a Source. The Source's authorship is
+        its parent Report's authorship — same gate as
+        ReportViewSet._user_can_modify.
+
+        Takes the parent Report directly so perform_create (which has
+        the Report in hand but no Source yet) and
+        perform_update/perform_destroy (which have a Source) share
+        the check. Previously took a Source instance and followed
+        ``instance.report`` — fine for update/destroy but made the
+        create path inaccessible (audit H-4).
+        """
         if not user or not user.is_authenticated:
             return False
         if user.is_staff:
             return True
         if user.groups.filter(name='Advocate').exists():
             return True
-        return instance.report.created_by_id == user.id
+        return report.created_by_id == user.id
 
     def _client_ip(self) -> str | None:
         xff = self.request.META.get('HTTP_X_FORWARDED_FOR')
@@ -973,14 +983,31 @@ class SourceViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        # Default report to whatever the URL filter said (or the request
-        # body's `report` field). SourceSerializer has `report` as a
-        # regular writable FK.
+        # Audit H-4: authorship/role gate, matching perform_update and
+        # perform_destroy. Without this, a volunteer could POST
+        # {report: <any_report_id>, ...} and attach a Source to any
+        # report on the platform — a quiet privacy leak we caught when
+        # reviewing the role surface. The helper is the same one
+        # perform_update and perform_destroy use.
+        report = serializer.validated_data.get('report')
+        if report is None:
+            # SourceSerializer declares `report` as required, so a
+            # missing value here means a programmatic caller or a
+            # future serializer regression. Fail loudly with 400
+            # rather than creating an orphan row.
+            raise ValidationError({'report': 'This field is required.'})
+        if not self._user_can_modify_source(self.request.user, report):
+            raise PermissionDenied(
+                'Only the report author, an advocate, or staff '
+                'can attach a source to this report.'
+            )
         instance = serializer.save()
         self._audit(AuditLog.Action.EDITED, instance, 'created')
 
     def perform_update(self, serializer):
-        if not self._user_can_modify_source(self.request.user, serializer.instance):
+        if not self._user_can_modify_source(
+            self.request.user, serializer.instance.report,
+        ):
             raise PermissionDenied(
                 'Only the report author, an advocate, or staff can edit this source.'
             )
@@ -988,7 +1015,9 @@ class SourceViewSet(viewsets.ModelViewSet):
         self._audit(AuditLog.Action.EDITED, instance, 'updated')
 
     def perform_destroy(self, instance):
-        if not self._user_can_modify_source(self.request.user, instance):
+        if not self._user_can_modify_source(
+            self.request.user, instance.report,
+        ):
             raise PermissionDenied(
                 'Only the report author, an advocate, or staff can delete this source.'
             )
