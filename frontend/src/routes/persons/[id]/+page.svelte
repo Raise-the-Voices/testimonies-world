@@ -25,6 +25,7 @@
 	import MediaImage from '$lib/MediaImage.svelte';
 	import Icon from '$lib/Icon.svelte';
 	import RelatedCases from '$lib/RelatedCases.svelte';
+	import { formatMonthYear } from '$lib/dateFormat';
 	import { sanitizeText } from '$lib/sanitize';
 	import type { FamilyRelationshipRow, Media, Person, Report } from '$lib/types';
 	import type { PageData } from './$types';
@@ -1013,7 +1014,7 @@
 						{#if person.last_known_date}
 							<div class="sidebar-field">
 								<dt>Last known</dt>
-								<dd>{person.last_known_date}</dd>
+								<dd>{formatMonthYear(person.last_known_date)}</dd>
 							</div>
 						{/if}
 						{#if person.ethnicity}

@@ -22,6 +22,7 @@
 	import Banner from '$lib/Banner.svelte';
 	import FilterToolbar from '$lib/FilterToolbar.svelte';
 	import PersonCard from '$lib/PersonCard.svelte';
+	import { formatMonthYear } from '$lib/dateFormat';
 	import Icon from '$lib/Icon.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import ErrorCard from '$lib/ErrorCard.svelte';
@@ -507,7 +508,7 @@
 									</span>
 								{/if}
 							</td>
-							<td data-label="Last known">{person.last_known_date || '—'}</td>
+							<td data-label="Last known">{formatMonthYear(person.last_known_date) || '—'}</td>
 							<td data-label="Reports">{person.report_count ?? 0}</td>
 							<td data-label="" class="cell-actions"><a href="{base}/persons/{person.id}" class="view-link">View »</a></td>
 						</tr>
