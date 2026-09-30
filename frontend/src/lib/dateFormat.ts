@@ -23,8 +23,8 @@ const MONTH_YEAR_RE = /^\d{4}-\d{2}$/;
  * Returns an empty string for nullish/empty input so callers can drop
  * the result straight into a template without a guard.
  */
-export function formatMonthYear(iso: string | null | undefined): string {
-	if (!iso) return '';
+export function formatMonthYear(iso: unknown): string {
+	if (typeof iso !== 'string' || !iso) return '';
 	const m = iso.match(MONTH_YEAR_RE);
 	if (m) {
 		// Already month-precision (e.g. raw form state) — format directly.
@@ -40,8 +40,8 @@ export function formatMonthYear(iso: string | null | undefined): string {
  * Defensive — if the input isn't a full ISO date, returns it unchanged
  * so the caller sees a sensible value rather than `undefined`.
  */
-export function isoToMonthYear(iso: string | null | undefined): string {
-	if (!iso) return '';
+export function isoToMonthYear(iso: unknown): string {
+	if (typeof iso !== 'string' || !iso) return '';
 	const d = matchIsoDate(iso);
 	return d ? `${d[1]}-${d[2]}` : iso;
 }
@@ -51,8 +51,8 @@ export function isoToMonthYear(iso: string | null | undefined): string {
  * The model is a `DateField`, so we send the 1st of the month — the
  * backend stores it; the day is no longer meaningful for this field.
  */
-export function monthYearToIsoDate(yyyyMm: string | null | undefined): string {
-	if (!yyyyMm) return '';
+export function monthYearToIsoDate(yyyyMm: unknown): string {
+	if (typeof yyyyMm !== 'string' || !yyyyMm) return '';
 	if (!MONTH_YEAR_RE.test(yyyyMm)) return '';
 	return `${yyyyMm}-01`;
 }
@@ -63,16 +63,16 @@ export function monthYearToIsoDate(yyyyMm: string | null | undefined): string {
  * like `YYYY-MM`. The native `<input type="month">` already gates the
  * picker UI; this catches paste / autofill / programmatic input.
  */
-export function isValidMonthYear(value: string): boolean {
+export function isValidMonthYear(value: unknown): boolean {
 	if (!value) return true;
+	if (typeof value !== 'string') return false;
 	return MONTH_YEAR_RE.test(value);
 }
 
-function matchIsoDate(s: string | null | undefined): RegExpMatchArray | null {
-	// Defensive null-guard: callers already filter nullish `iso`, but
-	// `.match` on null throws — keep this safe even if a future caller
-	// passes through a nullable.
-	if (!s) return null;
+function matchIsoDate(s: unknown): RegExpMatchArray | null {
+	// Defensive: `.match` on null throws, and on any truthy non-string
+	// (e.g. a stray number from a misconfigured serializer) crashes too.
+	if (typeof s !== 'string' || !s) return null;
 	return s.match(/^(\d{4})-(\d{2})-\d{2}$/);
 }
 

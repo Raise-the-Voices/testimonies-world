@@ -67,10 +67,11 @@
 		prev: string;
 		current: string;
 	}
-	function parseChange(description: string | null | undefined): ParsedChange | null {
+	function parseChange(description: unknown): ParsedChange | null {
 		// Defensive: backend types this as a non-null string, but legacy
-		// or hand-imported rows may carry null. `.match` on null crashes.
-		if (!description) return null;
+		// or hand-imported rows may carry null. `.match` on null throws,
+		// and truthy non-string values (e.g. a stray number) crash too.
+		if (typeof description !== 'string' || !description) return null;
 		// Match "<field>: <prev> → <current>" — em-dash U+2192 with
 		// optional surrounding whitespace.
 		const m = description.match(/^([^:]+):\s*(.+?)\s*→\s*(.+)$/);

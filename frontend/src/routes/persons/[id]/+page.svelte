@@ -131,7 +131,7 @@
 			let url = m[0];
 			// Defensive null-guard: `m[0]` is a string by spec, but
 			// belt-and-suspenders — `.match` on null throws.
-			const trail = url ? url.match(/[),.;]+$/) : null;
+			const trail = typeof url === 'string' && url ? url.match(/[),.;]+$/) : null;
 			if (trail) url = url.slice(0, -trail[0].length);
 			out.push({ kind: 'url', value: url });
 			last = m.index + m[0].length;

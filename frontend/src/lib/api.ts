@@ -78,7 +78,7 @@ function getCsrfToken(): string {
 	// getter can return null/empty; `.match` on null throws
 	// "t.match is not a function" at runtime.
 	const cookie = document.cookie ?? '';
-	const match = cookie ? cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) : null;
+	const match = typeof cookie === 'string' && cookie ? cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) : null;
 	return match ? decodeURIComponent(match[1]) : '';
 }
 

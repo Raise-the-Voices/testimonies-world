@@ -35,9 +35,10 @@
 		prev: string;
 		current: string;
 	}
-	function parseChange(description: string | null | undefined): ParsedChange | null {
-		// Defensive: see StatusHistoryTimeline.parseChange — null-safe.
-		if (!description) return null;
+	function parseChange(description: unknown): ParsedChange | null {
+		// Defensive: see StatusHistoryTimeline.parseChange — null-safe
+		// AND safe against truthy non-string values.
+		if (typeof description !== 'string' || !description) return null;
 		const m = description.match(/^([^:]+):\s*(.+?)\s*→\s*(.+)$/);
 		if (!m) return null;
 		return { field: m[1].trim(), prev: m[2].trim(), current: m[3].trim() };
