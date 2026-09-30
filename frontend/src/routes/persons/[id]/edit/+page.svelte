@@ -6,6 +6,7 @@
 	import { getPerson, updatePerson, getCategories, ApiError } from '$lib/api';
 	import { focusFirstFormError } from '$lib/formFocus';
 import Skeleton from '$lib/Skeleton.svelte';
+	import MediaImage from '$lib/MediaImage.svelte';
 	import { monthYearToIsoDate, isoToMonthYear } from '$lib/dateFormat';
 	import Icon from '$lib/Icon.svelte';
 	import type { Person, PersonCategory } from '$lib/types';
@@ -680,7 +681,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 									height="96"
 								/>
 							{:else if existingProfileImageUrl}
-								<img
+								<MediaImage
 									src={existingProfileImageUrl}
 									alt="Current profile"
 									class="profile-image-preview"

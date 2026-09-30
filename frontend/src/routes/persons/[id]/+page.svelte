@@ -960,7 +960,7 @@
 				</div>
 				<div class="sidebar-pic">
 					{#if person.profile_image_url}
-						<img
+						<MediaImage
 							src={person.profile_image_url}
 							alt={person.name}
 							class="profile-photo"

@@ -20,6 +20,7 @@
 		RelatedPersonsResponse,
 	} from '$lib/api/generated/endpoints.schemas';
 	import StatusBadge from '$lib/StatusBadge.svelte';
+	import MediaImage from '$lib/MediaImage.svelte';
 
 	interface Props {
 		/** The person whose related-cases we want. */
@@ -89,7 +90,7 @@
 			{#each items as person (person.id)}
 				<a class="related-card" href={personHref(person.id)} aria-label="Open case: {person.name}">
 					{#if person.profile_image_url}
-						<img
+						<MediaImage
 							class="related-card-thumb"
 							src={person.profile_image_url}
 							alt={person.name}
