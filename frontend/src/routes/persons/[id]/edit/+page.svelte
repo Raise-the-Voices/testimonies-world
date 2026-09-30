@@ -6,6 +6,7 @@
 	import { getPerson, updatePerson, getCategories, ApiError } from '$lib/api';
 	import { focusFirstFormError } from '$lib/formFocus';
 import Skeleton from '$lib/Skeleton.svelte';
+	import { monthYearToIsoDate, isoToMonthYear } from '$lib/dateFormat';
 	import Icon from '$lib/Icon.svelte';
 	import type { Person } from '$lib/types';
 	import type { PageData } from './$types';
@@ -42,6 +43,8 @@ import Skeleton from '$lib/Skeleton.svelte';
 	let roughLocation = $state('');
 	let preciseLocation = $state('');
 	let lastKnownDate = $state('');
+	// Form holds YYYY-MM; wire (DateField) needs YYYY-MM-DD.
+	let lastKnownDateIso = $derived(monthYearToIsoDate(lastKnownDate));
 	let summaryNarrative = $state('');
 	let ethnicity = $state('');
 	let gender = $state('');
@@ -109,7 +112,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 		medicalStatus = (person.medical_status as string) || 'unknown';
 		roughLocation = person.rough_location || '';
 		preciseLocation = person.precise_location || '';
-		lastKnownDate = person.last_known_date || '';
+		lastKnownDate = isoToMonthYear(person.last_known_date);
 		summaryNarrative = person.summary_narrative || '';
 		ethnicity = person.ethnicity || '';
 		gender = (person.gender as string) || '';
@@ -202,8 +205,8 @@ import Skeleton from '$lib/Skeleton.svelte';
 		if (authoritativeUrl && !/^https?:\/\//i.test(authoritativeUrl.trim())) {
 			e.authoritative_url = 'URL must start with http:// or https://';
 		}
-		if (lastKnownDate && Number.isNaN(new Date(lastKnownDate).getTime())) {
-			e.last_known_date = "That doesn't look like a valid date.";
+		if (lastKnownDate && !/^\d{4}-\d{2}$/.test(lastKnownDate)) {
+			e.last_known_date = "That doesn't look like a valid month and year.";
 		}
 		if (
 			ageAtIncident !== '' &&
@@ -268,7 +271,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 				gender: gender || undefined,
 				category_ids: selectedCategories,
 			};
-			baseData.last_known_date = lastKnownDate || null;
+			baseData.last_known_date = lastKnownDateIso || null;
 			if (ageAtIncident !== '' && ageAtIncident !== null && ageAtIncident !== undefined) {
 				baseData.age_at_incident = ageAtIncident;
 			} else {
@@ -599,12 +602,15 @@ import Skeleton from '$lib/Skeleton.svelte';
 						<label for="last_known_date">Last Known Date</label>
 						<input
 							id="last_known_date"
-							type="date"
+							type="month"
 							bind:value={lastKnownDate}
 							oninput={() => clearError('last_known_date')}
 							aria-invalid={errors.last_known_date ? 'true' : 'false'}
 							aria-describedby={errors.last_known_date ? 'lkd-error' : 'lkd-help'}
 						/>
+						<p class="field-help" id="lkd-help">
+							Month and year only — the exact day is rarely known.
+						</p>
 						{#if errors.last_known_date}<p class="field-error" id="lkd-error" role="alert">{errors.last_known_date}</p>{/if}
 					</div>
 
