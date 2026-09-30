@@ -129,7 +129,9 @@
 		while ((m = URL_RE.exec(safe)) !== null) {
 			if (m.index > last) out.push({ kind: 'text', value: safe.slice(last, m.index) });
 			let url = m[0];
-			const trail = url.match(/[),.;]+$/);
+			// Defensive null-guard: `m[0]` is a string by spec, but
+			// belt-and-suspenders — `.match` on null throws.
+			const trail = url ? url.match(/[),.;]+$/) : null;
 			if (trail) url = url.slice(0, -trail[0].length);
 			out.push({ kind: 'url', value: url });
 			last = m.index + m[0].length;

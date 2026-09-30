@@ -23,7 +23,10 @@ type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
 
 function csrfToken(): string {
 	if (typeof document === 'undefined') return '';
-	const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+	// Defensive null-guard: see api.ts getCsrfToken — `document.cookie`
+	// can be null/empty in sandboxed iframes or cookie-disabled contexts.
+	const cookie = document.cookie ?? '';
+	const m = cookie ? cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) : null;
 	return m ? decodeURIComponent(m[1]) : '';
 }
 

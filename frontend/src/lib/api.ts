@@ -73,7 +73,12 @@ import {
  */
 function getCsrfToken(): string {
 	if (typeof document === 'undefined') return '';
-	const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+	// Defensive null-guard: `document.cookie` is a string per the DOM
+	// spec, but in sandboxed iframes or cookie-disabled contexts the
+	// getter can return null/empty; `.match` on null throws
+	// "t.match is not a function" at runtime.
+	const cookie = document.cookie ?? '';
+	const match = cookie ? cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) : null;
 	return match ? decodeURIComponent(match[1]) : '';
 }
 

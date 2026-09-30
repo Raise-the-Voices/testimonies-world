@@ -68,7 +68,11 @@ export function isValidMonthYear(value: string): boolean {
 	return MONTH_YEAR_RE.test(value);
 }
 
-function matchIsoDate(s: string): RegExpMatchArray | null {
+function matchIsoDate(s: string | null | undefined): RegExpMatchArray | null {
+	// Defensive null-guard: callers already filter nullish `iso`, but
+	// `.match` on null throws — keep this safe even if a future caller
+	// passes through a nullable.
+	if (!s) return null;
 	return s.match(/^(\d{4})-(\d{2})-\d{2}$/);
 }
 
