@@ -15,7 +15,10 @@
 <script lang="ts">
 	import { ApiError } from '$lib/api';
 	import { personsRelatedRetrieve } from '$lib/api/generated/endpoints';
-	import type { PersonList } from '$lib/api/generated/endpoints.schemas';
+	import type {
+		PersonList,
+		RelatedPersonsResponse,
+	} from '$lib/api/generated/endpoints.schemas';
 	import StatusBadge from '$lib/StatusBadge.svelte';
 
 	interface Props {
@@ -38,7 +41,7 @@
 			// because the @extend_schema declares a `results` field on
 			// the inline RelatedPersonsResponse serializer. Normalize
 			// defensively in case the schema shape evolves.
-			const body: any = res.data;
+			const body: RelatedPersonsResponse | PersonList[] = res.data;
 			items = Array.isArray(body?.results) ? body.results : (Array.isArray(body) ? body : []);
 		} catch (e) {
 			// Don't surface a hard error for the widget — a failed
@@ -105,7 +108,7 @@
 						<span class="related-card-meta">
 							<span class="related-card-country">{person.country}</span>
 							{#if person.current_status}
-								<StatusBadge status={person.current_status as any} variant="default" />
+								<StatusBadge status={person.current_status} variant="default" />
 							{/if}
 						</span>
 					</div>

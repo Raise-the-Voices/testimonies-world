@@ -9,10 +9,10 @@
 	import '@fontsource/pt-sans/700.css';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
+	import { onMount, type Snippet } from 'svelte';
 	import type { LayoutData } from './$types';
 
-	let { children, data }: { children: any; data: LayoutData } = $props();
+	let { children, data }: { children: Snippet; data: LayoutData } = $props();
 
 	// SSR-hydrated auth state. `data.user` is populated by the root
 	// +layout.ts on every navigation (server and client), so the

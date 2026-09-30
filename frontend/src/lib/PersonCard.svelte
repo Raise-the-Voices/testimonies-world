@@ -22,12 +22,13 @@
 	import Icon from './Icon.svelte';
 	import StatusBadge from './StatusBadge.svelte';
 	import { formatMonthYear } from './dateFormat';
+	import type { Person } from '$lib/types';
 
 	let {
 		person,
 		delayMs = 0,
 	}: {
-		person: any;
+		person: Person;
 		delayMs?: number;
 	} = $props();
 

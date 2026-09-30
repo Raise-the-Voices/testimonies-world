@@ -10,6 +10,7 @@
 	import type { SourceEntry } from '$lib/SourcesField.svelte';
 	import MediaField from '$lib/MediaField.svelte';
 	import type { MediaEntry } from '$lib/MediaField.svelte';
+	import type { PersonCategory } from '$lib/types';
 	import {
 		loadDraft,
 		saveDraft,
@@ -38,7 +39,7 @@
 	let canMarkSensitiveMedia = $derived(
 		isAdvocate(currentUser) || isAdmin(currentUser),
 	);
-	let categories: any[] = $state([]);
+	let categories: PersonCategory[] = $state([]);
 	let saving = $state(false);
 	let refreshing = $state(false);
 	// Top-level banner — ONLY for API / auth / server failures.
@@ -195,8 +196,52 @@
 		};
 	}
 
+	// Local draft shapes — used purely by restoreFromDraft's runtime
+	// type guards. Drafts are untyped JSON, so each property is
+	// optional in the guard. Keeping these private to this file
+	// avoids widening the global lib/types.ts surface for one call
+	// site.
+	interface DraftSourceShape {
+		uid?: unknown;
+		source_type?: unknown;
+		source_attribution?: unknown;
+		narrative?: unknown;
+		is_private?: unknown;
+	}
+	interface DraftMediaShape {
+		uid?: unknown;
+		media_type?: unknown;
+		visibility?: unknown;
+		description?: unknown;
+		url?: unknown;
+	}
+
+	function isDraftSource(s: unknown): s is SourceEntry {
+		if (typeof s !== 'object' || s === null) return false;
+		const o = s as DraftSourceShape;
+		return (
+			typeof o.uid === 'number' &&
+			typeof o.source_type === 'string' &&
+			typeof o.source_attribution === 'string' &&
+			typeof o.narrative === 'string' &&
+			typeof o.is_private === 'boolean'
+		);
+	}
+
+	function isDraftMedia(m: unknown): m is MediaEntry {
+		if (typeof m !== 'object' || m === null) return false;
+		const o = m as DraftMediaShape;
+		return (
+			typeof o.uid === 'number' &&
+			typeof o.media_type === 'string' &&
+			typeof o.visibility === 'string' &&
+			typeof o.description === 'string' &&
+			typeof o.url === 'string'
+		);
+	}
+
 	function restoreFromDraft(draft: SubmitDraft) {
-		const p = draft.payload as Record<string, any>;
+		const p = draft.payload as Record<string, unknown>;
 		// Defensive per-field assignment — keeps the form usable even
 		// if a future schemaVersion-bumped payload is partially valid
 		// (loadDraft drops unknown-schema drafts, but a same-version
@@ -241,16 +286,7 @@
 		// Per-field guards drop malformed entries; same defensive pattern
 		// as the rest of this function.
 		if (Array.isArray(p.sourceEntries)) {
-			sourceEntries = (p.sourceEntries as unknown[]).filter(
-				(s): s is SourceEntry =>
-					typeof s === 'object' &&
-					s !== null &&
-					typeof (s as any).uid === 'number' &&
-					typeof (s as any).source_type === 'string' &&
-					typeof (s as any).source_attribution === 'string' &&
-					typeof (s as any).narrative === 'string' &&
-					typeof (s as any).is_private === 'boolean',
-			);
+			sourceEntries = (p.sourceEntries as unknown[]).filter(isDraftSource);
 		}
 		// Media restored from draft — strip `file` (never persisted) and
 		// force-snap `visibility: 'sensitive'` to `'restricted'` if the
@@ -259,16 +295,7 @@
 		// between users.
 		if (Array.isArray(p.mediaEntries)) {
 			mediaEntries = (p.mediaEntries as unknown[])
-				.filter(
-					(m): m is MediaEntry =>
-						typeof m === 'object' &&
-						m !== null &&
-						typeof (m as any).uid === 'number' &&
-						typeof (m as any).media_type === 'string' &&
-						typeof (m as any).visibility === 'string' &&
-						typeof (m as any).description === 'string' &&
-						typeof (m as any).url === 'string',
-				)
+				.filter(isDraftMedia)
 				.map((m) => ({
 					...m,
 					// File binary is intentionally absent — the volunteer
