@@ -12,8 +12,10 @@ Covers the contract spelled out in the design doc:
     read leaves an AuditLog trace.
 
 Real DB tests, no mocks (per SYSTEM_RULES §7). Cryptography round-
-trips are exercised but the Fernet key is the hardcoded DEV fallback
-in encryption.py — see TESTIMONIALS_DEV_FALLBACK_KEY.
+trips are exercised with a fresh key generated per test process
+(`_TEST_FERNET_KEY` below) — there is no DEV fallback key in
+encryption.py (audit H-6, 2026-09-30). The previous
+`TESTIMONIALS_DEV_FALLBACK_KEY` module was removed.
 """
 
 import json
@@ -28,10 +30,11 @@ from cases.models import AuditLog, Testimonial, TestimonialTag
 from cases.testimonials.encryption import (
     decrypt_str, encrypt_str,
 )
-# Generate a fresh key per test process — never load the hardcoded
-# dev key from cases.testimonials.dev_key. The hardcoded key's
-# existence is acceptable (it's a clearly-marked DEV-ONLY constant)
-# but tests should not be load-bearing on its value.
+# Generate a fresh key per test process — never load any committed
+# key. The previous TESTIMONIALS_DEV_FALLBACK_KEY module was removed
+# in audit H-6 (2026-09-30); tests are the only place we generate
+# ephemeral keys, and only via override_settings — never by writing
+# a fallback path into encryption.py.
 from cryptography.fernet import Fernet as _Fernet
 _TEST_FERNET_KEY = _Fernet.generate_key()
 
@@ -164,34 +167,51 @@ class EncryptionRotationAndGateTests(BaseTestCase):
             with self.assertRaises(ImproperlyConfigured):
                 encryption.get_fernet()
 
-    def test_runtime_warning_when_debug_true_and_no_key(self):
-        """DEBUG=True + no key + ALLOW_DEV_FALLBACK_KEY default (True)
-        → RuntimeWarning fires once per process (lru_cache). The
-        warning is the cue that production data isn't protected.
+    def test_improperly_configured_when_debug_true_and_no_key(self):
+        """Audit H-6: the DEV fallback path is GONE. DEBUG=True with
+        no TESTIMONIALS_FERNET_KEY[S] raises ImproperlyConfigured,
+        same as the DEBUG=False path. A previous RuntimeWarning +
+        dev_key fallback path was removed because:
+
+          1. Anyone with repo read could decrypt every source_encrypted
+             row written under the fallback key.
+          2. DEBUG=True accidentally set on prod (or a misconfigured
+             staging mirror) would silently leak all source identities.
+
+        Local dev now sets the key explicitly via
+        `./scripts/gen-dev-key.sh` → `backend/.env`.
         """
-        import warnings
+        from django.core.exceptions import ImproperlyConfigured
         from django.test import override_settings
-        with override_settings(
-            DEBUG=True,
-            TESTIMONIALS_FERNET_KEY=None,
-            TESTIMONIALS_FERNET_KEYS=None,
-        ):
-            from cases.testimonials import encryption
-            encryption.get_fernet.cache_clear()
-            with warnings.catch_warnings(record=True) as caught:
-                warnings.simplefilter('always')
-                encryption.get_fernet()
-                runtime_warnings = [
-                    w for w in caught
-                    if issubclass(w.category, RuntimeWarning)
-                ]
-                self.assertTrue(
-                    runtime_warnings,
-                    'expected RuntimeWarning when no key is configured '
-                    'and DEBUG=True',
-                )
-                msg = str(runtime_warnings[0].message)
-                self.assertIn('DEV fallback key', msg)
+        # Explicit ALLOW_DEV_FALLBACK_KEY=True is a no-op now — the
+        # setting is ignored entirely. Both should raise.
+        for allow_dev in (True, False):
+            with override_settings(
+                DEBUG=True,
+                TESTIMONIALS_FERNET_KEY=None,
+                TESTIMONIALS_FERNET_KEYS=None,
+                ALLOW_DEV_FALLBACK_KEY=allow_dev,
+            ):
+                from cases.testimonials import encryption
+                encryption.get_fernet.cache_clear()
+                with self.assertRaises(
+                    ImproperlyConfigured,
+                    msg=(
+                        f'DEBUG=True with ALLOW_DEV_FALLBACK_KEY={allow_dev} '
+                        'should still raise — the fallback is gone.'
+                    ),
+                ):
+                    encryption.get_fernet()
+
+    def test_dev_key_module_no_longer_exists(self):
+        """Audit H-6: `cases.testimonials.dev_key` is deleted. The
+        import path raises ModuleNotFoundError so any future
+        contributor who tries to reinstate the fallback sees the
+        error immediately rather than silently reverting.
+        """
+        import importlib
+        with self.assertRaises(ModuleNotFoundError):
+            importlib.import_module('cases.testimonials.dev_key')
 
 
 # Workflow transitions + AuditLog.

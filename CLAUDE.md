@@ -94,11 +94,13 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 # Reference from the gunicorn systemd unit's EnvironmentFile=
 ```
 
-Local dev with `DEBUG=True` falls back to a hardcoded test key in
-`cases/testimonials/encryption.py` (`TESTIMONIALS_DEV_FALLBACK_KEY`) and
-emits a one-shot `RuntimeWarning` at first use. Production must set the
-real key — `ImproperlyConfigured` is raised if `DEBUG=False` and no key
-is configured.
+Local dev sets the key via `./scripts/gen-dev-key.sh` → add the printed
+line to `backend/.env` (`TESTIMONIALS_FERNET_KEY=...`). **No development
+fallback** (audit H-6, 2026-09-30): a missing key raises
+`ImproperlyConfigured` at first encrypt/decrypt regardless of `DEBUG`.
+The previous `TESTIMONIALS_DEV_FALLBACK_KEY` module was removed — every
+environment is now required to set the key explicitly, and the dev key
+no longer exists anywhere in the repository.
 
 ### Workflow
 
