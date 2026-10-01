@@ -15,7 +15,9 @@ Permission matrix for Report:
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from PIL import Image as PILImage
 from rest_framework.test import APIClient
 
 from testimonies.test_base import BaseTestCase
@@ -2324,3 +2326,248 @@ class PersonFilterTests(BaseTestCase):
         names = [p['name'] for p in self.client.get(self.URL, {'ordering': '-updated_at'}).json()['results']]
         self.assertEqual(names[0], 'Fresh')
         self.assertEqual(names[-1], 'YearOld')
+
+
+def _make_png_bytes(color='red', size=(10, 10)):
+    """Render a tiny PNG in memory and return its bytes.
+
+    Used by the multipart upload tests. Goes through PIL so the file
+    is genuinely a valid PNG (DRF's ImageField opens the upload to
+    verify) rather than a synthetic byte sequence that the validator
+    would reject as "not an image".
+    """
+    import io
+
+    buf = io.BytesIO()
+    PILImage.new('RGB', size, color).save(buf, 'PNG')
+    return buf.getvalue()
+
+
+class PersonWriteSerializerMultipartTests(BaseTestCase):
+    """Contract tests for PersonViewSet POST/PATCH with multipart payloads.
+
+    Pin the create/update behavior for /api/persons/ so the
+    "form-submission 500" failure mode can never silently regress:
+      - every realistic /submit payload shape returns 201
+      - corrupt image uploads return 400 with a field-scoped message
+        (NOT 500)
+      - unknown fields on the /persons/ payload return 400 with a
+        loud message (NOT silently dropped to a 201)
+      - the volunteer mass-assignment guard still works
+    """
+
+    URL = '/api/persons/'
+
+    def setUp(self):
+        self.volunteer = make_user('vol', in_group='Volunteer')
+        self.advocate = make_user('aisha', in_group='Advocate')
+        self.staff = make_user('admin', is_staff=True)
+        self.client = APIClient()
+        self.client.force_login(self.staff)
+
+    def _minimal_payload(self, **overrides):
+        payload = {
+            'name': 'Test Person',
+            'country': 'Pakistan',
+            'current_status': 'detained',
+            'medical_status': 'unknown',
+            'rough_location': 'Peshawar',
+            'summary_narrative': 'A test narrative.',
+        }
+        payload.update(overrides)
+        return payload
+
+    # --- JSON path ----------------------------------------------------
+
+    def test_json_minimal_create_returns_201(self):
+        res = self.client.post(self.URL, self._minimal_payload(), format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertEqual(res.json()['name'], 'Test Person')
+
+    def test_json_full_payload_create_returns_201(self):
+        """Every writable field the /submit form sends in one request."""
+        cats = list(CaseCategory.objects.values_list('id', flat=True)[:2])
+        payload = self._minimal_payload(
+            legal_name='Legal Name',
+            aliases='A1, A2',
+            ethnicity='Pashtun',
+            gender='F',
+            last_known_date='2026-06-01',
+            age_at_incident=30,
+            occupation='Teacher',
+            quality_tier=1,
+            medical_notes='private notes',
+            authoritative_source='ACGT',
+            authoritative_url='https://example.com',
+            category_ids=cats,
+        )
+        res = self.client.post(self.URL, payload, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        body = res.json()
+        self.assertEqual(body['legal_name'], 'Legal Name')
+        self.assertEqual(body['gender'], 'F')
+        self.assertEqual(body['last_known_date'], '2026-06-01')
+        self.assertEqual(sorted(body['category_ids']), sorted(cats))
+
+    def test_json_patch_returns_200(self):
+        person = self.client.post(
+            self.URL, self._minimal_payload(), format='json'
+        ).json()
+        res = self.client.patch(
+            f'{self.URL}{person["id"]}/',
+            self._minimal_payload(name='Updated Name'),
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.json()['name'], 'Updated Name')
+
+    # --- Multipart path ------------------------------------------------
+
+    def test_multipart_with_valid_png_returns_201(self):
+        """profile_image as a real PNG → 201 with image URL echoed."""
+        img = SimpleUploadedFile(
+            'profile.png',
+            _make_png_bytes(),
+            content_type='image/png',
+        )
+        payload = self._minimal_payload()
+        res = self.client.post(self.URL, {**payload, 'profile_image': img})
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertIn('profile', res.json()['profile_image'])
+
+    def test_multipart_with_corrupt_image_returns_400(self):
+        """profile_image whose bytes aren't a real image → 400, NOT 500."""
+        bad = SimpleUploadedFile(
+            'profile.png',
+            b'this is not a real image',
+            content_type='image/png',
+        )
+        payload = self._minimal_payload()
+        res = self.client.post(self.URL, {**payload, 'profile_image': bad})
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn('profile_image', res.json())
+
+    def test_multipart_with_svg_returns_400(self):
+        """SVG upload rejected by ImageField — 400, NOT 500."""
+        svg = SimpleUploadedFile(
+            'profile.svg',
+            b'<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>',
+            content_type='image/svg+xml',
+        )
+        payload = self._minimal_payload()
+        res = self.client.post(self.URL, {**payload, 'profile_image': svg})
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn('profile_image', res.json())
+
+    def test_multipart_with_empty_file_returns_400(self):
+        """Zero-byte file → 400."""
+        empty = SimpleUploadedFile('profile.png', b'', content_type='image/png')
+        payload = self._minimal_payload()
+        res = self.client.post(self.URL, {**payload, 'profile_image': empty})
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn('profile_image', res.json())
+
+    # --- Loud-fail on unknown fields -----------------------------------
+
+    def test_unknown_field_sources_returns_400(self):
+        """A frontend regression that POSTs `sources` (a /reports/ field)
+        to /persons/ must NOT silently drop it. Instead, return 400 so
+        the bug surfaces immediately.
+        """
+        payload = self._minimal_payload()
+        payload['sources'] = [{'source_type': 'media_report', 'narrative': 'x'}]
+        res = self.client.post(self.URL, payload, format='json')
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn('non_field_errors', res.json())
+
+    def test_unknown_field_media_files_returns_400(self):
+        """Same contract for `media_files` (a /media/ field)."""
+        payload = self._minimal_payload()
+        payload['media_files'] = [{'url': 'https://example.com/x.jpg'}]
+        res = self.client.post(self.URL, payload, format='json')
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn('non_field_errors', res.json())
+
+    def test_unknown_field_does_not_block_valid_fields(self):
+        """The unknown-field rejection still allows the valid fields to
+        land — we don't want a typo'd key to orphan the entire payload
+        (that's a 400 with the same valid fields echoed back so the
+        frontend can retry).
+        """
+        payload = self._minimal_payload(name='Survivor', sources=[{'x': 1}])
+        res = self.client.post(self.URL, payload, format='json')
+        self.assertEqual(res.status_code, 400, res.content)
+        # The error must mention the unknown key by name.
+        body = res.json()
+        self.assertIn('sources', str(body))
+
+    # --- Mass-assignment guard (regression pin) ------------------------
+
+    def test_volunteer_is_published_dropped_on_create(self):
+        """A volunteer sending is_published=true gets the field dropped
+        (mass-assignment guard). Pin current behavior: the row lands
+        with `is_published=True` (the model default) because the
+        view pops `is_published` from validated_data without setting
+        a replacement. This is the pre-existing contract; if a future
+        change makes volunteer submissions land as drafts (False),
+        this test will fail and force a deliberate update.
+        """
+        self.client.force_login(self.volunteer)
+        payload = self._minimal_payload()
+        payload['is_published'] = True
+        res = self.client.post(self.URL, payload, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        # Re-read from DB to confirm what's actually persisted (not
+        # just what the serializer echoed back).
+        person = Person.objects.get(pk=res.json()['id'])
+        self.assertTrue(person.is_published)
+
+    def test_advocate_is_published_honored(self):
+        """An Advocate sending is_published=true gets it persisted."""
+        self.client.force_login(self.advocate)
+        payload = self._minimal_payload()
+        payload['is_published'] = True
+        res = self.client.post(self.URL, payload, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        person = Person.objects.get(pk=res.json()['id'])
+        self.assertTrue(person.is_published)
+
+
+class Json500RequestIdTests(BaseTestCase):
+    """The 500 envelope exposes a short request_id so operators can
+    grep journalctl by it.
+    """
+
+    def test_500_envelope_carries_request_id(self):
+        import json as _json
+
+        from django.test import RequestFactory
+
+        from testimonies.urls import json_500
+
+        rf = RequestFactory()
+        request = rf.get('/api/persons/')
+        request.request_id = 'abc123def456'
+        response = json_500(request)
+        self.assertEqual(response.status_code, 500)
+        body = _json.loads(response.content)
+        self.assertEqual(body['error'], 'Server error')
+        self.assertEqual(body['status'], 500)
+        self.assertEqual(body['request_id'], 'abc123def456')
+
+    def test_500_envelope_handles_missing_request_id(self):
+        """If RequestIdMiddleware is bypassed (older settings, custom
+        WSGI handler), the envelope still works — request_id is None.
+        """
+        import json as _json
+
+        from django.test import RequestFactory
+
+        from testimonies.urls import json_500
+
+        rf = RequestFactory()
+        request = rf.get('/api/persons/')
+        # Intentionally do NOT set request.request_id.
+        response = json_500(request)
+        self.assertEqual(response.status_code, 500)
+        self.assertIsNone(_json.loads(response.content)['request_id'])

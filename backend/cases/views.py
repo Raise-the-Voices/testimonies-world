@@ -1,5 +1,7 @@
+import logging
+
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Case, Count, IntegerField, Max, Q, When
 from django.db.models.functions import Lower
 from django.http import (
@@ -23,6 +25,8 @@ from .models import AuditLog, CaseCategory, CaseEvent, FamilyRelationship, Media
 from .permissions import IsVolunteer
 from contacts.permissions import IsAdvocate
 from .throttles import ActionScopedThrottle
+
+logger = logging.getLogger(__name__)
 from .serializers import (
     AuditLogSerializer,
     CaseCategorySerializer,
@@ -421,7 +425,33 @@ class PersonViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not (user.is_staff or user.groups.filter(name='Advocate').exists()):
             serializer.validated_data.pop('is_published', None)
-        instance = serializer.save(created_by=user)
+        try:
+            instance = serializer.save(created_by=user)
+        except (OSError, IOError) as exc:
+            # `profile_image` write to PUBLIC_MEDIA_ROOT can fail
+            # with disk-full / read-only / missing-dir. Convert to a
+            # 400 with a field-scoped message instead of a 500 — the
+            # volunteer can retry, or an admin can fix storage.
+            logger.exception(
+                'PersonViewSet.perform_create: profile_image write failed',
+            )
+            raise serializers.ValidationError({
+                'profile_image': (
+                    'Could not save the image. '
+                    'Try again or contact an admin if the problem persists.'
+                ),
+            }) from exc
+        except IntegrityError as exc:
+            # Last-resort DB conflict that slipped past the serializer
+            # validators (race not foreseen; a future unique constraint
+            # we forgot to migrate; etc.). Convert to a clean 400.
+            logger.exception('PersonViewSet.perform_create: IntegrityError')
+            raise serializers.ValidationError({
+                'non_field_errors': (
+                    'Could not save due to a data conflict. '
+                    'Refresh the page and try again.'
+                ),
+            }) from exc
         # Audit-log the create (audit H-2). The other CRUD ops
         # (update, destroy, retrieve-private) were already wired;
         # create was the missing piece. Co-located with the save so a
@@ -449,25 +479,48 @@ class PersonViewSet(viewsets.ModelViewSet):
             f: getattr(serializer.instance, f)
             for f in _STATUS_HISTORY_FIELDS
         }
-        with transaction.atomic():
-            instance = serializer.save()
-            new_values = {
-                f: getattr(instance, f) for f in _STATUS_HISTORY_FIELDS
-            }
-            for field in _STATUS_HISTORY_FIELDS:
-                if old_values[field] != new_values[field]:
-                    CaseEvent.objects.create(
-                        person=instance,
-                        event_kind=CaseEvent.EventKind.STATUS_CHANGE,
-                        event_date=timezone.now().date(),
-                        description=f'{field}: {old_values[field]} → {new_values[field]}',
-                        source='auto',
-                        created_by=user,
-                    )
-            # Audit-log the update (audit H-2). Inside the atomic block
-            # so the audit + CaseEvent rows either both land or both
-            # roll back together with the save.
-            self._audit(AuditLog.Action.EDITED, instance, 'updated')
+        try:
+            with transaction.atomic():
+                instance = serializer.save()
+                new_values = {
+                    f: getattr(instance, f) for f in _STATUS_HISTORY_FIELDS
+                }
+                for field in _STATUS_HISTORY_FIELDS:
+                    if old_values[field] != new_values[field]:
+                        CaseEvent.objects.create(
+                            person=instance,
+                            event_kind=CaseEvent.EventKind.STATUS_CHANGE,
+                            event_date=timezone.now().date(),
+                            description=f'{field}: {old_values[field]} → {new_values[field]}',
+                            source='auto',
+                            created_by=user,
+                        )
+                # Audit-log the update (audit H-2). Inside the atomic block
+                # so the audit + CaseEvent rows either both land or both
+                # roll back together with the save.
+                self._audit(AuditLog.Action.EDITED, instance, 'updated')
+        except (OSError, IOError) as exc:
+            # `profile_image` write to PUBLIC_MEDIA_ROOT can fail
+            # with disk-full / read-only / missing-dir. Convert to a
+            # 400 with a field-scoped message instead of a 500 — the
+            # volunteer can retry, or an admin can fix storage.
+            logger.exception(
+                'PersonViewSet.perform_update: profile_image write failed',
+            )
+            raise serializers.ValidationError({
+                'profile_image': (
+                    'Could not save the image. '
+                    'Try again or contact an admin if the problem persists.'
+                ),
+            }) from exc
+        except IntegrityError as exc:
+            logger.exception('PersonViewSet.perform_update: IntegrityError')
+            raise serializers.ValidationError({
+                'non_field_errors': (
+                    'Could not save due to a data conflict. '
+                    'Refresh the page and try again.'
+                ),
+            }) from exc
 
     def retrieve(self, request, *args, **kwargs):
         # Audit-log every detail view of a Person. Anonymous retrievals are
