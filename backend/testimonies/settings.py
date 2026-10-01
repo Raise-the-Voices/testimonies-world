@@ -188,6 +188,12 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    # RequestIdMiddleware (cases.middleware) — attaches a short UUID
+    # to every request as `request.request_id` so the 500 handler can
+    # surface it to the client and operators can grep journalctl by id.
+    # Placed after SessionMiddleware so request.user is populated by
+    # the time a future log call reads it; before everything else.
+    'cases.middleware.RequestIdMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',

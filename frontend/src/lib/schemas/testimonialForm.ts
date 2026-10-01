@@ -132,22 +132,4 @@ export const newTestimonialSchema = z
 
 export type NewTestimonialInput = z.infer<typeof newTestimonialSchema>;
 
-/** Flatten a `ZodError` into a per-field message map.
- *  - First message wins per field (later issues on the same field are
- *    dropped so the user sees the most important problem first).
- *  - Top-level issues only: nested paths are surfaced under the parent
- *    key so the existing `aria-describedby`/`id` lookup works.
- *  - Cross-field issues produced by `.superRefine` already carry their
- *    target field in `path`, so they show up under the right key. */
-export function zodToFieldErrors(
-	error: z.ZodError,
-): Record<string, string> {
-	const out: Record<string, string> = {};
-	for (const issue of error.issues) {
-		const key = issue.path[0];
-		if (typeof key === 'string' && !(key in out)) {
-			out[key] = issue.message;
-		}
-	}
-	return out;
-}
+export { zodToFieldErrors } from './formErrors';

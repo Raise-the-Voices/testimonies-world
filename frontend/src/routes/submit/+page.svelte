@@ -21,6 +21,7 @@
 	} from '$lib/submitDraft';
 	import { focusFirstFormError } from '$lib/formFocus';
 	import { monthYearToIsoDate } from '$lib/dateFormat';
+	import { validatePersonWriteRequest } from '$lib/schemas/personForm';
 	import ErrorCard from '$lib/ErrorCard.svelte';
 	import type { PageData } from './$types';
 
@@ -693,6 +694,24 @@
 				if (authoritativeSource.trim()) payload.authoritative_source = authoritativeSource.trim();
 				if (authoritativeUrl.trim()) payload.authoritative_url = authoritativeUrl.trim();
 				payload.is_published = isPublished;
+
+				// Front-load cheap schema checks so the volunteer sees
+				// the inline error immediately instead of waiting for a
+				// 400 round-trip. The page's own `validate()` already
+				// covers the required-field basics; this catches the
+				// shape + length + enum failures that would otherwise
+				// land as a 400 from DRF. The backend remains the
+				// source of truth for validation; this just avoids a
+				// network call for the obvious cases. The FormData
+				// branch above is skipped because file payloads aren't
+				// zod-friendly — those flow straight to the API.
+				const schemaResult = validatePersonWriteRequest(payload);
+				if (!schemaResult.ok) {
+					errors = schemaResult.errors;
+					focusFirstError(errors);
+					saving = false;
+					return;
+				}
 			}
 
 			const person = await createPerson(payload);
@@ -861,7 +880,12 @@
 						'Try refreshing your session — if that doesn’t work, log in again.';
 				} else if (e.isServer || e.status === 0) {
 					formErrorKind = 'server';
-					formError = e.message || 'The server hit a snag. Please try again in a moment.';
+					// Surface the server's request_id when present so
+					// the volunteer (or the operator they hand it to)
+					// can grep journalctl for the matching traceback.
+					// The backend's json_500 envelope is what sends it.
+					const ref = e.requestId ? ` Reference: ${e.requestId}.` : '';
+					formError = (e.message || 'The server hit a snag. Please try again in a moment.') + ref;
 				} else {
 					formErrorKind = 'other';
 					formError = e.message || 'Something went wrong. Please try again.';

@@ -557,6 +557,37 @@ class PersonWriteSerializer(SanitizingModelSerializerMixin, serializers.ModelSer
         exclude = ['categories']
         read_only_fields = ['created_by', 'created_at', 'updated_at']
 
+    def validate(self, attrs):
+        # Run the sanitizer first so text/url fields are still
+        # cleaned on the way through. `super().validate()` is the
+        # SanitizingModelSerializerMixin hook, which in turn calls
+        # serializers.ModelSerializer.validate().
+        attrs = super().validate(attrs)
+
+        # Loud-fail on unknown fields. DRF's ModelSerializer silently
+        # drops keys it doesn't recognize — that's been the source of
+        # real bugs on this endpoint (a frontend that sent `sources`
+        # or `media_files` got a 201 that ignored them, then the
+        # missing-data failed downstream on /reports/ or /media/ with
+        # a confusing 4xx/5xx). Compare the raw input against the
+        # declared fields so an extra key never reaches
+        # `serializer.save()` undetected.
+        allowed_fields = set(self.fields.keys())
+        unknown = [
+            k for k in (self.initial_data or {})
+            if k not in allowed_fields
+        ]
+        if unknown:
+            raise serializers.ValidationError({
+                'non_field_errors': [
+                    f"Unknown field '{k}' on /persons/ payload. "
+                    f'Remove it, or use the matching endpoint '
+                    f'(/reports/ for sources, /media/ for media files).'
+                    for k in unknown
+                ],
+            })
+        return attrs
+
 
 class FamilyRelationshipSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializer):
     """Family-relationship CRUD payload.

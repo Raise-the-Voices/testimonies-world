@@ -129,9 +129,18 @@ def json_500(request):
     traceback is captured by Django's logger + Sentry (config in
     testimonies/ops.py). Operators see it via journalctl; an
     anonymous HTTP client doesn't get a single byte of it.
+
+    The envelope does carry a short `request_id` (set by
+    ``cases.middleware.RequestIdMiddleware``) so a user who hits
+    a 500 can paste the id and an operator can grep journalctl by
+    it. We never include the path, query string, or traceback.
     """
     return JsonResponse(
-        {'error': 'Server error', 'status': 500},
+        {
+            'error': 'Server error',
+            'status': 500,
+            'request_id': getattr(request, 'request_id', None),
+        },
         status=500,
     )
 
