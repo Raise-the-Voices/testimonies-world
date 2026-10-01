@@ -251,6 +251,26 @@ server {
     location /testimonies/events/   { proxy_pass http://rtv_cases_backend/events/; }
     # /media/ is now defined above (auth-protected proxy to Django).
 
+    # /testimonies/public-media/ — mirror of the disk-alias block above.
+    # The serializer builds URLs as
+    # `${SITE_URL}${PUBLIC_MEDIA_URL}/<name>` and `settings.SITE_URL`
+    # includes the /testimonies/ SPA mount, so the absolute URL the
+    # browser receives is
+    # `https://<host>/testimonies/public-media/profiles/<hash>.png`.
+    # The bare /public-media/ block above doesn't match that prefixed
+    # path (nginx matches the full URI), so without this mirror every
+    # uploaded image falls into `location /` → SvelteKit node → 404.
+    # `alias` (not `root`) because the URL prefix and the directory
+    # name differ, same reason as the bare block above.
+    location /testimonies/public-media/ {
+        alias /opt/rtv-cases/backend/public_media/;
+        access_log off;
+        expires 7d;
+        add_header Cache-Control "public";
+        autoindex off;
+        try_files $uri =404;
+    }
+
     # SPA route aliases — the SvelteKit app is mounted at /testimonies/
     # (PUBLIC_BASE_PATH=/testimonies), so any bare /persons/<id> URL
     # falls through to the node catch-all and 404s. Redirect to the
