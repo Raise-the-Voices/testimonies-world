@@ -96,6 +96,20 @@ export class ApiError extends Error {
 	get isValidation(): boolean {
 		return this.status === 400 || this.status === 422;
 	}
+	/** Server-assigned request id (returned in the 500 envelope by
+	 * `testimonies.urls.json_500`). Operators grep journalctl by it
+	 * to find the matching traceback. Null on non-500 responses. */
+	get requestId(): string | null {
+		if (
+			this.body &&
+			typeof this.body === 'object' &&
+			!Array.isArray(this.body) &&
+			typeof (this.body as Record<string, unknown>).request_id === 'string'
+		) {
+			return ((this.body as Record<string, unknown>).request_id as string) || null;
+		}
+		return null;
+	}
 }
 
 /**
