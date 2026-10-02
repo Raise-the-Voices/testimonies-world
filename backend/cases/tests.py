@@ -2844,3 +2844,118 @@ class MediaInReportCardTests(BaseTestCase):
         self.assertFalse(by_id[self.media_document.id].get('url'))
         self.assertTrue(by_id[self.media_link.id]['url'])
         self.assertFalse(by_id[self.media_link.id].get('file'))
+
+
+class MediaSubmitFlowApiTests(BaseTestCase):
+    """End-to-end API exercise of the /submit upload path.
+
+    /submit does THREE sequential POSTs:
+      1. POST /api/persons/   → creates the Person, gets an id
+      2. POST /api/reports/   → creates the Report with that person, gets an id
+      3. POST /api/media/     → creates a Media row bound to BOTH person and
+                                report (the file branch and the URL branch)
+
+    Before this test, no test in the suite covered step 3 with `report` set
+    in the body — the read-side test (`MediaInReportCardTests`) seeded rows
+    directly via `Media.objects.create(...)`, which sidesteps the serializer.
+    The /submit handler appends `report` to the FormData exactly the way
+    this test does; if the backend silently dropped that field, every /submit
+    upload would orphan from its report card and the bug would have shipped.
+
+    These tests run against an in-memory test DB (auto-rollback), so they're
+    safe to push to shared CI without polluting the production Postgres.
+    """
+
+    def setUp(self):
+        self.volunteer = make_user('volunt', in_group='Volunteer')
+        self.client = APIClient()
+        self.client.force_login(self.volunteer)
+
+    def _create_person(self):
+        res = self.client.post('/api/persons/', {
+            'name': '_Diag_Subj',
+            'country': 'XX',
+            'current_status': 'detained',
+            'medical_status': 'unknown',
+            'is_published': 'true',
+        }, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        return res.json()
+
+    def _create_report(self, person_id):
+        res = self.client.post('/api/reports/', {
+            'person': person_id,
+            'source_type': 'firsthand',
+            'source_attribution': '_diag',
+            'narrative': '_diag narrative',
+        }, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        return res.json()
+
+    def test_submit_file_branch_binds_report_id(self):
+        """POST /api/media/ with multipart FormData containing `report=<id>`
+        must persist `report_id` on the saved row, AND the row must round-trip
+        through GET /api/persons/<id>/'s reports[0].media_files."""
+        person = self._create_person()
+        report = self._create_report(person['id'])
+
+        res = self.client.post('/api/media/', {
+            'person': person['id'],
+            'report': report['id'],
+            'media_type': 'photo',
+            'visibility': 'public',
+            'description': '_diag file branch',
+            'file': SimpleUploadedFile(
+                'photo.jpg', b'fake-jpeg', 'image/jpeg',
+            ),
+        }, format='multipart')
+        self.assertEqual(res.status_code, 201, res.content)
+        created = res.json()
+
+        # The save endpoint must echo both FKs.
+        self.assertEqual(created['report'], report['id'])
+        self.assertEqual(created['person'], person['id'])
+
+        # GET the person detail and confirm the new row is in the report
+        # card's media_files — this is the exact regression we're guarding
+        # against. PR #181 fixed the RENDERER; if the API silently dropped
+        # `report` from the FormData, this assertion would fail.
+        detail = self.client.get(f'/api/persons/{person["id"]}/')
+        self.assertEqual(detail.status_code, 200)
+        body = detail.json()
+        reports = body['reports']
+        self.assertEqual(len(reports), 1)
+        media_ids = [m['id'] for m in reports[0]['media_files']]
+        self.assertIn(
+            created['id'], media_ids,
+            f'Report card missing media row created via /submit '
+            f'(created id={created["id"]}, '
+            f'report FK on row={created["report"]}, '
+            f'report.media_files ids={media_ids}).',
+        )
+
+    def test_submit_url_branch_binds_report_id(self):
+        """POST /api/media/ with JSON containing `report=<id>` and `url`
+        (the link/external branch) must persist `report_id` too."""
+        person = self._create_person()
+        report = self._create_report(person['id'])
+
+        res = self.client.post('/api/media/', {
+            'person': person['id'],
+            'report': report['id'],
+            'media_type': 'link',
+            'visibility': 'public',
+            'description': '_diag url branch',
+            'url': 'https://example.org/article',
+        }, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        created = res.json()
+        self.assertEqual(created['report'], report['id'])
+        self.assertEqual(created['person'], person['id'])
+
+        detail = self.client.get(f'/api/persons/{person["id"]}/')
+        self.assertEqual(detail.status_code, 200)
+        media_ids = [
+            m['id'] for m in detail.json()['reports'][0]['media_files']
+        ]
+        self.assertIn(created['id'], media_ids)
