@@ -2571,3 +2571,64 @@ class Json500RequestIdTests(BaseTestCase):
         response = json_500(request)
         self.assertEqual(response.status_code, 500)
         self.assertIsNone(_json.loads(response.content)['request_id'])
+
+
+class BackfillMediaPersonFkTests(TestCase):
+    """Regression for the submit-flow bug where Media was saved with `report`
+    set but `person` left NULL — orphan rows were invisible on the case
+    detail page (which filters /api/media by `person`). The backfill
+    command must populate `person_id` from `report.person_id` for orphans
+    and skip already-populated rows.
+    """
+
+    def setUp(self):
+        self.volunteer = make_user('volunteer', in_group='Volunteer')
+        self.person = Person.objects.create(
+            name='Subject', country='XX', created_by=self.volunteer,
+        )
+        self.report = Report.objects.create(
+            person=self.person, source_type='direct',
+            source_attribution='test', narrative='A report',
+            created_by=self.volunteer,
+        )
+        # Orphan: person NULL, report set (the broken submit shape).
+        self.orphan = Media.objects.create(
+            report=self.report,
+            media_type=Media.MediaType.DOCUMENT,
+            visibility=Media.Visibility.PUBLIC,
+            description='orphan',
+            uploaded_by=self.volunteer,
+        )
+        # Healthy row: person set (the post-fix shape).
+        self.healthy = Media.objects.create(
+            person=self.person, report=self.report,
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.PUBLIC,
+            description='healthy',
+            uploaded_by=self.volunteer,
+        )
+
+    def test_backfill_populates_orphan_and_skips_healthy(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('backfill_media_person_fk', stdout=out)
+        self.orphan.refresh_from_db()
+        self.healthy.refresh_from_db()
+        self.assertEqual(self.orphan.person_id, self.person.id)
+        # Healthy row was untouched.
+        self.assertEqual(self.healthy.person_id, self.person.id)
+        self.assertIn('Fixed 1', out.getvalue())
+
+    def test_backfill_is_idempotent(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        call_command('backfill_media_person_fk')
+        # Second run — nothing left to fix.
+        out = StringIO()
+        call_command('backfill_media_person_fk', stdout=out)
+        self.assertIn('nothing to do', out.getvalue())
