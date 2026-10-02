@@ -501,7 +501,12 @@ class JsonErrorHandlerTests(BaseTestCase):
         self.assertEqual(res.status_code, 500)
         self.assertEqual(res.headers['Content-Type'], 'application/json')
         body = res.json()
-        self.assertEqual(body, {'error': 'Server error', 'status': 500})
+        # Envelope shape is contract; `request_id` is generated per
+        # request so check the two stable ones and the presence of
+        # request_id (string or None) rather than exact equality.
+        self.assertEqual(body['error'], 'Server error')
+        self.assertEqual(body['status'], 500)
+        self.assertIn('request_id', body)
 
     @override_settings(DEBUG=False, SECURE_SSL_REDIRECT=False, ROOT_URLCONF=_TEST_500_URLCONF)
     def test_500_does_not_leak_traceback_or_path(self):
