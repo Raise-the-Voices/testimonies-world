@@ -1096,7 +1096,19 @@ class MediaViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = MediaSerializer
-    filterset_fields = ['person', 'report', 'media_type', 'visibility']
+    # Dict form so the `report` field exposes BOTH `?report=<id>` (exact FK
+    # match) AND `?report__isnull=true|false` (standalone vs report-bound
+    # media). The list-form shortcut only generated exact filters, which
+    # silently ignored `report__isnull=true` and made the global "Standalone
+    # media" section on /persons/<id>/ impossible to scope. django-filter
+    # 25.1 (backend/requirements.txt) supports the dict form natively — no
+    # custom FilterSet subclass required.
+    filterset_fields = {
+        'person': ['exact'],
+        'report': ['exact', 'isnull'],
+        'media_type': ['exact'],
+        'visibility': ['exact'],
+    }
     # Tightened to IsVolunteer to match PersonViewSet / ReportViewSet /
     # FamilyRelationshipViewSet. The previous IsAuthenticatedOrReadOnly
     # gate let any logged-in user (even an authenticated outsider with
