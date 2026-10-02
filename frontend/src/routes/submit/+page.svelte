@@ -780,6 +780,12 @@
 				try {
 					if (hasFile && m.file) {
 						const fd = new FormData();
+						// Bind both report and person so the case
+						// detail page (which filters /api/media by
+						// `person`) can surface media uploaded via
+						// /submit. Mirrors MediaUploadModal's pattern
+						// when personId is set on create.
+						fd.append('person', String(person.id));
 						fd.append('report', String(report.id));
 						fd.append('media_type', m.media_type);
 						fd.append('visibility', m.visibility);
@@ -795,6 +801,11 @@
 						await request<unknown>('/media/', {
 							method: 'POST',
 							body: JSON.stringify({
+								// Bind both person and report so media
+								// uploaded from /submit is visible on
+								// the case detail page (which filters
+								// /api/media by `person`).
+								person: person.id,
 								report: report.id,
 								media_type: m.media_type,
 								visibility: m.visibility,

@@ -15,6 +15,7 @@
 		deletePerson,
 		deleteReport,
 	} from '$lib/api';
+	import type { Paginated } from '$lib/api';
 	import { user, isVolunteer, isAdvocate } from '$lib/session';
 	import StatusBadge from '$lib/StatusBadge.svelte';
 	import StatusHistoryTimeline from '$lib/StatusHistoryTimeline.svelte';
@@ -208,9 +209,36 @@
 	const personLoader = createLoader((signal, id: string) =>
 		getPerson(id, { signal }),
 	);
-	const mediaLoader = createLoader((signal, personId: number) =>
-		getMedia({ person: String(personId) }, { signal }),
-	);
+	const mediaLoader = createLoader(async (signal, personId: number) => {
+		// Pull media attached directly to the person AND media attached
+		// to any of this person's reports. Submit-flow rows created
+		// before the fix sent only `report=<id>`, leaving `person_id`
+		// NULL on those Media rows. The second query surfaces them so
+		// the case detail page isn't missing media for legacy data.
+		// Results are deduped by id (the same row can match both
+		// queries if it has both FKs).
+		const [directRes, relayedRes] = await Promise.all([
+			getMedia({ person: String(personId) }, { signal }),
+			getMedia({ report__person: String(personId) }, { signal }),
+		]);
+		const unwrap = (r: Paginated<Media> | Media[] | undefined): Media[] => {
+			if (!r) return [];
+			return Array.isArray(r) ? r : r.results ?? [];
+		};
+		const byId = new Map<number, Media>();
+		for (const m of [...unwrap(directRes), ...unwrap(relayedRes)]) {
+			byId.set(m.id, m);
+		}
+		// Newest first, matching the order the case detail list expects.
+		// `created_at` is optional in the Media interface, so coerce
+		// undefined to 0 (treat missing as oldest) rather than letting
+		// `new Date(undefined)` throw.
+		return [...byId.values()].sort((a, b) => {
+			const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+			const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+			return bt - at;
+		});
+	});
 	const relationshipsLoader = createLoader((signal, personId: number) =>
 		getRelationships({ person: String(personId) }, { signal }),
 	);
@@ -262,7 +290,10 @@
 				relationshipsLoader.load(p.id),
 			]);
 			if (m.status === 'fulfilled' && m.value !== undefined) {
-				mediaList = Array.isArray(m.value) ? m.value : m.value.results ?? [];
+				// mediaLoader returns Media[] (it merges person-direct +
+				// report-relayed queries internally), so the value is
+				// always an array.
+				mediaList = m.value;
 				loadingMedia = false;
 			} else if (m.status === 'rejected') {
 				loadingMedia = false;
@@ -313,7 +344,8 @@
 		try {
 			const m = await mediaLoader.load(person.id);
 			if (m === undefined) return;
-			mediaList = Array.isArray(m) ? m : m.results ?? [];
+			// mediaLoader returns Media[].
+			mediaList = m;
 		} catch (e: unknown) {
 			mediaError =
 				e instanceof Error ? e.message : 'Failed to load media for this case.';
