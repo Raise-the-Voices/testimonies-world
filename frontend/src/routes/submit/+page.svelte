@@ -142,18 +142,19 @@
 
 	// Sources + Media attached to the new Report. The bound arrays are
 	// owned by the child components (SourcesField / MediaField); the
-	// parent reads them at submit time. File binaries on `mediaEntries`
-	// are stripped before draft persistence (see buildDraftPayload).
+	// parent reads them at submit time. With the 2026-10-02 link-only
+	// simplification, MediaField entries have no `file` field — only
+	// url / description / visibility / media_type.
 	let sourceEntries = $state<SourceEntry[]>([]);
 	let mediaEntries = $state<MediaEntry[]>([]);
 
 	function buildDraftPayload(): Record<string, unknown> {
-		// File binaries are intentionally NOT included — `profileImageFile`
-		// and each `mediaEntries[i].file` don't survive JSON.stringify and
-		// would blow past the ~5MB localStorage quota. The
-		// `profileImageCleared` flag IS saved so the user's "remove image"
-		// intent survives a refresh. The restore-banner copy tells the
-		// volunteer about the media-file loss at restore time.
+		// The `profileImageFile` binary is intentionally NOT included —
+		// it doesn't survive JSON.stringify and would blow past the
+		// ~5MB localStorage quota. The `profileImageCleared` flag IS
+		// saved so the user's "remove image" intent survives a refresh.
+		// Media rows are now link-only (url + description) and round-
+		// trip cleanly without stripping.
 		return {
 			name,
 			legalName,
@@ -186,14 +187,7 @@
 			suspectedReason,
 			officialReason,
 			sourceEntries: sourceEntries.map((s) => ({ ...s })),
-			mediaEntries: mediaEntries.map((m) => {
-				// Strip the File binary — never persisted (see above).
-				// `url` and `description` round-trip cleanly; `file` is
-				// re-picked by the volunteer post-restore.
-				const { file: _drop, ...rest } = m;
-				void _drop;
-				return rest;
-			}),
+			mediaEntries: mediaEntries.map((m) => ({ ...m })),
 		};
 	}
 
@@ -289,23 +283,19 @@
 		if (Array.isArray(p.sourceEntries)) {
 			sourceEntries = (p.sourceEntries as unknown[]).filter(isDraftSource);
 		}
-		// Media restored from draft — strip `file` (never persisted) and
-		// force-snap `visibility: 'sensitive'` to `'restricted'` if the
-		// current user lacks permission, so the backend doesn't 403 an
-		// entry that survived only because the draft key was shared
-		// between users.
+		// Media restored from draft — round-trip url/visibility/media_type
+		// cleanly (no `file` field any more, per 2026-10-02 link-only
+		// simplification). Defense in depth: force-snap
+		// `visibility: 'sensitive'` to `'restricted'` if the current
+		// user lacks permission, so the backend doesn't 403 an entry
+		// that survived only because the draft key was shared between
+		// users.
 		if (Array.isArray(p.mediaEntries)) {
 			mediaEntries = (p.mediaEntries as unknown[])
 				.filter(isDraftMedia)
 				.map((m) => ({
 					...m,
-					// File binary is intentionally absent — the volunteer
-					// re-picks via the file input after restore.
-					file: null,
-					// Defense in depth: a draft with `sensitive` rows that
-					// outlived a role downgrade (or was created by an
-					// Advocate and is being restored by a Volunteer) gets
-					// force-snapped to `'restricted'`.
+					media_type: 'link',
 					visibility:
 						!canMarkSensitiveMedia && m.visibility === 'sensitive'
 							? 'restricted'
@@ -753,67 +743,33 @@
 			// Attach each media item separately. ReportSerializer has
 			// media_files as read-only nested, so a second POST per item
 			// is required. Track failures but don't fail the whole flow —
-			// the report itself is saved. Branches on file vs URL per row:
-			//   - file  → multipart/form-data with `file` field set
-			//   - url   → JSON, url + description + visibility + media_type
-			// A row with BOTH file and url is a programmer error — the
-			// file branch wins and url is ignored. A row with neither
-			// is filtered out so empty rows don't trigger a 400.
+			// the report itself is saved. Per 2026-10-02 product
+			// direction, /submit accepts external URL links only — no
+			// file/binary uploads. Each link POST is JSON. A row with
+			// neither URL nor description is filtered out so empty
+			// rows don't trigger a 400.
 			const failures: string[] = [];
 			for (let i = 0; i < mediaEntries.length; i++) {
 				const m = mediaEntries[i];
-				const hasFile = !!m.file;
 				const hasUrl = !!m.url.trim();
 				const hasDesc = !!m.description.trim();
-				if (!hasFile && !hasUrl && !hasDesc) continue;
-				// Client-side file-size guard mirrors MediaUploadModal's
-				// 25 MB cap. A too-large file aborts the rest of the
-				// loop because a 413 from the server would otherwise
-				// silently break subsequent items.
-				if (hasFile && m.file && m.file.size > 25 * 1024 * 1024) {
-					failures.push(
-						`Media #${i + 1}: file is too large ` +
-							`(${(m.file.size / 1024 / 1024).toFixed(1)} MB; max 25 MB).`,
-					);
-					continue;
-				}
+				if (!hasUrl && !hasDesc) continue;
 				try {
-					if (hasFile && m.file) {
-						const fd = new FormData();
-						// Bind both report and person so the case
-						// detail page (which filters /api/media by
-						// `person`) can surface media uploaded via
-						// /submit. Mirrors MediaUploadModal's pattern
-						// when personId is set on create.
-						fd.append('person', String(person.id));
-						fd.append('report', String(report.id));
-						fd.append('media_type', m.media_type);
-						fd.append('visibility', m.visibility);
-						if (m.description.trim()) {
-							fd.append('description', m.description.trim());
-						}
-						fd.append('file', m.file);
-						await request<unknown>('/media/', {
-							method: 'POST',
-							body: fd,
-						});
-					} else {
-						await request<unknown>('/media/', {
-							method: 'POST',
-							body: JSON.stringify({
-								// Bind both person and report so media
-								// uploaded from /submit is visible on
-								// the case detail page (which filters
-								// /api/media by `person`).
-								person: person.id,
-								report: report.id,
-								media_type: m.media_type,
-								visibility: m.visibility,
-								description: m.description.trim(),
-								url: m.url.trim(),
-							}),
-						});
-					}
+					await request<unknown>('/media/', {
+						method: 'POST',
+						body: JSON.stringify({
+							// Bind both person and report so media
+							// uploaded from /submit is visible on
+							// the case detail page (which filters
+							// /api/media by `person`).
+							person: person.id,
+							report: report.id,
+							media_type: 'link',
+							visibility: m.visibility,
+							description: m.description.trim(),
+							url: m.url.trim(),
+						}),
+					});
 				} catch (mErr: unknown) {
 					// Session-expired during the loop — abort the rest
 					// of the media uploads and surface the auth banner
@@ -821,7 +777,7 @@
 					if (mErr instanceof ApiError && mErr.isUnauthorized) {
 						formErrorKind = 'auth';
 						formError =
-							'Your session expired while uploading media. ' +
+							'Your session expired while saving media. ' +
 							'Try refreshing your session — if that doesn’t work, log in again.';
 						mediaFailures = failures;
 						throw mErr; // triggers catch (e) below for the
@@ -1742,26 +1698,27 @@
 			<!-- ============== Section 5: Media ============== -->
 			<!-- Repeating row list, owned by <MediaField>. Bound array
 			     `mediaEntries` is sent one POST per item, with the
-			     `report` FK set to the new report's id. Per-item
-			     failures are collected into `mediaFailures` and shown
-			     in a partial-failure banner (mirrors /reports UX). -->
+			     `report` FK set to the new report's id. Per 2026-10-02
+			     product direction, /submit accepts external URL links
+			     only — no file uploads. Per-item failures are collected
+			     into `mediaFailures` and shown in a partial-failure
+			     banner (mirrors /reports UX). -->
 			<section class="form-section" aria-labelledby="sec-media">
 				<h2 id="sec-media" class="form-section-title">
 					<span class="title-bar" aria-hidden="true"></span>
 					Media
 				</h2>
 				<p class="form-section-desc">
-					Attach supporting evidence — photos, documents,
-					videos, or external links. Each item gets its own
-					visibility tier; "Sensitive" requires Advocate/Admin
-					role.
+					Paste URLs to external articles, documents, videos,
+					or images that support this report. Each item gets
+					its own visibility tier; "Sensitive" requires
+					Advocate/Admin role.
 				</p>
 
 				<MediaField
 					bind:entries={mediaEntries}
 					disabled={saving}
 					canMarkSensitive={canMarkSensitiveMedia}
-					allowFileUpload={true}
 				/>
 			</section>
 

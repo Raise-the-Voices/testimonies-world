@@ -757,7 +757,6 @@
 					bind:entries={mediaEntries}
 					disabled={saving || disabled}
 					{canMarkSensitive}
-					allowFileUpload={false}
 				/>
 			</fieldset>
 		{/if}
