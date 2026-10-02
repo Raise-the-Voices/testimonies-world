@@ -197,8 +197,16 @@
 			if (urlValue.trim()) {
 				fd.append('url', urlValue.trim());
 			}
-			// Attach person only on create (and when not hidden).
-			if (!isEdit && !hidePerson && personId !== undefined) {
+			// Attach person when personId is set on a non-edit. `hidePerson`
+			// only controls whether the picker UI is rendered — it must
+			// not skip the binding, otherwise uploads from /persons/[id]/
+			// (which passes hidePerson=true because the person is implicit)
+			// create orphan rows with person_id=NULL. The case-detail
+			// media loader filters by ?person=<id>&report__isnull=true,
+			// so an orphan row appears to "disappear on refresh" — the
+			// UI shows it briefly (onMediaSaved writes to mediaList) but
+			// the next page load skips it. See commit on this branch.
+			if (!isEdit && personId !== undefined) {
 				fd.append('person', String(personId));
 			}
 
