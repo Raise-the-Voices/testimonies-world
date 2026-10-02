@@ -392,12 +392,36 @@
 	}
 
 	function onMediaSaved(saved: Media) {
-		// Upsert: if we already have this row (edit case), replace; else add.
-		const idx = mediaList.findIndex((m) => m.id === saved.id);
-		if (idx >= 0) {
-			mediaList[idx] = saved;
-		} else {
-			mediaList = [saved, ...mediaList];
+		// After PR #180 a Media row lives on EXACTLY ONE of two surfaces:
+		//   - `mediaList` — standalone (report__isnull=true), rendered in
+		//     the "Standalone media" section
+		//   - `person.reports[i].media_files` — bound to a report, rendered
+		//     inside that report's expanded card
+		// The edit modal doesn't tell us which surface fired the save, so
+		// we write to the surface that matches the row's current binding
+		// and leave the other untouched. Writing a report-bound row into
+		// `mediaList` would make it reappear in the standalone section on
+		// next load (since `mediaList` is now filtered to report__isnull=true
+		// — the row would vanish on reload, so a stale copy in memory is
+	// confusing) so the branch is explicitly scoped to `saved.report == null`.
+		if (saved.report == null) {
+			const idx = mediaList.findIndex((m) => m.id === saved.id);
+			if (idx >= 0) {
+				mediaList[idx] = saved;
+			} else {
+				mediaList = [saved, ...mediaList];
+			}
+		}
+		if (saved.report != null && person) {
+			person.reports = (person.reports ?? []).map((r) => {
+				if (r.id !== saved.report) return r;
+				const list = r.media_files ?? [];
+				const idx = list.findIndex((m) => m.id === saved.id);
+				const nextList = idx >= 0
+					? list.map((m) => (m.id === saved.id ? saved : m))
+					: [saved, ...list];
+				return { ...r, media_files: nextList };
+			});
 		}
 	}
 
@@ -415,8 +439,18 @@
 		if (!deleteTarget) return;
 		deleting = true;
 		try {
-			await deleteMedia(deleteTarget.id);
-			mediaList = mediaList.filter((m) => m.id !== deleteTarget!.id);
+			const id = deleteTarget.id;
+			await deleteMedia(id);
+			// After PR #180 the row is on at most one of the two surfaces,
+			// but `confirmDelete` doesn't know which card fired it. Remove
+			// from both so the row can't linger in a stale place.
+			mediaList = mediaList.filter((m) => m.id !== id);
+			if (person) {
+				person.reports = (person.reports ?? []).map((r) => ({
+					...r,
+					media_files: (r.media_files ?? []).filter((m) => m.id !== id),
+				}));
+			}
 			deleteTarget = null;
 		} catch (e: unknown) {
 			deleteError =
@@ -819,22 +853,111 @@
 									<p class="mt-1"><strong>Official reason:</strong> {sanitizeText(report.official_reason)}</p>
 								{/if}
 								{#if report.media_files && report.media_files.length > 0}
-									<div class="report-card-media">
+									<!--
+									  Renders every media type attached to this report — not
+									  just `media.url` like before PR #180. With the global
+									  Media section scoped to standalone-only, this card is
+									  the only surface where report-bound media can appear,
+									  so a photo/video/document row that's filtered out here
+									  would have no UI surface at all.
+
+									  Branch order is photo → video → document → link, with
+									  the link branch reusing the existing `.report-link-btn`
+									  pill. `download` is intentionally NOT set on file links
+									  — these files are served via Django's media handler and
+									  the volunteer may want to view in-browser (PDF, video)
+									  rather than download. The host-served thumbnail for
+									  photos uses MediaImage, which already short-circuits
+									  hostile hosts (x.com, etc.) and falls back to a link.
+									-->
+									<ul class="report-media-list">
 										{#each report.media_files as media (media.id)}
-											{#if media.url}
-												<a
-													href={media.url}
-													target="_blank"
-													rel="noopener noreferrer"
-													class="report-link-btn"
-													title={media.description || media.url}
-												>
-													<span>{domainOf(media.url)}</span>
-													<span class="report-link-icon" aria-hidden="true">↗</span>
-												</a>
-											{/if}
+											<li class="report-media-item">
+												<div class="report-media-thumb">
+													{#if media.media_type === 'photo' && media.file}
+														<MediaImage
+															src={media.file}
+															alt={media.description || 'Photo'}
+															description={media.description}
+															class="report-media-thumb-img"
+															loading="lazy"
+															decoding="async"
+															width="80"
+															height="80"
+														/>
+													{:else if media.media_type === 'video' && media.file}
+														<a
+															href={media.file}
+															target="_blank"
+															rel="noopener noreferrer"
+															class="report-media-tile"
+															title={media.description || 'Open video'}
+														>
+															<span class="report-media-tile-icon" aria-hidden="true">▶</span>
+															<span class="report-media-tile-label">Video</span>
+														</a>
+													{:else if media.media_type === 'document' && media.file}
+														<a
+															href={media.file}
+															target="_blank"
+															rel="noopener noreferrer"
+															class="report-media-tile"
+															title={media.description || 'Open document'}
+														>
+															<span class="report-media-tile-icon" aria-hidden="true">📄</span>
+															<span class="report-media-tile-label">Document</span>
+														</a>
+													{:else if media.media_type === 'link' && media.url}
+														<a
+															href={media.url}
+															target="_blank"
+															rel="noopener noreferrer"
+															class="report-link-btn"
+															title={media.description || media.url}
+														>
+															<span>{domainOf(media.url)}</span>
+															<span class="report-link-icon" aria-hidden="true">↗</span>
+														</a>
+													{/if}
+												</div>
+												<div class="report-media-body">
+													<div class="media-item-meta">
+														<span class="media-item-type media-type-{media.media_type}">
+															{mediaTypeLabels[media.media_type] || media.media_type}
+														</span>
+														<span class="media-item-visibility visibility-{media.visibility}">
+															{visibilityLabels[media.visibility] || media.visibility}
+														</span>
+													</div>
+													{#if media.description}
+														<p class="report-media-description">{media.description}</p>
+													{/if}
+												</div>
+												{#if isVolunteer(currentUser)}
+													<div class="report-media-actions" role="group" aria-label="Media actions">
+														<button
+															type="button"
+															class="row-action"
+															aria-label="Edit {media.description || mediaTypeLabels[media.media_type]}"
+															title="Edit"
+															onclick={() => openEdit(media)}
+														>
+															<Icon name="pencil-fill" size={12} filled />
+														</button>
+														<button
+															type="button"
+															class="row-action row-action-danger"
+															aria-label="Delete {media.description || mediaTypeLabels[media.media_type]}"
+															title="Delete"
+															onclick={() => startDelete(media)}
+														>
+															<Icon name="trash-fill" size={12} filled />
+														</button>
+													</div>
+												{/if}
+											</li>
 										{/each}
-									</div>
+									</ul>
 								{/if}
 							</div>
 						{/if}
@@ -1954,6 +2077,107 @@
 	}
 	.report-card-chevron.open {
 		transform: rotate(90deg);
+	}
+
+	/* === Report-attached media list ===
+	   After PR #180, media with `report_id` set lives ONLY inside its
+	   report's expanded card. The previous renderer's `{#if media.url}`
+	   branch silently dropped photos/videos/docs uploaded via /submit,
+	   so the volunteer saw "Standalone media" empty AND no media on
+	   the new report — broken UX. This block adds a compact vertical
+	   list (`.report-media-list`) with one row per attached Media row,
+	   branched by `media_type` so photo/video/document/link all
+	   render correctly. The pills (`.media-item-type`,
+	   `.media-item-visibility`) and edit/delete actions (`.row-action`)
+	   are already scoped to this file and shared with the standalone
+	   section above. */
+	.report-media-list {
+		list-style: none;
+		margin: 0.6rem 0 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.report-media-item {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		padding: 0.5rem 0.65rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border-light);
+		border-radius: var(--radius-card);
+	}
+	.report-media-thumb {
+		flex: 0 0 auto;
+		width: 80px;
+		height: 80px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.report-media-thumb-img {
+		width: 80px;
+		height: 80px;
+		object-fit: cover;
+		border-radius: 4px;
+		border: 1px solid var(--color-border-light);
+		display: block;
+	}
+	.report-media-tile {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		width: 80px;
+		height: 80px;
+		background: var(--color-bg-white);
+		border: 1px solid var(--color-border-light);
+		border-radius: 4px;
+		text-decoration: none;
+		color: var(--color-primary);
+		gap: 0.15rem;
+		transition:
+			background 0.15s ease,
+			border-color 0.15s ease;
+	}
+	.report-media-tile:hover {
+		background: var(--color-primary-tint);
+		border-color: var(--color-primary-light);
+	}
+	.report-media-tile:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+	}
+	.report-media-tile-icon {
+		font-size: 1.5rem;
+		line-height: 1;
+	}
+	.report-media-tile-label {
+		font-size: 0.62rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-muted);
+	}
+	.report-media-body {
+		flex: 1 1 auto;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		line-height: 1.5;
+	}
+	.report-media-description {
+		margin: 0;
+		font-size: 0.85rem;
+		color: var(--color-text);
+		word-break: break-word;
+	}
+	.report-media-actions {
+		flex: 0 0 auto;
+		display: flex;
+		gap: 0.3rem;
 	}
 
 	/* === Media section: interactive gallery with edit / delete === */

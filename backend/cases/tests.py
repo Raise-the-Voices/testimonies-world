@@ -2736,3 +2736,111 @@ class MediaStandaloneFilterTests(BaseTestCase):
         self.assertIn(self.standalone_public.id, ids)
         self.assertNotIn(self.standalone_restricted.id, ids)
         self.assertNotIn(self.attached.id, ids)
+
+
+class MediaInReportCardTests(BaseTestCase):
+    """Pins the data contract the report-card renderer relies on.
+
+    After PR #180 the global "Standalone media" section is filtered to
+    `report__isnull=true`, so report-attached media lives ONLY inside
+    `report.media_files` on the person-detail response. The previous
+    report-card markup only handled `media.url` rows — photos/videos/documents
+    uploaded via /submit were silently dropped, leaving the volunteer with
+    no UI surface for the files they just attached.
+
+    The renderer in `frontend/src/routes/persons/[id]/+page.svelte` branches
+    on `media_type` and reads `media.file` / `media.url` / `media.description`
+    / `media.visibility`. This test seeds exactly that shape and asserts the
+    nested serializer returns each field correctly, so any future serializer
+    change that would silently break the renderer's branches fails CI.
+    """
+
+    def setUp(self):
+        self.staff = make_user('admin', is_staff=True)
+        self.volunteer = make_user('vol', in_group='Volunteer')
+        self.client = APIClient()
+        self.client.force_login(self.staff)
+        self.person = Person.objects.create(
+            name='Subject', country='XX',
+            current_status=Person.Status.DETAINED,
+            medical_status=Person.MedicalStatus.UNKNOWN,
+            is_published=True,
+            created_by=self.volunteer,
+        )
+        self.report = Report.objects.create(
+            person=self.person, source_type='direct',
+            source_attribution='test', narrative='A report',
+            created_by=self.volunteer,
+        )
+        # One row per media_type, all bound to the same report. file-backed
+        # rows use SimpleUploadedFile to give the FileField something to
+        # serialize; the link row stays URL-only.
+        self.media_photo = Media.objects.create(
+            person=self.person, report=self.report,
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.PUBLIC,
+            description='photo-desc',
+            file=SimpleUploadedFile('photo.jpg', b'fake-jpeg', 'image/jpeg'),
+            uploaded_by=self.volunteer,
+        )
+        self.media_video = Media.objects.create(
+            person=self.person, report=self.report,
+            media_type=Media.MediaType.VIDEO,
+            visibility=Media.Visibility.PUBLIC,
+            description='video-desc',
+            file=SimpleUploadedFile('clip.mp4', b'fake-mp4', 'video/mp4'),
+            uploaded_by=self.volunteer,
+        )
+        self.media_document = Media.objects.create(
+            person=self.person, report=self.report,
+            media_type=Media.MediaType.DOCUMENT,
+            visibility=Media.Visibility.PUBLIC,
+            description='doc-desc',
+            file=SimpleUploadedFile('doc.pdf', b'%PDF-1.4', 'application/pdf'),
+            uploaded_by=self.volunteer,
+        )
+        self.media_link = Media.objects.create(
+            person=self.person, report=self.report,
+            media_type=Media.MediaType.LINK,
+            visibility=Media.Visibility.PUBLIC,
+            url='https://example.org/source',
+            description='link-desc',
+            uploaded_by=self.volunteer,
+        )
+
+    def test_person_detail_returns_all_four_media_types_in_report(self):
+        """The data contract the renderer assumes end-to-end.
+
+        Asserts the four rows are present on `reports[0].media_files`
+        with the expected `media_type`, `description`, `visibility`,
+        and source field (`file` for photo/video/document, `url` for link).
+        """
+        res = self.client.get(f'/api/persons/{self.person.id}/')
+        self.assertEqual(res.status_code, 200)
+        reports = res.json()['reports']
+        self.assertEqual(len(reports), 1)
+        media_files = reports[0]['media_files']
+        self.assertEqual(len(media_files), 4)
+
+        by_id = {m['id']: m for m in media_files}
+        for expected in (
+            self.media_photo, self.media_video,
+            self.media_document, self.media_link,
+        ):
+            self.assertIn(expected.id, by_id)
+            row = by_id[expected.id]
+            self.assertEqual(row['media_type'], expected.media_type)
+            self.assertEqual(row['visibility'], expected.visibility)
+            self.assertEqual(row['description'], expected.description)
+
+        # Per-type source assertion — the renderer's branch picker.
+        # file-backed rows must have a non-empty `file` URL; the link row
+        # must have a non-empty `url` and an empty `file`.
+        self.assertTrue(by_id[self.media_photo.id]['file'])
+        self.assertFalse(by_id[self.media_photo.id].get('url'))
+        self.assertTrue(by_id[self.media_video.id]['file'])
+        self.assertFalse(by_id[self.media_video.id].get('url'))
+        self.assertTrue(by_id[self.media_document.id]['file'])
+        self.assertFalse(by_id[self.media_document.id].get('url'))
+        self.assertTrue(by_id[self.media_link.id]['url'])
+        self.assertFalse(by_id[self.media_link.id].get('file'))
