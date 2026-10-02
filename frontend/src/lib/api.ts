@@ -486,6 +486,35 @@ export async function updateMedia(id: number | string, formData: FormData): Prom
 	});
 }
 
+/**
+ * JSON body for media rows that carry no binary file — the link-only
+ * volunteer flow. `MediaSerializer` accepts both multipart and
+ * JSON, so this avoids the FormData round-trip when there is no
+ * upload to perform.
+ */
+export async function uploadMediaJson(payload: MediaPayloadJson): Promise<Media> {
+	return request<Media>('/media/', {
+		method: 'POST',
+		body: JSON.stringify(payload),
+	});
+}
+
+export async function updateMediaJson(id: number | string, payload: MediaPayloadJson): Promise<Media> {
+	return request<Media>(`/media/${id}/`, {
+		method: 'PATCH',
+		body: JSON.stringify(payload),
+	});
+}
+
+export interface MediaPayloadJson {
+	media_type: 'photo' | 'video' | 'document' | 'link';
+	visibility: 'public' | 'restricted' | 'sensitive';
+	description?: string;
+	url?: string;
+	person?: number;
+	report?: number;
+}
+
 export async function deleteMedia(id: number | string): Promise<void> {
 	await request<null>(`/media/${id}/`, {
 		method: 'DELETE',

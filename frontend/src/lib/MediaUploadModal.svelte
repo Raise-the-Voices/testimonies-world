@@ -1,7 +1,20 @@
+<!--
+  MediaUploadModal — link-only media entry form.
+
+  Per the 2026-10-02 product decision, the volunteer-facing surface
+  accepts external URLs only. No file/binary uploads, no storage,
+  no nginx serving — the media row stores `url` and the browser
+  fetches the destination directly. This sidesteps the upload-
+  pipeline complexity that was making fills flicker behind a 403/404
+  nginx path on the dev VM.
+
+  Backend still accepts the `file` column for any future admin /
+  import path, but the volunteer form never sets it.
+-->
 <script lang="ts">
 	import { fly, fade } from 'svelte/transition';
-	import { uploadMedia, updateMedia, ApiError } from '$lib/api';
-	import type { Media, MediaType, Visibility } from '$lib/types';
+	import { uploadMediaJson, updateMediaJson, ApiError } from '$lib/api';
+	import type { Media, Visibility } from '$lib/types';
 
 	interface Props {
 		open: boolean;
@@ -29,62 +42,43 @@
 
 	const isEdit = $derived(!!media);
 
-	const mediaTypeLabels: Record<MediaType, string> = {
-		photo: 'Photo',
-		video: 'Video',
-		document: 'Document',
-		link: 'External link',
-	};
-	const mediaTypes: MediaType[] = ['photo', 'video', 'document', 'link'];
 	const visibilityLabels: Record<Visibility, string> = {
 		public: 'Public — anyone can see',
 		restricted: 'Restricted — volunteers and above',
 		sensitive: 'Sensitive — advocates and admins only',
 	};
-	// Reactive: hide 'sensitive' if the user can't mark it. `$derived`
-	// re-evaluates when the prop changes (e.g. session refresh upgrades
-	// role).
 	const visibilities = $derived<Visibility[]>(
 		canMarkSensitive
 			? ['public', 'restricted', 'sensitive']
 			: ['public', 'restricted'],
 	);
 
-	let mediaType = $state<MediaType>('photo');
+	// Link-only — the modal never lets the volunteer pick a type.
+	const mediaType = 'link';
 	let visibility = $state<Visibility>('public');
-	let description = $state('');
 	let urlValue = $state('');
-	let fileValue = $state<File | null>(null);
-	let fileInputEl: HTMLInputElement | null = $state(null);
+	let description = $state('');
 	let saving = $state(false);
 	let formError = $state('');
 	let errors = $state<Record<string, string>>({});
-	let isDragging = $state(false);
 
-	const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
 	const MAX_DESC = 500;
 
-	// Initialize fields when opening.
 	$effect(() => {
 		if (!open) return;
 		if (media) {
-			mediaType = media.media_type;
-			visibility = media.visibility;
+			visibility = media.visibility ?? 'public';
 			description = media.description ?? '';
 			urlValue = media.url ?? '';
-			fileValue = null;
 		} else {
-			mediaType = 'photo';
 			visibility = 'public';
 			description = '';
 			urlValue = '';
-			fileValue = null;
 		}
 		formError = '';
 		errors = {};
 	});
 
-	// Escape closes the modal.
 	$effect(() => {
 		if (!open) return;
 		const handler = (e: KeyboardEvent) => {
@@ -98,87 +92,24 @@
 	});
 
 	function close() {
-		if (saving) return; // don't close mid-save
+		if (saving) return;
 		onClose();
-	}
-
-	function onFileChange(e: Event) {
-		const input = e.currentTarget as HTMLInputElement;
-		fileValue = input.files && input.files.length > 0 ? input.files[0] : null;
-	}
-
-	function onDrop(e: DragEvent) {
-		e.preventDefault();
-		isDragging = false;
-		if (!e.dataTransfer) return;
-		const file = e.dataTransfer.files?.[0];
-		if (file) {
-			fileValue = file;
-			if (fileInputEl) fileInputEl.value = '';
-		}
-	}
-
-	function onDragOver(e: DragEvent) {
-		e.preventDefault();
-		isDragging = true;
-	}
-
-	function onDragLeave(e: DragEvent) {
-		e.preventDefault();
-		isDragging = false;
 	}
 
 	function validate(): boolean {
 		const e: Record<string, string> = {};
-		if (!mediaType) e.media_type = 'Pick a media type.';
-		if (!visibility) e.visibility = 'Pick a visibility level.';
-
-		if (isEdit) {
-			// On edit, file and url are optional (keep what's there).
-			if (fileValue) {
-				if (fileValue.size > MAX_FILE_BYTES) {
-					e.file = `File too large (${(fileValue.size / 1024 / 1024).toFixed(1)} MB). Max 25 MB.`;
-				}
-			}
-		} else {
-			// On create, exactly one of file or url is required, never both.
-			if (!fileValue && !urlValue.trim()) {
-				e.file = 'Pick a file or paste a URL.';
-				e.url = '';
-			}
-			if (fileValue && urlValue.trim()) {
-				e.file = 'Pick a file OR a URL, not both.';
-				e.url = '';
-			}
-			if (fileValue && fileValue.size > MAX_FILE_BYTES) {
-				e.file = `File too large (${(fileValue.size / 1024 / 1024).toFixed(1)} MB). Max 25 MB.`;
-			}
-			if (!fileValue && urlValue.trim() && !/^https?:\/\//i.test(urlValue.trim())) {
-				e.url = 'URL must start with http:// or https://';
-			}
+		const trimmed = urlValue.trim();
+		if (!trimmed) {
+			e.url = 'A URL is required.';
+		} else if (!/^https?:\/\//i.test(trimmed)) {
+			e.url = 'URL must start with http:// or https://';
 		}
-
 		if (description.length > MAX_DESC) {
 			e.description = `Description too long (max ${MAX_DESC} characters).`;
 		}
-
-		if (mediaType === 'link' && !urlValue.trim() && !fileValue) {
-			e.url = 'External links require a URL.';
-		}
-
 		errors = e;
 		return Object.keys(e).length === 0;
 	}
-
-	function filePreviewUrl(file: File): string | null {
-		if (!file.type.startsWith('image/')) return null;
-		try {
-			return URL.createObjectURL(file);
-		} catch {
-			return null;
-		}
-	}
-	const previewUrl = $derived(fileValue ? filePreviewUrl(fileValue) : null);
 
 	async function save() {
 		if (!validate()) return;
@@ -186,33 +117,23 @@
 		saving = true;
 
 		try {
-			const fd = new FormData();
-			fd.append('media_type', mediaType);
-			fd.append('visibility', visibility);
-			if (description.trim()) fd.append('description', description.trim());
-
-			if (fileValue) {
-				fd.append('file', fileValue);
-			}
-			if (urlValue.trim()) {
-				fd.append('url', urlValue.trim());
-			}
+			const payload: Parameters<typeof uploadMediaJson>[0] = {
+				media_type: mediaType,
+				visibility,
+				description: description.trim(),
+				url: urlValue.trim(),
+			};
 			// Attach person when personId is set on a non-edit. `hidePerson`
 			// only controls whether the picker UI is rendered — it must
-			// not skip the binding, otherwise uploads from /persons/[id]/
-			// (which passes hidePerson=true because the person is implicit)
-			// create orphan rows with person_id=NULL. The case-detail
-			// media loader filters by ?person=<id>&report__isnull=true,
-			// so an orphan row appears to "disappear on refresh" — the
-			// UI shows it briefly (onMediaSaved writes to mediaList) but
-			// the next page load skips it. See commit on this branch.
+			// not skip the binding, otherwise /persons/[id]/ would create
+			// orphan rows with person_id=NULL.
 			if (!isEdit && personId !== undefined) {
-				fd.append('person', String(personId));
+				payload.person = personId;
 			}
 
 			const result = isEdit && media
-				? await updateMedia(media.id, fd)
-				: await uploadMedia(fd);
+				? await updateMediaJson(media.id, payload)
+				: await uploadMediaJson(payload);
 			onSaved(result);
 			onClose();
 		} catch (e: unknown) {
@@ -231,20 +152,14 @@
 				formError = e instanceof Error ? e.message : 'Something went wrong.';
 			}
 		} finally {
-			// Reset regardless of success/failure. The success path
-			// unmounts the modal so the assignment is harmless; the
-			// failure path needs it so a partial save doesn't leave
-			// the submit button stuck disabled.
 			saving = false;
 		}
 	}
 </script>
 
 {#if open}
-	<!-- Backdrop -->
 	<div class="modal-overlay" onclick={close} role="presentation" transition:fade={{ duration: 150 }}></div>
 
-	<!-- Dialog -->
 	<div
 		class="modal"
 		role="dialog"
@@ -253,7 +168,7 @@
 		transition:fly={{ y: -16, duration: 200, opacity: 0 }}
 	>
 		<header class="modal-header">
-			<h2 id="media-modal-title">{isEdit ? 'Edit media' : 'Upload media'}</h2>
+			<h2 id="media-modal-title">{isEdit ? 'Edit media link' : 'Add a media link'}</h2>
 			<button
 				type="button"
 				class="modal-close"
@@ -271,101 +186,28 @@
 				</div>
 			{/if}
 
-			<!-- Media type -->
+			<p class="field-hint">
+				Paste a URL to an external article, document, video, or image. The link is stored
+				on the case; no file is uploaded.
+			</p>
+
 			<div class="field">
-				<label for="media-type">Type</label>
-				<select
-					id="media-type"
-					class="select--filter"
-					class:has-error={!!errors.media_type}
-					bind:value={mediaType}
-				>
-					{#each mediaTypes as t (t)}
-						<option value={t}>{mediaTypeLabels[t]}</option>
-					{/each}
-				</select>
-				{#if errors.media_type}
-					<p class="field-error">{errors.media_type}</p>
-				{/if}
-			</div>
-
-			<!-- Source: file or URL -->
-			<fieldset class="field source-fieldset">
-				<legend>Source</legend>
-				<p class="field-hint">
-					{#if isEdit}
-						Leave blank to keep the existing file / URL. Upload a new file to replace it,
-						or paste a URL to switch to an external link.
-					{:else}
-						Pick a file to upload, or paste an external URL. Exactly one of the two.
-					{/if}
-				</p>
-
-				<!-- Drop zone + file input -->
-				<div
-					class="dropzone"
-					class:is-dragging={isDragging}
-					class:has-error={!!errors.file}
-					role="button"
-					tabindex="0"
-					onclick={() => fileInputEl?.click()}
-					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputEl?.click(); } }}
-					ondrop={onDrop}
-					ondragover={onDragOver}
-					ondragleave={onDragLeave}
-				>
-					<input
-						bind:this={fileInputEl}
-						type="file"
-						class="visually-hidden"
-						onchange={onFileChange}
-						accept="image/*,video/*,application/pdf"
-					/>
-					{#if previewUrl}
-						<img
-							src={previewUrl}
-							alt=""
-							class="dropzone-preview"
-							decoding="async"
-							width="200"
-							height="200"
-						/>
-					{:else if fileValue}
-						<div class="dropzone-filename">
-							<span class="dropzone-fileicon" aria-hidden="true">📄</span>
-							<span>{fileValue.name}</span>
-						</div>
-					{:else}
-						<div class="dropzone-prompt">
-							<span class="dropzone-icon" aria-hidden="true">↑</span>
-							<span class="dropzone-text">
-								<strong>Click to choose</strong> or drag a file here
-							</span>
-							<span class="dropzone-hint">Images, video, PDF — up to 25 MB</span>
-						</div>
-					{/if}
-				</div>
-				{#if errors.file}
-					<p class="field-error">{errors.file}</p>
-				{/if}
-
-				<!-- OR URL -->
-				<div class="or-divider"><span>or</span></div>
-
+				<label for="media-url">URL</label>
 				<input
+					id="media-url"
 					type="url"
 					class="input--search"
 					class:has-error={!!errors.url}
 					bind:value={urlValue}
 					placeholder="https://example.org/document.pdf"
 					autocomplete="off"
+					required
 				/>
 				{#if errors.url}
 					<p class="field-error">{errors.url}</p>
 				{/if}
-			</fieldset>
+			</div>
 
-			<!-- Description -->
 			<div class="field">
 				<label for="media-description">Description</label>
 				<input
@@ -376,7 +218,7 @@
 					bind:value={description}
 					autocomplete="off"
 					maxlength={MAX_DESC}
-					placeholder="What's in this file? Any context that matters."
+					placeholder="What is this link? Any context that matters."
 				/>
 				<div class="field-counter" aria-live="polite">
 					{description.length} / {MAX_DESC}
@@ -386,7 +228,6 @@
 				{/if}
 			</div>
 
-			<!-- Visibility -->
 			<div class="field">
 				<label for="media-visibility">Visibility</label>
 				<select
@@ -415,7 +256,7 @@
 					type="submit"
 					class="btn btn-primary"
 					disabled={saving}
-				>{saving ? 'Saving…' : isEdit ? 'Save changes' : 'Upload'}</button>
+				>{saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add'}</button>
 			</div>
 		</form>
 	</div>
@@ -482,7 +323,6 @@
 		gap: 1rem;
 	}
 
-	/* === Form-level error === */
 	.form-error {
 		display: flex;
 		align-items: center;
@@ -518,18 +358,6 @@
 		color: var(--color-text);
 		margin: 0;
 	}
-	.source-fieldset {
-		border: 1px solid var(--color-border-light);
-		border-radius: var(--radius-card);
-		padding: 0.85rem 1rem 1rem 1rem;
-		margin: 0;
-	}
-	.source-fieldset legend {
-		font-size: 0.85rem;
-		font-weight: 600;
-		color: var(--color-text);
-		padding: 0 0.35rem;
-	}
 	.field-hint {
 		margin: 0;
 		font-size: 0.82rem;
@@ -556,107 +384,6 @@
 		box-shadow: 0 0 0 3px rgba(217, 22, 22, 0.15);
 	}
 
-	/* === Drop zone === */
-	.dropzone {
-		position: relative;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		min-height: 130px;
-		padding: 1.25rem;
-		border: 2px dashed var(--color-border-light);
-		border-radius: var(--radius-card);
-		background: var(--color-surface);
-		cursor: pointer;
-		transition: border-color 0.15s ease, background 0.15s ease;
-	}
-	.dropzone:hover,
-	.dropzone:focus-visible {
-		border-color: var(--color-primary);
-		background: var(--color-primary-tint);
-		outline: none;
-	}
-	.dropzone.is-dragging {
-		border-color: var(--color-primary);
-		background: var(--color-primary-tint);
-	}
-	.dropzone.has-error {
-		border-color: var(--color-danger);
-	}
-	.visually-hidden {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		margin: -1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
-		border: 0;
-	}
-
-	.dropzone-prompt {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.4rem;
-		text-align: center;
-		color: var(--color-text-muted);
-	}
-	.dropzone-icon {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 36px;
-		height: 36px;
-		border-radius: 50%;
-		background: var(--color-bg-white);
-		border: 1px solid var(--color-border-light);
-		color: var(--color-primary);
-		font-weight: 700;
-		font-size: 1.1rem;
-	}
-	.dropzone-text { font-size: 0.92rem; }
-	.dropzone-text strong { color: var(--color-text); font-weight: 600; }
-	.dropzone-hint { font-size: 0.78rem; }
-
-	.dropzone-preview {
-		max-width: 100%;
-		max-height: 200px;
-		border-radius: var(--radius-card);
-		object-fit: contain;
-	}
-	.dropzone-filename {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.9rem;
-		color: var(--color-text);
-	}
-	.dropzone-fileicon {
-		font-size: 1.4rem;
-	}
-
-	.or-divider {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		margin: 0.6rem 0 0.4rem 0;
-		color: var(--color-text-muted);
-		font-size: 0.78rem;
-		text-transform: uppercase;
-		letter-spacing: 0.06rem;
-	}
-	.or-divider::before,
-	.or-divider::after {
-		content: '';
-		flex: 1 1 auto;
-		height: 1px;
-		background: var(--color-border-light);
-	}
-
-	/* === Actions === */
 	.modal-actions {
 		display: flex;
 		justify-content: flex-end;
@@ -682,7 +409,6 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.dropzone,
 		.modal,
 		.modal-overlay {
 			transition: none;

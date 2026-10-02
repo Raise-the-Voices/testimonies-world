@@ -855,14 +855,14 @@
 					<button
 						type="button"
 						class="btn btn-secondary btn-sm media-add-btn"
-						title="Add media — file or external link"
-						aria-label="Add media"
+						title="Add media link — paste a URL"
+						aria-label="Add media link"
 						onclick={openUpload}
 					>
 						<svg class="media-add-btn-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
 							<path fill="currentColor" d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z" />
 						</svg>
-						Add media
+						Add media link
 					</button>
 				{/if}
 			</div>
@@ -881,70 +881,28 @@
 				<div class="media-empty">
 					<p class="muted">
 						{isVolunteer(currentUser)
-							? 'No media attached yet. Click "+ Add media" to attach a file or link to this case.'
+							? 'No media attached yet. Click "+ Add media link" to paste a link to external evidence.'
 							: 'No media attached yet.'}
 					</p>
 				</div>
 			{:else}
 				<div class="media-list fade-in-stagger">
 					{#each mediaList as media (media.id)}
-						<div class="media-item-card">
-							<div class="media-item-thumb">
-								{#if media.media_type === 'photo' && media.file}
-									<MediaImage
-										src={media.file}
-										alt={media.description || 'Photo'}
-										description={media.description}
-										class="media-item-thumb-img"
-										loading="lazy"
-										decoding="async"
-										width="120"
-										height="120"
-									/>
-								{:else if media.media_type === 'video' && media.file}
-									<a
-										href={media.file}
-										target="_blank"
-										rel="noopener noreferrer"
-										class="media-item-tile"
-										title={media.description || 'Open video'}
-									>
-										<span class="media-item-tile-icon" aria-hidden="true">▶</span>
-										<span class="media-item-tile-label">Video</span>
-									</a>
-								{:else if media.media_type === 'document' && media.file}
-									<a
-										href={media.file}
-										target="_blank"
-										rel="noopener noreferrer"
-										class="media-item-tile"
-										title={media.description || 'Open document'}
-									>
-										<span class="media-item-tile-icon" aria-hidden="true">📄</span>
-										<span class="media-item-tile-label">Document</span>
-									</a>
-								{:else if media.media_type === 'link' && media.url}
-									<a
-										href={media.url}
-										target="_blank"
-										rel="noopener noreferrer"
-										class="media-item-tile"
-										title={media.description || media.url}
-									>
-										<span class="media-item-tile-label">{domainOf(media.url)}</span>
-										<span class="media-item-tile-icon" aria-hidden="true">↗</span>
-									</a>
-								{/if}
-							</div>
+						<div class="media-item-card media-item-card--link">
+							<a
+								href={media.url}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="media-item-tile media-item-tile--link"
+								title={media.description || media.url}
+							>
+								<span class="media-item-tile-label">{domainOf(media.url ?? '')}</span>
+								<span class="media-item-tile-icon" aria-hidden="true">↗</span>
+							</a>
 							<div class="media-item-body">
-								<div class="media-item-meta">
-									<span class="media-item-type media-type-{media.media_type}">
-										{mediaTypeLabels[media.media_type] || media.media_type}
-									</span>
-									<span class="media-item-visibility visibility-{media.visibility}">
-										{visibilityLabels[media.visibility] || media.visibility}
-									</span>
-								</div>
+								<span class="media-item-visibility visibility-{media.visibility}">
+									{visibilityLabels[media.visibility] || media.visibility}
+								</span>
 								{#if media.description}
 									<p class="media-item-description">{media.description}</p>
 								{/if}
@@ -953,7 +911,7 @@
 										<button
 											type="button"
 											class="row-action"
-											aria-label="Edit {media.description || mediaTypeLabels[media.media_type]}"
+											aria-label="Edit {media.description || media.url}"
 											title="Edit"
 											onclick={() => openEdit(media)}
 										>
@@ -962,7 +920,7 @@
 										<button
 											type="button"
 											class="row-action row-action-danger"
-											aria-label="Delete {media.description || mediaTypeLabels[media.media_type]}"
+											aria-label="Delete {media.description || media.url}"
 											title="Delete"
 											onclick={() => startDelete(media)}
 										>
@@ -1666,36 +1624,28 @@
 		gap: 1.25rem;
 		color: var(--color-text);
 	}
-	.media-item-thumb {
-		width: 120px;
-		height: 120px;
-		flex-shrink: 0;
-		display: flex;
+	.media-item-card--link {
+		/* Link-only card: tile is a horizontal pill on the row, body
+		   flexes next to it. No thumbnail wrapper needed. */
 		align-items: center;
-		justify-content: center;
-		overflow: hidden;
-		border-radius: 4px;
-		border: 1px solid var(--color-border-light);
-		background: var(--color-bg);
-	}
-	.media-item-thumb-img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
 	}
 	.media-item-tile {
-		width: 100%;
-		height: 100%;
-		display: flex;
-		flex-direction: column;
+		flex: 0 1 auto;
+		min-width: 0;
+		max-width: 18rem;
+		display: inline-flex;
+		flex-direction: row;
 		align-items: center;
-		justify-content: center;
-		gap: 0.25rem;
+		justify-content: flex-start;
+		gap: 0.4rem;
+		padding: 0.55rem 0.95rem;
 		text-decoration: none;
-		color: var(--color-text-muted);
-		font-size: 0.78rem;
+		color: var(--color-text);
+		font-size: 0.88rem;
 		font-weight: 600;
 		background: var(--color-bg);
+		border: 1px solid var(--color-border-light);
+		border-radius: 999px;
 		transition: background 0.15s ease;
 	}
 	.media-item-tile:hover {
@@ -1703,12 +1653,12 @@
 		color: var(--color-text);
 	}
 	.media-item-tile-icon {
-		font-size: 1.6rem;
+		font-size: 0.95rem;
 		line-height: 1;
+		flex-shrink: 0;
 	}
 	.media-item-tile-label {
-		max-width: 100%;
-		padding: 0 0.4rem;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -1718,23 +1668,11 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: 0.4rem;
 		line-height: 1.6;
 	}
-	.media-item-meta {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex-wrap: wrap;
-	}
-	.media-item-type {
-		font-size: 0.72rem;
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		color: var(--color-text-muted);
-	}
 	.media-item-visibility {
+		align-self: flex-start;
 		font-size: 0.68rem;
 		font-weight: 600;
 		text-transform: uppercase;
