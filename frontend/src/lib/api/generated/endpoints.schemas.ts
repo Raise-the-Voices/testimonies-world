@@ -4227,6 +4227,7 @@ ordering?: string;
 page?: number;
 person?: number;
 report?: number;
+report__isnull?: boolean;
 /**
  * A search term.
  */
