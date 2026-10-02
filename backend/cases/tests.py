@@ -2632,3 +2632,107 @@ class BackfillMediaPersonFkTests(TestCase):
         out = StringIO()
         call_command('backfill_media_person_fk', stdout=out)
         self.assertIn('nothing to do', out.getvalue())
+
+
+class MediaStandaloneFilterTests(BaseTestCase):
+    """Regression for the /persons/<id>/ "Standalone media" scope.
+
+    The global section on the case detail page shows ONLY Media rows that
+    are attached to the person but NOT to any specific report — those
+    uploaded via the page-level "Add media" button. Media attached to a
+    report is rendered inside that report's expanded card.
+
+    Backend support: MediaViewSet.filterset_fields uses the dict form so
+    `?report__isnull=true` (and `=false`) is honoured alongside the
+    existing `?report=<id>` exact filter. These tests pin that contract.
+    """
+
+    def setUp(self):
+        self.volunteer = make_user('volunt', in_group='Volunteer')
+        self.advocate = make_user('adv', in_group='Advocate')
+        self.client = APIClient()
+        self.client.force_login(self.volunteer)
+        self.person = Person.objects.create(
+            name='Subject', country='XX', created_by=self.volunteer,
+        )
+        self.report = Report.objects.create(
+            person=self.person, source_type='direct',
+            source_attribution='test', narrative='A report',
+            created_by=self.volunteer,
+        )
+        # Standalone media (person set, report NULL) — what the page-level
+        # "Add media" button produces.
+        self.standalone_public = Media.objects.create(
+            person=self.person,
+            media_type=Media.MediaType.PHOTO,
+            visibility=Media.Visibility.PUBLIC,
+            description='standalone-public',
+            uploaded_by=self.volunteer,
+        )
+        # Standalone but restricted — used to verify visibility filtering
+        # still stacks on top of the isnull filter.
+        self.standalone_restricted = Media.objects.create(
+            person=self.person,
+            media_type=Media.MediaType.DOCUMENT,
+            visibility=Media.Visibility.RESTRICTED,
+            description='standalone-restricted',
+            uploaded_by=self.volunteer,
+        )
+        # Report-attached media — what /submit produces.
+        self.attached = Media.objects.create(
+            person=self.person, report=self.report,
+            media_type=Media.MediaType.LINK,
+            visibility=Media.Visibility.PUBLIC,
+            url='https://example.org/source',
+            description='attached',
+            uploaded_by=self.volunteer,
+        )
+
+    def _ids(self, res):
+        body = res.json()
+        return [r['id'] for r in (body['results'] if 'results' in body else body)]
+
+    def test_report_isnull_true_returns_only_standalone_media(self):
+        res = self.client.get(
+            f'/api/media/?person={self.person.id}&report__isnull=true'
+        )
+        self.assertEqual(res.status_code, 200)
+        ids = self._ids(res)
+        self.assertIn(self.standalone_public.id, ids)
+        self.assertIn(self.standalone_restricted.id, ids)
+        self.assertNotIn(self.attached.id, ids)
+
+    def test_report_isnull_false_returns_only_attached_media(self):
+        res = self.client.get(
+            f'/api/media/?person={self.person.id}&report__isnull=false'
+        )
+        self.assertEqual(res.status_code, 200)
+        ids = self._ids(res)
+        self.assertIn(self.attached.id, ids)
+        self.assertNotIn(self.standalone_public.id, ids)
+        self.assertNotIn(self.standalone_restricted.id, ids)
+
+    def test_visibility_filter_still_applies_with_isnull(self):
+        # An authed non-advocate (the volunteer used in setUp) sees only
+        # public in the standalone scope — restricted standalone rows are
+        # hidden.
+        res = self.client.get(
+            f'/api/media/?person={self.person.id}'
+            f'&report__isnull=true&visibility=public'
+        )
+        self.assertEqual(res.status_code, 200)
+        ids = self._ids(res)
+        self.assertIn(self.standalone_public.id, ids)
+        self.assertNotIn(self.standalone_restricted.id, ids)
+
+    def test_anonymous_sees_only_public_standalone(self):
+        # Drop the volunteer login so the request is anonymous.
+        self.client.logout()
+        res = self.client.get(
+            f'/api/media/?person={self.person.id}&report__isnull=true'
+        )
+        self.assertEqual(res.status_code, 200)
+        ids = self._ids(res)
+        self.assertIn(self.standalone_public.id, ids)
+        self.assertNotIn(self.standalone_restricted.id, ids)
+        self.assertNotIn(self.attached.id, ids)

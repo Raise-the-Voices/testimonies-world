@@ -685,6 +685,10 @@ paths:
         name: report
         schema:
           type: integer
+      - in: query
+        name: report__isnull
+        schema:
+          type: boolean
       - name: search
         required: false
         in: query
