@@ -1224,11 +1224,13 @@
 						<input
 							id="last_known_date"
 							type="month"
+							min="1900-01"
+							max="2100-12"
 							bind:value={lastKnownDate}
 							aria-describedby="last_known_date-help"
 						/>
 						<p class="field-help" id="last_known_date-help">
-							Month and year only — the exact day is rarely known.
+							Month and year only — the exact day is rarely known. Year range covers 1900–2100 for older cases.
 						</p>
 					</div>
 
