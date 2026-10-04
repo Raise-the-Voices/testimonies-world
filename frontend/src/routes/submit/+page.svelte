@@ -1183,7 +1183,7 @@
 					<div class="field">
 						<label for="medical">Medical Status</label>
 						<select id="medical" bind:value={medicalStatus}>
-							<option value="unknown" disabled hidden>Select medical status…</option>
+							<option value="unknown">Unknown</option>
 							<option value="healthy">Healthy</option>
 							<option value="health_concerns">Health Concerns</option>
 							<option value="critical">Critical</option>
@@ -1224,11 +1224,13 @@
 						<input
 							id="last_known_date"
 							type="month"
+							min="1900-01"
+							max="2100-12"
 							bind:value={lastKnownDate}
 							aria-describedby="last_known_date-help"
 						/>
 						<p class="field-help" id="last_known_date-help">
-							Month and year only — the exact day is rarely known.
+							Month and year only — the exact day is rarely known. Year range covers 1900–2100 for older cases.
 						</p>
 					</div>
 
