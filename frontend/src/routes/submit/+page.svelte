@@ -1183,7 +1183,7 @@
 					<div class="field">
 						<label for="medical">Medical Status</label>
 						<select id="medical" bind:value={medicalStatus}>
-							<option value="unknown" disabled hidden>Select medical status…</option>
+							<option value="unknown">Unknown</option>
 							<option value="healthy">Healthy</option>
 							<option value="health_concerns">Health Concerns</option>
 							<option value="critical">Critical</option>
