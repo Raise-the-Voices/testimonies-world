@@ -2738,6 +2738,121 @@ class MediaStandaloneFilterTests(BaseTestCase):
         self.assertNotIn(self.attached.id, ids)
 
 
+class MediaPaginationTests(BaseTestCase):
+    """Pins MediaPagination — the contract the case-page media gallery
+    depends on to show every row for a person.
+
+    Before this, MediaViewSet inherited the global `PAGE_SIZE=10`, so
+    `/api/media/?person=<id>` returned 10 rows and the gallery header
+    rendered "Media (10)" no matter how many links the case had. The
+    gallery now asks for `?page_size=500` and follows `next`; these
+    tests pin both halves — that the size override is honoured, and
+    that `next` still terminates so the follow-loop cannot spin.
+    """
+
+    URL = '/api/media/'
+
+    def setUp(self):
+        self.volunteer = make_user('volunt', in_group='Volunteer')
+        self.client = APIClient()
+        self.client.force_login(self.volunteer)
+        self.person = Person.objects.create(
+            name='Gallery Subject', country='XX', created_by=self.volunteer,
+        )
+
+    def _make_media(self, n):
+        return Media.objects.bulk_create([
+            Media(
+                person=self.person,
+                media_type=Media.MediaType.LINK,
+                visibility=Media.Visibility.PUBLIC,
+                url=f'https://example.org/{i}',
+                description=f'link-{i}',
+                uploaded_by=self.volunteer,
+            )
+            for i in range(n)
+        ])
+
+    def test_default_page_size_is_50(self):
+        """A bare ?person=<id> call gets 50 rows, not the global 10."""
+        self._make_media(60)
+        body = self.client.get(self.URL, {'person': self.person.id}).json()
+        self.assertEqual(body['count'], 60)
+        self.assertEqual(len(body['results']), 50)
+        self.assertIsNotNone(body['next'])
+
+    def test_page_size_override_returns_whole_case_in_one_request(self):
+        """?page_size=500 is the size the gallery asks for — a case with
+        37 links comes back complete, next=null."""
+        self._make_media(37)
+        body = self.client.get(
+            self.URL, {'person': self.person.id, 'page_size': '500'},
+        ).json()
+        self.assertEqual(body['count'], 37)
+        self.assertEqual(len(body['results']), 37)
+        self.assertIsNone(body['next'])
+
+    def test_page_size_caps_at_500(self):
+        """?page_size=10000 is clamped to MediaPagination.max_page_size=500.
+
+        This is the server-side guard that keeps an unscoped
+        /api/media/ sweep from becoming an unbounded query.
+        """
+        self._make_media(600)
+        body = self.client.get(
+            self.URL, {'person': self.person.id, 'page_size': '10000'},
+        ).json()
+        self.assertEqual(body['count'], 600)
+        self.assertEqual(len(body['results']), 500)
+        self.assertIsNotNone(body['next'])
+
+    def test_follow_next_terminates_and_covers_every_row(self):
+        """Walk page 1 → next → ... until next is null. Every seeded row
+        appears exactly once and the walk ends.
+
+        This mirrors what the frontend mediaLoader does: request a big
+        page, keep following `next` while the server offers one.
+        """
+        self._make_media(37)
+        seen = []
+        page_no = 1
+        for _ in range(10):  # generous bound; the walk must exit early
+            body = self.client.get(
+                self.URL,
+                {'person': self.person.id, 'page_size': '10', 'page': page_no},
+            ).json()
+            seen.extend(r['id'] for r in body['results'])
+            if not body['next']:
+                break
+            page_no += 1
+        else:
+            self.fail('next-pagination walk did not terminate')
+
+        self.assertEqual(len(seen), 37)
+        self.assertEqual(len(set(seen)), 37)
+
+    def test_person_scope_excludes_other_cases_media(self):
+        """page_size must not widen the `?person=` scope — another case's
+        rows stay out even when the page is huge."""
+        other = Person.objects.create(
+            name='Other Subject', country='YY', created_by=self.volunteer,
+        )
+        self._make_media(3)
+        Media.objects.create(
+            person=other,
+            media_type=Media.MediaType.LINK,
+            visibility=Media.Visibility.PUBLIC,
+            url='https://example.org/other',
+            description='other-case',
+            uploaded_by=self.volunteer,
+        )
+        body = self.client.get(
+            self.URL, {'person': self.person.id, 'page_size': '500'},
+        ).json()
+        self.assertEqual(body['count'], 3)
+        self.assertEqual(len(body['results']), 3)
+
+
 class MediaInReportCardTests(BaseTestCase):
     """Pins the data contract the report-card renderer relies on.
 

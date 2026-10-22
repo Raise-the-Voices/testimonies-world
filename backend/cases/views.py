@@ -1079,6 +1079,29 @@ class SourceViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
+class MediaPagination(PageNumberPagination):
+    """Pagination for the per-person media gallery.
+
+    The global `PAGE_SIZE` is 10 (settings.py), which the person
+    detail page inherited: it asked for `/api/media/?person=<id>`
+    with no size hint and rendered whatever page 1 held, so a case
+    with 37 links showed "Media (10)" and the other 27 were only
+    reachable by guessing page numbers.
+
+    `page_size_query_param` lets the gallery ask for a big page in
+    one round trip; `max_page_size` stays as the server-side guard
+    so an unscoped `/api/media/` sweep can't be turned into an
+    unbounded query. Same shape and same reasoning as
+    AuditLogPagination — per-viewset override rather than raising
+    the global default, because the catalog list views are sized
+    for a fold.
+    """
+
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 500
+
+
 class MediaViewSet(viewsets.ModelViewSet):
     """Media CRUD.
 
@@ -1096,6 +1119,10 @@ class MediaViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = MediaSerializer
+    # Per-viewset pagination so the person detail gallery can ask for
+    # a page big enough to hold a whole case's media. See
+    # MediaPagination above.
+    pagination_class = MediaPagination
     # Dict form so the `report` field exposes BOTH `?report=<id>` (exact FK
     # match) AND `?report__isnull=true|false` (standalone vs report-bound
     # media). The list-form shortcut only generated exact filters, which
