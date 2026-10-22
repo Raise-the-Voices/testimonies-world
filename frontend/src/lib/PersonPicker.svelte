@@ -10,8 +10,13 @@
 
   UX contract:
     - Type to search; debounced 200ms; results fetched from
-      `GET /api/persons/?search=<q>&page_size=10`.
+      `${base}/api/persons/?search=<q>&page_size=10`.
+    - Search fires at 3 characters (`MIN_SEARCH_LENGTH`, mirroring
+      `PersonSearchFilter.MIN_LENGTH` in cases/search.py). Under that
+      the server returns nothing, so we prompt instead of showing a
+      false "No matches."
     - Up to 10 matches shown. Each row: name · country · current_status.
+      `excludeIds` hides rows (e.g. the case you're linking from).
     - Keyboard nav: ArrowDown / ArrowUp / Enter / Escape.
     - Selected value rendered as a removable badge ("Asma Khan
       · Pakistan ✕"). Click ✕ to clear.
@@ -45,6 +50,8 @@
       schema change, an export-contract bump, and a separate review.
 -->
 <script lang="ts">
+	import { base } from '$app/paths';
+
 	interface Person {
 		id: number;
 		name: string;
@@ -62,6 +69,13 @@
 		inputId?: string;
 		/** Optional cap on results. Default 10 keeps the DOM small. */
 		pageSize?: number;
+		/**
+		 * Person ids to hide from the results. Used where a person
+		 * can't be linked to themselves (the family-link form on
+		 * /persons/[id]/ hides the case you're already looking at).
+		 * Defaults to empty — every other caller sees the full list.
+		 */
+		excludeIds?: number[];
 	}
 
 	let {
@@ -71,6 +85,7 @@
 		label = 'Linked Person',
 		inputId = 'person-picker',
 		pageSize = 10,
+		excludeIds = [],
 	}: Props = $props();
 
 	// --- Local state ---
@@ -89,6 +104,9 @@
 	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 	let inFlight: AbortController | null = null;
 
+	// Mirrors `PersonSearchFilter.MIN_LENGTH` in cases/search.py.
+	const MIN_SEARCH_LENGTH = 3;
+
 	function debouncedSearch(q: string) {
 		if (debounceTimer) clearTimeout(debounceTimer);
 		debounceTimer = setTimeout(() => {
@@ -98,17 +116,27 @@
 
 	async function runSearch(q: string) {
 		const term = q.trim();
-		if (!term) {
+		// A newer keystroke always cancels the older request — including
+		// when the newer query is too short to search. Otherwise a
+		// 3-character response could land after the user deleted back to
+		// 2 and repopulate the list under a query that never ran.
+		if (inFlight) inFlight.abort();
+		// `PersonSearchFilter.MIN_LENGTH` (cases/search.py) is 3 — below
+		// that the server returns `queryset.none()`, which used to read
+		// as a bare "No matches." We say why instead.
+		if (term.length < MIN_SEARCH_LENGTH) {
 			options = [];
 			loading = false;
 			return;
 		}
-		if (inFlight) inFlight.abort();
 		const ctrl = new AbortController();
 		inFlight = ctrl;
 		loading = true;
 		try {
-			const url = `/api/persons/?search=${encodeURIComponent(term)}&page_size=${pageSize}`;
+			// `base` prefixes the path for sub-path deploys
+			// (PUBLIC_BASE_PATH=/testimonies in .env.production) —
+			// mirrors API_BASE in $lib/api.ts.
+			const url = `${base}/api/persons/?search=${encodeURIComponent(term)}&page_size=${pageSize}`;
 			const res = await fetch(url, {
 				credentials: 'include',
 				signal: ctrl.signal,
@@ -118,13 +146,15 @@
 				return;
 			}
 			const data = (await res.json()) as { results?: Array<Record<string, unknown>> };
-			options = (data.results ?? []).map((r) => ({
-				id: Number(r.id),
-				name: String(r.name ?? ''),
-				country: (r.country as string | null | undefined) ?? null,
-				current_status:
-					(r.current_status as string | null | undefined) ?? null,
-			}));
+			options = (data.results ?? [])
+				.map((r) => ({
+					id: Number(r.id),
+					name: String(r.name ?? ''),
+					country: (r.country as string | null | undefined) ?? null,
+					current_status:
+						(r.current_status as string | null | undefined) ?? null,
+				}))
+				.filter((p) => !excludeIds.includes(p.id));
 		} catch (err) {
 			// AbortError from our own cancel; silent. Anything else is
 			// network — the dropdown just stays empty.
@@ -150,7 +180,7 @@
 		if (selected && selected.id === value) return;
 		void (async () => {
 			try {
-				const res = await fetch(`/api/persons/${value}/`, {
+				const res = await fetch(`${base}/api/persons/${value}/`, {
 					credentials: 'include',
 				});
 				if (!res.ok) return;
@@ -306,8 +336,11 @@
 				{#if loading && options.length === 0}
 					<li class="loading" aria-busy="true">Loading…</li>
 				{/if}
-				{#if !loading && query.trim() !== '' && options.length === 0}
+				{#if !loading && query.trim().length >= MIN_SEARCH_LENGTH && options.length === 0}
 					<li class="empty">No matches.</li>
+				{/if}
+				{#if query.trim().length > 0 && query.trim().length < MIN_SEARCH_LENGTH}
+					<li class="empty">Keep typing — {MIN_SEARCH_LENGTH}+ characters.</li>
 				{/if}
 				{#each options as opt, i (opt.id)}
 					<li

@@ -6,7 +6,6 @@
 	import {
 		getPerson,
 		getMedia,
-		getPersons,
 		getRelationships,
 		createRelationship,
 		updateRelationship,
@@ -23,14 +22,21 @@
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
 	import MediaUploadModal from '$lib/MediaUploadModal.svelte';
 	import MediaImage from '$lib/MediaImage.svelte';
+	import PersonPicker from '$lib/PersonPicker.svelte';
 	import Icon from '$lib/Icon.svelte';
 	import RelatedCases from '$lib/RelatedCases.svelte';
 	import { formatMonthYear } from '$lib/dateFormat';
 	import { sanitizeText } from '$lib/sanitize';
-	import type { FamilyRelationshipRow, Media, Person, Report } from '$lib/types';
+	import type { FamilyRelationshipRow, Media, Paginated, Person, Report } from '$lib/types';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	// Page size the media gallery asks the API for per request. Not a
+	// display cap — mediaLoader keeps following `next` past it. Mirrors
+	// `MediaPagination.max_page_size` in cases/views.py so we don't ask
+	// for a page the server silently trims.
+	const MEDIA_PAGE_SIZE = 500;
 
 	// SSR-hydrated auth (see +layout.svelte for the full rationale).
 	let currentUser = $derived(data.user ?? $user);
@@ -59,15 +65,13 @@
 
 	/* Family relationships state — full CRUD via /api/relationships/.
 	   We store the *full row* (not the flattened display shape) so we
-	   have the `id` for edit/delete. `relationshipPickerList` is the
-	   one-shot fetch used by the create/edit picker; we exclude the
-	   current person on the client (the picker doesn't include them). */
+	   have the `id` for edit/delete. The "other person" is chosen with
+	   PersonPicker (typeahead over /api/persons/?search=) rather than a
+	   pre-loaded <select>: the catalog is large and the old dropdown
+	   could only offer the first page of it. */
 	let relationships = $state<FamilyRelationshipRow[]>([]);
 	let loadingRelationships = $state(true);
 	let relationshipError = $state('');
-	let relationshipPickerList = $state<Array<{ id: number; name: string; country: string }>>([]);
-	let pickerLoaded = $state(false);
-	let pickerError = $state('');
 
 	// Create/edit form state.
 	let relationshipFormOpen = $state(false);
@@ -220,15 +224,45 @@
 		// Visibility filtering still applies server-side via
 		// MediaViewSet.get_queryset (cases/views.py) — anon viewers see
 		// public-only, advocates see sensitive.
-		const res = await getMedia(
-			{ person: String(personId) },
+		//
+		// `page_size` is the size we ASK for, not a display cap: the loop
+		// below keeps following DRF's `next` until the server stops
+		// offering one, so the section shows every row no matter how many
+		// a case has. MediaPagination.max_page_size (500) bounds a single
+		// request — an unscoped /api/media/ sweep stays guarded.
+		const first = await getMedia(
+			{ person: String(personId), page_size: String(MEDIA_PAGE_SIZE) },
 			{ signal },
 		);
-		const list: Media[] = Array.isArray(res) ? res : res.results ?? [];
+		const rows: Media[] = Array.isArray(first) ? [...first] : [...(first.results ?? [])];
+		// Follow `next` by page number rather than by the absolute URL DRF
+		// hands back, so every call goes through the same api.ts client
+		// (base path, credentials, error shape) as the rest of the page.
+		let cursor: string | null = Array.isArray(first) ? null : first.next;
+		let pageNo = 1;
+		while (cursor) {
+			const next: Paginated<Media> | Media[] = await getMedia(
+				{
+					person: String(personId),
+					page_size: String(MEDIA_PAGE_SIZE),
+					page: String(pageNo + 1),
+				},
+				{ signal },
+			);
+			// Unpaginated response — no more pages to follow.
+			if (Array.isArray(next)) break;
+			const batch = next.results ?? [];
+			// Defensive: an empty page with a `next` link would spin the
+			// loop. Nothing to append, so stop.
+			if (batch.length === 0) break;
+			rows.push(...batch);
+			pageNo += 1;
+			cursor = next.next;
+		}
 		// Newest first. `created_at` is optional in the Media type, so coerce
 		// undefined to 0 (treat missing as oldest) rather than letting
 		// `new Date(undefined)` throw.
-		return list.sort((a, b) => {
+		return rows.sort((a, b) => {
 			const at = a.created_at ? new Date(a.created_at).getTime() : 0;
 			const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
 			return bt - at;
@@ -347,39 +381,6 @@
 			mediaList = [];
 		} finally {
 			loadingMedia = false;
-		}
-	}
-
-	// Picker: single-shot fetch of all published persons. Used by the
-	// create/edit form so the user can pick the *other* side of the
-	// relationship. Fails gracefully — if the fetch errors, the form
-	// still opens with an empty picker and a visible error.
-	async function loadPicker() {
-		if (pickerLoaded) return;
-		pickerError = '';
-		try {
-			const data = await getPersons({
-				is_published: 'true',
-				page_size: '1000',
-			});
-			const list = Array.isArray(data) ? data : data.results ?? [];
-			relationshipPickerList = list.map((p) => ({
-				id: p.id,
-				name: p.name,
-				country: p.country,
-			}));
-			pickerLoaded = true;
-		} catch (e: unknown) {
-			// D.5 — surface the failure to the user instead of
-			// silently presenting an empty dropdown. The user
-			// would otherwise see 'no results' and assume the
-			// platform has no other people to relate this one
-			// to — a confusing dead-end.
-			relationshipPickerList = [];
-			pickerError =
-				e instanceof Error
-					? e.message
-					: "Couldn't load the people list — try again.";
 		}
 	}
 
@@ -538,7 +539,6 @@
 	function startRelCreate() {
 		resetRelForm();
 		relationshipFormOpen = true;
-		void loadPicker();
 	}
 
 	function startRelEdit(rel: FamilyRelationshipRow) {
@@ -550,7 +550,6 @@
 		relationshipFormError = '';
 		relationshipSaving = false;
 		relationshipFormOpen = true;
-		void loadPicker();
 	}
 
 	function cancelRelForm() {
@@ -1319,33 +1318,16 @@
 				{/if}
 			</p>
 			{#if !editingRel}
-				<label class="form-field" for="rel-other">
-					<span class="form-label">Person</span>
-					{#if pickerError}
-						<p class="picker-error" role="status">
-							{pickerError}
-							<button
-								type="button"
-								class="picker-retry"
-								onclick={() => { pickerLoaded = false; loadPicker(); }}
-							>Reload</button>
-						</p>
-					{:else}
-						<select
-							id="rel-other"
-							class="form-select"
-							bind:value={relationshipFormOtherId}
-							disabled={relationshipSaving}
-						>
-							<option value="" disabled>Pick a person…</option>
-							{#each relationshipPickerList as p (p.id)}
-								{#if p.id !== person.id}
-									<option value={p.id}>{p.name} — {p.country}</option>
-								{/if}
-							{/each}
-						</select>
-					{/if}
-				</label>
+				<div class="form-field">
+					<PersonPicker
+						value={relationshipFormOtherId === '' ? null : relationshipFormOtherId}
+						onChange={(id) => { relationshipFormOtherId = id ?? ''; }}
+						disabled={relationshipSaving}
+						label="Person"
+						inputId="rel-other"
+						excludeIds={person ? [person.id] : []}
+					/>
+				</div>
 			{/if}
 			<label class="form-field" for="rel-type">
 				<span class="form-label">Relationship</span>
@@ -2248,35 +2230,6 @@
 		border: 1px solid #feb2b2;
 		border-radius: var(--radius-card);
 		font-size: 0.88rem;
-	}
-	/* D.5 — picker-error is an inline note (not a banner) that
-	   replaces the person <select> in the relationship modal
-	   when the picker list couldn't be loaded. */
-	.picker-error {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem 0.6rem;
-		flex-wrap: wrap;
-		padding: 0.6rem 0.85rem;
-		background: #fffaf0;
-		color: #5a3b00;
-		border: 1px solid #fbd38d;
-		border-radius: var(--radius-control);
-		font-size: 0.88rem;
-		margin: 0.25rem 0 0 0;
-	}
-	.picker-retry {
-		font-size: 0.82rem;
-		font-weight: 500;
-		padding: 0.25rem 0.6rem;
-		border-radius: var(--radius-control);
-		border: 1px solid currentColor;
-		background: transparent;
-		color: inherit;
-		cursor: pointer;
-	}
-	.picker-retry:hover {
-		background: rgba(0, 0, 0, 0.06);
 	}
 	.form-error-icon {
 		display: inline-flex;
