@@ -27,10 +27,16 @@
 	import RelatedCases from '$lib/RelatedCases.svelte';
 	import { formatMonthYear } from '$lib/dateFormat';
 	import { sanitizeText } from '$lib/sanitize';
-	import type { FamilyRelationshipRow, Media, Person, Report } from '$lib/types';
+	import type { FamilyRelationshipRow, Media, Paginated, Person, Report } from '$lib/types';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	// Page size the media gallery asks the API for per request. Not a
+	// display cap — mediaLoader keeps following `next` past it. Mirrors
+	// `MediaPagination.max_page_size` in cases/views.py so we don't ask
+	// for a page the server silently trims.
+	const MEDIA_PAGE_SIZE = 500;
 
 	// SSR-hydrated auth (see +layout.svelte for the full rationale).
 	let currentUser = $derived(data.user ?? $user);
@@ -220,15 +226,45 @@
 		// Visibility filtering still applies server-side via
 		// MediaViewSet.get_queryset (cases/views.py) — anon viewers see
 		// public-only, advocates see sensitive.
-		const res = await getMedia(
-			{ person: String(personId) },
+		//
+		// `page_size` is the size we ASK for, not a display cap: the loop
+		// below keeps following DRF's `next` until the server stops
+		// offering one, so the section shows every row no matter how many
+		// a case has. MediaPagination.max_page_size (500) bounds a single
+		// request — an unscoped /api/media/ sweep stays guarded.
+		const first = await getMedia(
+			{ person: String(personId), page_size: String(MEDIA_PAGE_SIZE) },
 			{ signal },
 		);
-		const list: Media[] = Array.isArray(res) ? res : res.results ?? [];
+		const rows: Media[] = Array.isArray(first) ? [...first] : [...(first.results ?? [])];
+		// Follow `next` by page number rather than by the absolute URL DRF
+		// hands back, so every call goes through the same api.ts client
+		// (base path, credentials, error shape) as the rest of the page.
+		let cursor: string | null = Array.isArray(first) ? null : first.next;
+		let pageNo = 1;
+		while (cursor) {
+			const next: Paginated<Media> | Media[] = await getMedia(
+				{
+					person: String(personId),
+					page_size: String(MEDIA_PAGE_SIZE),
+					page: String(pageNo + 1),
+				},
+				{ signal },
+			);
+			// Unpaginated response — no more pages to follow.
+			if (Array.isArray(next)) break;
+			const batch = next.results ?? [];
+			// Defensive: an empty page with a `next` link would spin the
+			// loop. Nothing to append, so stop.
+			if (batch.length === 0) break;
+			rows.push(...batch);
+			pageNo += 1;
+			cursor = next.next;
+		}
 		// Newest first. `created_at` is optional in the Media type, so coerce
 		// undefined to 0 (treat missing as oldest) rather than letting
 		// `new Date(undefined)` throw.
-		return list.sort((a, b) => {
+		return rows.sort((a, b) => {
 			const at = a.created_at ? new Date(a.created_at).getTime() : 0;
 			const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
 			return bt - at;
