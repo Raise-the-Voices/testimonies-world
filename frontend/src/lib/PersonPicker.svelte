@@ -62,6 +62,13 @@
 		inputId?: string;
 		/** Optional cap on results. Default 10 keeps the DOM small. */
 		pageSize?: number;
+		/**
+		 * Person ids to hide from the results. Used where a person
+		 * can't be linked to themselves (the family-link form on
+		 * /persons/[id]/ hides the case you're already looking at).
+		 * Defaults to empty — every other caller sees the full list.
+		 */
+		excludeIds?: number[];
 	}
 
 	let {
@@ -71,6 +78,7 @@
 		label = 'Linked Person',
 		inputId = 'person-picker',
 		pageSize = 10,
+		excludeIds = [],
 	}: Props = $props();
 
 	// --- Local state ---
@@ -118,13 +126,15 @@
 				return;
 			}
 			const data = (await res.json()) as { results?: Array<Record<string, unknown>> };
-			options = (data.results ?? []).map((r) => ({
-				id: Number(r.id),
-				name: String(r.name ?? ''),
-				country: (r.country as string | null | undefined) ?? null,
-				current_status:
-					(r.current_status as string | null | undefined) ?? null,
-			}));
+			options = (data.results ?? [])
+				.map((r) => ({
+					id: Number(r.id),
+					name: String(r.name ?? ''),
+					country: (r.country as string | null | undefined) ?? null,
+					current_status:
+						(r.current_status as string | null | undefined) ?? null,
+				}))
+				.filter((p) => !excludeIds.includes(p.id));
 		} catch (err) {
 			// AbortError from our own cancel; silent. Anything else is
 			// network — the dropdown just stays empty.
