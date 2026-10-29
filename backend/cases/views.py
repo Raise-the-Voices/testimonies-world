@@ -596,8 +596,24 @@ class PersonViewSet(viewsets.ModelViewSet):
         # to published persons because they describe the *public*
         # catalog, a different concept from the operator's "total".
         qs = Person.objects.all()
+        # `count` answers "how many cases were entered", optionally for one
+        # country (?country=, case-insensitive) and since a date
+        # (?created_since=YYYY-MM-DD). A number only, no case data, so it is
+        # safe for anonymous callers such as a funder's progress tracker.
+        counted = qs
+        country = request.query_params.get('country')
+        if country:
+            counted = counted.filter(country__iexact=country.strip())
+        since = request.query_params.get('created_since')
+        if since:
+            from django.utils.dateparse import parse_date
+            since_date = parse_date(since)
+            if since_date is None:
+                return Response({'created_since': 'Use YYYY-MM-DD.'}, status=400)
+            counted = counted.filter(created_at__date__gte=since_date)
         return Response({
             'total': qs.count(),
+            'count': counted.count(),
             'by_status': dict(
                 qs.values_list('current_status').annotate(c=Count('id')).values_list('current_status', 'c')
             ),

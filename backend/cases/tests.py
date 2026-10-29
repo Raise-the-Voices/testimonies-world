@@ -3074,3 +3074,34 @@ class MediaSubmitFlowApiTests(BaseTestCase):
             m['id'] for m in detail.json()['reports'][0]['media_files']
         ]
         self.assertIn(created['id'], media_ids)
+
+
+class StatisticsCountTests(BaseTestCase):
+    """``/api/persons/statistics/`` ``count``: cases entered, optionally for one
+    country and since a date. A number only, open to anonymous callers."""
+
+    def setUp(self):
+        from datetime import datetime, timezone as dt_tz
+        self.client = APIClient()
+        old = Person.objects.create(name='Old', country='Pakistan', is_published=True)
+        Person.objects.filter(pk=old.pk).update(
+            created_at=datetime(2026, 7, 1, tzinfo=dt_tz.utc))
+        Person.objects.create(name='New', country='Pakistan', is_published=True)
+        Person.objects.create(name='Draft', country='PAKISTAN', is_published=False)
+        Person.objects.create(name='Elsewhere', country='Syria', is_published=True)
+
+    def test_count_without_filters_is_every_case(self):
+        res = self.client.get('/api/persons/statistics/')
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.json()['count'], 4)
+
+    def test_count_by_country_and_since(self):
+        res = self.client.get(
+            '/api/persons/statistics/?country=pakistan&created_since=2026-08-01')
+        self.assertEqual(res.status_code, 200, res.content)
+        # Unpublished cases count too; only the number is returned.
+        self.assertEqual(res.json()['count'], 2)
+
+    def test_bad_date_is_refused(self):
+        res = self.client.get('/api/persons/statistics/?created_since=August')
+        self.assertEqual(res.status_code, 400)
