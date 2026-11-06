@@ -6272,6 +6272,10 @@ components:
             type: object
             additionalProperties: {}
           readOnly: true
+        father_name:
+          type: string
+          nullable: true
+          readOnly: true
         profile_image_url:
           type: string
           format: uri
@@ -6560,6 +6564,7 @@ components:
       - created_by
       - days_since_last_report
       - family
+      - father_name
       - id
       - media_files
       - name

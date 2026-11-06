@@ -2228,6 +2228,8 @@ export interface PersonDetail {
   readonly days_since_last_report: number;
   readonly family: readonly PersonDetailFamilyItem[];
   /** @nullable */
+  readonly father_name: string | null;
+  /** @nullable */
   readonly profile_image_url: string | null;
   readonly status_history: readonly PersonDetailStatusHistoryItem[];
   /** @maxLength 255 */
