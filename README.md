@@ -1,666 +1,605 @@
-# Testimonies.world
+<div align="center">
+  <img src="docs/assets/banner.png" alt="Testimonies.world" width="820">
+</div>
 
-> **Person-centered casework platform for people facing oppression** —
-> enforced disappearances, arbitrary detention, restricted rights,
-> statelessness, and more. Modeled after [shahit.biz][shahit], expanded
-> globally. Operated by [Raise the Voices][rtv].
+<div align="center">
 
-[shahit]: https://shahit.biz/
-[rtv]: https://raisethevoices.org/
+**[Live app](https://cases.raisethevoices.org/testimonies/)** · **[API schema](https://cases.raisethevoices.org/testimonies/api/schema/)** · **[Source](https://github.com/Raise-the-Voices/testimonies-world)** · **[Raise the Voices](https://raisethevoices.org/)**
 
-Testimonies.world documents individual cases of oppression and links them to
-the advocacy actions taken on each person's behalf — so that no case is
-forgotten, and a partial or uncertain report today can grow into a complete
-record tomorrow.
+[![CI](https://img.shields.io/github/actions/workflow/status/Raise-the-Voices/testimonies-world/ci.yml?branch=main&label=CI&color=25646a)](https://github.com/Raise-the-Voices/testimonies-world/actions/workflows/ci.yml)
+[![Django](https://img.shields.io/badge/Django-6.0-25646a?style=flat-square)](backend/requirements.txt)
+[![SvelteKit](https://img.shields.io/badge/SvelteKit-2.50-25646a?style=flat-square)](frontend/package.json)
+[![Python](https://img.shields.io/badge/Python-3.12-25646a?style=flat-square)](backend/requirements.txt)
+[![DRF](https://img.shields.io/badge/DRF-3.15-25646a?style=flat-square)](backend/requirements.txt)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-25646a?style=flat-square)](backend/testimonies/settings.py)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-25646a?style=flat-square)](frontend/package.json)
+[![OpenAPI](https://img.shields.io/badge/OpenAPI-42_paths-25646a?style=flat-square)](openapi.yml)
 
----
+</div>
 
-## Contents
+<div align="center" style="background-color:#f4f7f6;border:1px solid #e2e8f0;padding:12px">
 
-1. [Live demo](#live-demo)
-2. [Stack at a glance](#stack-at-a-glance)
-3. [Quick start](#quick-start)
-4. [Repository layout](#repository-layout)
-5. [Data model](#data-model)
-6. [REST API surface](#rest-api-surface)
-7. [Frontend routes](#frontend-routes)
-8. [Roles & permissions](#roles--permissions)
-9. [Privacy model](#privacy-model)
-10. [Email & notifications](#email--notifications)
-11. [Design system](#design-system)
-12. [Development workflow](#development-workflow)
-13. [Deployment](#deployment)
-14. [Containerized deploy (Docker)](#containerized-deploy-docker)
-15. [Repository conventions](#repository-conventions)
-16. [Further reading](#further-reading)
-17. [Contributing](#contributing)
+**218 cases recorded** &nbsp;·&nbsp; **208 published** &nbsp;·&nbsp; **25 countries** &nbsp;·&nbsp; **80 disappeared** &nbsp;·&nbsp; **14 detained** &nbsp;·&nbsp; **25 published testimonials**
+
+</div>
 
 ---
 
-## Live demo
+<h2 style="color:#25646a">What this is</h2>
 
-| Surface | URL |
-|---|---|
-| Public app | https://demos.linkedtrust.us/testimonies/ |
-| Django admin | https://demos.linkedtrust.us/testimonies/admin/ |
-| API root | https://demos.linkedtrust.us/testimonies/api/ |
-| Production (live) | https://cases.raisethevoices.org |
+A record of one person's case, and the advocacy that followed it.
 
-Demo admin credentials: see the operator onboarding doc (1Password / sealed gist). Do not commit credentials to this repo.
+Cases of enforced disappearance, arbitrary detention, restricted rights and
+statelessness are usually scattered: a news clipping, a court filing, a
+family member's account, a lawyer's file. They get separated, and they get
+forgotten. Testimonies.world keeps them attached to a single **Person** record
+so the file grows over time instead of dissolving.
 
----
+A case can be opened with three lines: a name, a country, a status. Everything
+else can arrive later, as a dated **Report** attached to the same person, with
+its own source and its own verification level. Nothing has to be complete on
+day one.
 
-## Stack at a glance
+The platform is operated by [Raise the Voices](https://raisethevoices.org/),
+modeled on [shahit.biz](https://shahit.biz/), and built for human-rights
+volunteers and caseworkers who are doing this alongside their day jobs.
 
-| Layer | Tech | Notes |
-|---|---|---|
-| Frontend | **SvelteKit 2** + Svelte 5 (`adapter-node`) | TypeScript, Vite 7, design tokens in `app.css` |
-| Backend | **Django 6.0** + **DRF 3.15** + **django-filter** + **django-allauth** | gunicorn in prod |
-| Database | **PostgreSQL** (`testimonies_world`) | remote at `10.0.0.100:5432`, shared with other VM tenants |
-| Auth | django-allauth (Google OAuth in production) | role info surfaced via `/api/session/` |
-| Static assets | whiteNoise (Django) + nginx (frontend) | built `frontend/build/client/_app/` served at the doc root |
-| CI / CD | GitHub Actions → `scripts/deploy.sh` | single-host prod |
+<h2 style="color:#25646a">Who it is for</h2>
 
-Dev port map:
+<table>
+  <thead>
+    <tr>
+      <th style="background-color:#25646a;color:#fafafa;text-align:left">Role</th>
+      <th style="background-color:#25646a;color:#fafafa;text-align:left">What they can do</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td><b>Public</b></td><td>Read published cases, public reports, published testimonials</td></tr>
+    <tr><td><b>Volunteer</b></td><td>Open cases, add reports, attach media, draft testimonials</td></tr>
+    <tr><td><b>Advocate</b></td><td>Casework records, contacts, restricted media, review and publish</td></tr>
+    <tr><td><b>Admin</b></td><td>Sensitive media, audit logs, users, workflow configuration</td></tr>
+  </tbody>
+</table>
 
-| Service | Port |
-|---|---|
-| Django dev server | `8040` |
-| SvelteKit dev server | `3040` (proxies `/api` → `:8040` via Vite) |
-| SvelteKit prod server | `3000` (behind nginx) |
-| Postgres | `5432` on VM `100` (remote) |
+Roles are Django groups (`Volunteer`, `Advocate`) plus `is_staff` for admin.
+They are enforced in three places that must agree: Django views, DRF
+permission classes, and the frontend nav. The backend is the authority: the
+UI hides what the API would refuse anyway.
 
----
+<h2 style="color:#25646a">How a case moves</h2>
 
-## Quick start
+1. **Open the case.** A volunteer records the person: name, country, status,
+   rough location. A precise location, medical notes and reporter identity
+   are stored but never leave the server for anyone without the role.
+2. **Attach reports.** Each report is one dated update with a narrative and
+   a source type (`firsthand`, `secondhand`, `news`, `document`). A case
+   accumulates one, then five, then forty.
+3. **Work the case.** Casework records track what was actually done (a legal
+   filing, a letter, media engagement, an investigation) and notify
+   advocates when something changes.
+4. **Publish a testimonial.** When a family wants the story told publicly, an
+   advocate publishes it with the source identity encrypted and the location
+   coarsened to whatever the family consented to.
 
-### Run it locally
+<h2 style="color:#25646a">The screens</h2>
+
+<p align="center"><b style="color:#25646a">Landing</b>: platform totals, and the four ways to contribute</p>
+<p align="center"><img src="docs/assets/landing.png" alt="Landing page, platform totals and how to help" width="830"></p>
+
+<p align="center"><b style="color:#25646a">Cases</b>: the searchable catalog of published cases</p>
+<p align="center"><img src="docs/assets/cases.png" alt="Case catalog with search, status, country and activity filters" width="1000"></p>
+
+<p align="center"><b style="color:#25646a">Case detail</b>: one person: summary, dated reports, media, and the record's own metadata</p>
+<p align="center"><img src="docs/assets/case-detail.png" alt="Case detail page" width="1000"></p>
+
+<p align="center"><b style="color:#25646a">Statistics</b>: cases broken down by category and by medical condition</p>
+<p align="center"><img src="docs/assets/statistics.png" alt="Statistics by category and by medical status" width="1000"></p>
+
+<p align="center"><b style="color:#25646a">Testimonials</b>: the published archive</p>
+<p align="center"><img src="docs/assets/testimonials.png" alt="Testimonials list" width="1000"></p>
+
+<p align="center"><b style="color:#25646a">Published testimonial</b>: the public artifact, with the privacy rules stated on the page itself</p>
+<p align="center"><img src="docs/assets/testimonial-detail.png" alt="Published testimonial page" width="900"></p>
+
+Every image above is a real screenshot of the running app. Regenerate them
+with:
 
 ```bash
-# Backend (Django on :8040)
-cd backend
-source .venv/bin/activate           # or backend/.venv/bin/python ...
-python manage.py migrate
-python manage.py runserver 127.0.0.1:8040
-
-# Frontend (SvelteKit on :3040) — in a second shell
 cd frontend
-npm install                          # first time / after package.json changes
+npm run dev -- --host 127.0.0.1 --port 3040   # dev server
+node scripts/capture-readme-screenshots.mjs    # → docs/assets/*.png
+node scripts/capture-readme-banner.mjs         # → docs/assets/banner.png
+```
+
+<h2 style="color:#25646a">What stays private</h2>
+
+<div style="background-color:#f4f7f6;border-left:4px solid #25646a;padding:12px 16px">
+
+**Field level**: `medical_notes` and `precise_location` (person);
+`reporter_name`, `reporter_contact` and `precise_location` (report). Stripped
+from the response entirely when the requester lacks the role.
+
+**Internal**: `risk_level`, `risk_concerns`, `internal_notes`. Advocate and
+staff only, because risk metadata can expose a source to retaliation.
+
+**Media**: three tiers. `public` is anyone. `restricted` needs a session.
+`sensitive` needs Advocate or staff, and the file is served through Django
+behind an auth check, never off disk at a guessable URL. Public media is the
+only tree nginx serves directly.
+
+**Testimonials**: `source` and `precise_location` are Fernet-encrypted in the
+database. They are read through separate endpoints
+(`/api/testimonials/{id}/source/`, `/api/testimonials/{id}/precise_location/`)
+that are not part of the public serializer, so the URL is the security
+boundary, and every read writes an audit row.
+
+**Audit**: every create, update, view, download and delete on a sensitive
+record writes an `AuditLog` row with user, target, action and IP address.
+
+</div>
+
+<h2 style="color:#25646a">Run it locally</h2>
+
+Two processes: Django on `:8040`, SvelteKit on `:3040`.
+
+```bash
+# Backend
+cd backend
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+cp .env.example .env      # then fill in PG_* and SECRET_KEY
+.venv/bin/python manage.py migrate
+.venv/bin/python manage.py runserver 127.0.0.1:8040
+
+# Frontend (second shell)
+cd frontend
+npm install
 PUBLIC_BASE_PATH=/testimonies npm run dev -- --host 0.0.0.0 --port 3040
 ```
 
-The Vite dev server proxies `/api` → `http://localhost:8040/api`, so the
-backend must be running first. For a different backend, set
-`VITE_API_URL` in `frontend/.env` before `npm run dev`.
+The Vite dev server proxies `/testimonies/api/*` to the backend, so the
+backend has to be up first. `VITE_API_PROXY_TARGET` points the proxy somewhere
+else. It defaults to the live backend, which is the normal day-to-day setup.
 
-### Run both via systemd (on the demo VM)
+On a VM with systemd:
 
 ```bash
 sudo systemctl start rtv-cases-backend rtv-cases-frontend
 sudo journalctl -u rtv-cases-backend -f
 ```
 
-### First-time setup checklist
-
-- [ ] `backend/.venv/` created and `pip install -r backend/requirements.txt`
-- [ ] `backend/.env` populated from a teammate (DB creds, secret key, OAuth creds)
-- [ ] `npm install` in `frontend/`
-- [ ] Postgres reachable at `10.0.0.100:5432`, DB `testimonies_world` exists
-
----
-
-## Repository layout
+<h2 style="color:#25646a">Repository layout</h2>
 
 ```
 testimonies-world/
-├── backend/                          Django project
-│   ├── manage.py
-│   ├── requirements.txt              asgiref, Django 6.0, allauth, DRF,
-│   │                                 cors-headers, filter, pillow,
-│   │                                 psycopg2-binary, python-decouple,
-│   │                                 sqlparse, whitenoise
-│   ├── .env                          Environment config (not in git)
-│   ├── .venv/                        Python virtualenv (not in git)
-│   │
-│   ├── testimonies/                  Project package
-│   │   ├── settings.py               Django settings + DRF + allauth wiring
-│   │   ├── urls.py                   /api/* router + /api/session/ + /admin + /accounts
-│   │   ├── asgi.py / wsgi.py
-│   │
-│   ├── cases/                        Person, Report, Media, CaseCategory,
-│   │                                 FamilyRelationship, AuditLog
-│   ├── casework/                     CaseworkRecord
-│   ├── contacts/                     Contact (always-private)
-│   └── sensitive_media/              Sensitive uploads (PRIVATE tier; not gitignored)
-│
-├── frontend/                         SvelteKit project
-│   ├── src/
-│   │   ├── routes/                   Pages (file-based routing — see below)
-│   │   ├── lib/                      Components, stores, API client
-│   │   ├── app.css                   Design system tokens (single source of truth)
-│   │   ├── app.d.ts
-│   │   └── hooks.server.ts
-│   ├── static/                       Static assets
-│   ├── svelte.config.js              adapter-node config
-│   ├── vite.config.ts                dev proxy → :8040
-│   ├── tsconfig.json
-│   └── package.json
-│
-├── scripts/
-│   └── deploy.sh                     Production deploy (tag + autostash + rsync +
-│                                     systemctl restart + nginx reload + smoke test)
-│
-├── .github/
-│   └── workflows/
-│       └── deploy.yml                CI: triggers deploy on push to main
-│
-├── CLAUDE.md                         Project facts for Claude Code (project overlay)
-├── SYSTEM_RULES.md                   Engineer-role protocol (workflow + safety)
-└── README.md                         ← You are here
+├── backend/
+│   ├── cases/               Person, Report, Media, Source, CaseEvent,
+│   │                        CaseUpdate, FamilyRelationship, AuditLog,
+│   │                        CaseCategory, Testimonial, TestimonialTag
+│   │   └── testimonials/    Encryption, permissions, export contract, workflow
+│   ├── casework/            CaseworkRecord, Notification, UserPreference
+│   ├── contacts/            Contact, always private
+│   └── testimonies/         Settings, URLs, WSGI/ASGI, healthz
+├── frontend/
+│   ├── src/routes/          Pages (file-based routing)
+│   ├── src/lib/             Components, stores, API client
+│   ├── src/app.css          Design tokens, single source of truth
+│   └── scripts/             OpenAPI codegen, README capture scripts
+├── scripts/                 deploy.sh, backup_db.sh, nginx, systemd, docker
+├── docs/assets/             README screenshots and banner
+├── .github/workflows/       ci.yml, audit.yml, deploy.yml
+├── openapi.yml              Generated from drf-spectacular, checked in
+├── CLAUDE.md                Project facts for Claude Code
+└── SYSTEM_RULES.md          Working agreement: diffs, branches, deploys
 ```
 
----
+<h2 style="color:#25646a">Contributing</h2>
 
-## Data model
+Read [`CLAUDE.md`](CLAUDE.md) and [`SYSTEM_RULES.md`](SYSTEM_RULES.md) first.
+They are the project's working agreement and they are short.
 
-The central entity is **`Person`**. Everything else hangs off a person
-(or, for `Media` / `Report`, off a person or another report).
-
-### `Person`
-
-| Group | Fields |
-|---|---|
-| Identity | `name`, `legal_name`, `aliases`, `country`, `ethnicity`, `gender`, `date_of_birth` |
-| Status | `current_status` ∈ {`detained`, `disappeared`, `restricted_movement`, `released`, `deceased`, `unknown`, `stateless`, `rights_restricted`} |
-| Medical | `medical_status` ∈ {`unknown`, `healthy`, `health_concerns`, `critical`, `deceased`}; `medical_notes` (PRIVATE) |
-| Location | `rough_location` (public), `precise_location` (PRIVATE), `last_known_date` |
-| Narrative | `summary_narrative`, `profile_image` |
-| Source | `authoritative_source`, `authoritative_url` (for cases imported from external databases) |
-| Classification | `categories` (M2M `CaseCategory`), `quality_tier` ∈ {1, 2, 3}, `is_published` |
-| Meta | `created_by`, `created_at`, `updated_at` |
-
-### `Report` — chronological updates on a Person
-
-| Group | Fields |
-|---|---|
-| Source | `source_type` ∈ {`firsthand`, `secondhand`, `news`, `document`}; `source_attribution` (public), `reporter_name` + `reporter_contact` (PRIVATE) |
-| Dates | `date_start`, `date_end` (range or single date) |
-| Location | `rough_location` (public), `precise_location` (PRIVATE) |
-| Content | `narrative` (required), `suspected_reason`, `official_reason` |
-| Visibility | `is_private` (hides entire report from unauthenticated users) |
-
-### `Media` — attached to a Person or a Report
-
-| Group | Fields |
-|---|---|
-| Source | `file` (upload) **or** `url` (external link); `media_type` ∈ {`photo`, `document`, `video`, `link`} |
-| Access | `visibility` ∈ {`public`, `restricted`, `sensitive`} |
-| Meta | `description` (≤500 chars), `uploaded_by`, `created_at` |
-
-### Adjacent models
-
-- **`CaseCategory`** — taxonomy many-to-many with `Person`
-- **`FamilyRelationship`** — links two `Person` records (`parent`, `child`, `sibling`, `spouse`, `other`)
-- **`CaseworkRecord`** — advocacy actions on a person (letters, campaigns, legal filings)
-- **`Contact`** — people involved in cases; always private
-- **`AuditLog`** — every access/edit of sensitive data is recorded (`viewed` / `downloaded` / `edited` / `deleted`)
+- Work on a branch (`feat/`, `fix/`, `docs/`, `chore/`), never on `main`.
+- Conventional commits, one logical change per commit.
+- A PR to `main` needs green CI. Branch protection requires four checks:
+  `backend`, `backend-pg`, `frontend-tests` and `frontend`.
+- Run `npm run check` and `npm run test` before pushing; run the Django suite
+  if you touched the backend.
+- No credentials in the repo, in a diff, or in chat.
 
 ---
 
-## REST API surface
+<h2 style="color:#25646a">Technical reference</h2>
 
-All endpoints are registered via DRF's `DefaultRouter` in `backend/testimonies/urls.py`.
+Everything below is for people working on the code. The sections collapse.
 
-| Method | Endpoint | Purpose |
+<details>
+<summary><b>Stack and versions</b></summary>
+
+| Layer | Version | Notes |
 |---|---|---|
-| `GET` | `/api/persons/` | List persons (filterable: `country`, `status`, `category`, `quality`, `gender`, `is_published`, `name__icontains`) |
-| `GET` | `/api/persons/{id}/` | Person detail (read serializer uses `PersonDetailSerializer`) |
-| `POST` / `PATCH` / `DELETE` | `/api/persons/{id}/` | Write (auth required) — `PersonWriteSerializer` |
-| `GET` | `/api/persons/watchdog/` | Cases needing attention (stale + active) |
-| `GET` | `/api/persons/statistics/` | Aggregate counts (used by home page + `/statistics`) |
-| `GET` | `/api/persons/countries/` | Distinct countries with counts |
-| `GET` / `POST` | `/api/reports/`, `/api/reports/{id}/` | Report CRUD |
-| `GET` / `POST` | `/api/media/`, `/api/media/{id}/` | Media CRUD (visibility enforced server-side) |
-| `GET` | `/api/categories/` | Read-only category list |
-| `GET` / `POST` | `/api/relationships/`, `/api/relationships/{id}/` | Family relationships |
-| `GET` / `POST` | `/api/casework/`, `/api/casework/{id}/` | Casework records |
-| `GET` / `POST` | `/api/contacts/`, `/api/contacts/{id}/` | Contacts (always private) |
-| `GET` | `/api/session/` | Current user info (groups, `is_staff`, email) — drives nav |
-| — | `/admin/` | Django admin |
-| — | `/accounts/` | django-allauth (Google OAuth + social account mgmt) |
+| Python | 3.12.3 | Virtualenv at `backend/.venv` |
+| Django | 6.0 | `testimonies.settings`, fail-closed `SECRET_KEY` / `ALLOWED_HOSTS` |
+| DRF | 3.15.2 | `SessionAuthentication`, `IsAuthenticatedOrReadOnly` default |
+| django-filter | 25.1 | `DjangoFilterBackend` + `SearchFilter` + `OrderingFilter` |
+| django-allauth | 0.63.2 | Google OAuth in production |
+| drf-spectacular | 0.28.0 | Generates `openapi.yml`; Swagger/Redoc are dev-only |
+| cryptography | 50.0.1 | Fernet for testimonial source + precise location |
+| gunicorn | 23.0.0 | 2 workers, journald via `StandardOutput=journal` |
+| SvelteKit | 2.50.2 | `adapter-node` 5.5.4 |
+| Svelte | 5.57.1 | Runes |
+| Vite | 7.3.1 | Dev proxy `/testimonies/api` → backend |
+| TypeScript | 5.9.3 | `strict` |
+| Vitest | 5.0.0 | 116 unit tests across 7 files |
+| Playwright | 1.63.0 | 30 E2E specs across 4 files |
+| orval | 7.21.0 | OpenAPI → TypeScript client + Zod schemas |
+| PostgreSQL | 16 | `testimonies_world` on the shared VM, `10.0.0.100:5432` |
 
-**Country normalization** — the country dropdown collapses
-`'Pakistan'` / `'PAKISTAN'` / `'pakistan'` to one canonical label, with
-allowlisted multi-word / abbreviation forms (`USA`, `UAE`, `UK`, `DRC`,
-`DPRK`, `South Korea`). Implemented in `cases.views._normalize_country`.
+Ports: Django `8040`, SvelteKit dev `3040`, SvelteKit prod `3000`, Postgres
+`5432` (remote), Redis `6379`.
 
-**Filtering** uses `django-filter`; the same `PersonFilter` powers the
-`/persons` page facets and the API.
+</details>
 
----
+<details>
+<summary><b>Data model</b></summary>
 
-## Frontend routes
+`Person` is the centre. Everything else hangs off a person, or off a report.
 
-| Path | Page | Notes |
-|---|---|---|
-| `/` | Landing | Stats counters, intro, "Browse Cases" / "View Statistics" |
-| `/persons` | Case list | Search, facets (country/status/category/quality), pagination |
-| `/persons/[id]` | Case details | Unified design system: Reports accordion, Summary, Media, Sidebar metadata |
-| `/persons/[id]/edit` | Edit person | Auth required (volunteer+) |
-| `/persons/[id]/report` | Add report | Auth required (volunteer+) |
-| `/submit` | Submit a case | Auth required (volunteer+) |
-| `/statistics` | Aggregate statistics | Charts + breakdown by status / country |
-| `/watchdog` | Watchdog | Cases needing attention (calls `/api/persons/watchdog/`) |
-| `/casework` | Casework list | Auth required (advocate+) |
-| `/casework/new` | New casework record | Auth required (advocate+) |
-| `/contacts` | Contacts | Auth required (advocate+) |
+**`Person`** (56 fields): identity (`name`, `legal_name`, `aliases`,
+`country`, `ethnicity`, `gender`, `date_of_birth`), status (`current_status`,
+`current_status_date`, `current_status_source`, `current_status_verification`),
+medical (`medical_status`, `medical_notes`), location (`rough_location`,
+`precise_location`, `district`, `province`, `last_known_date`), narrative
+(`summary_narrative`, `public_summary`), classification (`categories`,
+`quality_tier`, `is_published`), publication consent
+(`public_identity_level`, `public_location_level`, `photograph_public`,
+`consent_public_publication`), verification (`verification_level`,
+`public_verification_level`), provenance (`authoritative_source`,
+`authoritative_url`, `case_received_date`, `case_received_by`,
+`case_source_types`, `duplicate_check`, `duplicate_of`), citation
+(`public_reference`, a human-readable reference such as `ED-2026-0042`,
+unique, blank until the case has one), and audit (`created_by`, `created_at`,
+`updated_at`, `case_id`).
 
-The landing and Case Details are the most-trafficked surfaces; both have
-been unified into a single design system — see below.
+`current_status`: `detained`, `disappeared`, `restricted_movement`, `released`,
+`deceased`, `unknown`, `stateless`, `rights_restricted`,
+`ongoing_enforced_disappearance`, `found_alive`.
 
----
+`medical_status`: `unknown`, `healthy`, `health_concerns`, `critical`,
+`deceased`.
 
-## Roles & permissions
+`quality_tier`: `1` strong evidence, `2` average, `3` weak.
 
-Four tiers, in increasing privilege:
+**`Report`** (79 fields): the chronological update. `person`, `source_type`,
+`source_attribution`, `reporter_name`, `reporter_contact`, `date_start`,
+`date_end`, `rough_location`, `precise_location`, `narrative`,
+`suspected_reason`, `official_reason`, `is_private`, plus the case-file
+sections: incident, detention, primary/additional sources and consistency,
+legal (FIR, court case, commission complaint), official response, the
+abduction block (`date_of_abduction`, `time_of_abduction`,
+`place_of_abduction`, `abductors`), verification ladder, risk assessment, and
+the 14-field QC checklist.
 
-| Role | Capabilities |
+`source_type`: `firsthand`, `secondhand`, `news`, `document`.
+
+**`Media`**: `person` or `report`, `file` or `url`, `media_type`
+(`photo`, `document`, `video`, `link`), `visibility` (`public`, `restricted`,
+`sensitive`), `description`, `evidence_kind`, `evidence_status`,
+`evidence_reference_number`.
+
+**`Source`**: a source attached to a report: `source_type`,
+`source_attribution`, `date_start`, `narrative`, `is_private`.
+
+**`Testimonial`** (39 fields): `title`, `slug`, `language`, `country`,
+`region`, `incident_date`, `incident_types`, `summary`, `narrative`,
+`outcome`, `source_visibility`, `source_encrypted`, `public_source_label`,
+`location_visibility`, `precise_location_encrypted`,
+`public_location_display`, `family_protected`, `contact_protected`, `status`,
+`verification_level`, `tags`, `schema_version`, plus the workflow stamps.
+
+**Also**: `CaseCategory` (taxonomy, M2M), `FamilyRelationship` (typed link
+between two people), `CaseEvent` (timeline), `CaseUpdate` (new information
+and status change), `AuditLog` (`user`, `action`, `target_type`,
+`target_id`, `details`, `ip_address`, `timestamp`), `CaseworkRecord`
+(`persons` M2M, `action_type`, `description`, `date`, `performed_by`,
+`status`, `next_steps`, `notes`), `Notification`, `UserPreference`,
+`Contact` (always private), `PreApprovedEmail`, `TestimonialTag`.
+
+</details>
+
+<details>
+<summary><b>API surface</b></summary>
+
+42 paths, generated by drf-spectacular into [`openapi.yml`](openapi.yml) and
+regenerated into a typed client with `npm run gen:api`.
+
+| Resource | Endpoints |
 |---|---|
-| **Public** | Browse published persons + public reports + public media |
-| **Volunteer** | All of Public + enter/edit reports, upload media |
-| **Advocate** | All of Volunteer + casework records + contacts + restricted media |
-| **Admin** | All of Advocate + sensitive media + audit logs + user mgmt |
+| Persons | `GET/POST /api/persons/`, `GET/PUT/PATCH/DELETE /api/persons/{id}/`, `GET /api/persons/statistics/`, `/countries/`, `/watchdog/`, `/{id}/related/` |
+| Reports | `GET/POST /api/reports/`, `GET/PUT/PATCH/DELETE /api/reports/{id}/`, `PUT/PATCH /api/reports/{id}/internal/` |
+| Media | `GET/POST /api/media/`, `GET/PUT/PATCH/DELETE /api/media/{id}/` |
+| Sources | `GET/POST /api/sources/`, `GET/PUT/PATCH/DELETE /api/sources/{id}/` |
+| Categories | `GET /api/categories/`, `/{id}/` |
+| Relationships | `GET/POST /api/relationships/`, `/{id}/` |
+| Casework | `GET/POST /api/casework/`, `/{id}/` |
+| Notifications | `GET /api/notifications/`, `/{id}/`, `/{id}/read/`, `/read-all/`, `/unread-count/` |
+| Preferences | `GET/POST /api/preferences/`, `/{id}/` |
+| Contacts | `GET/POST /api/contacts/`, `/{id}/` |
+| Audit logs | `GET /api/audit-logs/`, `/{id}/` (staff only) |
+| Dashboard | `GET /api/dashboard/` (role-scoped aggregator) |
+| Testimonials | `GET/POST /api/testimonials/`, `/{id}/`, `/{id}/submit/`, `/{id}/approve/`, `/{id}/reject/`, `/{id}/archive/`, `/{id}/source/`, `/{id}/precise_location/` |
+| Testimonial tags | `GET/POST /api/testimonial-tags/`, `/{id}/` |
+| Session | `GET /api/session/` returns groups, `is_staff`, email |
+| Schema | `GET /api/schema/`, `/schema/swagger-ui/`, `/schema/redoc/` |
+| Other | `GET /api/healthz/`, `/api/debug/recent-persons/` (staff), `/accounts/` (allauth), `/admin/` |
 
-Role enforcement lives in three layers:
+Auth is Django session cookie (`sessionid`). Pagination is
+`PageNumberPagination` with `PAGE_SIZE = 10`; list endpoints accept
+`page_size`. Rate limits are applied to reads and authenticated writes.
 
-1. **Django** — `is_authenticated` / `is_staff` / `is_superuser` checks in views.
-2. **DRF** — `permission_classes` per viewset; private fields are stripped at the serializer level when the requester lacks the right group.
-3. **Frontend** — nav items are gated by `isVolunteer()` / `isAdvocate()` from `$lib/session.ts`; the `/api/session/` response carries the user's groups.
+</details>
 
-Authentication in production uses **Google OAuth** via `django-allauth`.
+<details>
+<summary><b>Privacy model</b></summary>
 
----
+Three layers, enforced at every level.
 
-## Privacy model
+**Field level**: `PRIVATE_PERSON_FIELDS = ['medical_notes',
+'precise_location']` and `PRIVATE_REPORT_FIELDS = ['reporter_name',
+'reporter_contact', 'precise_location']` are removed from the response
+entirely when the requester lacks the role. `INTERNAL_REPORT_FIELDS =
+['risk_level', 'risk_concerns', 'risk_concerns_other', 'internal_notes']` are
+Advocate and staff only. Volunteers handle cases but should not see metadata
+that could expose a source to retaliation.
 
-Three concentric layers of protection — implemented at every level of the stack:
+**Record level**: `Report.is_private` hides the whole report;
+`Person.is_published` hides the whole person from public listings;
+`Source.is_private` hides one source.
 
-### 1. Field-level (`PRIVATE` comment on Django model fields)
+**Media tier**: `public` / `restricted` / `sensitive`. Three separate trees on
+disk (`backend/public_media/`, `backend/media/`, `backend/sensitive_media/`)
+routed by `MediaStorageRouter`, so a file cannot leak through a misconfigured
+alias. Only the public tree is served by nginx directly; everything else goes
+through `MediaDownloadView`, which checks the visibility tier and writes an
+audit row on sensitive downloads.
 
-A field marked `# PRIVATE` is **omitted from the API response entirely** when
-the requester lacks permission. Examples:
+**Testimonial encryption**: `source` and `precise_location` are Fernet
+(AES-128-CBC + HMAC) at the field level. The key lives in
+`settings.TESTIMONIALS_FERNET_KEY`; there is no development fallback, so a
+missing key raises `ImproperlyConfigured` at first use regardless of `DEBUG`.
 
-- `Person.precise_location`
-- `Person.medical_notes`
-- `Report.reporter_name`, `Report.reporter_contact`
-- `Report.precise_location`
-- `Contact.*` (all fields)
+**Error handling**: 404 and 500 return a stable JSON envelope with no path,
+query string or traceback. The real traceback goes to journald and Sentry.
+Every response carries a `request_id` an operator can grep by.
 
-### 2. Record-level (`is_private`, `is_published`)
+</details>
 
-- `Report.is_private` — entire report is hidden from public listings.
-- `Person.is_published` — entire person record is hidden from public listings.
+<details>
+<summary><b>Frontend routes</b></summary>
 
-### 3. Media tier (`Media.visibility`)
-
-| Visibility | Who can access |
-|---|---|
-| `public` | Anyone |
-| `restricted` | Authenticated users (volunteer+) |
-| `sensitive` | Advocates + admins only |
-
-Sensitive files are **always served through Django** (they're never exposed
-at a direct URL); they live under `backend/sensitive_media/` (separate from
-the public `backend/media/` directory) and require an authenticated advocate
-or admin to retrieve.
-
-Every access to sensitive data should be recorded in `AuditLog`
-(`viewed` / `downloaded` / `edited` / `deleted`) with `user`, `target_type`,
-`target_id`, and `ip_address`.
-
----
-
-## Email & notifications
-
-Casework actions (create, update, "marked done", "seen by") generate
-both a Django in-app notification row and (by default) an email to
-eligible advocates + staff, with a per-record 24h anti-spam rule
-described inline in [`backend/casework/notifications.py`](backend/casework/notifications.py).
-The dispatch is wrapped in `transaction.on_commit` and pushed onto a
-daemon thread so the HTTP request never blocks on the SMTP handshake.
-
-### Provider: Migadu
-
-Production routes email through **Migadu**, an external transactional
-mailer chosen over a self-hosted Postfix to avoid deliverability /
-spam-classification risk on our IP range. See `backend/.env.example` for
-the canonical env var template.
-
-| Setting | Default | Purpose |
+| Path | Page | Access |
 |---|---|---|
-| `EMAIL_BACKEND` | `django.core.mail.backends.console.EmailBackend` | Dev prints emails to stdout. Set to `django.core.mail.backends.smtp.EmailBackend` in prod. |
-| `EMAIL_HOST` | `''` | `smtp.migadu.com` in prod |
-| `EMAIL_PORT` | `587` | `465` recommended for Migadu (implicit SSL) |
-| `EMAIL_USE_TLS` | `True` | STARTTLS — pick *one* of `EMAIL_USE_TLS` / `EMAIL_USE_SSL` |
-| `EMAIL_USE_SSL` | `False` | Implicit TLS (port 465) |
-| `EMAIL_HOST_USER` | `''` | Full mailbox email address (e.g. `noreply@<migadu-domain>`) |
-| `EMAIL_HOST_PASSWORD` | `''` | Mailbox password — never commit |
-| `EMAIL_TIMEOUT` | `15` | Seconds; defensive cap on SMTP handshakes |
-| `DEFAULT_FROM_EMAIL` | `Testimonies.world <noreply@linkedtrust.us>` | The from-address must live on the same domain as the Migadu mailbox or recipients see "Sent on behalf of" and it looks phishy. |
-| `SITE_URL` | `https://demos.linkedtrust.us/testimonies` | Used for in-email links to records |
+| `/` | Landing: platform totals, how to help | Public |
+| `/persons` | Case catalog: search, filters, cards or list | Public |
+| `/persons/[id]` | Case detail: summary, reports, media, metadata | Public |
+| `/persons/[id]/edit` | Edit a case | Volunteer |
+| `/persons/[id]/report` | Add a report to a case | Volunteer |
+| `/submit` | Submit a case | Volunteer |
+| `/reports` | Reports list | Volunteer |
+| `/testimonials` | Published testimonials | Public |
+| `/testimonials/[id]` | Testimonial detail | Public |
+| `/testimonials/new` | Compose a testimonial | Volunteer |
+| `/testimonials/[id]/edit` | Edit a testimonial | Author / Advocate |
+| `/statistics` | Aggregate statistics and charts | Public |
+| `/watchdog` | Cases needing attention: stale, no recent report | Public |
+| `/dashboard` | Operator dashboard | Volunteer |
+| `/dashboard/audit-logs` | Sensitive-data access log | Staff |
+| `/notifications` | In-app notifications | Authenticated |
+| `/casework`, `/casework/new` | Advocacy records | Advocate |
+| `/contacts`, `/contacts/new` | Contacts | Advocate |
+| `/settings` | User preferences | Authenticated |
 
-### Migrating the from-address
+Data loading is universal (`+page.ts`), so pages render populated HTML on the
+first request. Skeleton loaders match the final layout; no bare "Loading…".
 
-If the production mailbox is set up on a different domain than
-`linkedtrust.us`, both `EMAIL_HOST_USER` and `DEFAULT_FROM_EMAIL` must
-be updated together — keep them in lock-step or recipients will see a
-mismatched "on behalf of" stamp that looks like a phishing attempt.
+</details>
 
-### Testing locally
+<details>
+<summary><b>Design system</b></summary>
 
-In dev, `EMAIL_BACKEND` defaults to the console backend — no setup
-needed. Trigger a casework create/update as an advocate and watch stdout
-for a `Subject:` line. The Django test runner overrides
-`EMAIL_BACKEND` to `locmem`, so unit tests can assert on
-`mail.outbox` (see `casework/tests.py`).
-
-### Required DNS for prod
-
-When the Migadu mailbox domain goes live, the ops team needs to publish
-SPF + DKIM + DMARC records (Migadu provides them in the admin panel).
-Without these, major receivers (Gmail, Outlook, etc.) will silently
-deliver the notification to spam.
-
----
-
-## Design system
-
-The Case Details page (the most-trafficked surface) and the landing page
-share a single, unified design system. The single source of truth is
-**[`frontend/src/app.css`](frontend/src/app.css)**, which defines:
+[`frontend/src/app.css`](frontend/src/app.css) is the single source of truth.
+No hardcoded colours anywhere else.
 
 | Token | Value | Used by |
 |---|---|---|
 | `--color-primary` | `#25646a` | Buttons, headings, stat numbers |
-| `--color-primary-light` | `#477c81` | Hover state on primary surfaces |
+| `--color-primary-light` | `#477c81` | Hover on primary surfaces |
 | `--color-bg` | `#f4f7f6` | Page background |
-| `--color-bg-white` | `#fff` | Card surfaces |
+| `--color-surface` | `#f8fafb` | Catalog surfaces |
+| `--color-bg-white` | `#fff` | Cards |
 | `--color-text` | `#1a1a1a` | Body copy |
 | `--color-text-muted` | `#666` | Secondary copy, labels |
 | `--color-border-light` | `#e2e8f0` | Card borders |
-| `--radius-card` | `8px` | All cards |
-| `--shadow-card` | `0 1px 2px rgba(0,0,0,.04), 0 1px 3px rgba(0,0,0,.06)` | Default elevation |
-| `--shadow-card-hover` | `0 4px 12px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.04)` | Hover elevation |
-| `--transition-card` | `0.2s ease` | All card transitions |
-| `--card-padding` | `1.25rem 1.5rem` | Standard card padding |
+| `--color-success` / `--color-danger` | `#2f855a` / `#d91616` | Status |
+| `--radius-card` / `--radius-card-lg` / `--radius-input` | `8px` / `16px` / `10px` | Corners |
+| `--shadow-card` | `0 1px 2px rgba(0,0,0,.04), 0 1px 3px rgba(0,0,0,.06)` | Elevation |
+| `--transition-card` | `0.2s ease` | Card transitions |
 
-**Animations** — `@keyframes fadeSlideUp` (and `fadeSlideUpSmall`) are reused
-by the Summary, Media, Reports accordion, Sidebar, and now the landing page
-cards, with staggered delays on repeated-item lists (`fade-in-stagger`).
-All animations honor `prefers-reduced-motion: reduce`.
+Type is PT Sans, bundled via `@fontsource/pt-sans`, so there is no external font request.
+Entrance animations (`fadeSlideUp`, `fadeSlideUpSmall`, `fade-in-stagger`) all
+honour `prefers-reduced-motion: reduce`.
 
-The full per-component polish history + verification checklists live in
-[`frontend/README.md`](frontend/README.md).
+</details>
 
----
+<details>
+<summary><b>Notifications and email</b></summary>
 
-## Development workflow
+Casework actions (create, update, done, seen by) create a Django
+`Notification` row and, by default, an email to eligible advocates and staff.
+A per-record 24-hour anti-spam rule lives in
+[`backend/casework/notifications.py`](backend/casework/notifications.py).
+Dispatch is wrapped in `transaction.on_commit` and pushed onto a daemon thread
+so the request never blocks on SMTP.
 
-### Branch & commit conventions
+Production mail goes through **Migadu** rather than a self-hosted Postfix.
+Deliverability on our IP range is the risk that matters, not effort. In
+development `EMAIL_BACKEND` is the console backend, so emails print to stdout.
+The Django test runner overrides it to `locmem`, so tests assert on
+`mail.outbox`.
 
-- **Feature branches** — never work on `main` directly. Branch names:
-  `feat/<feature>`, `fix/<issue>`, `chore/<task>`, `docs/<doc>`.
-- **Conventional commits** — `feat:`, `fix:`, `docs:`, `refactor:`,
-  `chore:`, optionally scoped: `feat(persons): …`.
-- **PRs are required** for merge into `main`. Delete the branch after
-  merge (this repo convention keeps the branch list short).
-- **Build before pushing** to avoid CI failures.
+`DEFAULT_FROM_EMAIL` must sit on the same domain as the Migadu mailbox, or
+recipients see an "on behalf of" stamp that looks like phishing. SPF, DKIM and
+DMARC records have to be published before the mailbox goes live or major
+receivers silently file notifications as spam.
 
-### Command cheat sheet
+</details>
+
+<details>
+<summary><b>Development workflow</b></summary>
 
 ```bash
 # Frontend
-cd frontend
-npm install                # first time / after package.json changes
-npm run dev                # vite dev — defaults to :5173 unless --port given
+npm install
 npm run dev -- --host 0.0.0.0 --port 3040
-PUBLIC_BASE_PATH=/testimonies npm run dev -- --host 0.0.0.0 --port 3040
-npm run check              # type-check (svelte-check)
-npm run test               # vitest unit tests
-npm run build              # production build → ./build/
-npm run preview            # preview the production build locally
+npm run check          # svelte-check
+npm run test           # vitest
+npm run build          # production build
+npm run gen:api        # regenerate the OpenAPI client
+npm run gen:api:check  # fail if the committed client drifted
 
 # Backend
-cd backend
-source .venv/bin/activate
-python manage.py runserver 127.0.0.1:8040
-python manage.py makemigrations
-python manage.py migrate
-python manage.py test
-python manage.py createsuperuser
+.venv/bin/python manage.py makemigrations
+.venv/bin/python manage.py migrate
+.venv/bin/python manage.py test
+.venv/bin/python manage.py createsuperuser
 ```
 
-### Pre-deploy checklist (SvelteKit)
+`npm run gen:api:check` is the drift gate: it regenerates the client from the
+live schema and fails if `frontend/src/lib/api/generated/` or `openapi.yml`
+changed. CI runs it.
 
-Per `SYSTEM_RULES.md` §3, every production build **must**:
+Gotchas worth knowing before you touch a deploy:
 
-1. Use `PUBLIC_BASE_PATH=""` and
-   `ORIGIN=https://cases.raisethevoices.org` (or the live equivalent) so
-   path-drifting doesn't 404 assets.
-2. Sync built assets to the nginx doc root:
-   `rsync build/client/_app/ /var/www/cases/_app/`.
-3. **Restart the Node server process.** It caches HTML in memory and
-   will keep serving stale asset hashes otherwise. The deploy script
-   (`scripts/deploy.sh`) does this defensively, with a `nohup` fallback
-   if systemd fails.
+- `PUBLIC_BASE_PATH` is set at **both** build time and runtime. The build-time
+  value is baked into asset URLs; the runtime value is SvelteKit's URL
+  rewrite. Change one without the other and you get 404s on assets.
+- The Node server caches rendered HTML in memory. Restart it after a build
+  (`sudo systemctl restart rtv-cases-frontend`) or it keeps serving the old
+  asset hashes.
+- `adapter-node` 5.5.x needs a symlink workaround for its server-asset layout;
+  `scripts/deploy.sh` and the Docker frontend image both apply it.
 
-### Common gotchas
+</details>
 
-- **Stale asset 404s after deploy** — the Node server is still caching
-  the previous build. Restart it (`sudo systemctl restart
-  rtv-cases-frontend`).
-- **Path-drifted assets in subpath deploys** — `PUBLIC_BASE_PATH` was
-  non-empty during build. Rebuild with `PUBLIC_BASE_PATH=""` for the
-  root domain, or with `/testimonies` for the demo subpath.
-- **`PUBLIC_BASE_PATH` is set at *both* build time and runtime.** The
-  build-time value is embedded in the bundle (asset URLs); the
-  systemd unit's `Environment=PUBLIC_BASE_PATH=...` sets the runtime
-  value (SvelteKit's request URL rewrite). Changing the env var
-  without rebuilding causes asset 404s because the bundle still
-  references the old prefix. Rebuild AND restart the Node service
-  to change it.
-- **Empty DB on first run** — `python manage.py migrate` against the
-  remote PG; the `getStatistics()` call on the landing page handles an
-  empty DB by returning `{ total: 0 }` and the stats bar is suppressed.
+<details>
+<summary><b>Deployment</b></summary>
 
----
+Single host, systemd + nginx. TLS is terminated by Caddy on the Proxmox host;
+this VM's nginx is plain HTTP only and hardcodes
+`proxy_set_header X-Forwarded-Proto https;` in every proxy block. Using
+`$scheme` there causes redirect loops.
 
-## Deployment
+`scripts/deploy.sh` does the whole thing: tag the commit for rollback,
+autostash local-only files, `git fetch` + `reset --hard origin/main`,
+`pip install -r requirements.txt`, `migrate`, `collectstatic`,
+`npm ci --omit=dev && npm run build`, apply the symlink workaround, `rsync`
+the build to `/var/www/cases/`, restart `rtv-cases-backend` and
+`rtv-cases-frontend`, `nginx -t && nginx -s reload`, then smoke-test: fetch
+the homepage, pull the entry-script hash out of the rendered HTML, and confirm
+that exact asset returns 200 alongside the API. Ten retries, three seconds
+apart.
 
-Single-host production deployment, orchestrated by `scripts/deploy.sh`:
+CI (`.github/workflows/deploy.yml`) triggers on push to `main` and after CI
+completes on `main`; both paths re-verify that CI was green.
 
-1. Tag the current commit for rollback.
-2. Autostash local-only files (`.env`, `settings.py`).
-3. `git fetch + reset --hard origin/main` (handles force-push cleanly).
-4. `pip install -r requirements.txt`, `python manage.py migrate`,
-   `collectstatic`.
-5. `npm ci --omit=dev && npm run build` for the frontend.
-6. Symlink workaround for `@sveltejs/adapter-node 5.5.x` server-asset layout.
-7. `rsync build/client/` to `/var/www/cases/`.
-8. `systemctl restart rtv-cases-backend rtv-cases-frontend` with
-   `reset-failed` + nohup fallback.
-9. `nginx -t && nginx -s reload`.
-10. **Smoke test**: fetch the homepage, extract the entry-script asset
-    hash from the rendered HTML, confirm that exact asset returns 200
-    AND the API returns 200. Retries up to 10× with 3 s backoff.
-
-CI (`.github/workflows/deploy.yml`) triggers this on push to `main`.
-
-### Logs
-
-All app logs are routed to journald. The systemd unit files set
-`StandardOutput=journal` / `StandardError=journal` explicitly so the
-gunicorn `--access-logfile -` / `--error-logfile -` flags (and the
-Node server's stdout) end up in journal rather than a file that
-fills `/var/log`.
-
-Triage:
+Logs are in journald:
 
 ```bash
-sudo journalctl -u rtv-cases-backend -f               # follow backend
-sudo journalctl -u rtv-cases-frontend -f              # follow frontend
-sudo journalctl -u rtv-cases-backend --since "1 hour ago"
-sudo journalctl -u rtv-cases-backend -n 200 --no-pager
+sudo journalctl -u rtv-cases-backend -f
+sudo journalctl -u rtv-cases-frontend -n 200 --no-pager
 ```
 
-The backend unit is capped at 10 restarts in any 5-minute window
-(`StartLimitIntervalSec=300` + `StartLimitBurst=10`) — if you see a
-`Start request repeated too quickly` in the journal, the service is
-crash-looping and needs manual intervention, not another restart.
+The backend unit is capped at 10 restarts in 5 minutes. `Start request
+repeated too quickly` means it is crash-looping and needs a human, not another
+restart.
 
----
+**Backups**: `rtv-cases-db-backup.timer` runs `pg_dump` daily at 03:00 UTC
+(`Persistent=true` catches up after downtime). RPO 24h, RTO ~30 minutes,
+30-day retention in `/var/backups/rtv-cases/db-*.sql.zst`. Every dump is
+checked with `pg_restore -l` so silent corruption does not pass the size
+check. `journalctl -u rtv-cases-db-backup.service --since='-7 days'` shows the
+log.
 
-## Containerized deploy (Docker)
+</details>
 
-A parallel, containerized build ships alongside the native
-systemd + nginx deploy. **The live production deploy is unchanged**
-— the containerized path is for fresh VMs, a future cutover, or
-local dev parity. `docker compose` orchestrates five services
-(`db`, `redis`, `backend`, `frontend`, `nginx`) with three profiles
-so the operator picks the right DB source at `up` time:
+<details>
+<summary><b>Containerized deploy (Docker)</b></summary>
 
-| Profile       | DB source                       | When to use                          |
-|---------------|----------------------------------|--------------------------------------|
-| `dev`         | in-compose postgres + sqlite override (`USE_SQLITE=1`) | Local work on a dev machine |
-| `prod-pg`     | in-compose postgres              | Fresh VM with no external PG          |
-| `prod-remote` | external PG at `PG_HOST=10.0.0.100` (compose-managed redis only) | Same topology as the live prod (VM-managed PG, containerized app + redis) |
+A parallel container path ships alongside the native one. The live deploy is
+unchanged. This is for fresh VMs, a future cutover, or local parity.
 
-### Bring up the dev profile
-
-```bash
-# One-time: copy + edit env
-cp .env.example .env
-$EDITOR .env  # fill in PG_PASSWORD (or leave blank + USE_SQLITE=1)
-
-# Build + run
-docker compose --profile dev up -d --build
-
-# Wait for healthy (db + redis + backend + frontend + nginx)
-docker compose ps
-
-# Smoke test
-curl -fsS http://localhost/healthz         # → {"ok":true,...}
-curl -fsS http://localhost/api/session/      # → {"authenticated":false}
-```
-
-### Bring up the prod-remote profile (mirrors current production)
+`docker compose` runs five services (`db`, `redis`, `backend`, `frontend`,
+`nginx`) under three profiles: `dev` (in-compose Postgres or SQLite),
+`prod-pg` (in-compose Postgres), `prod-remote` (external Postgres at
+`PG_HOST=10.0.0.100`, same topology as production).
 
 ```bash
-# .env already populated with the production VM's PG creds
+cp .env.example .env && $EDITOR .env
 docker compose --profile prod-remote up -d --build
-# No `db` service — backend connects to PG_HOST=10.0.0.100
+docker compose ps
+curl -fsS http://localhost/healthz
 ```
 
-### Image architecture
+The backend image logs JSON to stdout (12-factor). Sentry is wired but inert
+unless `SENTRY_DSN` is set, with `send_default_pii=False`: the platform
+holds sensitive human-rights data, so PII is opt-in per project policy.
 
-| Image                     | Base                            | Notes |
-|---------------------------|---------------------------------|-------|
-| `backend`                 | `python:3.12-slim-bookworm` (multi-stage) | venv at `/app/.venv`, gunicorn via `gunicorn.conf.py` |
-| `frontend`                | `node:22-alpine` (multi-stage)   | `npm run build` then `node build/index.js`; preserves the adapter-node 5.5.x symlink trick from `deploy.sh:115-117` |
-| `nginx`                   | `nginx:1.27-alpine`             | mounted config; routes mirror `scripts/nginx/rtv-cases` |
-| `db` (dev / prod-pg only) | `postgres:16-alpine`            | healthcheck via `pg_isready` |
-| `redis`                   | `redis:7-alpine`                | healthcheck via `redis-cli ping` |
+</details>
 
-### Healthcheck
+<details>
+<summary><b>Tests</b></summary>
 
-The backend image exposes `GET /healthz` (a 25-line view in
-`backend/testimonies/healthz.py`) that pings the DB and cache. The
-Docker `HEALTHCHECK` directive curls it every 30s; `docker compose ps`
-shows the result. `docker/nginx.conf` proxies `/healthz` only from
-the internal upstream — not exposed publicly.
+| Suite | Count | Command |
+|---|---|---|
+| Backend (Django) | 272 test methods | `cd backend && .venv/bin/python manage.py test` |
+| Frontend (Vitest) | 116 across 7 files | `cd frontend && npm run test` |
+| E2E (Playwright) | 30 across 4 specs | `cd frontend && npx playwright test` |
 
-### Logging + Sentry
+The backend count is `def test_` methods across `backend/cases/tests.py`,
+`test_adapters.py`, `tests_security.py`, `tests_perf.py`,
+`cases/testimonials/tests.py`, `casework/tests.py` and `contacts/tests.py`.
+The frontend and E2E counts are what the runners report.
 
-The backend image logs JSON to stdout/stderr (12-factor) — capture
-with `docker compose logs -f backend` or any log scraper. Sentry is
-wired but inactive unless `SENTRY_DSN` is set; PII is opt-in
-(`send_default_pii=False`) per the project's data policy on a
-sensitive human-rights PII surface.
+`tests_security.py` covers the privacy guarantees: that private fields are
+absent from responses, that media tiers hold, that a volunteer cannot reach
+an advocate-only endpoint, and that every sensitive access writes an audit
+row.
 
-### Files added by this build
+</details>
 
-| File | Purpose |
+<details>
+<summary><b>Further reading</b></summary>
+
+| Document | What it holds |
 |---|---|
-| `docker-compose.yml`                | Multi-service orchestration with three profiles |
-| `docker/nginx.conf`                 | Reverse proxy + static serving (mirrors `scripts/nginx/rtv-cases`) |
-| `.env.example`                      | Single source of truth for container env (secrets gitignored) |
-| `.dockerignore`                     | Excludes `.venv`, `node_modules`, secrets, host-only scripts |
-| `backend/Dockerfile`                | Multi-stage Python build |
-| `backend/.dockerignore`             | Backend-context excludes |
-| `backend/gunicorn.conf.py`          | Env-driven workers / threads / timeout / keepalive / max-requests |
-| `scripts/docker/entrypoint-backend.sh` | Waits for PG + Redis, runs migrations + collectstatic, execs gunicorn |
-| `scripts/docker/entrypoint-frontend.sh` | Applies the symlink trick, validates env, execs node |
-| `scripts/docker/wait-for-it.sh`     | Bash-builtin TCP probe with timeout |
-| `docker-compose.override.yml.example` | Local-dev override template (gitignored copy is per-developer) |
+| [`CLAUDE.md`](CLAUDE.md) | Project facts: stack, commands, data model, permissions, privacy |
+| [`SYSTEM_RULES.md`](SYSTEM_RULES.md) | Working agreement: diffs, branches, deploy safety, scope |
+| [`frontend/README.md`](frontend/README.md) | Frontend design system and per-component notes |
+| [`AUDIT_REPORT.md`](AUDIT_REPORT.md) | Security audit and its findings |
+| [`OPERATIONS_HARDENING.md`](OPERATIONS_HARDENING.md) | Production hardening work |
+| [`CI_CD_TROUBLESHOOTING.md`](CI_CD_TROUBLESHOOTING.md) | When the pipeline is red |
+| [`CI_GATE_RUNBOOK.md`](CI_GATE_RUNBOOK.md) | The drift gate and branch protection |
+| [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) | Dependency upgrade plan |
+| [`scripts/deploy.sh`](scripts/deploy.sh) | The production deploy, commented |
+| [Live app](https://cases.raisethevoices.org/testimonies/) | The running platform |
+| [Raise the Voices](https://raisethevoices.org/) | The organization behind it |
 
-### What's NOT in this build (out of scope)
-
-- **k8s manifests / Helm chart** — the deploy surface is
-  `docker compose`, not a cluster. Add a separate chart when a
-  k8s target exists.
-- **CI image build + push to a registry** — needs a registry
-  decision (GHCR vs ECR vs self-hosted). The current CI
-  (`.github/workflows/ci.yml`) builds and tests; it doesn't
-  produce an image. Image push is a follow-up.
-- **Migrating the live VM off systemd + nginx** — the live
-  deploy is intentionally unchanged. A cutover is operator-driven.
+</details>
 
 ---
 
-## Repository conventions
+<div align="center">
 
-This repo has two policy documents that are **read by Claude Code sessions**
-on every interaction:
+**Testimonies.world**: a record of one person's case, and the advocacy that followed it.
 
-- **[`CLAUDE.md`](CLAUDE.md)** — project facts (stack, dev URLs, commands,
-  data model, permissions, privacy). Read this first.
-- **[`SYSTEM_RULES.md`](SYSTEM_RULES.md)** — engineer-role protocol: diff
-  dumps, git/PR workflow, SvelteKit deployment safety, scope discipline.
-  Read this before any code change.
+[Raise the Voices](https://raisethevoices.org/). Every person matters.
 
-Both are group-writable. Update them when the project changes; new
-Claude sessions will pick up the changes immediately.
-
----
-
-## Further reading
-
-| Doc | Purpose |
-|---|---|
-| [`CLAUDE.md`](CLAUDE.md) | Concise project facts for Claude Code |
-| [`SYSTEM_RULES.md`](SYSTEM_RULES.md) | Engineer-role protocol (workflow + safety) |
-| [`frontend/README.md`](frontend/README.md) | Design system reference + per-component polish docs |
-| [`scripts/deploy.sh`](scripts/deploy.sh) | Production deploy script (heavily commented) |
-| [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) | CI pipeline |
-| [Testimonies.world demo](https://demos.linkedtrust.us/testimonies/) | Live running app |
-| [Testimonies.world prod](https://cases.raisethevoices.org) | Production |
-| [shahit.biz](https://shahit.biz/) | Inspiration / model for case structure |
-| [Raise the Voices](https://raisethevoices.org/) | Parent organization |
-
----
-
-## Contributing
-
-This project follows the `SYSTEM_RULES.md` discipline. The short version:
-
-- **Plan** complex work before implementing.
-- **Diff + why** for every change.
-- **Conventional commits** on a **feature branch**.
-- **PR** for merge to `main`.
-- **Strict scope** — don't bundle unrelated changes; flag follow-ups separately.
-- **Production builds**: `PUBLIC_BASE_PATH=""` + `ORIGIN` set + restart
-  the Node server.
-- **No secrets in diffs or chat.** If a secret leaks, alert immediately
-  and follow the rotation steps in `SYSTEM_RULES.md` §5.
-
-When in doubt, read `CLAUDE.md` + `SYSTEM_RULES.md` first.
+</div>
