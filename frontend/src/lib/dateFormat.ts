@@ -19,6 +19,53 @@
 const MONTH_YEAR_RE = /^\d{4}-\d{2}$/;
 
 /**
+ * Full-date formatter — day-precision dates for surfaces that state the
+ * day (the case card's header date and abduction date).
+ *
+ * Accepts both shapes a date arrives in:
+ *   - a `Date`, for fields the Zod boundary converts (`created_at`,
+ *     `case_received_date` — see `isoDate` / `isoDateTime` in
+ *     `schemas/wire.ts`);
+ *   - an ISO `YYYY-MM-DD` string, for fields the boundary leaves alone
+ *     (a report's `date_of_abduction` arrives inside `reports[]`,
+ *     which the detail schema keeps as `z.any()`).
+ *
+ * Output is `14 Mar 2026` — day first, `en-GB` ordering. It reads as
+ * a date on a document rather than as a US form field, and it is
+ * unambiguous to a reader who does not share the author's locale.
+ * Everything is rendered in UTC so the day never shifts.
+ *
+ * Returns an empty string for anything it cannot read, so callers can
+ * drop the result into a template without a guard.
+ */
+export function formatFullDate(value: unknown): string {
+	const d = toUtcDate(value);
+	if (!d) return '';
+	return d.toLocaleDateString('en-GB', {
+		day: 'numeric',
+		month: 'short',
+		year: 'numeric',
+		timeZone: 'UTC',
+	});
+}
+
+/**
+ * Coerce a date-ish value to a UTC-midnight Date, or null if it cannot
+ * be read. `YYYY-MM` is accepted and pinned to the 1st.
+ */
+function toUtcDate(value: unknown): Date | null {
+	if (value instanceof Date) {
+		return Number.isNaN(value.getTime()) ? null : value;
+	}
+	if (typeof value !== 'string' || !value) return null;
+	const m = value.match(/^(\d{4})-(\d{2})(?:-(\d{2}))?/);
+	if (!m) return null;
+	const day = m[3] ?? '01';
+	const d = new Date(`${m[1]}-${m[2]}-${day}T00:00:00Z`);
+	return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
  * Display formatter — `YYYY-MM-DD` → `Mon YYYY`.
  * Returns an empty string for nullish/empty input so callers can drop
  * the result straight into a template without a guard.

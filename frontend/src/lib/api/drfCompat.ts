@@ -53,6 +53,22 @@ export function extractCreatedId(res: unknown): number {
 }
 
 /**
+ * Coerce an orval response into a single object body.
+ *
+ * Same shape assumption as `asPaginated`: orval's generated types say
+ * the response is wrapped in `{ data, status, headers }`, but the
+ * custom mutator hands back the raw DRF body. This unwraps `.data`
+ * when it is there and returns the body otherwise.
+ */
+export function asBody<T>(res: unknown): T {
+	const candidate = (res ?? {}) as Record<string, unknown>;
+	if (candidate.data && typeof candidate.data === 'object') {
+		return candidate.data as unknown as T;
+	}
+	return candidate as unknown as T;
+}
+
+/**
  * Coerce an SSR `fetch().json()` response into a single object.
  * Anonymous and authenticated GETs use different serializers
  * (TestimonialPublic vs TestimonialInternal) — this helper is

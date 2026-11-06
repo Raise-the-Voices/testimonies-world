@@ -27,6 +27,7 @@ from contacts.permissions import IsAdvocate
 from .throttles import ActionScopedThrottle
 
 logger = logging.getLogger(__name__)
+from .card.serializers import CaseCardPayloadSerializer
 from .serializers import (
     AuditLogSerializer,
     CaseCategorySerializer,
@@ -409,6 +410,10 @@ class PersonViewSet(viewsets.ModelViewSet):
         instance.delete()
 
     def get_serializer_class(self):
+        # The card action answers with its own masked projection, not
+        # with the person detail shape — see cases/card/serializers.py.
+        if self.action == 'card':
+            return CaseCardPayloadSerializer
         if self.action == 'list':
             return PersonListSerializer
         if self.action in ('create', 'update', 'partial_update'):
@@ -764,6 +769,46 @@ class PersonViewSet(viewsets.ModelViewSet):
         qs = qs.prefetch_related('categories')
 
         serializer = PersonListSerializer(qs, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    @extend_schema(
+        responses={200: CaseCardPayloadSerializer},
+        description=(
+            'The masked Case Information Card for this person — the '
+            'publication-facing projection of the case, ready to render '
+            'as a poster. Every field is decided on the server from the '
+            'consent flags on the case (publication consent, identity '
+            'level, location level, photograph clearance); private '
+            'reports and non-public media never contribute. An '
+            'unpublished case is a 404 for anonymous callers, matching '
+            'the rest of the public catalog. `exportable` is computed '
+            'server-side and says whether the case may be shared as an '
+            'image; `withheld` names what was taken out of the card.'
+        ),
+    )
+    @action(
+        detail=True, methods=['get'], url_path='card',
+        serializer_class=CaseCardPayloadSerializer,
+    )
+    def card(self, request, pk=None):
+        """Case Information Card — the shareable projection of a case.
+
+        A separate endpoint rather than a flag on the person detail
+        response because the card is the ONE payload that leaves the
+        platform: it gets rendered to an image and shared. Building it
+        in the browser would mean shipping the advocate's view of the
+        record — precise locations, medical notes, source names — to
+        whoever renders the poster. The masking rules live in
+        `cases/card/serializers.py`; the payload never contains a
+        field that has not been cleared for publication.
+        """
+        person = self.get_object()
+        # Every read of a case card is an audit row, like every other
+        # retrieve on a sensitive viewset (see PersonViewSet.retrieve).
+        self._audit(AuditLog.Action.VIEWED, person, 'card')
+        serializer = CaseCardPayloadSerializer(
+            person, context={'request': request},
+        )
         return Response(serializer.data)
 
 

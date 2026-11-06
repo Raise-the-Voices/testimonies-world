@@ -16,6 +16,13 @@
 	aria-labelledby; if you supply a `header` snippet it replaces the
 	default title bar entirely (no aria-labelledby is set — provide
 	your own aria-label on the dialog content).
+
+	Variants:
+	  - `default` — a small dialog pinned near the top of the viewport.
+	  - `poster`  — a large, centred surface for a full-page artefact
+	    (the case card). Deeper scrim, heavier backdrop blur, no
+	    dialog chrome of its own: the artefact supplies its own frame.
+	    Use `ariaLabel` to name the dialog when there is no `title`.
 -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
@@ -26,6 +33,11 @@
 		title?: string;
 		role?: 'dialog' | 'alertdialog';
 		dismissable?: boolean;
+		/** Layout of the dialog. See the note at the top of the file. */
+		variant?: 'default' | 'poster';
+		/** Accessible name for the dialog, used when there is no
+		    `title` (i.e. when a custom `header` snippet is supplied). */
+		ariaLabel?: string;
 		onClose: () => void;
 		children?: Snippet;
 		header?: Snippet;
@@ -37,6 +49,8 @@
 		title,
 		role = 'dialog',
 		dismissable = true,
+		variant = 'default',
+		ariaLabel,
 		onClose,
 		children,
 		header,
@@ -109,6 +123,7 @@
 	<!-- Backdrop -->
 	<div
 		class="modal-overlay"
+		class:modal-overlay--poster={variant === 'poster'}
 		onclick={onBackdropClick}
 		onkeydown={(e) => {
 			if (e.key === 'Enter' || e.key === ' ') {
@@ -124,10 +139,12 @@
 	<div
 		bind:this={dialogEl}
 		class="modal"
+		class:modal--poster={variant === 'poster'}
 		role={role}
 		aria-modal="true"
 		aria-labelledby={title ? titleId : undefined}
-		transition:fly={{ y: -16, duration: 200, opacity: 0 }}
+		aria-label={!title && ariaLabel ? ariaLabel : undefined}
+		transition:fly={{ y: variant === 'poster' ? 12 : -16, duration: 200, opacity: 0 }}
 	>
 		{#if header}
 			{@render header()}
@@ -159,10 +176,19 @@
 	.modal-overlay {
 		position: fixed;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.45);
+		background: var(--color-overlay);
 		backdrop-filter: blur(2px);
 		-webkit-backdrop-filter: blur(2px);
 		z-index: 80;
+	}
+
+	/* Poster variant — a full-page artefact needs a deeper scrim and a
+	   heavier blur, so the card reads as a separate surface rather than
+	   as another panel on the page. */
+	.modal-overlay--poster {
+		background: var(--color-overlay-deep);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
 	}
 
 	.modal {
@@ -182,6 +208,23 @@
 		z-index: 90;
 		display: flex;
 		flex-direction: column;
+	}
+
+	/* Poster variant — centred on the viewport, and the artefact inside
+	   carries its own frame and shadow, so the dialog contributes no
+	   chrome of its own. The top padding reserves room for a close
+	   control that hangs on the artefact's top-right corner. */
+	.modal--poster {
+		top: 50%;
+		transform: translate(-50%, -50%);
+		max-width: 620px;
+		max-height: calc(100vh - 2rem);
+		padding: 3.25rem 1.75rem 2rem;
+		background: transparent;
+		border: none;
+		border-left: none;
+		border-radius: 0;
+		box-shadow: none;
 	}
 
 	.modal-header {

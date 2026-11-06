@@ -1670,6 +1670,36 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/persons/{id}/card/:
+    get:
+      operationId: persons_card_retrieve
+      description: The masked Case Information Card for this person — the publication-facing
+        projection of the case, ready to render as a poster. Every field is decided
+        on the server from the consent flags on the case (publication consent, identity
+        level, location level, photograph clearance); private reports and non-public
+        media never contribute. An unpublished case is a 404 for anonymous callers,
+        matching the rest of the public catalog. `exportable` is computed server-side
+        and says whether the case may be shared as an image; `withheld` names what
+        was taken out of the card.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this person.
+        required: true
+      tags:
+      - persons
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseCardPayload'
+          description: ''
   /api/persons/{id}/related/:
     get:
       operationId: persons_related_retrieve
@@ -3997,6 +4027,194 @@ components:
     BlankEnum:
       enum:
       - ''
+    CaseCardIdentity:
+      type: object
+      properties:
+        display_name:
+          type: string
+          readOnly: true
+        father_name:
+          type: string
+          readOnly: true
+          nullable: true
+        age:
+          type: integer
+          readOnly: true
+          nullable: true
+        occupation:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - age
+      - display_name
+      - father_name
+      - occupation
+    CaseCardIncident:
+      type: object
+      properties:
+        date:
+          type: string
+          readOnly: true
+          nullable: true
+        time:
+          type: string
+          readOnly: true
+          nullable: true
+        place:
+          type: string
+          readOnly: true
+          nullable: true
+        abductors:
+          type: string
+          readOnly: true
+          nullable: true
+        detail:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - abductors
+      - date
+      - detail
+      - place
+      - time
+    CaseCardLocation:
+      type: object
+      properties:
+        country:
+          type: string
+          readOnly: true
+        display:
+          type: string
+          readOnly: true
+          nullable: true
+        precision:
+          allOf:
+          - $ref: '#/components/schemas/PrecisionEnum'
+          readOnly: true
+      required:
+      - country
+      - display
+      - precision
+    CaseCardPayload:
+      type: object
+      description: |-
+        The masked card payload.
+
+        Read-only by construction: every field is `read_only` and the
+        endpoint only answers GET. `to_internal_value` refuses input
+        outright so the contract holds wherever the serializer is used.
+
+        Two keys are NOT `read_only`: `location` and `photo`. They are
+        genuinely ABSENT from the payload when they are withheld — that
+        absence is the contract ("this was withheld", not "this was
+        empty"). drf-spectacular marks every read-only field as required
+        in the generated schema, so a `read_only` declaration here would
+        publish a schema that promises a `photo` the payload does not
+        contain, and a consumer that trusted it would read
+        `payload.photo.url` on a card whose photograph was withheld.
+        `required=False` puts both keys in the schema as optional, which
+        is what they are. Input is still refused — `to_internal_value`
+        raises before any field is read.
+      properties:
+        schema_version:
+          type: integer
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+          nullable: true
+        generated_date:
+          type: string
+          readOnly: true
+        headline:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        status_label:
+          type: string
+          readOnly: true
+        identity:
+          allOf:
+          - $ref: '#/components/schemas/CaseCardIdentity'
+          readOnly: true
+        location:
+          $ref: '#/components/schemas/CaseCardLocation'
+        incident:
+          allOf:
+          - $ref: '#/components/schemas/CaseCardIncident'
+          readOnly: true
+        photo:
+          $ref: '#/components/schemas/CaseCardPhoto'
+        categories:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        verification:
+          allOf:
+          - $ref: '#/components/schemas/CaseCardVerification'
+          readOnly: true
+        source_label:
+          type: string
+          readOnly: true
+          nullable: true
+        exportable:
+          type: boolean
+          readOnly: true
+        withheld:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - categories
+      - exportable
+      - generated_date
+      - headline
+      - identity
+      - incident
+      - reference
+      - schema_version
+      - source_label
+      - status
+      - status_label
+      - title
+      - verification
+      - withheld
+    CaseCardPhoto:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          readOnly: true
+        alt:
+          type: string
+          readOnly: true
+      required:
+      - alt
+      - url
+    CaseCardVerification:
+      type: object
+      properties:
+        level:
+          type: string
+          readOnly: true
+          nullable: true
+        label:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - label
+      - level
     CaseCategory:
       type: object
       properties:
@@ -5285,6 +5503,12 @@ components:
           type: array
           items:
             type: integer
+        public_reference:
+          type: string
+          nullable: true
+          description: Human-readable public case reference, e.g. "ED-2026-0042".
+            Blank means the case has no citable reference yet.
+          maxLength: 32
         name:
           type: string
           minLength: 1
@@ -5822,6 +6046,23 @@ components:
           oneOf:
           - $ref: '#/components/schemas/VerificationStatusEnum'
           - $ref: '#/components/schemas/BlankEnum'
+        date_of_abduction:
+          type: string
+          format: date
+          nullable: true
+          description: Date the person was abducted or taken into custody, when documented.
+        time_of_abduction:
+          type: string
+          format: time
+          nullable: true
+          description: Time of day of the abduction, when known.
+        place_of_abduction:
+          type: string
+          description: Place where the abduction or custody event occurred.
+          maxLength: 255
+        abductors:
+          type: string
+          description: Identified or alleged perpetrators or state actors, when documented.
         verification_level:
           description: |-
             Case-level verification ladder (Section L).
@@ -6120,6 +6361,12 @@ components:
           format: uuid
           readOnly: true
           description: External / website case ID (Section A).
+        public_reference:
+          type: string
+          nullable: true
+          description: Human-readable public case reference, e.g. "ED-2026-0042".
+            Blank means the case has no citable reference yet.
+          maxLength: 32
         case_received_date:
           type: string
           format: date
@@ -6416,6 +6663,12 @@ components:
           format: uuid
           readOnly: true
           description: External / website case ID (Section A).
+        public_reference:
+          type: string
+          nullable: true
+          description: Human-readable public case reference, e.g. "ED-2026-0042".
+            Blank means the case has no citable reference yet.
+          maxLength: 32
         case_received_date:
           type: string
           format: date
@@ -6624,6 +6877,12 @@ components:
           type: array
           items:
             type: integer
+        public_reference:
+          type: string
+          nullable: true
+          description: Human-readable public case reference, e.g. "ED-2026-0042".
+            Blank means the case has no citable reference yet.
+          maxLength: 32
         name:
           type: string
           maxLength: 255
@@ -6903,6 +7162,12 @@ components:
           type: array
           items:
             type: integer
+        public_reference:
+          type: string
+          nullable: true
+          description: Human-readable public case reference, e.g. "ED-2026-0042".
+            Blank means the case has no citable reference yet.
+          maxLength: 32
         name:
           type: string
           minLength: 1
@@ -7154,6 +7419,18 @@ components:
       required:
       - country
       - name
+    PrecisionEnum:
+      enum:
+      - province
+      - district
+      - city
+      - withheld
+      type: string
+      description: |-
+        * `province` - province
+        * `district` - district
+        * `city` - city
+        * `withheld` - withheld
     PrimarySourceTypeEnum:
       enum:
       - victim_survivor
@@ -7497,6 +7774,23 @@ components:
           oneOf:
           - $ref: '#/components/schemas/VerificationStatusEnum'
           - $ref: '#/components/schemas/BlankEnum'
+        date_of_abduction:
+          type: string
+          format: date
+          nullable: true
+          description: Date the person was abducted or taken into custody, when documented.
+        time_of_abduction:
+          type: string
+          format: time
+          nullable: true
+          description: Time of day of the abduction, when known.
+        place_of_abduction:
+          type: string
+          description: Place where the abduction or custody event occurred.
+          maxLength: 255
+        abductors:
+          type: string
+          description: Identified or alleged perpetrators or state actors, when documented.
         verification_level:
           description: |-
             Case-level verification ladder (Section L).
@@ -7923,6 +8217,23 @@ components:
           oneOf:
           - $ref: '#/components/schemas/VerificationStatusEnum'
           - $ref: '#/components/schemas/BlankEnum'
+        date_of_abduction:
+          type: string
+          format: date
+          nullable: true
+          description: Date the person was abducted or taken into custody, when documented.
+        time_of_abduction:
+          type: string
+          format: time
+          nullable: true
+          description: Time of day of the abduction, when known.
+        place_of_abduction:
+          type: string
+          description: Place where the abduction or custody event occurred.
+          maxLength: 255
+        abductors:
+          type: string
+          description: Identified or alleged perpetrators or state actors, when documented.
         verification_level:
           description: |-
             Case-level verification ladder (Section L).

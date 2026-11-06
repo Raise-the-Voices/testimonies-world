@@ -1,0 +1,240 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://testimonies.world/schemas/case-card-v1.json",
+  "title": "CaseCard",
+  "description": "Canonical export shape for a Case Information Card. Pinned at schema_version=1. Bumping to v2 requires updating this schema and the EXPORT_SCHEMA dict in cases/card/export.py atomically.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "reference",
+    "generated_date",
+    "headline",
+    "title",
+    "status",
+    "status_label",
+    "identity",
+    "incident",
+    "categories",
+    "verification",
+    "source_label",
+    "exportable",
+    "withheld"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "reference": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "generated_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "headline": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "detained",
+        "disappeared",
+        "restricted_movement",
+        "released",
+        "deceased",
+        "unknown",
+        "stateless",
+        "rights_restricted",
+        "ongoing_enforced_disappearance",
+        "found_alive",
+        "found_dead",
+        "case_closed",
+        "other"
+      ]
+    },
+    "status_label": {
+      "type": "string"
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "display_name",
+        "father_name",
+        "age",
+        "occupation"
+      ],
+      "properties": {
+        "display_name": {
+          "type": "string"
+        },
+        "father_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "age": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "occupation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "location": {
+      "type": "object",
+      "required": [
+        "country",
+        "display",
+        "precision"
+      ],
+      "properties": {
+        "country": {
+          "type": "string"
+        },
+        "display": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "precision": {
+          "type": "string",
+          "enum": [
+            "province",
+            "district",
+            "city",
+            "withheld"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "incident": {
+      "type": "object",
+      "required": [
+        "date",
+        "time",
+        "place",
+        "abductors",
+        "detail"
+      ],
+      "properties": {
+        "date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "place": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "abductors": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "photo": {
+      "type": "object",
+      "required": [
+        "url",
+        "alt"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "alt": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": [
+        "level",
+        "label"
+      ],
+      "properties": {
+        "level": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "level_1_reported",
+            "level_2_partially_verified",
+            "level_3_corroborated",
+            "level_4_documented",
+            null
+          ]
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "source_label": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "exportable": {
+      "type": "boolean"
+    },
+    "withheld": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}
