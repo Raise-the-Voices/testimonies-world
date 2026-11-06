@@ -8,6 +8,7 @@
 import type {
   AuditLog,
   AuditLogsListParams,
+  CaseCardPayload,
   CaseCategory,
   CaseworkListParams,
   CaseworkRecord,
@@ -1839,6 +1840,42 @@ export const personsDestroy = async (id: number, options?: RequestInit): Promise
   {      
     ...options,
     method: 'DELETE'
+    
+    
+  }
+);}
+
+
+
+/**
+ * The masked Case Information Card for this person — the publication-facing projection of the case, ready to render as a poster. Every field is decided on the server from the consent flags on the case (publication consent, identity level, location level, photograph clearance); private reports and non-public media never contribute. An unpublished case is a 404 for anonymous callers, matching the rest of the public catalog. `exportable` is computed server-side and says whether the case may be shared as an image; `withheld` names what was taken out of the card.
+ */
+export type personsCardRetrieveResponse200 = {
+  data: CaseCardPayload
+  status: 200
+}
+    
+export type personsCardRetrieveResponseSuccess = (personsCardRetrieveResponse200) & {
+  headers: Headers;
+};
+;
+
+export type personsCardRetrieveResponse = (personsCardRetrieveResponseSuccess)
+
+export const getPersonsCardRetrieveUrl = (id: number,) => {
+
+
+  
+
+  return `/api/persons/${id}/card/`
+}
+
+export const personsCardRetrieve = async (id: number, options?: RequestInit): Promise<personsCardRetrieveResponse> => {
+  
+  return fetcher<personsCardRetrieveResponse>(getPersonsCardRetrieveUrl(id),
+  {      
+    ...options,
+    method: 'GET'
     
     
   }

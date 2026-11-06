@@ -119,6 +119,13 @@ export const MedicalStatusEnum = {
 export const NullEnum = {
 } as const;
 
+export const PrecisionEnum = {
+  province: 'province',
+  district: 'district',
+  city: 'city',
+  withheld: 'withheld',
+} as const;
+
 export const PrimarySourceTypeEnum = {
   victim_survivor: 'victim_survivor',
   family: 'family',
@@ -755,6 +762,88 @@ export interface AuditLog {
 export type BlankEnum = typeof BlankEnum[keyof typeof BlankEnum];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
+
+export interface CaseCardIdentity {
+  readonly display_name: string;
+  /** @nullable */
+  readonly father_name: string | null;
+  /** @nullable */
+  readonly age: number | null;
+  /** @nullable */
+  readonly occupation: string | null;
+}
+
+export interface CaseCardIncident {
+  /** @nullable */
+  readonly date: string | null;
+  /** @nullable */
+  readonly time: string | null;
+  /** @nullable */
+  readonly place: string | null;
+  /** @nullable */
+  readonly abductors: string | null;
+  /** @nullable */
+  readonly detail: string | null;
+}
+
+export interface CaseCardLocation {
+  readonly country: string;
+  /** @nullable */
+  readonly display: string | null;
+  readonly precision: PrecisionEnum;
+}
+
+/**
+ * The masked card payload.
+
+Read-only by construction: every field is `read_only` and the
+endpoint only answers GET. `to_internal_value` refuses input
+outright so the contract holds wherever the serializer is used.
+
+Two keys are NOT `read_only`: `location` and `photo`. They are
+genuinely ABSENT from the payload when they are withheld — that
+absence is the contract ("this was withheld", not "this was
+empty"). drf-spectacular marks every read-only field as required
+in the generated schema, so a `read_only` declaration here would
+publish a schema that promises a `photo` the payload does not
+contain, and a consumer that trusted it would read
+`payload.photo.url` on a card whose photograph was withheld.
+`required=False` puts both keys in the schema as optional, which
+is what they are. Input is still refused — `to_internal_value`
+raises before any field is read.
+ */
+export interface CaseCardPayload {
+  readonly schema_version: number;
+  /** @nullable */
+  readonly reference: string | null;
+  readonly generated_date: string;
+  readonly headline: string;
+  readonly title: string;
+  readonly status: string;
+  readonly status_label: string;
+  readonly identity: CaseCardIdentity;
+  location?: CaseCardLocation;
+  readonly incident: CaseCardIncident;
+  photo?: CaseCardPhoto;
+  readonly categories: readonly string[];
+  readonly verification: CaseCardVerification;
+  /** @nullable */
+  readonly source_label: string | null;
+  readonly exportable: boolean;
+  readonly withheld: readonly string[];
+}
+
+export interface CaseCardPhoto {
+  readonly url: string;
+  readonly alt: string;
+}
+
+export interface CaseCardVerification {
+  /** @nullable */
+  readonly level: string | null;
+  /** @nullable */
+  readonly label: string | null;
+}
 
 export interface CaseCategory {
   readonly id: number;
@@ -1507,6 +1596,12 @@ export type PatchedPersonWriteRequestQualityTier = typeof PatchedPersonWriteRequ
 export interface PatchedPersonWriteRequest {
   category_ids?: number[];
   /**
+   * Human-readable public case reference, e.g. "ED-2026-0042". Blank means the case has no citable reference yet.
+   * @maxLength 32
+   * @nullable
+   */
+  public_reference?: string | null;
+  /**
    * @minLength 1
    * @maxLength 255
    */
@@ -1937,6 +2032,23 @@ export interface PatchedReportRequest {
 * `corroborated` - Corroborated
 * `documented` - Documented */
   response_verification?: typeof PatchedReportRequestResponseVerification[keyof typeof PatchedReportRequestResponseVerification] ;
+  /**
+   * Date the person was abducted or taken into custody, when documented.
+   * @nullable
+   */
+  date_of_abduction?: string | null;
+  /**
+   * Time of day of the abduction, when known.
+   * @nullable
+   */
+  time_of_abduction?: string | null;
+  /**
+   * Place where the abduction or custody event occurred.
+   * @maxLength 255
+   */
+  place_of_abduction?: string;
+  /** Identified or alleged perpetrators or state actors, when documented. */
+  abductors?: string;
   /** Case-level verification ladder (Section L).
 
 * `level_1_reported` - Level 1 — Reported
@@ -2171,6 +2283,12 @@ export interface PersonDetail {
   /** External / website case ID (Section A). */
   readonly case_id: string;
   /**
+   * Human-readable public case reference, e.g. "ED-2026-0042". Blank means the case has no citable reference yet.
+   * @maxLength 32
+   * @nullable
+   */
+  public_reference?: string | null;
+  /**
    * Date the case file was received by the documentation officer (Section A).
    * @nullable
    */
@@ -2395,6 +2513,12 @@ export interface PersonList {
   /** External / website case ID (Section A). */
   readonly case_id: string;
   /**
+   * Human-readable public case reference, e.g. "ED-2026-0042". Blank means the case has no citable reference yet.
+   * @maxLength 32
+   * @nullable
+   */
+  public_reference?: string | null;
+  /**
    * Date the case file was received by the documentation officer (Section A).
    * @nullable
    */
@@ -2567,6 +2691,12 @@ export type PersonWriteQualityTier = typeof PersonWriteQualityTier[keyof typeof 
 export interface PersonWrite {
   readonly id: number;
   category_ids?: number[];
+  /**
+   * Human-readable public case reference, e.g. "ED-2026-0042". Blank means the case has no citable reference yet.
+   * @maxLength 32
+   * @nullable
+   */
+  public_reference?: string | null;
   /** @maxLength 255 */
   name: string;
   /** @maxLength 255 */
@@ -2792,6 +2922,12 @@ export type PersonWriteRequestQualityTier = typeof PersonWriteRequestQualityTier
 export interface PersonWriteRequest {
   category_ids?: number[];
   /**
+   * Human-readable public case reference, e.g. "ED-2026-0042". Blank means the case has no citable reference yet.
+   * @maxLength 32
+   * @nullable
+   */
+  public_reference?: string | null;
+  /**
    * @minLength 1
    * @maxLength 255
    */
@@ -2980,6 +3116,16 @@ export interface PersonWriteRequest {
   /** @nullable */
   final_reviewer?: number | null;
 }
+
+/**
+ * * `province` - province
+* `district` - district
+* `city` - city
+* `withheld` - withheld
+ */
+export type PrecisionEnum = typeof PrecisionEnum[keyof typeof PrecisionEnum];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
 
 /**
  * * `victim_survivor` - Victim/survivor
@@ -3248,6 +3394,23 @@ export interface Report {
 * `corroborated` - Corroborated
 * `documented` - Documented */
   response_verification?: typeof ReportResponseVerification[keyof typeof ReportResponseVerification] ;
+  /**
+   * Date the person was abducted or taken into custody, when documented.
+   * @nullable
+   */
+  date_of_abduction?: string | null;
+  /**
+   * Time of day of the abduction, when known.
+   * @nullable
+   */
+  time_of_abduction?: string | null;
+  /**
+   * Place where the abduction or custody event occurred.
+   * @maxLength 255
+   */
+  place_of_abduction?: string;
+  /** Identified or alleged perpetrators or state actors, when documented. */
+  abductors?: string;
   /** Case-level verification ladder (Section L).
 
 * `level_1_reported` - Level 1 — Reported
@@ -3578,6 +3741,23 @@ export interface ReportRequest {
 * `corroborated` - Corroborated
 * `documented` - Documented */
   response_verification?: typeof ReportRequestResponseVerification[keyof typeof ReportRequestResponseVerification] ;
+  /**
+   * Date the person was abducted or taken into custody, when documented.
+   * @nullable
+   */
+  date_of_abduction?: string | null;
+  /**
+   * Time of day of the abduction, when known.
+   * @nullable
+   */
+  time_of_abduction?: string | null;
+  /**
+   * Place where the abduction or custody event occurred.
+   * @maxLength 255
+   */
+  place_of_abduction?: string;
+  /** Identified or alleged perpetrators or state actors, when documented. */
+  abductors?: string;
   /** Case-level verification ladder (Section L).
 
 * `level_1_reported` - Level 1 — Reported
