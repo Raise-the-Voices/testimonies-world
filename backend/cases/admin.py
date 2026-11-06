@@ -32,7 +32,8 @@ class PersonAdmin(admin.ModelAdmin):
     list_filter = ['current_status', 'medical_status', 'quality_tier',
                    'is_published', 'country', 'categories', 'authoritative_source']
     search_fields = ['name', 'legal_name', 'aliases', 'country',
-                     'summary_narrative', 'authoritative_source']
+                     'summary_narrative', 'authoritative_source',
+                     'public_reference']
     filter_horizontal = ['categories']
     inlines = [ReportInline, MediaInline]
     readonly_fields = ['created_at', 'updated_at']
@@ -56,6 +57,13 @@ class PersonAdmin(admin.ModelAdmin):
         }),
         ('Classification', {
             'fields': ['categories', 'quality_tier', 'is_published']
+        }),
+        ('Case reference', {
+            'fields': ['public_reference'],
+            'description': 'Public citable identifier printed on the case card '
+                           '(e.g. ED-2026-0042). Leave blank until the reference '
+                           'is assigned; blank means the case has no citable '
+                           'reference yet.'
         }),
         ('Meta', {
             'fields': ['created_by', 'created_at', 'updated_at'],

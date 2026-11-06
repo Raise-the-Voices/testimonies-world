@@ -373,6 +373,11 @@ class Person(models.Model):
         default=uuid.uuid4, unique=True, editable=False,
         help_text='External / website case ID (Section A).',
     )
+    public_reference = models.CharField(
+        max_length=32, unique=True, null=True, blank=True,
+        help_text='Human-readable public case reference, e.g. "ED-2026-0042". '
+                  'Blank means the case has no citable reference yet.',
+    )
     case_received_date = models.DateField(
         null=True, blank=True,
         help_text='Date the case file was received by the documentation officer (Section A).',
@@ -751,6 +756,31 @@ class Report(models.Model):
         max_length=20, blank=True, default='',
         choices=VerificationStatus.choices,
         help_text='Per-response verification status (Section J).',
+    )
+
+    # ----- ABDUCTION / TAKING-INTO-CUSTODY EVENT -----
+    # The structured form splits the incident across Sections C, F and J
+    # (what happened, detention, official response). The publication card
+    # needs one flat block for the abduction event itself — when it
+    # happened, where, and who was responsible — so a reader does not have
+    # to reconcile three sections into a single sentence. Kept on Report
+    # (not Person) because the abduction is an event documented per
+    # report, and a case file can carry several reports of the same event.
+    date_of_abduction = models.DateField(
+        null=True, blank=True,
+        help_text='Date the person was abducted or taken into custody, when documented.',
+    )
+    time_of_abduction = models.TimeField(
+        null=True, blank=True,
+        help_text='Time of day of the abduction, when known.',
+    )
+    place_of_abduction = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text='Place where the abduction or custody event occurred.',
+    )
+    abductors = models.TextField(
+        blank=True, default='',
+        help_text='Identified or alleged perpetrators or state actors, when documented.',
     )
 
     # ----- Section L: VERIFICATION LEVEL -----
