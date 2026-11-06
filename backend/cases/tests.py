@@ -3107,6 +3107,136 @@ class StatisticsCountTests(BaseTestCase):
         self.assertEqual(res.status_code, 400)
 
 
+class PublicReferenceTests(BaseTestCase):
+    """Contract for ``Person.public_reference`` — the citable, human-readable
+    case reference shown on the published card.
+
+    The column is UNIQUE, so the write path has to behave in three ways
+    that are easy to get wrong:
+
+      - a real reference round-trips through POST /api/persons/;
+      - a blank reference means "no citable reference yet" and must be
+        stored as NULL, not '' — an empty string is a value as far as the
+        unique index is concerned, so every unreferenced case would
+        collide with every other one;
+      - a duplicate comes back as a 400 with a field-scoped message,
+        not a raw IntegrityError.
+    """
+
+    URL = '/api/persons/'
+
+    def setUp(self):
+        self.staff = make_user('refadmin', is_staff=True)
+        self.client = APIClient()
+        self.client.force_login(self.staff)
+
+    def _payload(self, **overrides):
+        payload = {
+            'name': 'Referenced Person',
+            'country': 'Pakistan',
+            'current_status': 'detained',
+            'medical_status': 'unknown',
+            'rough_location': 'Peshawar',
+            'summary_narrative': 'A test narrative.',
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_reference_round_trips(self):
+        res = self.client.post(
+            self.URL, self._payload(public_reference='ED-2026-0042'), format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertEqual(res.json()['public_reference'], 'ED-2026-0042')
+        self.assertEqual(
+            Person.objects.get(pk=res.json()['id']).public_reference,
+            'ED-2026-0042',
+        )
+
+    def test_blank_reference_stored_as_null_and_not_unique(self):
+        res = self.client.post(
+            self.URL, self._payload(public_reference=''), format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertIsNone(
+            Person.objects.get(pk=res.json()['id']).public_reference)
+        # A second case with no reference must not collide with the first.
+        res2 = self.client.post(self.URL, self._payload(), format='json')
+        self.assertEqual(res2.status_code, 201, res2.content)
+        self.assertIsNone(
+            Person.objects.get(pk=res2.json()['id']).public_reference)
+
+    def test_duplicate_reference_returns_field_scoped_400(self):
+        first = self.client.post(
+            self.URL, self._payload(public_reference='ED-2026-0042'), format='json')
+        self.assertEqual(first.status_code, 201, first.content)
+        dup = self.client.post(
+            self.URL, self._payload(public_reference='ED-2026-0042'), format='json')
+        self.assertEqual(dup.status_code, 400, dup.content)
+        self.assertIn('public_reference', dup.json())
+
+    def test_patch_without_touching_reference_keeps_it(self):
+        res = self.client.post(
+            self.URL, self._payload(public_reference='ED-2026-0042'), format='json')
+        pid = res.json()['id']
+        upd = self.client.patch(
+            f'{self.URL}{pid}/', {'rough_location': 'Lahore'}, format='json')
+        self.assertEqual(upd.status_code, 200, upd.content)
+        self.assertEqual(upd.json()['public_reference'], 'ED-2026-0042')
+
+
+class ReportAbductionFieldsTests(BaseTestCase):
+    """Contract for the abduction / taking-into-custody block on Report.
+
+    These four fields exist because the documentation form splits one
+    incident across Sections C, F and J, while the publication card
+    needs it as one flat block. They are volunteer free-text, so they
+    are HTML-stripped on save like every other documentation-form field.
+    """
+
+    URL = '/api/reports/'
+
+    def setUp(self):
+        self.staff = make_user('abductadmin', is_staff=True)
+        self.client = APIClient()
+        self.client.force_login(self.staff)
+        self.person = Person.objects.create(name='Anchor', country='Y')
+
+    def test_abduction_fields_round_trip(self):
+        res = self.client.post(self.URL, {
+            'person': self.person.pk,
+            'narrative': 'n',
+            'date_start': '2026-01-15',
+            'date_of_abduction': '2026-01-15',
+            'time_of_abduction': '04:30',
+            'place_of_abduction': 'Old City',
+            'abductors': 'Agency A',
+        }, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        row = Report.objects.get(pk=res.json()['id'])
+        self.assertEqual(str(row.date_of_abduction), '2026-01-15')
+        self.assertEqual(str(row.time_of_abduction), '04:30:00')
+        self.assertEqual(row.place_of_abduction, 'Old City')
+        self.assertEqual(row.abductors, 'Agency A')
+
+    def test_abduction_free_text_is_html_stripped(self):
+        res = self.client.post(self.URL, {
+            'person': self.person.pk,
+            'narrative': 'n',
+            'date_start': '2026-01-15',
+            'place_of_abduction': '<b>Old City</b>',
+            'abductors': '<script>alert(1)</script>Agency A',
+        }, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        row = Report.objects.get(pk=res.json()['id'])
+        # bleach with tags=[] + strip=True drops the markup but keeps the
+        # text content — the XSS vector is gone because the browser no
+        # longer sees a tag to execute. Assert on the markup, not the text.
+        self.assertNotIn('<script', row.abductors)
+        self.assertNotIn('</script>', row.abductors)
+        self.assertIn('Agency A', row.abductors)
+        self.assertNotIn('<b>', row.place_of_abduction)
+        self.assertIn('Old City', row.place_of_abduction)
+
+
 class PersonFamilyPayloadTests(BaseTestCase):
     """Contract for ``PersonDetailSerializer.get_family`` — the flattened
     family list on a case file.

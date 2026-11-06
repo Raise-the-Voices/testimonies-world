@@ -274,6 +274,9 @@ class ReportSerializer(SanitizingModelSerializerMixin, serializers.ModelSerializ
         'detention_information',
         'source_verification_notes',
         'current_legal_status',
+        # Abduction / taking-into-custody event block
+        'abductors',
+        'place_of_abduction',
         # Section L / M
         'verification_reason',
         'unverified_information_remaining',
@@ -583,6 +586,12 @@ class PersonWriteSerializer(SanitizingModelSerializerMixin, serializers.ModelSer
         'name', 'legal_name', 'aliases', 'country', 'ethnicity',
         'rough_location', 'precise_location', 'medical_notes',
         'summary_narrative', 'authoritative_source',
+        'public_reference',
+        # Section K — the free-text list of items withheld from
+        # publication. It is read back on the person record and it
+        # decides what the case card may show, so it is stored as
+        # plain text like every other documentation-form field.
+        'information_restricted_from_publication',
     ]
     url_fields = ['authoritative_url']
 
@@ -591,10 +600,57 @@ class PersonWriteSerializer(SanitizingModelSerializerMixin, serializers.ModelSer
         many=True, required=False, source='categories'
     )
 
+    # Declared explicitly rather than left to the model default, for two
+    # reasons. The column is UNIQUE, so a duplicate has to come back as a
+    # 400 with a message the volunteer can act on — not a raw
+    # IntegrityError from the DB. And a blank reference has to be stored
+    # as NULL, not '': an empty string is a value as far as the unique
+    # index is concerned, so every unreferenced case would collide with
+    # every other one. `validate_public_reference` handles both.
+    public_reference = serializers.CharField(
+        max_length=32,
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        help_text=(
+            'Human-readable public case reference, e.g. "ED-2026-0042". '
+            'Blank means the case has no citable reference yet.'
+        ),
+    )
+
     class Meta:
         model = Person
         exclude = ['categories']
         read_only_fields = ['created_by', 'created_at', 'updated_at']
+
+    def validate_public_reference(self, value):
+        """Normalize a blank reference to NULL and reject duplicates.
+
+        The lookup mirrors the DB constraint exactly (exact match, not
+        case-insensitive), so what passes here is what the unique index
+        will accept — no false "already taken" on a value the database
+        would have let through, and no surprise rejection on one it
+        would not.
+        """
+        if value is None:
+            return None
+        # Sanitize here rather than relying only on the mixin's
+        # `validate()`: that runs a moment later, so the duplicate check
+        # would otherwise compare a different string than the one that
+        # gets stored.
+        value = sanitize_text(value)
+        if not value:
+            # Blank means "no citable reference yet" — the unique index
+            # allows many NULLs, but only one ''.
+            return None
+        duplicates = Person.objects.filter(public_reference=value)
+        if self.instance is not None:
+            duplicates = duplicates.exclude(pk=self.instance.pk)
+        if duplicates.exists():
+            raise serializers.ValidationError(
+                'A case with this public reference already exists.'
+            )
+        return value
 
     def validate(self, attrs):
         # Run the sanitizer first so text/url fields are still
