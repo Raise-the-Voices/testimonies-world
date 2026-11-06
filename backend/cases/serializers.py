@@ -25,6 +25,20 @@ INTERNAL_REPORT_FIELDS = [
     'internal_notes',
 ]
 
+# Relationship-type display labels, keyed by the stored slug. Derived
+# from the model's TextChoices so a new type shows up here without a
+# second edit.
+RELATIONSHIP_TYPE_LABELS = dict(FamilyRelationship.RelationType.choices)
+
+# The types whose meaning reverses when the row is read from the other
+# side. `relationship_type` describes person_b relative to person_a,
+# so from person_b's perspective person_a is the inverse. Undirected
+# types (sibling, spouse, other) read the same from both sides.
+INVERSE_RELATIONSHIP_TYPE = {
+    'parent': 'child',
+    'child': 'parent',
+}
+
 
 def _can_view_internal(request) -> bool:
     """True if `request.user` may see Section M (internal) fields.
@@ -488,18 +502,43 @@ class PersonDetailSerializer(serializers.ModelSerializer):
         # onto `obj.relationships_as_a` builds a new queryset that
         # bypasses the prefetched cache and re-queries per row. Just
         # iterate the prefetched managers directly.
+        #
+        # Direction: `relationship_type` is stored from person_a's
+        # perspective — person_b is that type relative to person_a
+        # (see FamilyRelationshipSerializer's docstring: "parent /
+        # child allow either direction (direction carries meaning)").
+        # So reading the row from person_b's side yields the INVERSE
+        # type: a child's row reports their parent as 'Parent', and
+        # the same row read from the parent's side reports the child
+        # as 'Child', not 'Parent'.
+        #
+        # No gender. The card used to read a relative's gender from
+        # here to label the row "Father" — but the card is built from
+        # the masked card payload now (see cases/card/serializers.py),
+        # which resolves the father server-side. Publishing the gender
+        # of every relative on a public case file bought nothing and
+        # disclosed a fact about someone who had not consented to it.
         result = []
         for rel in obj.relationships_as_a.all():
             result.append({
                 'person_id': rel.person_b.id,
                 'person_name': rel.person_b.name,
-                'relationship': rel.get_relationship_type_display(),
+                'relationship': RELATIONSHIP_TYPE_LABELS.get(
+                    rel.relationship_type, rel.relationship_type,
+                ),
+                'relationship_type': rel.relationship_type,
             })
         for rel in obj.relationships_as_b.all():
+            # Seen from obj (person_b), person_a's relation to obj is
+            # the inverse of obj's relation to person_a.
+            rel_type = INVERSE_RELATIONSHIP_TYPE.get(
+                rel.relationship_type, rel.relationship_type,
+            )
             result.append({
                 'person_id': rel.person_a.id,
                 'person_name': rel.person_a.name,
-                'relationship': rel.get_relationship_type_display(),
+                'relationship': RELATIONSHIP_TYPE_LABELS.get(rel_type, rel_type),
+                'relationship_type': rel_type,
             })
         return result
 

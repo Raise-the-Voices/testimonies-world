@@ -3105,3 +3105,84 @@ class StatisticsCountTests(BaseTestCase):
     def test_bad_date_is_refused(self):
         res = self.client.get('/api/persons/statistics/?created_since=August')
         self.assertEqual(res.status_code, 400)
+
+
+class PersonFamilyPayloadTests(BaseTestCase):
+    """Contract for ``PersonDetailSerializer.get_family`` — the flattened
+    family list on a case file.
+
+    Three things this pins:
+
+      - Direction. ``relationship_type`` is stored from person_a's
+        perspective, so the same row read from person_b's side reports
+        the INVERSE type. A child's row says "Parent"; the parent's
+        row says "Child", not "Parent".
+      - Undirected types read the same from both sides.
+      - No gender. The row does NOT carry the related person's
+        gender. The card resolves the father server-side (see
+        ``cases/card/serializers.py``), so publishing every relative's
+        gender on the case file bought nothing and disclosed a fact
+        about people who did not consent to it.
+    """
+
+    URL = '/api/persons/'
+
+    def setUp(self):
+        self.staff = make_user('familyadmin', is_staff=True)
+        self.client = APIClient()
+        self.client.force_login(self.staff)
+        self.child = Person.objects.create(
+            name='Child Person', country='Y', gender='F')
+        self.father = Person.objects.create(
+            name='Father Person', country='Y', gender='M')
+        self.mother = Person.objects.create(
+            name='Mother Person', country='Y', gender='F')
+        self.sibling = Person.objects.create(
+            name='Sibling Person', country='Y', gender='M')
+        # person_a = child, person_b = father → the father IS a 'parent'
+        # relative to the child.
+        FamilyRelationship.objects.create(
+            person_a=self.child, person_b=self.father,
+            relationship_type='parent')
+        FamilyRelationship.objects.create(
+            person_a=self.child, person_b=self.mother,
+            relationship_type='parent')
+        FamilyRelationship.objects.create(
+            person_a=self.child, person_b=self.sibling,
+            relationship_type='sibling')
+
+    def _family(self, person):
+        res = self.client.get(f'{self.URL}{person.pk}/')
+        self.assertEqual(res.status_code, 200, res.content)
+        return res.json()['family']
+
+    def test_parent_side_reports_parent(self):
+        family = self._family(self.child)
+        by_name = {row['person_name']: row for row in family}
+        self.assertEqual(by_name['Father Person']['relationship'], 'Parent')
+        self.assertEqual(by_name['Father Person']['relationship_type'], 'parent')
+
+    def test_inverse_side_reports_child_not_parent(self):
+        # The father's own detail page must not list the child as a
+        # parent. Before this fix both sides echoed the stored type.
+        family = self._family(self.father)
+        by_name = {row['person_name']: row for row in family}
+        self.assertEqual(by_name['Child Person']['relationship'], 'Child')
+        self.assertEqual(by_name['Child Person']['relationship_type'], 'child')
+
+    def test_undirected_type_reads_the_same_from_both_sides(self):
+        from_child = {r['person_name']: r for r in self._family(self.child)}
+        from_sibling = {r['person_name']: r for r in self._family(self.sibling)}
+        self.assertEqual(from_child['Sibling Person']['relationship'], 'Sibling')
+        self.assertEqual(from_sibling['Child Person']['relationship'], 'Sibling')
+        self.assertEqual(from_sibling['Child Person']['relationship_type'], 'sibling')
+
+    def test_no_entry_carries_the_related_persons_gender(self):
+        for person in (self.child, self.father, self.sibling):
+            for row in self._family(person):
+                self.assertIn('person_id', row)
+                self.assertIn('person_name', row)
+                self.assertIn('relationship', row)
+                self.assertIn('relationship_type', row)
+                self.assertNotIn('person_gender', row)
+
