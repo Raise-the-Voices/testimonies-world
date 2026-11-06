@@ -20,6 +20,7 @@
 	import StatusTransitionBanner from '$lib/StatusTransitionBanner.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import ConfirmModal from '$lib/ConfirmModal.svelte';
+	import CaseInfoCardModal from '$lib/CaseInfoCardModal.svelte';
 	import MediaUploadModal from '$lib/MediaUploadModal.svelte';
 	import MediaImage from '$lib/MediaImage.svelte';
 	import PersonPicker from '$lib/PersonPicker.svelte';
@@ -45,6 +46,8 @@
 	let mediaError = $state('');
 	let uploadOpen = $state(false);
 	let editTarget = $state<Media | null>(null);
+	/* Case information card — the poster view of this case. */
+	let caseCardOpen = $state(false);
 	let deleteTarget = $state<Media | null>(null);
 	let deleting = $state(false);
 	let deleteError = $state('');
@@ -699,6 +702,16 @@
 	<div class="view-container">
 		<!-- Main content (reports, media) -->
 		<div class="victim-item-container">
+			<div class="case-card-trigger">
+				<button
+					type="button"
+					class="btn btn-secondary case-card-trigger-btn"
+					onclick={() => (caseCardOpen = true)}
+				>
+					<Icon name="cases" size={16} />
+					<span>Case card</span>
+				</button>
+			</div>
 			{#if person.summary_narrative}
 				<div class="view-title">
 					<span class="view-item-title">Summary</span>
@@ -1190,6 +1203,13 @@
 	onClose={() => (uploadOpen = false)}
 />
 
+<!-- Case information card — the poster view of this case -->
+<CaseInfoCardModal
+	open={caseCardOpen}
+	personId={person?.id ?? null}
+	onClose={() => (caseCardOpen = false)}
+/>
+
 <!-- Delete media confirm dialog -->
 {#if deleteTarget}
 	{@const mediaTarget = deleteTarget}
@@ -1399,6 +1419,20 @@
 {/if}
 
 <style>
+	/* Case card trigger — the only action in the main column's header
+	   row. Right-aligned so it sits opposite the case's own content
+	   rather than competing with it. */
+	.case-card-trigger {
+		display: flex;
+		justify-content: flex-end;
+		margin-bottom: var(--space-card);
+	}
+	.case-card-trigger-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+	}
+
 	/* Responsive grid: profile card first on mobile (immediate scannability —
 	   photo + name + status + meta before the long-form narrative), 2-column
 	   2:1 split (Summary main / Profile sidebar) at >=50em.

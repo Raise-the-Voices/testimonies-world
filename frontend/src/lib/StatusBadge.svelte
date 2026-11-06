@@ -26,6 +26,16 @@
 		unknown: 'Unknown',
 		stateless: 'Stateless',
 		rights_restricted: 'Rights Restricted',
+		// Documentation Form Section D added these to the backend enum
+		// (Person.Status). They are absent from STATUS_VALUES — the
+		// /persons filter dropdown still offers only the original 8 —
+		// but a case can carry one, so the label map covers all 13
+		// the backend accepts (see schemas/personForm.ts).
+		ongoing_enforced_disappearance: 'Ongoing enforced disappearance',
+		found_alive: 'Found alive',
+		found_dead: 'Found dead',
+		case_closed: 'Case closed',
+		other: 'Other',
 	};
 </script>
 

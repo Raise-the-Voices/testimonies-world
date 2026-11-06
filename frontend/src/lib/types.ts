@@ -104,6 +104,13 @@ export interface Report {
 	narrative: string;
 	suspected_reason?: string;
 	official_reason?: string;
+	/* Abduction / taking-into-custody event block. Flat on the Report
+	   because the documentation form splits the incident across three
+	   sections while the case card needs it as one unit. */
+	date_of_abduction?: string | null;
+	time_of_abduction?: string | null;
+	place_of_abduction?: string;
+	abductors?: string;
 	is_private?: boolean;
 	created_by?: number | null;
 	created_at: string;
@@ -139,7 +146,13 @@ export type Gender = 'M' | 'F' | 'O' | 'U' | string;
 export interface FamilyRelationship {
 	person_id: number;
 	person_name: string;
+	/** Display label of the relation, e.g. "Parent", "Sibling". */
 	relationship: string;
+	/** Slug of the relation, e.g. "parent", "sibling". Read from the
+	    SUBJECT's perspective — a child's row says the other person is
+	    their "parent", and the same row read from the parent's side
+	    says "child". */
+	relationship_type?: string;
 }
 
 /**
@@ -221,6 +234,12 @@ export interface Person {
 	    thereafter. Surfaced in the submit form for volunteers to
 	    capture for their own records; not editable. */
 	case_id?: string;
+	/** Human-readable citable case reference, e.g. "ED-2026-0042".
+	    Blank until an advocate assigns one. Shown on the case card. */
+	public_reference?: string | null;
+	/** Date the case file was received by the documentation officer.
+	    Mostly unset; the case card falls back to `created_at`. */
+	case_received_date?: string | null;
 	created_at: string;
 	updated_at: string;
 }

@@ -98,6 +98,29 @@
 	--transition-card: 0.2s ease;
 	--card-padding: 1.25rem 1.5rem;
 	--card-padding-lg: 1.5rem 1.75rem; /* form sections, hero cards — anything with more vertical density */
+
+	/* Modal scrim — the veil between a dialog and the page behind it.
+	   Two depths: the standard one for small dialogs, the deeper one
+	   for a full-bleed poster card, which is bright white and needs
+	   more separation from the page behind it. */
+	--color-overlay: rgba(0, 0, 0, 0.45);
+	--color-overlay-deep: rgba(0, 0, 0, 0.62);
+
+	/* Case card (the interactive "Case Information Card" modal).
+	   The card is scaled in `em` against --card-base-font, so one set of
+	   rules renders at two sizes: 14px on screen (540px wide) and a
+	   double-size instance for image export.
+
+	   --card-poster-width is a multiple of --card-base-font rather
+	   than a plain `em`: a bare `38.57em` resolves against whatever
+	   font-size it lands on, so the width would silently change with
+	   the element that uses it. calc() keeps the number tied to the
+	   base font — 540px at 14px, 1080px at 28px. */
+	--card-base-font: 14px;
+	--card-poster-width: calc(var(--card-base-font) * 38.57);
+	/* Poster frames are square. --radius-card (8px) reads as "web
+	   card"; a dossier sheet has no rounded corners. */
+	--radius-card-poster: 0;
 }
 
 /* normalize basics */

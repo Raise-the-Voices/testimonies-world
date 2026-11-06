@@ -57,6 +57,13 @@ export const PersonDetailSchema = z.object({
 	authoritative_url: z.string().optional(),
 	quality_tier: z.union([z.number(), z.null()]).optional(),
 	is_published: z.boolean().optional(),
+	// Zod strips keys the schema doesn't declare, so every field the
+	// API actually returns has to be listed here or it is dropped on
+	// the way in.
+	age_at_incident: z.number().nullable().optional(),
+	occupation: z.string().optional(),
+	public_reference: z.string().nullable().optional(),
+	case_received_date: isoDateNullable.optional(),
 	created_at: isoDateTime,
 	updated_at: isoDateTime,
 	created_by: z.number().nullable(),
