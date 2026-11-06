@@ -1206,7 +1206,7 @@
 <!-- Case information card — the poster view of this case -->
 <CaseInfoCardModal
 	open={caseCardOpen}
-	personId={person?.id ?? null}
+	person={person}
 	onClose={() => (caseCardOpen = false)}
 />
 

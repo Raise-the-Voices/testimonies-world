@@ -37,6 +37,7 @@ export const PersonDetailSchema = z.object({
 	// the detail page for any empty-case Person record.
 	days_since_last_report: z.number().nullable(),
 	family: z.array(z.any()),
+	father_name: z.string().nullable().optional(),
 	profile_image_url: z.string().nullable(),
 	name: z.string(),
 	legal_name: z.string().optional(),

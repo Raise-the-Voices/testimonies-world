@@ -2,85 +2,53 @@
  * Case card data — the resolver behind the interactive "Case Information
  * Card" modal.
  *
- * The card is a *poster*: a flat, ordered list of facts about one case.
- * This module turns the MASKED card payload into that list, and
- * nothing else — no fetching, no formatting of presentation, no DOM.
+ * The card is a *poster*: a flat, ordered list of facts about one case,
+ * rendered as a dossier rather than as a form. This module owns the
+ * mapping from a `Person` record to that list, and nothing else — no
+ * fetching, no formatting of presentation, no DOM.
  *
- * Why the payload is the only input: the card is the artefact that
- * leaves the platform. It gets rendered to an image and shared, so
- * what may appear on it is decided by the consent flags on the case —
- * publication consent, identity level, photograph clearance, location
- * precision — and that decision is made on the SERVER, in
- * `backend/cases/card/serializers.py`. The browser is handed only what
- * is cleared for publication.
+ * Why a separate module rather than logic inside the component:
+ * the interesting decisions here (which report is the abduction event,
+ * which relative is the father, which rows to drop when empty) are pure
+ * functions, so they are unit-testable in the repo's existing
+ * `environment: 'node'` vitest setup, which cannot render components.
+ * Component rendering is covered by Playwright instead.
  *
- * Building the card from the person detail record instead would put
- * the advocate's view of the case file on the poster — the name, the
- * age, the occupation, the photograph, the precise location — which
- * is exactly what the server-side masking exists to prevent. So the
- * person detail payload is not an input here at all.
+ * Every field is read from data already in memory. The card makes no
+ * API call of its own — the person detail page has already loaded the
+ * full record, and a second fetch would be a wasted round trip.
  *
- * Why a separate module rather than logic inside the component: the
- * decisions here (which rows to drop when empty, how the location
- * reads) are pure functions, so they are unit-testable in the repo's
- * existing `environment: 'node'` vitest setup, which cannot render
- * components. Component rendering is covered by Playwright instead.
+ * This is the case-file view of a case, for someone working the file.
+ * The shareable, publication-facing projection of the same case is a
+ * separate payload with its own masking rules
+ * (`backend/cases/card/serializers.py`, `GET /api/persons/{id}/card/`).
  */
 
+import { statusLabels } from './StatusBadge.svelte';
 import { formatFullDate } from './dateFormat';
-
-/**
- * The masked card payload.
- *
- * Mirrors `CaseCardPayload` in the generated OpenAPI client
- * (`src/lib/api/generated/endpoints.schemas.ts`), which is the source
- * of truth — this interface is declared here only because the vitest
- * config runs the library tests in plain node with no `$lib` alias.
- * The modal hands the generated payload straight into
- * `buildCaseCardData`, so `npm run check` fails if the two drift.
- *
- * `location` and `photo` are OPTIONAL: the server omits them
- * entirely when they are withheld, and "this was withheld" is a
- * different fact from "this was empty".
- */
-export interface CaseCardPayload {
-	schema_version: number;
-	reference: string | null;
-	generated_date: string;
-	headline: string;
-	title: string;
-	status: string;
-	status_label: string;
-	identity: {
-		display_name: string;
-		father_name: string | null;
-		age: number | null;
-		occupation: string | null;
-	};
-	location?: {
-		country: string;
-		display: string | null;
-		precision: string;
-	};
-	incident: {
-		date: string | null;
-		time: string | null;
-		place: string | null;
-		abductors: string | null;
-		detail: string | null;
-	};
-	photo?: { url: string; alt: string };
-	categories: readonly string[];
-	verification: { level: string | null; label: string | null };
-	source_label: string | null;
-	exportable: boolean;
-	withheld: readonly string[];
-}
+import type { FamilyRelationship, Person, Report } from './types';
 
 export interface CardPhoto {
 	src: string;
+	/** Empty by design — the person's name sits directly above the
+	 *  photograph, so a description would only repeat it. */
 	alt: string;
 }
+
+/**
+ * The person shape the card reads.
+ *
+ * Dates arrive in one of two shapes depending on which endpoint
+ * delivered the record: the list endpoint returns the raw JSON
+ * (`created_at` is an ISO string), while the detail endpoint parses
+ * through `PersonDetailSchema`, whose `isoDateTime` / `isoDateNullable`
+ * transforms turn them into `Date` objects. `formatFullDate` accepts
+ * either, so the card does not care which one it got.
+ */
+export type CaseCardPerson = Omit<Person, 'created_at' | 'case_received_date'> & {
+	created_at: string | Date;
+	case_received_date?: string | Date | null;
+};
 
 export interface CardMetaRow {
 	label: string;
@@ -90,7 +58,7 @@ export interface CardMetaRow {
 export interface CaseCardData {
 	/** Citable public reference, or null when the case has none yet. */
 	reference: string | null;
-	/** Header date — the day the card was generated. */
+	/** Header date — the day the case entered the platform. */
 	date: string | null;
 	title: string;
 	statusLabel: string | null;
@@ -98,68 +66,117 @@ export interface CaseCardData {
 	/** Metadata rows in print order. Rows with no value are omitted
 	 *  entirely — never rendered with an empty value. */
 	rows: CardMetaRow[];
-	/**
-	 * The server's publication gate, carried through untouched.
-	 *
-	 * Any "Download poster" affordance MUST be driven by this flag and
-	 * by nothing else: the client never computes it, or a user could
-	 * patch the client and export a card the case was never cleared
-	 * for. See `docs/case-info-card-architecture.md` §1.4 and §3.2.
-	 */
-	exportable: boolean;
 }
 
 /**
- * Build the card's data from the masked payload.
+ * Build the card's data from a person record.
  *
  * Row order is fixed by the poster layout, not by the data: Age,
  * Residence, Profession, Father, then the abduction block.
  */
-export function buildCaseCardData(payload: CaseCardPayload): CaseCardData {
+export function buildCaseCardData(person: CaseCardPerson): CaseCardData {
 	const rows: CardMetaRow[] = [];
 	const add = (label: string, value: unknown) => {
 		const v = clean(value);
 		if (v) rows.push({ label, value: v });
 	};
 
-	add('Age', payload.identity.age ?? '');
-	add('Residence', formatResidence(payload));
-	add('Profession', payload.identity.occupation ?? '');
-	add('Father', payload.identity.father_name ?? '');
+	add('Age', person.age_at_incident ?? '');
+	add('Residence', formatResidence(person));
+	add('Profession', person.occupation ?? '');
 
-	// The abduction event is one block on the server: the date, the
-	// place and the perpetrators, already resolved from the case's
-	// public reports. The card prints what it is given.
-	add('Abduction date', formatFullDate(payload.incident.date ?? ''));
-	add('Abduction place', payload.incident.place ?? '');
-	add('Perpetrators', payload.incident.abductors ?? '');
+	const parent = resolveParent(person);
+	if (parent) add(parent.label, parent.name);
+
+	// The abduction event lives on a Report, not on the Person: one
+	// case file can carry several reports of the same incident. The
+	// report's own start date stands in for the abduction date when
+	// the dedicated field has not been filled in.
+	const abduction = pickAbductionReport(person.reports ?? []);
+	add(
+		'Abduction date',
+		formatFullDate(abduction?.date_of_abduction ?? abduction?.date_start ?? ''),
+	);
+	add('Abduction place', abduction?.place_of_abduction ?? '');
+	add('Perpetrators', abduction?.abductors ?? '');
 
 	return {
-		reference: clean(payload.reference) || null,
-		date: formatFullDate(payload.generated_date) || null,
-		title: clean(payload.title),
-		statusLabel: clean(payload.status_label) || null,
-		photo: payload.photo ? { src: payload.photo.url, alt: payload.photo.alt } : null,
+		reference: clean(person.public_reference) || null,
+		// The date the case file was received is the semantically right
+		// date but is rarely filled in, so the platform's own record of
+		// when the case was entered stands in for it.
+		date: formatFullDate(person.case_received_date ?? '') || formatFullDate(person.created_at),
+		title: clean(person.name),
+		statusLabel: clean(statusLabels[person.current_status] ?? '') || null,
+		photo: person.profile_image_url ? { src: person.profile_image_url, alt: '' } : null,
 		rows,
-		exportable: payload.exportable,
 	};
 }
 
 /**
- * Residence reads "Alexandria, Smouha, Egypt".
- *
- * The server decides how fine the location may be — `province` gives
- * the country alone, `city` adds the district and the rough location —
- * and the card prints what it is given. A withheld location is not a
- * blank one: the whole key is absent from the payload, and this
- * returns '' so the row is left off the card.
+ * Residence reads "Alexandria, Egypt" when a rough location is known
+ * and just the country when it is not. `rough_location` is the coarse
+ * region; `precise_location` is private and never reaches the card.
  */
-function formatResidence(payload: CaseCardPayload): string {
-	if (!payload.location) return '';
-	return [payload.location.display, payload.location.country]
-		.map((part) => clean(part))
-		.filter((part) => part.length > 0)
-		.join(', ');
+function formatResidence(person: CaseCardPerson): string {
+	const country = clean(person.country);
+	const rough = clean(person.rough_location);
+	if (rough && country) return `${rough}, ${country}`;
+	return rough || country;
+}
+
+/**
+ * Find the father for the "Father" row.
+ *
+ * The relation only says "parent" — it is not gendered — so the
+ * browser cannot tell a father from a mother on its own. The server
+ * resolves it instead and sends the answer as `father_name` on the
+ * person payload, which is the same resolution the publication card
+ * uses (`backend/cases/serializers.py:father_name`).
+ *
+ * When the case records no father, the row falls back to a parent and
+ * says "Parent": naming someone a father when the record does not say
+ * so would be a guess about a person.
+ */
+export function resolveParent(
+	person: CaseCardPerson,
+): { label: string; name: string } | null {
+	const father = clean(person.father_name);
+	if (father) return { label: 'Father', name: father };
+
+	const family: FamilyRelationship[] = person.family ?? [];
+	const parents = family.filter(
+		(rel) => rel.relationship_type === 'parent' || rel.relationship === 'Parent',
+	);
+	if (parents.length === 0) return null;
+
+	return { label: 'Parent', name: clean(parents[0].person_name) };
+}
+
+/**
+ * Pick the report that documents the abduction.
+ *
+ * `reports[]` comes back in the model's default order, which is not
+ * guaranteed to be chronological, so "the abduction report" is chosen
+ * explicitly: the earliest report with a `date_of_abduction`, or —
+ * when no report has one — the earliest report by `date_start`.
+ */
+export function pickAbductionReport(reports: Report[]): Report | null {
+	const dated = reports.filter((r) => !!r.date_of_abduction);
+	if (dated.length > 0) {
+		return dated.reduce((earliest, r) =>
+			(r.date_of_abduction as string) < (earliest.date_of_abduction as string) ? r : earliest,
+		);
+	}
+
+	const started = reports.filter((r) => !!r.date_start);
+	if (started.length > 0) {
+		return started.reduce((earliest, r) =>
+			(r.date_start as string) < (earliest.date_start as string) ? r : earliest,
+		);
+	}
+
+	return null;
 }
 
 /** Trim to a non-empty string; anything else becomes ''. */
