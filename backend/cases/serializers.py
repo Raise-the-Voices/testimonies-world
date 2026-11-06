@@ -40,6 +40,42 @@ INVERSE_RELATIONSHIP_TYPE = {
 }
 
 
+def father_name(person) -> str | None:
+    """The name of the person's father, or None.
+
+    `FamilyRelationship.relationship_type` describes person_b relative
+    to person_a, so the parent has to be read from the correct side:
+    a 'parent' row where the subject is person_a, or a 'child' row
+    where the subject is person_b.
+
+    The relation only says "parent" — it is not gendered — so the
+    related Person's gender decides whether that parent is the father
+    or the mother. Anything that is not male answers None: naming a
+    mother "Father" would put a wrong name on a line about a real
+    person.
+
+    Both relationship sides are prefetched by the viewset
+    (`relationships_as_a__person_b` and `relationships_as_b__person_a`),
+    so this costs no extra queries.
+
+    Used by the case-file payload (`get_father_name` below) and by the
+    publication-facing card export (`cases/card/serializers.py`), so
+    both read the same record the same way.
+    """
+    candidates = []
+    for relation in person.relationships_as_a.all():
+        if relation.relationship_type == 'parent':
+            candidates.append(relation.person_b)
+    for relation in person.relationships_as_b.all():
+        if relation.relationship_type == 'child':
+            candidates.append(relation.person_a)
+    for parent in candidates:
+        if parent.gender == Person.Gender.MALE:
+            name = (parent.name or '').strip()
+            return name or None
+    return None
+
+
 def _can_view_internal(request) -> bool:
     """True if `request.user` may see Section M (internal) fields.
 
@@ -439,6 +475,7 @@ class PersonDetailSerializer(serializers.ModelSerializer):
     media_files = MediaSerializer(many=True, read_only=True)
     days_since_last_report = serializers.IntegerField(read_only=True)
     family = serializers.SerializerMethodField()
+    father_name = serializers.SerializerMethodField()
     profile_image_url = serializers.SerializerMethodField()
     # Auto-captured history of edits to the status-ish fields on Person
     # (current_status, medical_status, current_status_date,
@@ -544,6 +581,17 @@ class PersonDetailSerializer(serializers.ModelSerializer):
                 'relationship_type': rel_type,
             })
         return result
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_father_name(self, obj):
+        # The father's name, resolved from the relationship rows — the
+        # same resolution the card export uses. The family list itself
+        # carries no gender (see get_family), so this is the only way
+        # a client can tell a father from a mother without guessing.
+        #
+        # It adds no disclosure: the father's name is already in the
+        # `family` rows of this same payload.
+        return father_name(obj)
 
     @extend_schema_field(serializers.ListField(child=serializers.DictField()))
     def get_status_history(self, obj):

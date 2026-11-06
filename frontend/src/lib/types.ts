@@ -223,6 +223,11 @@ export interface Person {
 	reports?: Report[];
 	media_files?: Media[];
 	family?: FamilyRelationship[];
+	/** The father's name, resolved server-side from the relationship
+	    rows. The family rows themselves carry no gender, so this is
+	    how a client tells a father from a mother without guessing.
+	    Backend field: ``father_name``. */
+	father_name?: string | null;
 	/** Auto-captured history of edits to the status-ish fields
 	    (current_status, medical_status, current_status_date,
 	    current_status_source, current_status_verification). One row

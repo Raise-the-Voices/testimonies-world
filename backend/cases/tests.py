@@ -3316,3 +3316,67 @@ class PersonFamilyPayloadTests(BaseTestCase):
                 self.assertIn('relationship_type', row)
                 self.assertNotIn('person_gender', row)
 
+
+class PersonFatherNamePayloadTests(BaseTestCase):
+    """Contract for ``PersonDetailSerializer.get_father_name``.
+
+    A relationship row says "parent", never "father". The card needs
+    to know which parent is the father, and the family list on this
+    same payload deliberately carries no gender — so the server
+    resolves it and sends the answer as ``father_name``.
+
+    A name on a line labelled "Father" is a statement about a real
+    person, so the resolver answers only for a parent the database
+    records as male, and answers nothing otherwise.
+    """
+
+    URL = '/api/persons/'
+
+    def setUp(self):
+        self.staff = make_user('fatheradmin', is_staff=True)
+        self.client = APIClient()
+        self.client.force_login(self.staff)
+        self.child = Person.objects.create(
+            name='Child Person', country='Y', gender='F')
+        self.father = Person.objects.create(
+            name='Father Person', country='Y', gender='M')
+        self.mother = Person.objects.create(
+            name='Mother Person', country='Y', gender='F')
+
+    def _detail(self, person):
+        res = self.client.get(f'{self.URL}{person.pk}/')
+        self.assertEqual(res.status_code, 200, res.content)
+        return res.json()
+
+    def test_father_name_is_the_male_parent(self):
+        FamilyRelationship.objects.create(
+            person_a=self.child, person_b=self.father,
+            relationship_type='parent')
+        self.assertEqual(
+            self._detail(self.child)['father_name'], 'Father Person')
+
+    def test_no_father_when_the_only_parent_is_the_mother(self):
+        FamilyRelationship.objects.create(
+            person_a=self.child, person_b=self.mother,
+            relationship_type='parent')
+        self.assertIsNone(self._detail(self.child)['father_name'])
+
+    def test_father_name_resolves_from_the_other_side_of_the_row(self):
+        # The same relation stored the other way round: the father is
+        # person_a, the child person_b, and the row reads 'child'.
+        FamilyRelationship.objects.create(
+            person_a=self.father, person_b=self.child,
+            relationship_type='child')
+        self.assertEqual(
+            self._detail(self.child)['father_name'], 'Father Person')
+
+    def test_no_father_when_the_case_records_no_family(self):
+        self.assertIsNone(self._detail(self.child)['father_name'])
+
+    def test_no_father_when_the_parents_name_is_blank(self):
+        blank = Person.objects.create(name='   ', country='Y', gender='M')
+        FamilyRelationship.objects.create(
+            person_a=self.child, person_b=blank,
+            relationship_type='parent')
+        self.assertIsNone(self._detail(self.child)['father_name'])
+

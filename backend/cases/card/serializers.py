@@ -33,6 +33,7 @@ from rest_framework import serializers
 from cases.models import Person
 from cases.models import PublicIdentityLevel, PublicLocationLevel
 from cases.serializers import _absolute_media_url
+from cases.serializers import father_name as _father_name
 
 # --- Vocabularies ------------------------------------------------------
 
@@ -210,33 +211,6 @@ def _anchor_report(reports):
     with_start = [r for r in reports if r.date_start]
     if with_start:
         return min(with_start, key=lambda r: r.date_start)
-    return None
-
-
-def _father_name(person):
-    """The name of the person's father, or None.
-
-    `FamilyRelationship.relationship_type` describes person_b relative
-    to person_a, so the parent has to be read from the correct side:
-    a 'parent' row where the subject is person_a, or a 'child' row
-    where the subject is person_b.
-
-    The relation only says "parent" — the API's family payload
-    carries no gender, so father vs mother is not decidable from the
-    relation row. The related Person's gender is read from the
-    database instead, and anything that is not male answers None.
-    Guessing would put a mother's name on a line labelled "Father".
-    """
-    candidates = []
-    for relation in person.relationships_as_a.all():
-        if relation.relationship_type == 'parent':
-            candidates.append(relation.person_b)
-    for relation in person.relationships_as_b.all():
-        if relation.relationship_type == 'child':
-            candidates.append(relation.person_a)
-    for parent in candidates:
-        if parent.gender == Person.Gender.MALE:
-            return _clean(parent.name)
     return None
 
 
