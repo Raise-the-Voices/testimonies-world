@@ -4,6 +4,7 @@
 	import { isEmptyAfterSanitization, safeText, safeTextOr } from '$lib/testimonial-sanitize';
 	import { sanitizeText } from '$lib/sanitize';
 	import { statusLabel } from '$lib/statusPresentation';
+	import { reveal } from '$lib/motion';
 
 	/**
 	 * One-testimonial card for the public list and the "My drafts"
@@ -28,9 +29,11 @@
 	interface Props {
 		testimonial: TestimonialPublic;
 		showStatus?: boolean;
+		/** Position in the grid. Drives the reveal stagger. */
+		index?: number;
 	}
 
-	let { testimonial, showStatus = false }: Props = $props();
+	let { testimonial, showStatus = false, index = 0 }: Props = $props();
 
 	const safeTitle = $derived(sanitizeText(safeText(testimonial.title)));
 	const safeSummary = $derived(sanitizeText(safeText(testimonial.summary)));
@@ -60,7 +63,7 @@
 </script>
 
 {#if !isEmpty}
-	<a class="testimonial-card" href="{base}/testimonials/{testimonial.id}">
+	<a class="testimonial-card" href="{base}/testimonials/{testimonial.id}" use:reveal={{ index }}>
 		{#if safeLocationDisplay || safeCountry}
 			<p class="testimonial-card-location">
 				{#if safeLocationDisplay}
@@ -149,7 +152,7 @@
 		   the only difference is the snap from rest→hover is
 		   instant for the shadow. Browsers without `contain`
 		   degrade gracefully. */
-		transition: transform 0.2s ease;
+		transition: transform var(--motion-duration-enter) var(--motion-ease-editorial);
 		/* See PersonCard for the rationale — scope layout/style/
 		   paint to this card so off-card hover / image decode
 		   doesn't invalidate the whole list. */
@@ -278,5 +281,13 @@
 	.testimonial-card-status-archived {
 		background: #e5e7eb;
 		color: #4b5563;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.testimonial-card,
+		.testimonial-card:hover {
+			transition: none;
+			transform: none;
+		}
 	}
 </style>

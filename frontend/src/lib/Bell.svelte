@@ -5,6 +5,7 @@
 	import { user, isAdvocate } from '$lib/session';
 	import Icon from '$lib/Icon.svelte';
 import Skeleton from '$lib/Skeleton.svelte';
+	import { drop } from '$lib/motion';
 	import {
 		getUnreadCount,
 		getNotifications,
@@ -159,7 +160,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 		</button>
 
 		{#if open}
-			<div class="bell-panel" role="dialog" aria-label="Notifications">
+			<div class="bell-panel" role="dialog" aria-label="Notifications" transition:drop>
 				<header class="bell-header">
 					<span>Notifications</span>
 					{#if unread > 0}
@@ -220,7 +221,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		transition: background 0.15s ease;
+		transition: background var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.bell-btn:hover {
 		background: rgba(0, 0, 0, 0.32);
@@ -343,5 +344,11 @@ import Skeleton from '$lib/Skeleton.svelte';
 	}
 	.bell-footer a:hover {
 		color: var(--color-primary);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.bell-btn {
+			transition: none;
+		}
 	}
 </style>

@@ -26,7 +26,7 @@
 -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { fly, fade } from 'svelte/transition';
+	import { fade, panel } from '$lib/motion';
 
 	interface Props {
 		open: boolean;
@@ -132,7 +132,7 @@
 			}
 		}}
 		role="presentation"
-		transition:fade={{ duration: 150 }}
+		transition:fade
 	></div>
 
 	<!-- Dialog -->
@@ -144,7 +144,7 @@
 		aria-modal="true"
 		aria-labelledby={title ? titleId : undefined}
 		aria-label={!title && ariaLabel ? ariaLabel : undefined}
-		transition:fly={{ y: variant === 'poster' ? 12 : -16, duration: 200, opacity: 0 }}
+		transition:panel={{ direction: variant === 'poster' ? 'up' : 'down' }}
 	>
 		{#if header}
 			{@render header()}
@@ -261,12 +261,5 @@
 	}
 	.modal-close:hover {
 		color: var(--color-text);
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.modal,
-		.modal-overlay {
-			transition: none;
-		}
 	}
 </style>

@@ -25,8 +25,9 @@
   -------------------
   - Each section is independently wrapped with a fixed `min-height`
     so swapping skeleton → content never reflows the page.
-  - Skeleton → content transitions use `transition:fade` (220 ms) so
-    the swap is a soft crossfade, not a hard cut.
+  - Skeleton → content transitions use `transition:fade` from
+    `$lib/motion` (240 ms) so the swap is a soft crossfade, not a
+    hard cut. Reduced motion turns them off entirely.
   - Auth state derives from `data.user` (SSR-hydrated by +layout.ts)
     instead of the global `$user` store. Without this, the SSR HTML
     would render the unauthenticated chrome and the client hydration
@@ -39,7 +40,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { invalidateAll } from '$app/navigation';
-	import { fade } from 'svelte/transition';
+	import { fade } from '$lib/motion';
 	import Icon from '$lib/Icon.svelte';
 	import DashboardCard from '$lib/DashboardCard.svelte';
 	import StatisticsCard from '$lib/StatisticsCard.svelte';
@@ -284,7 +285,7 @@
 		>
 			<div class="dashboard-section summary-section">
 				{#if loading}
-					<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<div class="section-inner" transition:fade>
 						<div class="summary-row" aria-hidden="true">
 							{#each Array(4) as _, i (i)}
 								<Skeleton variant="rect" height="6rem" />
@@ -292,7 +293,7 @@
 						</div>
 					</div>
 				{:else if data.data}
-					<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<div class="section-inner" transition:fade>
 						<section class="summary-row" aria-label="Platform summary">
 							<StatisticsCard
 								variant="kpi"
@@ -350,7 +351,7 @@
 		>
 			<div class="dashboard-section quick-actions-section">
 				{#if loading}
-					<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<div class="section-inner" transition:fade>
 						<DashboardCard title="Quick actions" subtitle="One click to the right place.">
 							<div class="quick-actions" aria-hidden="true">
 								{#each Array(6) as _, i (i)}
@@ -360,7 +361,7 @@
 						</DashboardCard>
 					</div>
 				{:else if data.data}
-					<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<div class="section-inner" transition:fade>
 						<DashboardCard title="Quick actions" subtitle="One click to the right place.">
 							{#if visibleActions.length === 0}
 								<p class="empty-state">No actions available for your role.</p>
@@ -384,7 +385,7 @@
 		>
 		<div class="dashboard-section activity-section">
 			{#if loading}
-				<div class="section-inner" transition:fade={{ duration: 220 }}>
+				<div class="section-inner" transition:fade>
 					<DashboardCard title="Recent activity" subtitle="Your activity across the platform.">
 						<div class="feed-skel" aria-hidden="true">
 							{#each Array(5) as _, i (i)}
@@ -394,7 +395,7 @@
 					</DashboardCard>
 				</div>
 			{:else if data.data}
-				<div class="section-inner" transition:fade={{ duration: 220 }}>
+				<div class="section-inner" transition:fade>
 					<DashboardCard
 						title="Recent activity"
 						subtitle={scopeLabel === 'staff'
@@ -444,7 +445,7 @@
 		>
 		<div class="dashboard-section status-section">
 			{#if loading}
-				<div class="section-inner" transition:fade={{ duration: 220 }}>
+				<div class="section-inner" transition:fade>
 					<DashboardCard title="Status breakdown" subtitle="Open cases by current status.">
 						<div class="status-skel" aria-hidden="true">
 							<Skeleton variant="rect" height="0.75rem" width="100%" />
@@ -457,7 +458,7 @@
 					</DashboardCard>
 				</div>
 			{:else if data.data}
-				<div class="section-inner" transition:fade={{ duration: 220 }}>
+				<div class="section-inner" transition:fade>
 					<DashboardCard title="Status breakdown" subtitle="Open cases by current status.">
 						<StatusBreakdownChart counts={data.data.by_status} />
 					</DashboardCard>
@@ -476,7 +477,7 @@
 		>
 		<div class="dashboard-section recent-persons-section">
 			{#if loading}
-				<div class="section-inner" transition:fade={{ duration: 220 }}>
+				<div class="section-inner" transition:fade>
 					<DashboardCard title="Recently updated cases" subtitle="Latest five published cases.">
 						<div class="feed-skel" aria-hidden="true">
 							{#each Array(5) as _, i (i)}
@@ -486,7 +487,7 @@
 					</DashboardCard>
 				</div>
 			{:else if data.data}
-				<div class="section-inner" transition:fade={{ duration: 220 }}>
+				<div class="section-inner" transition:fade>
 					<DashboardCard title="Recently updated cases" subtitle="Latest five published cases.">
 						{#snippet trailing()}
 							<a href="{base}/persons" class="view-all-link">
@@ -527,7 +528,7 @@
 		>
 			<div class="dashboard-section recent-casework-section">
 				{#if loading}
-					<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<div class="section-inner" transition:fade>
 						<DashboardCard title="My recent casework" subtitle="Latest five advocacy actions.">
 							<div class="feed-skel" aria-hidden="true">
 								{#each Array(5) as _, i (i)}
@@ -537,7 +538,7 @@
 						</DashboardCard>
 					</div>
 				{:else if data.data}
-					<div class="section-inner" transition:fade={{ duration: 220 }}>
+					<div class="section-inner" transition:fade>
 						<DashboardCard
 							title={isAdmin(currentUser) ? 'Recent casework' : 'My recent casework'}
 							subtitle="Latest five advocacy actions."

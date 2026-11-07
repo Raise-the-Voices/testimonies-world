@@ -12,6 +12,7 @@
 	import Skeleton from '$lib/Skeleton.svelte';
 	import { sanitizeText } from '$lib/sanitize';
 	import TestimonialCard from '$lib/TestimonialCard.svelte';
+	import { fade } from '$lib/motion';
 	import type { Paginated } from '$lib/types';
 	import type { PageData } from './$types';
 
@@ -216,8 +217,8 @@
 
 {#snippet cardGrid(items: TestimonialPublic[], showStatus: boolean)}
 	<div class="testimonials-grid">
-		{#each items as t (t.id)}
-			<TestimonialCard testimonial={t} {showStatus} />
+		{#each items as t, i (t.id)}
+			<TestimonialCard testimonial={t} {showStatus} index={i} />
 		{/each}
 	</div>
 {/snippet}
@@ -308,6 +309,10 @@
 		id="testimonials-panel"
 		aria-labelledby={`testimonials-tab-${activeTab}`}
 	>
+		<!-- Keyed on the tab so switching sections crossfades the panel
+		     instead of snapping to the new content. -->
+		{#key activeTab}
+			<div class="testimonials-panel-body" in:fade>
 	{#if activeTab === 'published'}
 		{#if data.error}
 			<div class="error-state" role="alert">
@@ -366,17 +371,19 @@
 				</div>
 			{:else}
 				<div class="testimonials-grid">
-					{#each state.list as t (t.id)}
+					{#each state.list as t, i (t.id)}
 						{#if tab.key === 'rejected'}
 							{@render rejectedCard(t)}
 						{:else}
-							<TestimonialCard testimonial={t} showStatus />
+							<TestimonialCard testimonial={t} showStatus index={i} />
 						{/if}
 					{/each}
 				</div>
 			{/if}
 		{/if}
 	{/if}
+			</div>
+		{/key}
 	</div>
 </div>
 

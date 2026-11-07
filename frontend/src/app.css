@@ -62,6 +62,54 @@
 	--skeleton-shine: rgba(255, 255, 255, 0.6);
 	--skeleton-bg-static: #d8dee2;
 
+	/* === Motion ==========================================================
+	   One vocabulary for every animation on the site.
+
+	     editorial  — public pages: scroll reveals, count-ups, the
+	                  ambient wash. Long-ish, decelerating, quiet.
+	     functional — internal tools: dropdowns, crossfades, accordions.
+	                  Short, mechanical, travel capped at 8px.
+
+	   House rules encoded here:
+	     - nothing bounces, nothing springs, nothing scales.
+	     - durations / easings / travel are named; components never
+	       hardcode a duration or an easing.
+	     - every value below has a matching key in $lib/motion.ts
+	       (see src/lib/motion.test.ts — the parity test enforces it).
+	   =================================================================== */
+
+	/* Durations */
+	--motion-duration-enter: 400ms;    /* above-the-fold settle on load    */
+	--motion-duration-overlay: 240ms;  /* dropdown, modal, toast, banner   */
+	--motion-duration-accordion: 280ms;/* report accordion height          */
+	--motion-duration-reveal: 700ms;   /* scroll reveal                    */
+	--motion-duration-count: 900ms;    /* count-up                         */
+	--motion-duration-grow: 700ms;     /* stat bar grow                    */
+	--motion-duration-ambient: 46s;    /* ambient wash cycle               */
+	--motion-duration-fast: 180ms;     /* colour / border / focus changes  */
+	--motion-duration-press: 120ms;    /* button press feedback           */
+	--motion-duration-spin: 800ms;     /* loading spinner                 */
+	--motion-duration-shimmer: 1400ms; /* skeleton shimmer                */
+
+	/* Travel (never exceeds 12px; 16px is the toast only) */
+	--motion-rise-enter: 8px;
+	--motion-rise-overlay: 8px;
+	--motion-rise-reveal: 12px;
+	--motion-rise-toast: 16px;
+
+	/* Rhythm */
+	--motion-stagger-step: 90ms;
+
+	/* Easings — decelerating only. */
+	--motion-ease-editorial: cubic-bezier(0.16, 1, 0.3, 1);
+	--motion-ease-overlay: cubic-bezier(0.2, 0, 0, 1);
+	--motion-ease-count: cubic-bezier(0, 0, 0.58, 1); /* == CSS ease-out */
+
+	/* Ambient wash — derived from the brand teal, never a raw hex
+	   outside this token block. */
+	--motion-ambient-stop-1: color-mix(in srgb, var(--color-primary) 6%, transparent);
+	--motion-ambient-stop-2: color-mix(in srgb, var(--color-sidebar-header) 5%, transparent);
+
 	/* Layout */
 	--max-width: 1140px; /* legacy layout wrapper */
 	--max-w-page: 1100px; /* primary content column on dashboard pages */
@@ -95,7 +143,7 @@
 	--shadow-toolbar: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -12px rgba(37, 100, 106, 0.18);
 	--shadow-card-lg: 0 4px 12px rgba(0, 0, 0, 0.06), 0 20px 40px -16px rgba(37, 100, 106, 0.18);
 	--focus-ring: 0 0 0 3px var(--color-primary-tint);
-	--transition-card: 0.2s ease;
+	--transition-card: var(--motion-duration-fast) var(--motion-ease-overlay);
 	--card-padding: 1.25rem 1.5rem;
 	--card-padding-lg: 1.5rem 1.75rem; /* form sections, hero cards — anything with more vertical density */
 
@@ -154,6 +202,16 @@
 	   mono stack — the poster needs no webfont of its own. */
 	--font-mono: ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas,
 		'Liberation Mono', monospace;
+}
+
+/* Fallback for the ambient wash stops on browsers without `color-mix`
+   (Chrome < 111 / Safari < 16.2 / Firefox < 113). The values mirror
+   the mix percentages above, written out as rgba. */
+@supports not (color: color-mix(in srgb, red, blue)) {
+	:root {
+		--motion-ambient-stop-1: rgba(37, 100, 106, 0.06);
+		--motion-ambient-stop-2: rgba(95, 158, 160, 0.05);
+	}
 }
 
 /* normalize basics */
@@ -220,11 +278,17 @@ h3 { font-size: 1.15rem; }
 	min-height: 44px;
 	min-width: 44px;
 	box-sizing: border-box;
+	/* Press feedback. `transform` only — a compositor property, so the
+	   press never repaints the button. */
+	transition: transform var(--motion-duration-press) var(--motion-ease-overlay);
 }
 .btn:hover {
 	background: var(--color-primary-light);
 	color: var(--color-text-light);
 	text-decoration: none;
+}
+.btn:active {
+	transform: scale(0.98);
 }
 .btn-primary {
 	background: var(--color-primary);
@@ -249,7 +313,7 @@ h3 { font-size: 1.15rem; }
 
 /* === Design system: card animations + transitions === */
 @keyframes fadeSlideUp {
-	from { opacity: 0; transform: translateY(8px); }
+	from { opacity: 0; transform: translateY(var(--motion-rise-enter)); }
 	to { opacity: 1; transform: translateY(0); }
 }
 @keyframes fadeSlideUpSmall {
@@ -257,32 +321,60 @@ h3 { font-size: 1.15rem; }
 	to { opacity: 1; transform: translateY(0); }
 }
 
-/* Entrance animation for all major card sections.
-   Targets existing class names — no template changes required. */
-.summary-card,
-.media-item-card,
-.meta-card,
-.incident-container,
-.sidebar-top,
-.sidebar-bot,
-.profile-photo,
-.profile-photo-placeholder {
-	animation: fadeSlideUp 0.4s ease both;
+/* Stat bar grow — transform-only, so the fill paints in without a
+   layout change (a width animation here would be a CLS event). */
+@keyframes bar-grow {
+	from { transform: scaleX(0); }
+	to { transform: scaleX(1); }
 }
 
-/* Staggered cascade for the media list (only repeated item list on the page).
-   .fade-in-stagger applied via class on the wrapper. */
-.fade-in-stagger > * {
-	animation: fadeSlideUpSmall 0.35s ease both;
+/* Ambient wash drift — transform-only, so the layer is composited once
+   and never repainted while it drifts. */
+@keyframes ambient-drift {
+	from { transform: translate3d(-2%, -1%, 0) scale(1); }
+	to { transform: translate3d(2%, 1.5%, 0) scale(1.04); }
 }
-.fade-in-stagger > *:nth-child(1) { animation-delay: 0s; }
-.fade-in-stagger > *:nth-child(2) { animation-delay: 0.05s; }
-.fade-in-stagger > *:nth-child(3) { animation-delay: 0.10s; }
-.fade-in-stagger > *:nth-child(4) { animation-delay: 0.15s; }
-.fade-in-stagger > *:nth-child(5) { animation-delay: 0.20s; }
-.fade-in-stagger > *:nth-child(6) { animation-delay: 0.25s; }
-.fade-in-stagger > *:nth-child(7) { animation-delay: 0.30s; }
-.fade-in-stagger > *:nth-child(8) { animation-delay: 0.35s; }
+
+/* Global spinner — one definition for the whole site. The five
+   component-scoped copies were removed; Svelte scopes @keyframes per
+   component, so a global name is what makes them interchangeable. */
+@keyframes spin {
+	to { transform: rotate(360deg); }
+}
+
+/* Global skeleton shimmer — promoted from Skeleton.svelte so the two
+   components that referenced it by name (StatisticsCard, RelatedCases)
+   resolve it. Svelte scopes @keyframes per component, so a reference
+   to a name defined in another component silently does nothing. */
+@keyframes skeleton-shimmer {
+	0% { background-position: 200% 0; }
+	100% { background-position: -200% 0; }
+}
+
+/* Entrance animation for all major card sections.
+
+   REMOVED — the person-detail page now reveals on scroll (the `reveal`
+   action in $lib/motion.ts). A global load-time entrance fought the
+   reveal: the card animated in, then hid again, then animated in a
+   second time when it scrolled into view. It also double-animated
+   `.media-item-card`, which is already a child of `.fade-in-stagger`. */
+
+/* Staggered cascade for the media list (only repeated item list on the page).
+   .fade-in-stagger applied via class on the wrapper.
+   The step is the shared `--motion-stagger-step`, the same one the
+   scroll reveal uses, so a list of cards cascades at one rhythm
+   whichever way it enters. Capped at 8 steps. */
+.fade-in-stagger > * {
+	animation: fadeSlideUpSmall var(--motion-duration-enter) var(--motion-ease-editorial) both;
+}
+.fade-in-stagger > *:nth-child(1) { animation-delay: calc(var(--motion-stagger-step) * 0); }
+.fade-in-stagger > *:nth-child(2) { animation-delay: calc(var(--motion-stagger-step) * 1); }
+.fade-in-stagger > *:nth-child(3) { animation-delay: calc(var(--motion-stagger-step) * 2); }
+.fade-in-stagger > *:nth-child(4) { animation-delay: calc(var(--motion-stagger-step) * 3); }
+.fade-in-stagger > *:nth-child(5) { animation-delay: calc(var(--motion-stagger-step) * 4); }
+.fade-in-stagger > *:nth-child(6) { animation-delay: calc(var(--motion-stagger-step) * 5); }
+.fade-in-stagger > *:nth-child(7) { animation-delay: calc(var(--motion-stagger-step) * 6); }
+.fade-in-stagger > *:nth-child(8) { animation-delay: calc(var(--motion-stagger-step) * 7); }
 
 /* Hover transitions + subtle elevation on cards.
    Skip .incident-container — it has its own accordion click behavior. */
@@ -302,16 +394,106 @@ h3 { font-size: 1.15rem; }
 	border-color: var(--color-primary-light);
 }
 
+/* ============================================================================
+   Scroll reveal
+   --------------------------------------------------------------------------
+   The hidden state is applied BY JAVASCRIPT (the `reveal` action in
+   $lib/motion.ts sets data-reveal="pending"), never by CSS default.
+   That is deliberate: an SSR snapshot, a JS-disabled browser, or a
+   failed hydration all render the content VISIBLE. The reveal can
+   never hide content that the browser is unable to un-hide.
+   ========================================================================== */
+[data-reveal] {
+	/* Delay, in stagger steps, before this element animates in. The
+	   action writes --reveal-index; `mod()` caps the cascade so a long
+	   list never leaves a card waiting more than a few steps. Where
+	   `mod()` is unsupported the declaration is dropped and the delay
+	   falls back to 0 — every element still animates, just together. */
+	--reveal-stagger: 0;
+	--reveal-stagger: mod(var(--reveal-index, 0), 8);
+	transition:
+		opacity var(--motion-duration-reveal) var(--motion-ease-editorial),
+		transform var(--motion-duration-reveal) var(--motion-ease-editorial);
+	transition-delay: calc(var(--motion-stagger-step) * var(--reveal-stagger, 0));
+}
+/* pending: hidden, and deliberately not transitionable — the action
+   applies this off-screen, so the hide itself must be instant. */
+[data-reveal='pending'] {
+	opacity: 0;
+	transform: translateY(var(--motion-rise-reveal));
+	transition: none;
+}
+/* in: the animated state. `transform: none` (not translateY(0)) so a
+   revealed element does not become a containing block for any
+   position: fixed descendant. */
+[data-reveal='in'] {
+	opacity: 1;
+	transform: none;
+}
+
+/* Grid cascade — the delay follows the card's COLUMN, so a row unfurls
+   left to right instead of the whole grid arriving at once. `mod()`
+   gives the column index from the card's index. */
+.cases-grid > [data-reveal],
+.testimonials-grid > [data-reveal] {
+	/* One column on phones: every card is alone in its row, so there
+	   is nothing to offset. */
+	--reveal-stagger: 0;
+}
+@media (min-width: 700px) {
+	.testimonials-grid > [data-reveal] {
+		--reveal-stagger: 0;
+		--reveal-stagger: mod(var(--reveal-index, 0), 2);
+	}
+}
+@media (min-width: 720px) {
+	.cases-grid > [data-reveal] {
+		--reveal-stagger: 0;
+		--reveal-stagger: mod(var(--reveal-index, 0), 2);
+	}
+}
+@media (min-width: 1100px) {
+	.cases-grid > [data-reveal],
+	.testimonials-grid > [data-reveal] {
+		--reveal-stagger: mod(var(--reveal-index, 0), 3);
+	}
+}
+
+/* ============================================================================
+   Ambient wash — public pages only (mounted by +layout.svelte).
+   A single fixed layer of two soft brand-teal gradients that drifts
+   slowly. It is decoration, so it never intercepts pointer events and
+   never sits over text.
+
+   `z-index: -1` is what keeps it behind the content. A negative
+   z-index paints the layer in step 2 of the root stacking context —
+   below every in-flow block, every line of text, and every positioned
+   element (modals, toasts, the nav drawer). The alternative, giving
+   `main.page` `position: relative; z-index: 1`, also lifts the
+   content, but it turns `main.page` into a stacking context — which
+   traps the modal overlay (z-index 80, rendered inside the page)
+   beneath the nav drawer and scrim (z-index 60 / 55, rendered
+   outside it). The negative z-index has no such side effect: nothing
+   on the site changes its own stacking context because of it.
+
+   The wash is visible through the transparent page background. `html`
+   has no background, so `body`'s background propagates to the canvas
+   and is painted underneath the wash.
+   ========================================================================== */
+.ambient-wash {
+	position: fixed;
+	inset: -4%;
+	z-index: -1;
+	pointer-events: none;
+	background:
+		radial-gradient(48% 42% at 22% 18%, var(--motion-ambient-stop-1) 0%, transparent 68%),
+		radial-gradient(52% 46% at 78% 74%, var(--motion-ambient-stop-2) 0%, transparent 70%);
+	animation: ambient-drift var(--motion-duration-ambient) var(--motion-ease-editorial) infinite alternate;
+	will-change: transform;
+}
+
 /* Respect user's reduced-motion preference */
 @media (prefers-reduced-motion: reduce) {
-	.summary-card,
-	.media-item-card,
-	.meta-card,
-	.incident-container,
-	.sidebar-top,
-	.sidebar-bot,
-	.profile-photo,
-	.profile-photo-placeholder,
 	.fade-in-stagger > * {
 		animation: none;
 	}
@@ -321,6 +503,40 @@ h3 { font-size: 1.15rem; }
 	.sidebar-top,
 	.sidebar-bot {
 		transition: none;
+	}
+
+	/* The global net. Per-component blocks still exist for
+	   component-specific rules; this catches anything that animates
+	   without one of its own. */
+	[data-reveal] {
+		transition: none !important;
+	}
+	.ambient-wash {
+		display: none !important;
+	}
+	.skeleton,
+	.skeleton-stat-card-title,
+	.kpi-skeleton,
+	.related-card-skeleton,
+	.spinner,
+	.spinner-inline,
+	.form-spinner {
+		animation: none !important;
+	}
+	/* Press feedback is motion — drop it. */
+	.btn {
+		transition: none !important;
+	}
+	.btn:active {
+		transform: none !important;
+	}
+}
+
+/* Print — a hidden reveal would print as a blank block. */
+@media print {
+	[data-reveal='pending'] {
+		opacity: 1;
+		transform: none;
 	}
 }
 
@@ -511,7 +727,9 @@ label {
 	padding: 0.65rem 1rem;
 	background: var(--color-bg-white);
 	color: var(--color-text);
-	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+	transition:
+		border-color var(--motion-duration-fast) var(--motion-ease-overlay),
+		box-shadow var(--motion-duration-fast) var(--motion-ease-overlay);
 }
 .input--search:focus,
 .select--filter:focus {
@@ -555,7 +773,7 @@ label {
 .report-card-chevron {
 	flex: 0 0 auto;
 	display: inline-block;
-	transition: transform 0.15s ease;
+	transition: transform var(--motion-duration-accordion) var(--motion-ease-editorial);
 	color: var(--color-text-muted);
 	font-size: 0.85rem;
 }
@@ -758,7 +976,7 @@ label {
 	font-weight: 700;
 	border-radius: 0 0 4px 4px;
 	text-decoration: none;
-	transition: top 0.18s ease;
+	transition: top var(--motion-duration-fast) var(--motion-ease-overlay);
 }
 .skip-link:focus,
 .skip-link:focus-visible {

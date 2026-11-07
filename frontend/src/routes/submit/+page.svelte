@@ -2223,11 +2223,6 @@
 		border-radius: 50%;
 		animation: spin 0.7s linear infinite;
 	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
 
 	/* === Responsive === */
 	@media (max-width: 720px) {

@@ -145,11 +145,6 @@
 		margin-right: 0.4rem;
 		vertical-align: -2px;
 	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
 
 	@media (max-width: 600px) {
 		.modal-actions {

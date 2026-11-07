@@ -148,7 +148,7 @@
 	.activity-target-link {
 		text-decoration: none;
 		color: var(--color-text-muted);
-		transition: color 0.15s ease;
+		transition: color var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.activity-target-link:hover {
 		color: var(--color-primary);
@@ -170,5 +170,11 @@
 		font-size: 0.78rem;
 		white-space: nowrap;
 		flex-shrink: 0;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.activity-target-link {
+			transition: none;
+		}
 	}
 </style>

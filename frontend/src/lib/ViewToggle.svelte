@@ -90,7 +90,10 @@
 		font-weight: 600;
 		border-radius: 999px;
 		cursor: pointer;
-		transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+		transition:
+			background var(--motion-duration-fast) var(--motion-ease-overlay),
+			color var(--motion-duration-fast) var(--motion-ease-overlay),
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.view-toggle-btn:hover:not(.active) {
 		color: var(--color-text);

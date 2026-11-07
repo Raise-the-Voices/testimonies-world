@@ -4,6 +4,7 @@
 	import { user } from '$lib/session';
 	import { safeText, isEmptyAfterSanitization } from '$lib/testimonial-sanitize';
 	import { sanitizeText } from '$lib/sanitize';
+	import { reveal } from '$lib/motion';
 	import WorkflowActions from '$lib/WorkflowActions.svelte';
 	import type { TestimonialPublic } from '$lib/api/generated/endpoints.schemas';
 	import type { PageData } from './$types';
@@ -99,7 +100,7 @@
 		</div>
 	{:else}
 		<article class="testimonial-card-detail">
-			<header class="testimonial-card-header">
+			<header class="testimonial-card-header" use:reveal={{ index: 0 }}>
 				{#if safeLocationDisplay || safeCountry}
 					<p class="testimonial-card-location">
 						{safeLocationDisplay || safeCountry}{#if safeCountry && safeRegion && safeRegion !== safeLocationDisplay}, {safeRegion}{/if}
@@ -115,27 +116,27 @@
 			</header>
 
 			{#if safeSummary}
-				<section class="testimonial-section">
+				<section class="testimonial-section" use:reveal={{ index: 1 }}>
 					<h2>Summary</h2>
 					<p class="testimonial-summary">{safeSummary}</p>
 				</section>
 			{/if}
 
 			{#if safeNarrative}
-				<section class="testimonial-section">
+				<section class="testimonial-section" use:reveal={{ index: 2 }}>
 					<h2>Narrative</h2>
 					<p class="testimonial-narrative">{safeNarrative}</p>
 				</section>
 			{/if}
 
 			{#if safeOutcome}
-				<section class="testimonial-section">
+				<section class="testimonial-section" use:reveal={{ index: 3 }}>
 					<h2>Outcome</h2>
 					<p class="testimonial-outcome">{safeOutcome}</p>
 				</section>
 			{/if}
 
-			<dl class="testimonial-meta">
+			<dl class="testimonial-meta" use:reveal={{ index: 4 }}>
 				{#if t.source_visible && safeSourceLabel}
 					<dt>Source</dt>
 					<dd>{safeSourceLabel}</dd>
@@ -177,7 +178,7 @@
 			/>
 
 			{#if t.family_protected || t.contact_protected}
-				<aside class="testimonial-privacy" aria-label="Privacy protections in effect">
+				<aside class="testimonial-privacy" aria-label="Privacy protections in effect" use:reveal={{ index: 5 }}>
 					<h3>Privacy protections</h3>
 					<ul>
 						{#if t.family_protected}

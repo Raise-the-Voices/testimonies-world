@@ -604,7 +604,9 @@
 		cursor: pointer;
 		font: inherit;
 		font-size: 0.88rem;
-		transition: background 0.15s ease, border-color 0.15s ease;
+		transition:
+			background var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.toolbar-clear:hover {
 		background: var(--color-surface);
@@ -686,9 +688,9 @@
 		border-radius: var(--radius-card-lg);
 		box-shadow: var(--shadow-card);
 		transition:
-			transform 0.15s ease,
-			box-shadow 0.15s ease,
-			border-color 0.15s ease;
+			transform var(--motion-duration-fast) var(--motion-ease-overlay),
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.report-row:hover {
 		transform: translateY(-1px);
@@ -803,7 +805,9 @@
 		color: var(--color-text-muted);
 		align-self: center;
 		line-height: 1;
-		transition: transform 0.15s ease, color 0.15s ease;
+		transition:
+			transform var(--motion-duration-fast) var(--motion-ease-overlay),
+			color var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.report-row:hover .report-row-arrow {
 		color: var(--color-primary);
@@ -1025,6 +1029,20 @@
 		.toolbar-select {
 			min-width: 0;
 			width: 100%;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.toolbar-clear,
+		.report-row,
+		.report-row-arrow {
+			transition: none;
+		}
+		.report-row:hover {
+			transform: none;
+		}
+		.report-row:hover .report-row-arrow {
+			transform: none;
 		}
 	}
 </style>

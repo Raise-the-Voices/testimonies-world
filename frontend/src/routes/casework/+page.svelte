@@ -10,8 +10,9 @@
   - The page-level `!$ready` skeleton gate is gone — it was causing
     a one-frame skeleton flash on hard refresh. Each section now
     owns its own skeleton with a fixed `min-height`.
-  - `transition:fade` on every skeleton → content swap so the
-    handoff is a soft crossfade, not a hard cut.
+  - `transition:fade` from `$lib/motion` on every skeleton →
+    content swap so the handoff is a soft crossfade, not a hard cut.
+    Reduced motion turns them off entirely.
 
   Section layout:
     +-------------------------------------------------+
@@ -29,7 +30,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { replaceState } from '$app/navigation';
-	import { fade } from 'svelte/transition';
+	import { fade } from '$lib/motion';
 	import { isAdvocate, user } from '$lib/session';
 	import { getCasework, deleteCasework } from '$lib/api';
 	import Banner from '$lib/Banner.svelte';
@@ -295,7 +296,7 @@
 		     rendered across data-load transitions so the user never
 		     loses their selection. min-height matches the filter row. -->
 		<div class="casework-section filters-section">
-			<div class="filters" in:fade={{ duration: 180 }}>
+			<div class="filters" in:fade>
 				<div class="filter-group">
 					<label for="filter-status">Status</label>
 					<select id="filter-status" bind:value={filterStatus} onchange={loadRecords}>
@@ -329,7 +330,7 @@
 		     the floor. -->
 		<div class="casework-section records-section">
 			{#if loading}
-				<div class="section-inner" transition:fade={{ duration: 200 }} aria-busy="true" aria-label="Loading casework records">
+				<div class="section-inner" transition:fade aria-busy="true" aria-label="Loading casework records">
 					<div class="records-skel" aria-hidden="true">
 						{#each Array(3) as _, i (i)}
 							<div class="record-card-skel">
@@ -345,7 +346,7 @@
 					</div>
 				</div>
 			{:else if loadError}
-				<div class="section-inner" transition:fade={{ duration: 200 }}>
+				<div class="section-inner" transition:fade>
 					<ErrorCard
 						title="Couldn't load casework"
 						message={loadError}
@@ -354,7 +355,7 @@
 					/>
 				</div>
 			{:else if records.length === 0}
-				<div class="section-inner" transition:fade={{ duration: 200 }}>
+				<div class="section-inner" transition:fade>
 					<div class="state-card state-empty">
 						<div class="state-icon state-icon-empty" aria-hidden="true">✓</div>
 						{#if hasActiveFilters}
@@ -377,7 +378,7 @@
 					</div>
 				</div>
 			{:else}
-				<div class="section-inner" transition:fade={{ duration: 200 }}>
+				<div class="section-inner" transition:fade>
 					<section class="records-list" aria-label="Casework records">
 						{#each records as record (record.id)}
 							<article class="record-card">
@@ -671,7 +672,6 @@
 		vertical-align: middle;
 		margin-right: 0.2rem;
 	}
-	@keyframes spin { to { transform: rotate(360deg); } }
 
 	.record-description {
 		margin: 0 0 0.45rem 0;
@@ -848,9 +848,7 @@
 
 	@media (prefers-reduced-motion: reduce) {
 		.record-card,
-		.spinner-inline,
-		.delete-toast,
-		.delete-toast-overlay {
+		.spinner-inline {
 			transition: none;
 			animation: none;
 		}
