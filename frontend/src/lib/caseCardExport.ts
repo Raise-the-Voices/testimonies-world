@@ -80,16 +80,23 @@ export function sameOriginMediaUrl(url: string, origin: string, basePath: string
 }
 
 /**
- * Capture a node as a PNG data URL.
+ * Capture a node as a PNG blob.
  *
  * `pixelRatio: 2` doubles the poster's 1080px to 2160px — the size a
  * poster needs to stay sharp when a platform re-scales it. The paper
  * tone comes from the token the card is printed on, so the file's
  * background matches the sheet rather than being a white rectangle.
+ *
+ * The file is a blob, not a data URL, and that is load-bearing. The
+ * production CSP is `connect-src 'self'`, and `fetch()` on a `data:`
+ * URL is a connect-src request: the browser refuses it, and a poster
+ * that renders perfectly still fails to download. The blob comes
+ * straight off the canvas and never touches the network.
  */
-export async function renderPosterPng(node: HTMLElement): Promise<string> {
-	const { toPng } = await import('html-to-image');
-	return toPng(node, {
+export async function renderPosterBlob(node: HTMLElement): Promise<Blob> {
+	await imagesSettled(node);
+	const { toBlob } = await import('html-to-image');
+	const blob = await toBlob(node, {
 		pixelRatio: 2,
 		backgroundColor: paperColour(),
 		cacheBust: true,
@@ -97,18 +104,55 @@ export async function renderPosterPng(node: HTMLElement): Promise<string> {
 		// cookies come along so a session-gated asset still resolves.
 		fetchRequestInit: { credentials: 'include' },
 	});
+	if (!blob) {
+		// `canvas.toBlob` resolves with null when the canvas is tainted
+		// or empty. Either way there is no file to hand over.
+		throw new Error('The poster could not be rendered.');
+	}
+	return blob;
+}
+
+/**
+ * Wait for the sheet's images to settle before it is captured.
+ *
+ * The export copy of the card mounts off-screen and its photograph
+ * starts loading at that moment. Capturing before the photograph has
+ * arrived ships a poster with an empty frame — the one element a case
+ * card cannot be missing.
+ *
+ * A photograph that fails to load is not waited on forever: the card
+ * swaps in its placeholder, and the capture is taken once that swap
+ * has been rendered, so the file shows the same thing the screen does.
+ */
+async function imagesSettled(node: HTMLElement): Promise<void> {
+	const images = Array.from(node.querySelectorAll('img'));
+	await Promise.all(
+		images.map(
+			(image) =>
+				image.complete
+					? Promise.resolve()
+					: new Promise<void>((resolve) => {
+							const done = () => resolve();
+							image.addEventListener('load', done, { once: true });
+							image.addEventListener('error', done, { once: true });
+						}),
+		),
+	);
+	// Two frames: one for the browser to lay the photograph out, one
+	// for the card to swap in its placeholder if it did not arrive.
+	await new Promise<void>((resolve) =>
+		requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+	);
 }
 
 /**
  * Hand the PNG to the browser as a download.
  *
- * The data URL is turned into a blob first: a multi-megabyte data URL
- * in an `href` is refused by some browsers, and an object URL is what
- * `a[download]` expects. The URL is revoked a moment later — the
- * download has already started by then.
+ * An object URL is what `a[download]` expects — a multi-megabyte data
+ * URL in an `href` is refused by some browsers. The URL is revoked a
+ * moment later; the download has already started by then.
  */
-export async function downloadPoster(dataUrl: string, filename: string): Promise<void> {
-	const blob = await (await fetch(dataUrl)).blob();
+export function downloadPoster(blob: Blob, filename: string): void {
 	const url = URL.createObjectURL(blob);
 	const link = document.createElement('a');
 	link.href = url;
