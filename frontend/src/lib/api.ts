@@ -1,4 +1,5 @@
 import { base } from '$app/paths';
+import type { CaseCardPayload } from './api/generated/endpoints.schemas';
 import type {
 	CaseworkRecord,
 	Contact,
@@ -238,6 +239,27 @@ export async function getPerson(
 
 export async function getWatchdog(): Promise<Person[]> {
 	return request<Person[]>('/persons/watchdog/');
+}
+
+/**
+ * The masked, publication-facing projection of one case.
+ *
+ * `GET /api/persons/{id}/card/` answers with what the server has
+ * cleared for publication — the headline, the identity fields, the
+ * incident, the photograph, the hashtags — plus the `exportable`
+ * verdict and the list of what was withheld. The server decides what a
+ * poster may show; the browser only lays it out.
+ *
+ * Not parsed through a Zod overlay: the payload's own schema is
+ * pinned by the backend (`backend/cases/card/export_schema.json`) and
+ * the card's shape is fixed by the export contract, not by this
+ * screen's needs.
+ */
+export async function getCaseCard(
+	id: number | string,
+	opts: { signal?: AbortSignal } = {},
+): Promise<CaseCardPayload> {
+	return request<CaseCardPayload>(`/persons/${id}/card/`, { signal: opts.signal });
 }
 
 /**

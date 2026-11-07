@@ -217,6 +217,17 @@ export interface Person {
 	authoritative_url?: string;
 	quality_tier?: 1 | 2 | 3 | null;
 	is_published?: boolean;
+	/** Consent for public publication (Section K of the case form):
+	    "yes" / "no" / "pending", blank when nobody has answered yet.
+	    Blank means the MOST restrictive option — the case has not been
+	    cleared to publish. */
+	consent_public_publication?: string | null;
+	/** How much of the person's identity may be published: "full" /
+	    "partial" / "anonymous", blank when nobody has answered yet. */
+	public_identity_level?: string | null;
+	/** Whether the photograph may be published: "yes" / "no" /
+	    "pending", blank when nobody has answered yet. */
+	photograph_public?: string | null;
 	profile_image_url?: string | null;
 	report_count?: number;
 	categories?: PersonCategory[];

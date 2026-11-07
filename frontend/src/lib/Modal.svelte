@@ -213,18 +213,28 @@
 	/* Poster variant — centred on the viewport, and the artefact inside
 	   carries its own frame and shadow, so the dialog contributes no
 	   chrome of its own. The top padding reserves room for a close
-	   control that hangs on the artefact's top-right corner. */
+	   control that hangs on the artefact's top-right corner.
+
+	   The width holds the 720px sheet plus the padding around it; the
+	   sheet itself is capped at its own width, so on a narrow screen
+	   the dialog shrinks and the sheet follows it down. */
 	.modal--poster {
 		top: 50%;
 		transform: translate(-50%, -50%);
-		max-width: 620px;
+		max-width: 800px;
 		max-height: calc(100vh - 2rem);
-		padding: 3.25rem 1.75rem 2rem;
+		padding: 3.25rem 2rem 1.5rem;
 		background: transparent;
 		border: none;
 		border-left: none;
 		border-radius: 0;
 		box-shadow: none;
+	}
+
+	@media (max-width: 560px) {
+		.modal--poster {
+			padding: 3rem 1rem 1.25rem;
+		}
 	}
 
 	.modal-header {

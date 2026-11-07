@@ -25,6 +25,9 @@ import type { Report } from './types';
  * never invents a fact that is not in it.
  */
 
+/** The day the sheet is produced — pinned, so the tests do not move. */
+const TODAY = new Date('2026-02-02T00:00:00Z');
+
 function makeReport(overrides: Partial<Report> = {}): Report {
 	return {
 		id: 1,
@@ -107,29 +110,45 @@ describe('formatFullDate', () => {
 
 describe('buildCaseCardData', () => {
 	it('renders the core facts in poster order', () => {
-		const data = buildCaseCardData(makePerson());
+		const data = buildCaseCardData(makePerson(), TODAY);
 
 		expect(data.reference).toBe('ED-2026-0042');
-		expect(data.title).toBe('Ahmed Al-Hassan');
 		expect(data.statusLabel).toBe('Disappeared');
 		expect(labels(data)).toEqual([
+			'Name',
+			'Father name',
 			'Age',
-			'Residence',
+			'Residence (R/O)',
 			'Profession',
-			'Father',
 			'Date of abduction',
 			'Time of abduction',
 			'Place of abduction',
-			'Perpetrators',
+			'Abductors',
 		]);
+		expect(valueOf(data, 'Name')).toBe('Ahmed Al-Hassan');
+		expect(valueOf(data, 'Father name')).toBe('Yusuf Al-Hassan');
 		expect(valueOf(data, 'Age')).toBe('34');
-		expect(valueOf(data, 'Residence')).toBe('Alexandria, Egypt');
+		expect(valueOf(data, 'Residence (R/O)')).toBe('Alexandria, Egypt');
 		expect(valueOf(data, 'Profession')).toBe('Teacher');
-		expect(valueOf(data, 'Father')).toBe('Yusuf Al-Hassan');
 		expect(valueOf(data, 'Date of abduction')).toBe('3 Nov 2025');
 		expect(valueOf(data, 'Time of abduction')).toBe('21:30');
 		expect(valueOf(data, 'Place of abduction')).toBe('Old City, Alexandria');
-		expect(valueOf(data, 'Perpetrators')).toBe('Security Service');
+		expect(valueOf(data, 'Abductors')).toBe('Security Service');
+	});
+
+	it('leads with the case category as the headline', () => {
+		// The poster is about the kind of violation the file records; the
+		// person's name is a field on it.
+		const data = buildCaseCardData(makePerson(), TODAY);
+		expect(data.title).toBe('Enforced Disappearance');
+		expect(data.name).toBe('Ahmed Al-Hassan');
+	});
+
+	it('falls back to the name when the case is filed under no category', () => {
+		const data = buildCaseCardData(makePerson({ categories: [] }), TODAY);
+		expect(data.title).toBe('Ahmed Al-Hassan');
+		// The name is the headline, so it is not printed again as a row.
+		expect(labels(data)).not.toContain('Name');
 	});
 
 	it('omits a row entirely when the value is missing', () => {
@@ -141,20 +160,21 @@ describe('buildCaseCardData', () => {
 				family: [],
 				reports: [],
 			}),
+			TODAY,
 		);
 		// No age, no occupation, no father, no incident block.
-		expect(labels(data)).toEqual(['Residence']);
-		expect(valueOf(data, 'Residence')).toBe('Alexandria, Egypt');
+		expect(labels(data)).toEqual(['Name', 'Residence (R/O)']);
+		expect(valueOf(data, 'Residence (R/O)')).toBe('Alexandria, Egypt');
 	});
 
 	it('shows the country alone when no rough location is recorded', () => {
-		const data = buildCaseCardData(makePerson({ rough_location: '' }));
-		expect(valueOf(data, 'Residence')).toBe('Egypt');
+		const data = buildCaseCardData(makePerson({ rough_location: '' }), TODAY);
+		expect(valueOf(data, 'Residence (R/O)')).toBe('Egypt');
 	});
 
 	it('shows the rough location and the country', () => {
-		const data = buildCaseCardData(makePerson({ rough_location: 'Alexandria' }));
-		expect(valueOf(data, 'Residence')).toBe('Alexandria, Egypt');
+		const data = buildCaseCardData(makePerson({ rough_location: 'Alexandria' }), TODAY);
+		expect(valueOf(data, 'Residence (R/O)')).toBe('Alexandria, Egypt');
 	});
 
 	it('never prints the precise location', () => {
@@ -162,49 +182,39 @@ describe('buildCaseCardData', () => {
 		// card reads the rough one only.
 		const data = buildCaseCardData(
 			makePerson({ precise_location: '12 Rue de la Paix, Alexandria' }),
+			TODAY,
 		);
-		expect(valueOf(data, 'Residence')).toBe('Alexandria, Egypt');
+		expect(valueOf(data, 'Residence (R/O)')).toBe('Alexandria, Egypt');
 		expect(JSON.stringify(data)).not.toContain('Rue de la Paix');
 	});
 
 	it('has no photo when the record has none', () => {
-		const data = buildCaseCardData(makePerson({ profile_image_url: null }));
+		const data = buildCaseCardData(makePerson({ profile_image_url: null }), TODAY);
 		expect(data.photo).toBeNull();
 	});
 
 	it('has a photo when the record has one', () => {
-		const data = buildCaseCardData(makePerson());
+		const data = buildCaseCardData(makePerson(), TODAY);
 		expect(data.photo).toEqual({
 			src: 'https://example.org/public-media/profiles/face.jpg',
 			alt: '',
 		});
 	});
 
-	it('uses the received date in the header', () => {
-		expect(buildCaseCardData(makePerson()).date).toBe('2 February 2026');
-	});
-
-	it('falls back to the entry date when the received date is unset', () => {
-		const data = buildCaseCardData(makePerson({ case_received_date: null }));
-		expect(data.date).toBe('14 March 2026');
+	it('dates the sheet with the day it was produced', () => {
+		expect(buildCaseCardData(makePerson(), TODAY).date).toBe('2 February 2026');
 	});
 
 	it('has no reference when the case has none', () => {
-		expect(buildCaseCardData(makePerson({ public_reference: null })).reference).toBeNull();
-		expect(buildCaseCardData(makePerson({ public_reference: '' })).reference).toBeNull();
-		expect(buildCaseCardData(makePerson({ public_reference: '  ED-1  ' })).reference).toBe(
+		expect(buildCaseCardData(makePerson({ public_reference: null }), TODAY).reference).toBeNull();
+		expect(buildCaseCardData(makePerson({ public_reference: '' }), TODAY).reference).toBeNull();
+		expect(buildCaseCardData(makePerson({ public_reference: '  ED-1  ' }), TODAY).reference).toBe(
 			'ED-1',
 		);
 	});
 
-	it('leads with the case category, in title case', () => {
-		const data = buildCaseCardData(makePerson());
-		expect(data.category).toBe('Enforced Disappearance');
-	});
-
 	it('has no category line when the case is filed under none', () => {
-		const data = buildCaseCardData(makePerson({ categories: [] }));
-		expect(data.category).toBeNull();
+		const data = buildCaseCardData(makePerson({ categories: [] }), TODAY);
 		expect(data.hashtags).toEqual([]);
 	});
 
@@ -216,6 +226,7 @@ describe('buildCaseCardData', () => {
 					{ id: 2, name: 'Arbitrary detention' },
 				],
 			}),
+			TODAY,
 		);
 		expect(data.hashtags).toEqual(['#EnforcedDisappearance', '#ArbitraryDetention']);
 	});
@@ -243,7 +254,7 @@ describe('leadCategory', () => {
 describe('resolveParent', () => {
 	it('uses the name the server resolved', () => {
 		const parent = resolveParent(makePerson({ father_name: 'Yusuf Al-Hassan' }));
-		expect(parent).toEqual({ label: 'Father', name: 'Yusuf Al-Hassan' });
+		expect(parent).toEqual({ label: 'Father name', name: 'Yusuf Al-Hassan' });
 	});
 
 	it('falls back to a parent when the server resolved no father', () => {
@@ -263,7 +274,7 @@ describe('resolveParent', () => {
 				],
 			}),
 		);
-		expect(parent).toEqual({ label: 'Parent', name: 'Amina Al-Hassan' });
+		expect(parent).toEqual({ label: 'Parent name', name: 'Amina Al-Hassan' });
 	});
 
 	it('has no parent row when the case records none', () => {

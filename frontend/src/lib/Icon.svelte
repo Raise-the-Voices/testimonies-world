@@ -42,7 +42,8 @@
 		| 'book'
 		| 'pencil-fill'
 		| 'trash-fill'
-		| 'lock-fill';
+		| 'lock-fill'
+		| 'download';
 
 	interface IconPath {
 		/** Inner SVG markup. Becomes the <svg> body. */
@@ -94,6 +95,8 @@
 		// is hand-tuned to that canvas and would visibly shrink if we
 		// forced it into 24×24.
 		'lock-fill': { path: `<path fill="currentColor" d="M4 7V5a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h1zm2 0h4V5a2 2 0 1 0-4 0v2z"/>`, viewBox: '0 0 16 16' },
+		// Lucide `download` — an arrow into a tray. Stroke family, 24×24.
+		'download': { path: `<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>` },
 	};
 </script>
 

@@ -269,30 +269,29 @@ Desktop (poster proportions), from the brief's description:
 
 ```
 ┌──────────────────────────────────────────────┐
-│ Ref: ED-2024-0042            14 Mar 2026     │  ← .case-card-header
+│ REF: ED-2026-0042             7 NOVEMBER 2026│  ← .case-card-header
 ├──────────────────────────────────────────────┤
-│                                              │
-│   AHMED AL-HASSAN                           │  ← .case-card-title (red, uppercase)
-│   Disappeared                                │  ← .case-card-status
-│                                              │
+│ ENFORCED DISAPPEARANCE                       │  ← .case-card-title (teal, uppercase)
+│ [ DISAPPEARED ]                              │  ← .case-card-status
 ├───────────────────────┬──────────────────────┤
-│  ┌─────────────────┐  │  AGE      34         │  ← .case-card-body
-│  │                 │  │  RESIDENCE Alexandria│     (2-col grid)
-│  │   [ photograph] │  │  PROFESSION Teacher  │
-│  │                 │  │  FATHER    Yusuf     │
-│  └─────────────────┘  │  ABDUCTED  3 Nov 25 │
-│                       │  LAST SEEN  9 Dec 25 │
+│  ┌─────────────────┐  │  NAME:        Ahmed…  │  ← .case-card-body
+│  │                 │  │  FATHER NAME: Yusuf…  │     (2-col grid)
+│  │   [ photograph] │  │  AGE:         34      │
+│  │                 │  │  RESIDENCE (R/O): …   │
+│  └─────────────────┘  │  PROFESSION:  Teacher │
+│                       │  DATE OF ABDUCTION: … │
 ├───────────────────────┴──────────────────────┤
-│ #EnforcedDisappearance  #ArbitraryDetention   │  ← .case-card-tags
-│ Testimonies.world · cases.raisethevoices.org  │  ← .case-card-brand
+│ #EnforcedDisappearance   Testimonies.world…  │  ← .case-card-footer
 └──────────────────────────────────────────────┘
 ```
 
-Two-column split: photo column ~38%, metadata column ~62%, `grid-template-columns: 38% 1fr; gap: var(--space-card)`.
+The heading is **the kind of violation the case records** (`Enforced disappearance`), not the person's name — the name is the first row of the metadata list, and is dropped from that list when it would repeat the heading. The brief's field order is fixed and is the order the card prints: name, father's name, age, residence (R/O), profession, date / time / place of abduction, abductors.
 
-The photo is a **framed** portrait: `aspect-ratio: 3/4`, `object-fit: cover`, `object-position: center 20%`, inside a 3px solid `var(--color-text)` frame with an 8px outer padding — the poster's "framed photo" read.
+Two-column split: photo column ~38%, metadata column ~62%, `grid-template-columns: 38% 1fr; gap: 1.4em`.
 
-The metadata column is a `<dl>` (the app already uses `dt`/`dd` pairs in `.sidebar-fields` / `.sidebar-field`, `routes/persons/[id]/+page.svelte:1526-1559`): `<div class="case-card-meta-row"><dt class="case-card-meta-label">Age</dt><dd class="case-card-meta-value">34</dd></div>`. Label = uppercase 0.72rem `var(--color-text-muted)`; value = 1rem `var(--color-text)`. Reuse the app's existing uppercase-label idiom (`.meta-section-title`, page-local, `routes/persons/[id]/+page.svelte:1731-1738`).
+The photo sits in a **framed portrait**: a 2px solid `var(--color-primary)` frame with 0.45em of paper inside it, `object-fit: cover`, `object-position: center 20%`. The frame is not a fixed ratio — it takes the height of the facts column beside it (the photo column is a flex container, the frame takes the row's height), so the photograph stands as tall as the list and the sheet keeps its portrait proportion at any number of rows. Below 560px the frame takes a 3/4 ratio instead, because the facts are no longer beside it.
+
+The metadata column is a `<dl>` (the app already uses `dt`/`dd` pairs in `.sidebar-fields` / `.sidebar-field`, `routes/persons/[id]/+page.svelte:1526-1559`): `<div class="case-card-meta-row"><dt class="case-card-meta-label">Age</dt><dd class="case-card-meta-value">34</dd></div>`. Label = uppercase 0.78em `var(--color-primary)`, ending in a colon drawn by `::after` so the label text itself stays plain; value = 1.1em `var(--color-text)`. The rows are separated by hairline rules (`--color-card-rule`), not boxes.
 
 ### 2.4 CSS — tokens, not Tailwind
 
@@ -300,48 +299,65 @@ All sizing in `em`, all colour from `app.css` tokens. New tokens to add to the `
 
 | Token | Value | Why |
 |---|---|---|
-| `--color-card-red` | `#d91616` (reuse `--color-danger`) | the poster's red title; reusing an existing token avoids a second red |
+| `--card-base-font` | `16px` (screen) / `24px` (export) | the scale driver |
+| `--card-poster-width` | `calc(var(--card-base-font) * 45)` | 720px on screen, 1080px for the export — one rule, two scales |
+| `--card-poster-width-export` | `calc(var(--card-base-font-export) * 45)` | the export instance re-points the width token; see §2.5 |
+| `--color-card-paper` | `#fcfbf9` (+ `--card-paper-wash`, `--card-paper-grain`) | the archival paper the sheet is printed on, not a white web card |
+| `--color-card-rule` | `rgba(26, 26, 26, 0.18)` | the hairline between the metadata rows |
 | `--radius-card-poster` | `0` | poster frames are square; `--radius-card` is 8px and reads "web card" |
-| `--card-base-font` | `14px` (screen) / `28px` (export) | the scale driver |
-| `--card-poster-width` | `38.57em` | 540px at 14px, 1080px at 28px — one rule, two scales |
+
+The title is `var(--color-primary)` (deep teal, `#25646a`) — the brand accent, per the brief. The earlier plan's separate red token was dropped: the brief asks for the title in the brand accent, and the status badge already carries the red.
 
 Selector plan (flat hyphenated, matching `.testimonial-card-*` / `.person-card`):
 
 ```css
 .case-card { font-size: var(--card-base-font); width: var(--card-poster-width);
-             max-width: 100%; background: var(--color-bg-white);
-             border: 2px solid var(--color-text); color: var(--color-text); }
+             max-width: 100%; background-color: var(--color-card-paper);
+             border: 1px solid var(--color-text); border-top: 4px solid var(--color-primary);
+             border-radius: var(--radius-card-poster); color: var(--color-text); }
 .case-card-header  { display:flex; justify-content:space-between; align-items:baseline;
-                     padding: var(--space-tight) var(--space-card);
-                     border-bottom: 2px solid var(--color-text);
-                     font-size: .8em; letter-spacing: .04em; text-transform: uppercase; }
-.case-card-ref     { font-weight: 700; }
-.case-card-date    { color: var(--color-text-muted); }
-.case-card-title   { color: var(--color-danger); font-weight: 700; text-transform: uppercase;
-                     font-size: 2.6em; line-height: 1.08; padding: var(--space-card); }
-.case-card-status  { font-size: 1.05em; font-weight: 700; letter-spacing: .08em;
+                     padding: .75em 1.25em .6em; border-bottom: 2px solid var(--color-text);
+                     font-family: var(--font-mono); font-size: .8em; letter-spacing: .14em;
                      text-transform: uppercase; }
-.case-card-body    { display:grid; grid-template-columns: 38% 1fr; gap: var(--space-card);
-                     padding: 0 var(--space-card) var(--space-card); }
-.case-card-photo-frame { border: 3px solid var(--color-text); padding: 8px; }
-.case-card-photo   { display:block; width:100%; aspect-ratio: 3/4; object-fit: cover; }
-.case-card-photo-placeholder { aspect-ratio: 3/4; background: var(--color-surface);
-                     border: 1px dashed var(--color-border-light); }
-.case-card-meta     { margin:0; display:grid; gap: var(--space-tight); align-content:start; }
-.case-card-meta-row { display:grid; grid-template-columns: 38% 1fr; gap: var(--space-tight);
-                      border-bottom: 1px solid var(--color-border-subtle); padding-bottom: .25em; }
-.case-card-meta-label { font-size: .72em; font-weight:700; text-transform:uppercase;
-                        letter-spacing:.05em; color: var(--color-text-muted); margin:0; }
-.case-card-meta-value { font-size: 1em; margin:0; overflow-wrap:anywhere; }
-.case-card-tags     { display:flex; flex-wrap:wrap; gap: var(--space-tight);
-                      padding: var(--space-tight) var(--space-card);
-                      border-top: 2px solid var(--color-text); font-size:.85em; }
-.case-card-brand    { padding: 0 var(--space-card) var(--space-card);
-                      display:flex; justify-content:space-between; align-items:center;
-                      font-size:.75em; color: var(--color-text-muted); }
+.case-card-ref     { font-weight: 700; white-space: nowrap; }
+.case-card-date    { font-weight: 700; color: var(--color-text-muted); white-space: nowrap; }
+.case-card-title   { color: var(--color-primary); font-weight: 700; text-transform: uppercase;
+                     font-size: 2.6em; line-height: 1.04; text-decoration: underline;
+                     hyphens: auto; overflow-wrap: break-word; }
+.case-card-status  { font-size: .95em; font-weight: 700; letter-spacing: .18em;
+                     text-transform: uppercase; color: var(--color-danger-text-strong);
+                     background: var(--color-danger-bg); border: 1px solid var(--color-danger-border); }
+.case-card-body    { display:grid; grid-template-columns: 38% 1fr; gap: 1.4em;
+                     padding: 1.2em 1.25em 1.3em; border-top: 2px solid var(--color-text); }
+.case-card-photo-column { display:flex; }
+.case-card-photo-frame { flex: 1; min-height: 12em;
+                     border: 2px solid var(--color-primary); padding: .45em; }
+.case-card-photo   { display:block; width:100%; height:100%; object-fit: cover;
+                     object-position: center 20%; }
+.case-card-photo-placeholder { display:flex; flex-direction:column; gap:.6em;
+                     align-items:center; justify-content:center; min-height: 11em;
+                     color: var(--color-text-muted); background: var(--color-surface); }
+.case-card-meta     { margin:0; display:grid; align-content:start; }
+.case-card-meta-row { display:grid; grid-template-columns: 11em 1fr; gap: .6em;
+                      align-items:baseline; padding: .5em 0;
+                      border-bottom: 1px solid var(--color-card-rule); }
+.case-card-meta-label { font-size: .78em; font-weight:700; text-transform:uppercase;
+                        letter-spacing:.07em; color: var(--color-primary); margin:0; }
+.case-card-meta-label::after { content: ':'; }
+.case-card-meta-value { font-size: 1.1em; margin:0; overflow-wrap:anywhere; }
+.case-card-footer   { border-top: 2px solid var(--color-text); padding: .9em 1.25em 1.1em;
+                      display:flex; flex-wrap:wrap; align-items:center;
+                      justify-content:space-between; gap:.6em 1em; }
+.case-card-tags     { display:flex; flex-wrap:wrap; flex: 1 1 0; min-width: 0; gap: .45em; }
+.case-card-tag      { font-size:.8em; font-weight:700; letter-spacing:.05em;
+                      text-transform:uppercase; color:var(--color-primary);
+                      background:var(--color-primary-tint);
+                      border:1px solid var(--color-primary); padding:.2em .55em; }
+.case-card-brand    { flex: 0 0 auto; font-size:.8em; letter-spacing:.06em;
+                      color: var(--color-text-muted); white-space: nowrap; }
 ```
 
-Two tokens above are **new colour/size decisions a human should approve** (the red, the square radius). Everything else reuses existing tokens.
+The footer needs the tags row to be a **flex item that takes the room the signature leaves** (`flex: 1 1 0; min-width: 0`), not one that claims its own width. Two items whose widths exactly fill a row can land on either side of a line break in two copies of the same sheet — and the exported file *is* a copy (`html-to-image` re-lays-out the clone, and a 1/64-px difference in the available width is enough to push the last tag onto its own line and clip the footer).
 
 Also required: add `.case-card` to the entrance-animation list at `app.css:206-215` and to the reduced-motion block at `app.css:250-269`, or the card will not animate with its siblings and will not honour `prefers-reduced-motion`.
 
@@ -349,16 +365,30 @@ Also required: add `.case-card` to the entrance-animation list at `app.css:206-2
 
 The card must render at **fixed 1080px** for export and **fluid** on screen, from identical markup. That is achieved with the `em`-based scale, not with two layouts:
 
-- **Screen:** `--card-base-font: 14px` → card is 540px wide, capped by `max-width: 100%`.
-- **Export:** `--card-base-font: 28px` → card is 1080px wide, exported at `pixelRatio: 2` → 2160px PNG.
+- **Screen:** `--card-base-font: 16px` → card is 720px wide, capped by `max-width: 100%`.
+- **Export:** `--card-base-font: 24px` → card is 1080px wide, exported at `pixelRatio: 2` → 2160px PNG.
 
-Mobile: below ~480px the two-column body collapses to one column (photo above the metadata list). Use a **container query** so the collapse depends on the card's own width, not the viewport — the card may later live in the narrow sidebar:
+The width token cannot simply follow the font token: a custom property is substituted where it is *used* but resolved against the element that *declares* it, so `--card-poster-width` computes once, on `:root`, and inherits that computed 720px everywhere. The export instance therefore re-points the width token as well:
+
+```css
+.case-card--export {
+  --card-base-font: var(--card-base-font-export);
+  --card-poster-width: var(--card-poster-width-export);
+}
+```
+
+Mobile: below 560px the two-column body collapses to one column (photo above the metadata list) and the heading drops to 2.1em so the longest word still fits the narrow sheet. Use a **container query** so the collapse depends on the card's own width, not the viewport — the card may later live in the narrow sidebar:
 
 ```css
 .case-card-wrap { container-type: inline-size; }
-@container (max-width: 480px) {
+@container (max-width: 560px) {
   .case-card-body { grid-template-columns: 1fr; }
-  .case-card-photo { aspect-ratio: 16/9; }
+  .case-card-photo { height: auto; aspect-ratio: 3 / 4; }
+  .case-card-photo-frame { min-height: 0; }
+  .case-card-title { font-size: 2.1em; }
+  .case-card-header { flex-wrap: wrap; row-gap: .25em; }
+  .case-card-date { margin-left: auto; }
+  .case-card-meta-row { grid-template-columns: 1fr; gap: .2em; }
 }
 ```
 
@@ -374,7 +404,7 @@ The page is a two-column grid: main column (`.victim-item-container`, grid-area 
 
 Two placements, and they serve different jobs:
 
-- **Sidebar, replacing/augmenting `.sidebar-top`** — the card becomes the case's visual identity on the page; the photo and the metadata rows are already there in a different form. Risk: the sidebar is ~320px wide, which is below the card's natural 540px, so the card would always render in its collapsed mobile layout inside the sidebar. **Not recommended as the primary placement.**
+- **Sidebar, replacing/augmenting `.sidebar-top`** — the card becomes the case's visual identity on the page; the photo and the metadata rows are already there in a different form. Risk: the sidebar is ~320px wide, which is below the card's natural 720px, so the card would always render in its collapsed mobile layout inside the sidebar. **Not recommended as the primary placement.**
 - **Main column, above the Summary section** (`:702-741`) — full width of the main column (~700px+), so the poster proportions hold, and the card reads as the headline artefact of the case. **Recommended.**
 
 Either way the card is **preview-only** by default; the Download action is a separate button beside it (see §3.7), not inside the card, so the exported image never contains the button.
@@ -387,17 +417,17 @@ Either way the card is **preview-only** by default; the Download action is a sep
 |---|---|
 | No photo | render `.case-card-photo-placeholder` — a neutral silhouette block, **not** a broken image and **not** a crop of the case categories card. `MediaImage.svelte` already has a fallback path (`src/lib/MediaImage.svelte:116-127`) but it renders a *link*; the poster needs a distinct placeholder. |
 | No occupation / age / father | the row is omitted entirely — no empty label, no em dash. |
-| No `public_reference` yet | the header shows `Ref: —` in the preview and the card is marked not-exportable. |
+| No `public_reference` yet | the header shows `Ref: Not assigned` in the preview and the card is marked not-exportable. |
 | No date | the header date slot is omitted; the header keeps its two-column alignment via `justify-content: space-between` with one child. |
 | No categories | the hashtag strip is omitted, keeping its top border (the poster's frame stays intact). |
-| Long text | `summary_narrative` is **not** on the card (it is case narrative, not poster metadata). Any value that could run long (occupation, location, source label) gets `overflow-wrap: anywhere` and a 2-line clamp. The card's height is content-driven; at export it is measured, not fixed at 1350px. |
+| Long text | `summary_narrative` is **not** on the card (it is case narrative, not poster metadata). Any value that could run long (occupation, location, source label) gets `overflow-wrap: anywhere`; the heading gets `hyphens: auto` and `overflow-wrap: break-word`, so it breaks at a hyphen rather than past the edge of the sheet. The card's height is content-driven; at export it is measured, not fixed at 1350px. |
 
 ### 2.8 Accessibility
 
 - The card is a `<article>` with `aria-labelledby` pointing at the title element; the metadata column is a real `<dl>`.
 - `alt` on the photo: the photo is the person's face next to their name — the name is already in text, so `alt=""` is correct (decorative, per `SYSTEM_RULES §4`: "alt text on `<img>` only when not redundant").
-- The red title is `var(--color-danger)` `#d91616` on white → contrast ratio **5.06:1**, passes WCAG AA for large text (≥3:1) but **not** for body-size text. Any red body copy is non-compliant — red is for the title only.
-- The Download button needs a disabled state with a reason, not a silent hide: "Publication not approved — 3 fields missing", linking to the checklist.
+- The title is `var(--color-primary)` `#25646a` on the paper tone `#fcfbf9` → contrast ratio **6.4:1**, passes WCAG AA for body text and comfortably for large text. The status badge is the only red on the sheet (`--color-danger-text-strong` on `--color-danger-bg`).
+- The Download button needs a disabled state with a reason, not a silent hide: "Publication not approved — consent fields not set". The reason names the field to go and set; the server still decides whether the case may be exported.
 - The card must render with `prefers-reduced-motion: reduce` honoured (add it to the `app.css:250-269` block).
 
 ---
@@ -421,7 +451,7 @@ The client-side approach also matches the deployment reality: the app is SSR'd S
 1. User clicks "Download poster" on /persons/[id]
 2. GET /api/persons/{id}/card/  →  CaseCardPayload (masked, exportable: true|false)
 3. If !exportable → show the reason + link to the publication checklist. Stop.
-4. Build the poster DOM: render <CaseInfoCard> with variant="poster" into an
+4. Build the poster DOM: render <CaseInfoCard> with variant="export" into an
    off-screen container:
        position: fixed; left: -20000px; top: 0; width: 1080px;
    → one component, one data source, no second layout.
@@ -525,7 +555,7 @@ Each step leaves the tree working (tests pass, migrations apply) — `SYSTEM_RUL
 |---|---|
 | Missing profile image (45%) | `.case-card-photo-placeholder`; photo row still occupies the grid cell so the two-column rhythm holds |
 | Missing occupation (65%) / age (61%) / father (97%) | row omitted entirely |
-| No `public_reference` | header shows "Ref: —"; export disabled |
+| No `public_reference` | header shows "Ref: Not assigned"; export disabled |
 | `reports[]` empty or all `date_start` null | abduction date row omitted |
 | `date_start` after `last_known_date` | both rendered as stored; the card does not reorder or "correct" the data |
 | Very long occupation / location / source label | `overflow-wrap: anywhere`, 2-line clamp; card height is content-driven, so the export is 1080px wide × measured height |
