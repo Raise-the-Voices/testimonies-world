@@ -152,6 +152,8 @@ Today the poster classes (`.case-card*`) are not in the global entrance list, so
 
 Replace the single token with a small, named set in `app.css`. Durations on a 60/120/200/320 ladder; one easing per intent.
 
+> The token names below are the proposal as written. What shipped is `--motion-duration-enter` / `-overlay` / `-accordion` / `-reveal` / `-count` / `-grow` / `-ambient` / `-fast` / `-press` and `--motion-ease-editorial` / `-overlay` / `-count`, with the JS constants in `$lib/motion.ts` pinned to them by `motion.test.ts`. Same shape, one extra ladder step, and a `--motion-stagger-step` of 90ms instead of 40ms.
+
 ```css
 :root {
   /* durations */
@@ -200,7 +202,7 @@ export const flyOut = (opts = {}) => fly({ easing: cubicIn,  ...opts });
 export const fadeIn = (opts = {}) => fade({ easing: cubicOut, ...opts });
 ```
 
-`prefersReducedMotion` is a `MediaQuery` from `svelte/reactivity` — it is reactive, so a user flipping the OS setting mid-session is picked up without a reload.
+The sketch above is what this section proposed. What shipped is close in shape and different in detail: `svelte/motion`'s `prefersReducedMotion` is a function, not a reactive object, so the module reads the setting itself and listens for the change — `onReducedMotionChange` — instead of importing a store. The transitions are guarded per surface (`fade`, `rise`, `drop`, `lift`, `expand`, `panel`) and each returns `{ duration: 0, css: () => '' }` when the reader has asked for reduced motion. The curves come from a `cubicBezier` solver that mirrors the CSS curves, so a JS transition and a CSS transition cannot drift apart.
 
 Two ways to use it, both valid — pick per case:
 
@@ -287,7 +289,7 @@ The plan is written as five phases. What shipped is one branch and one PR, `feat
 |---|---|---|---|---|
 | 0 | `feat/motion-tokens` | Duration/easing tokens in `app.css`; global reduced-motion kill switch; replace the 15 literals | none | none |
 | 1 | `fix/motion-reduced-motion` | `src/lib/motion.ts`; rewrite the 8 `transition:` call sites to use it | none (only under `prefers-reduced-motion`) | low |
-| 2 | `feat/motion-primitives` | `.stagger-item` pattern; modal parity across all four modals; nav-drawer content shift | low | medium |
+| 2 | `feat/motion-primitives` | `.stagger-item` pattern; modal parity across all four modals; the nav drawer keeps its overlay (G7) | low | medium |
 | 3 | `feat/motion-data-surfaces` | Chart bar growth, timeline reveal, view-toggle FLIP | medium | medium |
 | 4 | `test/motion-a11y` | Playwright spec: with `prefers-reduced-motion: reduce`, no element changes position between two frames; poster export PNG is byte-stable across two runs | none | low |
 
