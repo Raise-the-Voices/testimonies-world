@@ -244,11 +244,11 @@ export async function getWatchdog(): Promise<Person[]> {
 /**
  * The masked, publication-facing projection of one case.
  *
- * `GET /api/persons/{id}/card/` answers with what the server has
- * cleared for publication — the headline, the identity fields, the
- * incident, the photograph, the hashtags — plus the `exportable`
- * verdict and the list of what was withheld. The server decides what a
- * poster may show; the browser only lays it out.
+ * `GET /api/persons/{id}/card/` answers with what the public case
+ * page publishes — the headline, the identity fields, the incident,
+ * the photograph, the hashtags — plus the `exportable` verdict and the
+ * list of what was withheld. The server decides what a poster may
+ * show; the browser only lays it out.
  *
  * Not parsed through a Zod overlay: the payload's own schema is
  * pinned by the backend (`backend/cases/card/export_schema.json`) and

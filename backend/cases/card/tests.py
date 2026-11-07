@@ -122,26 +122,29 @@ class CardMaskingTests(CardTestCase):
         payload = self.get_card(person)
         self.assertFalse(payload['exportable'])
 
-    def test_blank_consent_for_publication_blocks_export(self):
-        # Blank is the restrictive option, never the permissive one.
+    def test_blank_consent_for_publication_follows_the_public_case_page(self):
+        # The card publishes what the public page publishes. A blank
+        # consent flag is the absence of a decision, not a refusal, so
+        # it does not block the download.
         person = make_person(consent_public_publication='')
         payload = self.get_card(person)
-        self.assertFalse(payload['exportable'])
+        self.assertTrue(payload['exportable'])
 
-    def test_blank_identity_level_is_treated_as_anonymous(self):
+    def test_blank_identity_level_publishes_the_full_name(self):
+        # The public case page shows the full name. A blank identity
+        # level is the absence of a decision, so the card shows what
+        # the page shows.
         person = make_person(
             public_identity_level='', age_at_incident=34,
             occupation='Teacher',
         )
         payload = self.get_card(person)
-        self.assertEqual(payload['identity']['display_name'], 'Identity withheld')
-        self.assertEqual(payload['title'], 'Identity withheld')
-        self.assertIsNone(payload['identity']['age'])
-        self.assertIsNone(payload['identity']['occupation'])
-        self.assertIsNone(payload['identity']['father_name'])
-        self.assertNotIn('photo', payload)
-        self.assertFalse(payload['exportable'])
-        self.assertIn('identity', payload['withheld'])
+        self.assertEqual(payload['identity']['display_name'], 'Ahmed Al-Hassan')
+        self.assertEqual(payload['title'], 'Ahmed Al-Hassan')
+        self.assertEqual(payload['identity']['age'], 34)
+        self.assertEqual(payload['identity']['occupation'], 'Teacher')
+        self.assertTrue(payload['exportable'])
+        self.assertNotIn('identity', payload['withheld'])
 
     def test_partial_identity_level_publishes_first_name_and_initial(self):
         person = make_person(
@@ -158,7 +161,9 @@ class CardMaskingTests(CardTestCase):
         person = make_person(public_identity_level='partial', name='')
         payload = self.get_card(person)
         self.assertEqual(payload['identity']['display_name'], 'Identity withheld')
-        self.assertFalse(payload['exportable'])
+        # The poster is still downloadable: it says the identity is
+        # withheld, which is a fact about the case, not a failure.
+        self.assertTrue(payload['exportable'])
 
     def test_full_identity_level_publishes_the_full_name(self):
         person = make_person(public_identity_level='full')
@@ -170,11 +175,27 @@ class CardMaskingTests(CardTestCase):
         person = self.attach_image(make_person(photograph_public='no'))
         payload = self.get_card(person)
         self.assertNotIn('photo', payload)
-        self.assertFalse(payload['exportable'])
+        # A withheld photograph is named in `withheld` and nowhere
+        # else; it does not stop the poster from being downloaded.
+        self.assertTrue(payload['exportable'])
         self.assertIn('photograph', payload['withheld'])
 
+    def test_photo_is_omitted_when_the_clearance_is_pending(self):
+        person = self.attach_image(make_person(photograph_public='pending'))
+        payload = self.get_card(person)
+        self.assertNotIn('photo', payload)
+        self.assertIn('photograph', payload['withheld'])
+
+    def test_blank_photograph_clearance_publishes_the_photo(self):
+        # The profile image is served from the public media tree, so
+        # the public case page already shows it.
+        person = self.attach_image(make_person(photograph_public=''))
+        payload = self.get_card(person)
+        self.assertIn('photo', payload)
+        self.assertNotIn('photograph', payload['withheld'])
+
     def test_photo_is_omitted_when_the_identity_is_anonymous(self):
-        person = self.attach_image(make_person(public_identity_level=''))
+        person = self.attach_image(make_person(public_identity_level='anonymous'))
         payload = self.get_card(person)
         self.assertNotIn('photo', payload)
         self.assertIn('photograph', payload['withheld'])
@@ -187,15 +208,18 @@ class CardMaskingTests(CardTestCase):
         self.assertTrue(payload['photo']['url'].endswith('.jpg'))
         self.assertEqual(payload['photo']['alt'], '')
 
-    def test_blank_location_level_shows_the_country_only(self):
+    def test_blank_location_level_shows_the_public_case_page_location(self):
+        # The public case page shows the district and the coarse
+        # place. A blank level is the absence of a decision, so the
+        # card shows the same.
         person = make_person(
             public_location_level='', province='Alexandria Governorate',
             district='Alexandria', rough_location='Smouha',
         )
         payload = self.get_card(person)
         self.assertEqual(payload['location']['country'], 'Egypt')
-        self.assertEqual(payload['location']['precision'], 'province')
-        self.assertIsNone(payload['location']['display'])
+        self.assertEqual(payload['location']['precision'], 'city')
+        self.assertEqual(payload['location']['display'], 'Alexandria, Smouha')
 
     def test_province_location_level_shows_the_country_only(self):
         # The province level discloses the country and nothing finer.
@@ -312,12 +336,13 @@ class CardMaskingTests(CardTestCase):
         self.assertIn('photograph', payload['withheld'])
 
     def test_card_masks_a_person_record_that_is_otherwise_complete(self):
-        # The card is built from the consent flags, not from the case
-        # file. The person record still carries the name, the age, the
-        # occupation and the father — the edit form needs them — so the
-        # browser must never be able to re-derive the card from it.
+        # The card is built from the case file, not from the person
+        # record the browser already holds. Where the record carries
+        # MORE than the card may show — here the identity is
+        # explicitly anonymous — the browser must never be able to
+        # re-derive the card from it.
         person = self.attach_image(make_person(
-            public_identity_level='', age_at_incident=34,
+            public_identity_level='anonymous', age_at_incident=34,
             occupation='Teacher', rough_location='Smouha',
         ))
         father = Person.objects.create(

@@ -15,7 +15,9 @@
 	What the poster may show is the server's decision, not the
 	browser's: when the card opens, the masked card payload
 	(`GET /api/persons/{id}/card/`) is fetched, and the button is only
-	live when that payload says the case is cleared for publication.
+	live when that payload says the case may be exported. The poster
+	publishes what the public case page already publishes, so any
+	visitor to a published case can download it.
 	See `docs/case-info-card-architecture.md` §3.7.
 -->
 <script lang="ts">
@@ -90,7 +92,7 @@
 			case 'checking':
 				return 'Checking publication status…';
 			case 'ready':
-				return 'The poster carries only the fields cleared for publication.';
+				return 'The poster carries the same details as the public case page.';
 			case 'blocked':
 				return blocker
 					? `Publication not approved — ${blocker}.`

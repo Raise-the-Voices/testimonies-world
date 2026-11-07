@@ -13,73 +13,60 @@ import { publicationBlocker } from './caseCardPublication';
  * the one reported.
  */
 
-/** A case file cleared for publication. */
-const CLEARED = {
+/** A case on the public site. */
+const PUBLISHED = {
 	is_published: true,
 	consent_public_publication: 'yes',
-	public_identity_level: 'full',
-	photograph_public: 'yes',
 };
 
 describe('publicationBlocker', () => {
-	it('has no blocker when the case file says it is cleared', () => {
-		expect(publicationBlocker(CLEARED)).toBeNull();
+	it('has no blocker when the case is published', () => {
+		expect(publicationBlocker(PUBLISHED)).toBeNull();
 	});
 
 	it('reports the unpublished case first', () => {
-		expect(publicationBlocker({ ...CLEARED, is_published: false })).toBe(
+		expect(publicationBlocker({ ...PUBLISHED, is_published: false })).toBe(
 			'the case is not published',
 		);
 	});
 
-	it('reports the missing consent', () => {
-		expect(publicationBlocker({ ...CLEARED, consent_public_publication: '' })).toBe(
-			'consent fields not set',
-		);
-		expect(publicationBlocker({ ...CLEARED, consent_public_publication: 'pending' })).toBe(
-			'consent fields not set',
-		);
-		expect(publicationBlocker({ ...CLEARED, consent_public_publication: 'no' })).toBe(
-			'consent fields not set',
+	it('lets a published case through when consent was never filled in', () => {
+		// The poster publishes what the public case page publishes, so
+		// a blank consent flag is not a refusal.
+		expect(publicationBlocker({ ...PUBLISHED, consent_public_publication: '' })).toBeNull();
+		expect(publicationBlocker({ ...PUBLISHED, consent_public_publication: 'pending' })).toBeNull();
+	});
+
+	it('reports a refused consent', () => {
+		expect(publicationBlocker({ ...PUBLISHED, consent_public_publication: 'no' })).toBe(
+			'publication consent is declined',
 		);
 	});
 
-	it('reports an identity that is not published at full or partial level', () => {
-		expect(publicationBlocker({ ...CLEARED, public_identity_level: 'anonymous' })).toBe(
-			'the identity is not cleared for publication',
-		);
-		// Blank is the most restrictive option, so it is not published.
-		expect(publicationBlocker({ ...CLEARED, public_identity_level: '' })).toBe(
-			'the identity is not cleared for publication',
-		);
-	});
-
-	it('publishes a partial identity', () => {
-		expect(
-			publicationBlocker({ ...CLEARED, public_identity_level: 'partial' }),
-		).toBeNull();
-	});
-
-	it('reports a photograph that is not cleared', () => {
-		expect(publicationBlocker({ ...CLEARED, photograph_public: '' })).toBe(
-			'the photograph is not cleared for publication',
-		);
+	it('does not block on the identity level or the photograph', () => {
+		// Those decide what the poster SHOWS. The server withholds
+		// them and names them in `withheld`; they do not stop the
+		// download.
+		const caseFile = {
+			...PUBLISHED,
+			public_identity_level: 'anonymous',
+			photograph_public: 'no',
+		};
+		expect(publicationBlocker(caseFile)).toBeNull();
 	});
 
 	it('reports the first unmet condition, in the server’s order', () => {
-		// Every flag is wrong here. The consent comes first, so it is
-		// what the advocate is told to go and set.
+		// Everything is wrong here. The unpublished case comes first,
+		// so it is what the advocate is told to go and fix.
 		expect(
 			publicationBlocker({
 				is_published: false,
-				consent_public_publication: '',
-				public_identity_level: 'anonymous',
-				photograph_public: 'no',
+				consent_public_publication: 'no',
 			}),
 		).toBe('the case is not published');
 	});
 
-	it('treats missing fields as unanswered, not as consent', () => {
-		expect(publicationBlocker({})).toBe('consent fields not set');
+	it('treats missing fields as unanswered, not as a refusal', () => {
+		expect(publicationBlocker({})).toBeNull();
 	});
 });

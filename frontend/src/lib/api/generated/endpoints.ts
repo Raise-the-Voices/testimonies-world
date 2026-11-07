@@ -1848,7 +1848,7 @@ export const personsDestroy = async (id: number, options?: RequestInit): Promise
 
 
 /**
- * The masked Case Information Card for this person — the publication-facing projection of the case, ready to render as a poster. Every field is decided on the server from the consent flags on the case (publication consent, identity level, location level, photograph clearance); private reports and non-public media never contribute. An unpublished case is a 404 for anonymous callers, matching the rest of the public catalog. `exportable` is computed server-side and says whether the case may be shared as an image; `withheld` names what was taken out of the card.
+ * The masked Case Information Card for this person — the publication-facing projection of the case, ready to render as a poster. The card publishes what the public case page already publishes; private reports and non-public media never contribute, and a flag that has been filled in is honoured as written (an explicit "no", "anonymous" or "do not disclose" withholds what it names). An unpublished case is a 404 for anonymous callers, matching the rest of the public catalog. `exportable` is computed server-side and says whether the case may be shared as an image; `withheld` names what was taken out of the card.
  */
 export type personsCardRetrieveResponse200 = {
   data: CaseCardPayload
