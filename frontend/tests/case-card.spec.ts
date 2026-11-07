@@ -53,7 +53,7 @@ const FULL_PERSON = {
 	days_since_last_report: 12,
 	is_published: true,
 	profile_image_url: null,
-	categories: [],
+	categories: [{ id: 1, name: 'Enforced disappearance', description: '' }],
 	media_files: [],
 	family: [
 		{
@@ -172,7 +172,7 @@ test.describe('Case information card', () => {
 					position: cs.position,
 				};
 			});
-			expect(overlayStyle.backdropFilter).toContain('blur(8px)');
+			expect(overlayStyle.backdropFilter).toContain('blur(10px)');
 			expect(overlayStyle.position).toBe('fixed');
 			// A semi-transparent dark scrim — not an opaque one.
 			expect(overlayStyle.background).toMatch(/rgba\(0, 0, 0, 0\.\d+\)/);
@@ -210,22 +210,27 @@ test.describe('Case information card', () => {
 
 			// Header: reference and the date the case was received.
 			await expect(dialog.locator('.case-card-ref')).toHaveText('Ref: ED-2026-0042');
-			await expect(dialog.locator('.case-card-date')).toHaveText('2 Feb 2026');
+			await expect(dialog.locator('.case-card-date')).toHaveText('2 February 2026');
 
-			// Title block: the person's name and the status.
+			// Title block: the case category, the person's name and the
+			// status.
+			await expect(dialog.locator('.case-card-category')).toHaveText(
+				'Enforced Disappearance',
+			);
 			await expect(dialog.getByRole('heading', { name: 'Ahmed Al-Hassan' })).toBeVisible();
 			await expect(dialog.locator('.case-card-status')).toHaveText('Disappeared');
 
 			// Metadata rows, in the order the poster prints them.
 			const rows = dialog.locator('.case-card-meta-row');
-			await expect(rows).toHaveCount(7);
+			await expect(rows).toHaveCount(8);
 			await expect(rows.locator('.case-card-meta-label')).toHaveText([
 				'Age',
 				'Residence',
 				'Profession',
 				'Father',
-				'Abduction date',
-				'Abduction place',
+				'Date of abduction',
+				'Time of abduction',
+				'Place of abduction',
 				'Perpetrators',
 			]);
 			await expect(rows.locator('.case-card-meta-value')).toHaveText([
@@ -234,9 +239,18 @@ test.describe('Case information card', () => {
 				'Teacher',
 				'Yusuf Al-Hassan',
 				'3 Nov 2025',
+				'21:30',
 				'Old City, Alexandria',
 				'Security Service',
 			]);
+
+			// Footer: a hashtag per case category, and the signature.
+			await expect(dialog.locator('.case-card-tag')).toHaveText([
+				'#EnforcedDisappearance',
+			]);
+			await expect(dialog.locator('.case-card-brand')).toHaveText(
+				'Testimonies.world · cases.raisethevoices.org',
+			);
 		},
 	);
 

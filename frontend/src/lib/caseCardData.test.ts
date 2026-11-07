@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	buildCaseCardData,
+	leadCategory,
 	pickAbductionReport,
 	resolveParent,
 	type CaseCardPerson,
@@ -32,6 +33,7 @@ function makeReport(overrides: Partial<Report> = {}): Report {
 		narrative: 'Sighted being taken from the family home.',
 		date_start: '2025-11-03',
 		date_of_abduction: '2025-11-03',
+		time_of_abduction: '21:30',
 		place_of_abduction: 'Old City, Alexandria',
 		abductors: 'Security Service',
 		created_at: '2025-11-10T00:00:00Z',
@@ -56,6 +58,7 @@ function makePerson(overrides: Partial<CaseCardPerson> = {}): CaseCardPerson {
 		case_received_date: '2026-02-02',
 		father_name: 'Yusuf Al-Hassan',
 		profile_image_url: 'https://example.org/public-media/profiles/face.jpg',
+		categories: [{ id: 1, name: 'Enforced disappearance' }],
 		family: [],
 		reports: [makeReport()],
 		...overrides,
@@ -114,16 +117,18 @@ describe('buildCaseCardData', () => {
 			'Residence',
 			'Profession',
 			'Father',
-			'Abduction date',
-			'Abduction place',
+			'Date of abduction',
+			'Time of abduction',
+			'Place of abduction',
 			'Perpetrators',
 		]);
 		expect(valueOf(data, 'Age')).toBe('34');
 		expect(valueOf(data, 'Residence')).toBe('Alexandria, Egypt');
 		expect(valueOf(data, 'Profession')).toBe('Teacher');
 		expect(valueOf(data, 'Father')).toBe('Yusuf Al-Hassan');
-		expect(valueOf(data, 'Abduction date')).toBe('3 Nov 2025');
-		expect(valueOf(data, 'Abduction place')).toBe('Old City, Alexandria');
+		expect(valueOf(data, 'Date of abduction')).toBe('3 Nov 2025');
+		expect(valueOf(data, 'Time of abduction')).toBe('21:30');
+		expect(valueOf(data, 'Place of abduction')).toBe('Old City, Alexandria');
 		expect(valueOf(data, 'Perpetrators')).toBe('Security Service');
 	});
 
@@ -176,12 +181,12 @@ describe('buildCaseCardData', () => {
 	});
 
 	it('uses the received date in the header', () => {
-		expect(buildCaseCardData(makePerson()).date).toBe('2 Feb 2026');
+		expect(buildCaseCardData(makePerson()).date).toBe('2 February 2026');
 	});
 
 	it('falls back to the entry date when the received date is unset', () => {
 		const data = buildCaseCardData(makePerson({ case_received_date: null }));
-		expect(data.date).toBe('14 Mar 2026');
+		expect(data.date).toBe('14 March 2026');
 	});
 
 	it('has no reference when the case has none', () => {
@@ -190,6 +195,48 @@ describe('buildCaseCardData', () => {
 		expect(buildCaseCardData(makePerson({ public_reference: '  ED-1  ' })).reference).toBe(
 			'ED-1',
 		);
+	});
+
+	it('leads with the case category, in title case', () => {
+		const data = buildCaseCardData(makePerson());
+		expect(data.category).toBe('Enforced Disappearance');
+	});
+
+	it('has no category line when the case is filed under none', () => {
+		const data = buildCaseCardData(makePerson({ categories: [] }));
+		expect(data.category).toBeNull();
+		expect(data.hashtags).toEqual([]);
+	});
+
+	it('prints a hashtag for every category', () => {
+		const data = buildCaseCardData(
+			makePerson({
+				categories: [
+					{ id: 1, name: 'Enforced disappearance' },
+					{ id: 2, name: 'Arbitrary detention' },
+				],
+			}),
+		);
+		expect(data.hashtags).toEqual(['#EnforcedDisappearance', '#ArbitraryDetention']);
+	});
+});
+
+describe('leadCategory', () => {
+	it('leads with the most serious category, not the first one', () => {
+		// The API returns the categories in name order, so "Arbitrary
+		// detention" arrives first. The poster leads with the category
+		// the editorial list ranks highest.
+		expect(leadCategory(['Arbitrary detention', 'Enforced disappearance'])).toBe(
+			'Enforced Disappearance',
+		);
+	});
+
+	it('leads with a category the editorial list does not know', () => {
+		expect(leadCategory(['Forced displacement'])).toBe('Forced Displacement');
+	});
+
+	it('has no category when the case has none', () => {
+		expect(leadCategory([])).toBeNull();
 	});
 });
 

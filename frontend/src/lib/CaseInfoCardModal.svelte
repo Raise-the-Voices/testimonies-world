@@ -81,15 +81,17 @@
 		height: 44px;
 		padding: 0;
 		border-radius: 50%;
-		border: 1px solid var(--color-text);
-		background: var(--color-bg-white);
-		color: var(--color-text);
+		border: 1px solid var(--color-primary);
+		background: var(--color-primary);
+		color: var(--color-text-light);
+		box-shadow: var(--shadow-card-lg);
 		transition:
 			background var(--transition-card),
-			color var(--transition-card);
+			border-color var(--transition-card);
 	}
 	.case-card-modal-close:hover {
-		background: var(--color-text);
+		background: var(--color-primary-light);
+		border-color: var(--color-primary-light);
 		color: var(--color-text-light);
 	}
 </style>

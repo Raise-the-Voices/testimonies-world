@@ -25,8 +25,8 @@
  */
 
 import { statusLabels } from './StatusBadge.svelte';
-import { formatFullDate } from './dateFormat';
-import type { FamilyRelationship, Person, Report } from './types';
+import { formatEditorialDate, formatFullDate } from './dateFormat';
+import type { FamilyRelationship, Person, PersonCategory, Report } from './types';
 
 export interface CardPhoto {
 	src: string;
@@ -60,12 +60,17 @@ export interface CaseCardData {
 	reference: string | null;
 	/** Header date — the day the case entered the platform. */
 	date: string | null;
+	/** The case category the poster leads with, or null when the case
+	 *  is filed under no category. */
+	category: string | null;
 	title: string;
 	statusLabel: string | null;
 	photo: CardPhoto | null;
 	/** Metadata rows in print order. Rows with no value are omitted
 	 *  entirely — never rendered with an empty value. */
 	rows: CardMetaRow[];
+	/** Hashtags for the poster's footer, one per case category. */
+	hashtags: string[];
 }
 
 /**
@@ -94,23 +99,107 @@ export function buildCaseCardData(person: CaseCardPerson): CaseCardData {
 	// the dedicated field has not been filled in.
 	const abduction = pickAbductionReport(person.reports ?? []);
 	add(
-		'Abduction date',
+		'Date of abduction',
 		formatFullDate(abduction?.date_of_abduction ?? abduction?.date_start ?? ''),
 	);
-	add('Abduction place', abduction?.place_of_abduction ?? '');
+	add('Time of abduction', abduction?.time_of_abduction ?? '');
+	add('Place of abduction', abduction?.place_of_abduction ?? '');
 	add('Perpetrators', abduction?.abductors ?? '');
+
+	const categories = categoryNames(person.categories);
 
 	return {
 		reference: clean(person.public_reference) || null,
 		// The date the case file was received is the semantically right
 		// date but is rarely filled in, so the platform's own record of
 		// when the case was entered stands in for it.
-		date: formatFullDate(person.case_received_date ?? '') || formatFullDate(person.created_at),
+		date:
+			formatEditorialDate(person.case_received_date ?? '') ||
+			formatEditorialDate(person.created_at),
+		category: leadCategory(categories),
 		title: clean(person.name),
 		statusLabel: clean(statusLabels[person.current_status] ?? '') || null,
 		photo: person.profile_image_url ? { src: person.profile_image_url, alt: '' } : null,
 		rows,
+		hashtags: categories.map(toHashtag).filter(Boolean),
 	};
+}
+
+/**
+ * The order the poster's category line and hashtags follow.
+ *
+ * EDITORIAL: this is a judgement about which category is the most
+ * serious, not a fact about the data, which is why it lives in code
+ * where a human can edit it rather than in a table nobody looks at.
+ *
+ * It mirrors the list the publication-facing card payload uses
+ * (`backend/cases/card/serializers.py` → `CATEGORY_HEADLINE_PRIORITY`)
+ * so both views of the same case lead with the same category. Change
+ * one, change the other.
+ */
+const CATEGORY_LEAD_ORDER = [
+	'Enforced disappearance',
+	'Arbitrary detention',
+	'Extrajudicial violence',
+	'Restricted movement',
+	'Rights restricted',
+	'Stateless',
+	'Child rights violation',
+	'Refugee / needs relocation',
+	'Torture',
+	'Other',
+];
+
+/**
+ * The category names on the record, in the order the API returned them.
+ * The API sends them through a loose schema, so each entry is read
+ * defensively.
+ */
+function categoryNames(categories: PersonCategory[] | undefined): string[] {
+	if (!Array.isArray(categories)) return [];
+	return categories.map((c) => clean(c?.name)).filter(Boolean);
+}
+
+/**
+ * The category the poster leads with — the most serious one the case
+ * is filed under, in title case. Null when the case has no category.
+ */
+export function leadCategory(names: string[]): string | null {
+	if (names.length === 0) return null;
+
+	const byLower = new Map(names.map((n) => [n.toLowerCase(), n]));
+	for (const candidate of CATEGORY_LEAD_ORDER) {
+		const match = byLower.get(candidate.toLowerCase());
+		if (match) return titleCase(match);
+	}
+
+	// A category the editorial list does not know about still leads,
+	// so the line is never empty when the case has one.
+	return titleCase(names[0]);
+}
+
+/**
+ * Capitalise the first letter of every word, leaving the rest of the
+ * word alone so acronyms and possessives survive ("children's rights"
+ * → "Children's rights"). Mirrors the backend's `_title_case`.
+ */
+function titleCase(text: string): string {
+	return text
+		.split(/\s+/)
+		.filter(Boolean)
+		.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+		.join(' ');
+}
+
+/**
+ * A category name as a hashtag: "Enforced disappearance" →
+ * "#EnforcedDisappearance". Words that are not letters or digits
+ * (a slash, a hyphen) are dropped rather than carried into the tag.
+ */
+function toHashtag(name: string): string {
+	const words = name.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+	if (words.length === 0) return '';
+	return `#${words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join('')}`;
 }
 
 /**

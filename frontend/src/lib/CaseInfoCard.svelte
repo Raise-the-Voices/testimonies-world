@@ -5,19 +5,20 @@
 	The mapping from a Person record to that data lives in
 	`caseCardData.ts` so it can be unit-tested without a DOM.
 
-	Layout (the "Modern Infographic Poster / Dossier" layout):
+	Layout (the editorial dossier):
 
 	  ┌────────────────────────────────────────┐
-	  │ REF: ED-2026-0042          14 Mar 2026 │  header
+	  │ REF: ED-2026-0042         2 FEB 2026   │  reference bar
 	  ├────────────────────────────────────────┤
-	  │ AHMED AL-HASSAN                        │  title (red, uppercase)
-	  │ DISAPPEARED                            │  status
+	  │ ENFORCED DISAPPEARANCE                  │  category line
+	  │ AHMED AL-HASSAN                        │  headline
+	  │ DISAPPEARED                             │  status
 	  ├──────────────────┬─────────────────────┤
-	  │  ┌────────────┐  │ AGE       34        │
-	  │  │ photograph │  │ RESIDENCE Alexandria│
-	  │  └────────────┘  │ PROFESSION Teacher   │
-	  │                  │ FATHER    Yusuf      │
+	  │  ┌────────────┐  │ AGE:        34      │
+	  │  │ photograph │  │ RESIDENCE:  Alex…  │
+	  │  └────────────┘  │ FATHER:     Yusuf   │
 	  ├──────────────────┴─────────────────────┤
+	  │ #EnforcedDisappearance   Testimonies…  │  footer
 	  └────────────────────────────────────────┘
 
 	The card carries no close button, no download button and no other
@@ -50,6 +51,10 @@
 	// job is to state facts — the facts list reads better across the
 	// full width instead.
 	let showPhoto = $derived(!!data.photo && !photoFailed);
+
+	// The footer signature. Text, not a logo: the project ships no
+	// logo asset, and the sheet is a document rather than a badge.
+	const SIGNATURE = 'Testimonies.world · cases.raisethevoices.org';
 </script>
 
 <div class="case-card-wrap">
@@ -68,6 +73,9 @@
 		</header>
 
 		<div class="case-card-title-block">
+			{#if data.category}
+				<p class="case-card-category">{data.category}</p>
+			{/if}
 			<h3 class="case-card-title" id="case-card-title">{data.title}</h3>
 			{#if data.statusLabel}
 				<p class="case-card-status">{data.statusLabel}</p>
@@ -97,6 +105,17 @@
 				{/each}
 			</dl>
 		</div>
+
+		<footer class="case-card-footer">
+			{#if data.hashtags.length > 0}
+				<ul class="case-card-tags">
+					{#each data.hashtags as tag (tag)}
+						<li class="case-card-tag">{tag}</li>
+					{/each}
+				</ul>
+			{/if}
+			<p class="case-card-brand">{SIGNATURE}</p>
+		</footer>
 	</article>
 </div>
 
@@ -112,20 +131,25 @@
 		width: 100%;
 	}
 
+	/* The sheet: warm paper, a sharp dark edge, and the brand accent
+	   line along the top. Square corners — a dossier sheet has no
+	   rounded corners. */
 	.case-card {
 		font-size: var(--card-base-font);
 		width: var(--card-poster-width);
 		max-width: 100%;
 		margin-inline: auto;
-		background: var(--color-bg-white);
-		border: 2px solid var(--color-text);
-		border-radius: var(--radius-card-poster);
 		color: var(--color-text);
+		background-color: var(--color-card-paper);
+		background-image: var(--card-paper-wash), var(--card-paper-grain);
+		border: 1px solid var(--color-text);
+		border-top: 4px solid var(--color-primary);
+		border-radius: var(--radius-card-poster);
 		box-shadow: var(--shadow-card-lg);
 		overflow: hidden;
 	}
 
-	/* --- header --------------------------------------------------- */
+	/* --- reference bar ---------------------------------------------- */
 	.case-card-header {
 		display: flex;
 		justify-content: space-between;
@@ -134,10 +158,11 @@
 		/* The top padding is generous so the close control that
 		   overlaps the card's top-right corner (in the modal) never
 		   reaches the header's text. */
-		padding: 0.85em 0.9em 0.6em;
+		padding: 0.7em 1.1em 0.55em;
 		border-bottom: 2px solid var(--color-text);
+		font-family: var(--font-mono);
 		font-size: 0.78em;
-		letter-spacing: 0.08em;
+		letter-spacing: 0.14em;
 		text-transform: uppercase;
 	}
 	.case-card-ref {
@@ -149,38 +174,53 @@
 		white-space: nowrap;
 	}
 
-	/* --- title ---------------------------------------------------- */
+	/* --- title ------------------------------------------------------ */
 	.case-card-title-block {
-		padding: 0.85em 0.9em 0.7em;
+		padding: 1.05em 1.1em 0.95em;
+	}
+	/* The case category the poster leads with. */
+	.case-card-category {
+		margin: 0 0 0.4em;
+		font-size: 0.78em;
+		font-weight: 700;
+		letter-spacing: 0.24em;
+		text-transform: uppercase;
+		color: var(--color-primary);
 	}
 	.case-card-title {
 		margin: 0;
-		font-size: 2.4em;
-		line-height: 1.06;
+		font-size: 2.5em;
+		line-height: 1.05;
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.01em;
-		/* --color-danger on white is 5.06:1 — passes AA for large
-		   text. Red is for the title only; body copy stays on
-		   --color-text. */
-		color: var(--color-danger);
+		/* --color-primary on the paper tone is 6.4:1 — passes AA for
+		   body text and comfortably for large text. */
+		color: var(--color-primary);
+		text-decoration: underline;
+		text-decoration-thickness: 0.09em;
+		text-underline-offset: 0.16em;
+		text-decoration-color: var(--color-primary);
 		overflow-wrap: anywhere;
 	}
 	.case-card-status {
-		margin: 0.3em 0 0;
-		font-size: 0.92em;
+		margin: 0.55em 0 0;
+		font-size: 0.95em;
 		font-weight: 700;
-		letter-spacing: 0.14em;
+		letter-spacing: 0.2em;
 		text-transform: uppercase;
-		color: var(--color-text);
+		/* --color-danger on the paper tone is 4.9:1 — passes AA for
+		   body text. Red states the case's condition; everything else
+		   on the sheet stays on the brand teal or the ink. */
+		color: var(--color-danger);
 	}
 
-	/* --- body ----------------------------------------------------- */
+	/* --- body ------------------------------------------------------- */
 	.case-card-body {
 		display: grid;
 		grid-template-columns: 38% 1fr;
-		gap: 1.1em;
-		padding: 0 0.9em 0.95em;
+		gap: 1.2em;
+		padding: 0 1.1em 1.1em;
 	}
 
 	/* No photograph: the facts take the whole sheet. */
@@ -189,9 +229,9 @@
 	}
 
 	.case-card-photo-frame {
-		border: 2px solid var(--color-text);
-		padding: 0.35em;
-		background: var(--color-bg-white);
+		border: 2px solid var(--color-primary);
+		padding: 0.4em;
+		background: var(--color-card-paper);
 	}
 	.case-card-photo {
 		display: block;
@@ -201,7 +241,7 @@
 		object-position: center 20%;
 	}
 
-	/* --- metadata -------------------------------------------------
+	/* --- metadata ---------------------------------------------------
 	   A ruled list, not a stack of boxes. The rules are hairlines and
 	   the rows are flat, so the card reads as one sheet. */
 	.case-card-meta {
@@ -211,10 +251,10 @@
 	}
 	.case-card-meta-row {
 		display: grid;
-		grid-template-columns: 8em 1fr;
-		gap: 0.5em;
+		grid-template-columns: 9.6em 1fr;
+		gap: 0.55em;
 		align-items: baseline;
-		padding: 0.5em 0;
+		padding: 0.55em 0;
 		border-bottom: 1px solid var(--color-border-subtle);
 	}
 	.case-card-meta-row:last-child {
@@ -222,16 +262,56 @@
 	}
 	.case-card-meta-label {
 		margin: 0;
-		font-size: 0.72em;
+		font-size: 0.68em;
 		font-weight: 700;
-		letter-spacing: 0.09em;
+		letter-spacing: 0.07em;
 		text-transform: uppercase;
-		color: var(--color-text-muted);
+		color: var(--color-primary);
+	}
+	/* The dossier's label colon. Punctuation, not content — it stays
+	   out of the DOM text so the label itself is still plain. */
+	.case-card-meta-label::after {
+		content: ':';
 	}
 	.case-card-meta-value {
 		margin: 0;
 		font-size: 1em;
 		overflow-wrap: anywhere;
+	}
+
+	/* --- footer ----------------------------------------------------- */
+	.case-card-footer {
+		border-top: 2px solid var(--color-text);
+		padding: 0.8em 1.1em 1em;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.6em 1em;
+	}
+	.case-card-tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45em;
+		margin: 0;
+		padding: 0;
+	}
+	.case-card-tag {
+		font-size: 0.78em;
+		font-weight: 700;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		color: var(--color-primary);
+		background: var(--color-primary-tint);
+		border: 1px solid var(--color-primary);
+		padding: 0.2em 0.55em;
+	}
+	.case-card-brand {
+		margin: 0 0 0 auto;
+		font-size: 0.75em;
+		letter-spacing: 0.06em;
+		color: var(--color-text-muted);
+		white-space: nowrap;
 	}
 
 	/* Narrow card (phone, or a sidebar later): the photograph moves
@@ -244,7 +324,7 @@
 			aspect-ratio: 16 / 9;
 		}
 		.case-card-meta-row {
-			grid-template-columns: 7em 1fr;
+			grid-template-columns: 8.5em 1fr;
 		}
 	}
 </style>

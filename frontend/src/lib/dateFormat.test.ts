@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { formatMonthYear, isoToMonthYear, monthYearToIsoDate, isValidMonthYear } from './dateFormat';
+import {
+	formatEditorialDate,
+	formatMonthYear,
+	isoToMonthYear,
+	monthYearToIsoDate,
+	isValidMonthYear,
+} from './dateFormat';
 
 describe('dateFormat', () => {
 	describe('formatMonthYear', () => {
@@ -66,6 +72,31 @@ describe('dateFormat', () => {
 			expect(isValidMonthYear('2024-03-01')).toBe(false);
 			expect(isValidMonthYear('2024-3')).toBe(false);
 			expect(isValidMonthYear('2024/03')).toBe(false);
+		});
+	});
+
+	describe('formatEditorialDate', () => {
+		it('spells the month out', () => {
+			expect(formatEditorialDate('2026-03-14')).toBe('14 March 2026');
+		});
+
+		it('accepts a Date — the shape the Zod boundary produces', () => {
+			expect(formatEditorialDate(new Date('2026-03-14T00:00:00Z'))).toBe('14 March 2026');
+		});
+
+		it('accepts a month-precision string', () => {
+			expect(formatEditorialDate('2026-03')).toBe('1 March 2026');
+		});
+
+		it('returns an empty string for nullish and unreadable input', () => {
+			expect(formatEditorialDate(null)).toBe('');
+			expect(formatEditorialDate(undefined)).toBe('');
+			expect(formatEditorialDate('')).toBe('');
+			expect(formatEditorialDate('not-a-date')).toBe('');
+		});
+
+		it('does not shift the day across time zones', () => {
+			expect(formatEditorialDate(new Date('2026-01-01T00:00:00Z'))).toBe('1 January 2026');
 		});
 	});
 });
