@@ -169,15 +169,6 @@
 		border-radius: 4px;
 	}
 
-	@keyframes skeleton-shimmer {
-		0% {
-			background-position: 200% 0;
-		}
-		100% {
-			background-position: -200% 0;
-		}
-	}
-
 	/* === text === */
 	.skeleton-text {
 		height: 0.9em;

@@ -26,6 +26,29 @@ import {
 
 // --- Person overlays ----------------------------------------------------
 
+/**
+ * One row of the auto-captured status history — the backend's
+ * CaseEvent rows for status changes, serialized by CaseEventSerializer
+ * and returned by PersonDetailSerializer.get_status_history.
+ *
+ * The dates stay ISO strings on purpose. The person page puts
+ * `event_date` straight into a <time datetime> attribute and sorts the
+ * feed by the `created_at` string, and neither wants a Date object.
+ */
+export const StatusHistoryEntrySchema = z.object({
+	id: z.number().int(),
+	person: z.number().int().nullish(),
+	report: z.number().nullish(),
+	event_date: z.string().nullish(),
+	event_kind: z.string().nullish(),
+	description: z.string().nullish(),
+	source: z.string().nullish(),
+	verification: z.string().nullish(),
+	created_at: z.string().nullish(),
+	created_by: z.number().nullish(),
+	created_by_username: z.string().nullish()
+});
+
 export const PersonDetailSchema = z.object({
 	id: z.number().int(),
 	categories: z.array(z.any()),
@@ -71,6 +94,10 @@ export const PersonDetailSchema = z.object({
 	occupation: z.string().optional(),
 	public_reference: z.string().nullable().optional(),
 	case_received_date: isoDateNullable.optional(),
+	// The status history the person page renders — the timeline and the
+	// transition banner. Zod strips keys the schema doesn't declare, so
+	// without this the feed never reaches the page.
+	status_history: z.array(StatusHistoryEntrySchema).optional(),
 	created_at: isoDateTime,
 	updated_at: isoDateTime,
 	created_by: z.number().nullable(),

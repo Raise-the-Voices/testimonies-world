@@ -920,11 +920,6 @@
 		border-radius: 50%;
 		animation: spin 0.7s linear infinite;
 	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
 
 	/* === Responsive === */
 	@media (max-width: 720px) {
@@ -959,8 +954,6 @@
 		.field input,
 		.field select,
 		.field textarea,
-		.person-pill,
-		.person-check,
 		.spinner {
 			transition: none;
 			animation: none;

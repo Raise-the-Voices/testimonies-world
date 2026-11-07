@@ -1322,9 +1322,6 @@ import Skeleton from '$lib/Skeleton.svelte';
 		border-radius: 50%;
 		animation: spin 0.7s linear infinite;
 	}
-	@keyframes spin {
-		to { transform: rotate(360deg); }
-	}
 
 	@media (max-width: 720px) {
 		.form-section { padding: 1.25rem 1.25rem; }

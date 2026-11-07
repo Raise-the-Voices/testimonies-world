@@ -6,6 +6,7 @@
 	import StatisticsCard from '$lib/StatisticsCard.svelte';
 	import StatRow from '$lib/StatRow.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
+	import { countUp } from '$lib/motion';
 	import type { PageData } from './$types';
 	import type { MedicalStatus, Statistics as StatisticsT } from '$lib/types';
 
@@ -117,9 +118,22 @@
 				<span class="total-label">Total cases</span>
 			</div>
 		{:else if stats}
-			<div class="total-badge" aria-label="{stats.total} total cases">
-				<span class="total-number">{stats.total}</span>
-				<span class="total-label">Total cases</span>
+			<div class="total-badge">
+				<!-- The count-up writes into .total-number-digits. The static
+				     fallback carries the number for readers without scripting;
+				     .sr-only carries it for screen readers, so the value is
+				     announced once either way. -->
+				<span class="total-number">
+					<span
+						class="total-number-digits"
+						aria-hidden="true"
+						style="min-width: {String(stats.total).length}ch"
+						use:countUp={{ value: stats.total, when: 'visible' }}
+					></span>
+					<span class="total-number-fallback" aria-hidden="true">{stats.total}</span>
+					<span class="sr-only">{stats.total} total cases</span>
+				</span>
+				<span class="total-label" aria-hidden="true">Total cases</span>
 			</div>
 		{/if}
 	</header>
@@ -135,7 +149,7 @@
 		<ErrorState error={error} title="Could not load statistics" onRetry={loadStats} />
 	{:else if stats}
 		<div class="stats-grid">
-			<StatisticsCard variant="section" title="By Status" meta="{sortedByStatus.length} categories" delayMs={0}>
+			<StatisticsCard variant="section" title="By Status" meta="{sortedByStatus.length} categories" revealIndex={0}>
 				{#if sortedByStatus.length > 0}
 					<ul class="stat-list">
 						{#each sortedByStatus as [key, count] (key)}
@@ -147,7 +161,7 @@
 				{/if}
 			</StatisticsCard>
 
-			<StatisticsCard variant="section" title="By Country" meta="{countries.length} countries" delayMs={50}>
+			<StatisticsCard variant="section" title="By Country" meta="{countries.length} countries" revealIndex={1}>
 				{#if countries.length > 0}
 					<ul class="stat-list">
 						{#each countries as [country, count] (country)}
@@ -163,7 +177,7 @@
 				variant="section"
 				title="By Category"
 				meta="{sortedCategories.length} categories"
-				delayMs={100}
+				revealIndex={2}
 			>
 				{#if sortedCategories.length > 0}
 					<ul class="stat-list">
@@ -180,7 +194,7 @@
 				variant="section"
 				title="By Medical Status"
 				meta="{sortedByMedical.length} statuses"
-				delayMs={150}
+				revealIndex={3}
 			>
 				{#if sortedByMedical.length > 0}
 					<ul class="stat-list">
@@ -250,6 +264,26 @@
 		font-weight: 700;
 		color: var(--color-primary);
 		line-height: 1;
+		font-variant-numeric: tabular-nums;
+	}
+	/* The count-up writes into .total-number-digits. Until scripting runs,
+	   the static fallback shows the number; with scripting the fallback is
+	   hidden and the animated slot takes over. The slot reserves the final
+	   width (min-width, set inline from the value) so the count causes no
+	   layout shift. */
+	.total-number-fallback {
+		display: inline;
+	}
+	.total-number-digits {
+		display: none;
+	}
+	@media (scripting: enabled) {
+		.total-number-fallback {
+			display: none;
+		}
+		.total-number-digits {
+			display: inline-block;
+		}
 	}
 	.total-label {
 		font-size: 0.78rem;

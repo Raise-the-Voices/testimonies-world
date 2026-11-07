@@ -33,6 +33,7 @@
 -->
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { drop } from '$lib/motion';
 
 	interface Person {
 		id: number;
@@ -318,6 +319,7 @@
 				aria-multiselectable="true"
 				class="options"
 				bind:this={listEl}
+				transition:drop
 			>
 				{#if loading && options.length === 0}
 					<li class="loading" aria-busy="true">Loading…</li>

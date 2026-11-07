@@ -34,6 +34,8 @@
     - any other surface that renders external `Media.url` as <img>
 -->
 <script lang="ts">
+	import { fade } from '$lib/motion';
+
 	interface Props {
 		src: string;
 		alt: string;
@@ -114,6 +116,9 @@
 </script>
 
 {#if showFallback}
+	<!-- The swap crossfades: the broken image fades out while the
+	     fallback fades in. Same pattern as the dashboard's skeleton →
+	     content swap. -->
 	<a
 		href={src}
 		target="_blank"
@@ -121,6 +126,7 @@
 		class={`media-fallback ${klass}`}
 		title={description ?? src}
 		data-testid="media-fallback"
+		transition:fade
 	>
 		<span class="media-fallback-domain">{domainOf(src)}</span>
 		<span class="media-fallback-icon" aria-hidden="true">↗</span>
@@ -137,6 +143,7 @@
 		{height}
 		onerror={handleError}
 		data-testid="media-image"
+		transition:fade
 	/>
 {/if}
 
@@ -156,7 +163,9 @@
 		font-weight: 600;
 		min-height: 2.5rem;
 		min-width: 6rem;
-		transition: background-color 0.15s ease, border-color 0.15s ease;
+		transition:
+			background-color var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 
 	.media-fallback:hover {
@@ -176,5 +185,11 @@
 	.media-fallback-icon {
 		font-size: 0.95rem;
 		line-height: 1;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.media-fallback {
+			transition: none;
+		}
 	}
 </style>

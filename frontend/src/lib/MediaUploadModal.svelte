@@ -12,7 +12,7 @@
   import path, but the volunteer form never sets it.
 -->
 <script lang="ts">
-	import { fly, fade } from 'svelte/transition';
+	import { drop, fade } from '$lib/motion';
 	import { uploadMediaJson, updateMediaJson, ApiError } from '$lib/api';
 	import type { Media, Visibility } from '$lib/types';
 
@@ -158,14 +158,14 @@
 </script>
 
 {#if open}
-	<div class="modal-overlay" onclick={close} role="presentation" transition:fade={{ duration: 150 }}></div>
+	<div class="modal-overlay" onclick={close} role="presentation" transition:fade></div>
 
 	<div
 		class="modal"
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="media-modal-title"
-		transition:fly={{ y: -16, duration: 200, opacity: 0 }}
+		transition:drop
 	>
 		<header class="modal-header">
 			<h2 id="media-modal-title">{isEdit ? 'Edit media link' : 'Add a media link'}</h2>
@@ -405,13 +405,6 @@
 		}
 		.modal-actions .btn {
 			width: 100%;
-		}
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.modal,
-		.modal-overlay {
-			transition: none;
 		}
 	}
 </style>

@@ -21,6 +21,7 @@
 	} from '$lib/api/generated/endpoints.schemas';
 	import StatusBadge from '$lib/StatusBadge.svelte';
 	import MediaImage from '$lib/MediaImage.svelte';
+	import { fade } from '$lib/motion';
 
 	interface Props {
 		/** The person whose related-cases we want. */
@@ -70,7 +71,7 @@
 
 {#if loading}
 	<!-- Skeleton matching the real grid shape so layout doesn't jump -->
-	<section class="related-cases" aria-busy="true" aria-label="Loading related cases">
+	<section class="related-cases" aria-busy="true" aria-label="Loading related cases" transition:fade>
 		<h2 class="related-cases-title">Related cases</h2>
 		<div class="related-cases-grid">
 			{#each Array(3) as _, i (i)}
@@ -79,7 +80,7 @@
 		</div>
 	</section>
 {:else if !errored && items.length > 0}
-	<section class="related-cases" aria-label="Related cases">
+	<section class="related-cases" aria-label="Related cases" transition:fade>
 		<header class="related-cases-header">
 			<h2 class="related-cases-title">Related cases</h2>
 			<p class="related-cases-subtitle">

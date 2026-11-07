@@ -45,7 +45,7 @@
 -->
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import { fly } from 'svelte/transition';
+	import { drop } from '$lib/motion';
 	import { ApiError, createReport, getReport, request, updateReport } from '$lib/api';
 	import { focusFirstFormError } from '$lib/formFocus';
 	import PersonPicker from '$lib/PersonPicker.svelte';
@@ -427,7 +427,7 @@
 		novalidate
 	>
 		{#if errorMsg}
-			<div class="form-error form-error-{errorKind}" role="alert" transition:fly={{ y: -8, duration: 200 }}>
+			<div class="form-error form-error-{errorKind}" role="alert" transition:drop>
 				<span class="form-error-icon" aria-hidden="true">!</span>
 				<span>{errorMsg}</span>
 				{#if errorKind === 'auth'}
@@ -1103,12 +1103,9 @@
 		border: 2px solid currentColor;
 		border-right-color: transparent;
 		border-radius: 50%;
-		animation: rf-spin 0.7s linear infinite;
+		animation: spin 0.7s linear infinite;
 		margin-right: 0.4rem;
 		vertical-align: -2px;
-	}
-	@keyframes rf-spin {
-		to { transform: rotate(360deg); }
 	}
 
 	/* === Responsive === */
@@ -1135,7 +1132,6 @@
 
 	@media (prefers-reduced-motion: reduce) {
 		.spinner { animation: none; }
-		.form-error { transition: none; }
 		.report-form-skeleton-row { animation: none; }
 	}
 </style>
