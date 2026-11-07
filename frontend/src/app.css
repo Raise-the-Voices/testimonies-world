@@ -104,20 +104,30 @@
 	   for a full-bleed poster card, which is bright white and needs
 	   more separation from the page behind it. */
 	--color-overlay: rgba(0, 0, 0, 0.45);
-	--color-overlay-deep: rgba(0, 0, 0, 0.6);
+	--color-overlay-deep: rgba(0, 0, 0, 0.65);
 
 	/* Case card (the interactive "Case Information Card" modal).
 	   The card is scaled in `em` against --card-base-font, so one set of
-	   rules renders at two sizes: 14px on screen (540px wide) and a
-	   double-size instance for image export.
+	   rules renders at two sizes: 16px on screen (720px wide) and a
+	   larger instance for image export.
 
 	   --card-poster-width is a multiple of --card-base-font rather
-	   than a plain `em`: a bare `38.57em` resolves against whatever
+	   than a plain `em`: a bare `45em` resolves against whatever
 	   font-size it lands on, so the width would silently change with
 	   the element that uses it. calc() keeps the number tied to the
-	   base font — 540px at 14px, 1080px at 28px. */
-	--card-base-font: 14px;
-	--card-poster-width: calc(var(--card-base-font) * 38.57);
+	   base font — 720px at 16px.
+
+	   A custom property is substituted where it is USED, but it is
+	   resolved against the element that DECLARES it: --card-poster-width
+	   computes once, on :root, and inherits that computed 720px
+	   everywhere. So the export instance cannot simply change
+	   --card-base-font — it has to point the width token at the export
+	   scale too, which is what --card-poster-width-export is for
+	   (1080px at the 24px export base font). */
+	--card-base-font: 16px;
+	--card-base-font-export: 24px;
+	--card-poster-width: calc(var(--card-base-font) * 45);
+	--card-poster-width-export: calc(var(--card-base-font-export) * 45);
 	/* Poster frames are square. --radius-card (8px) reads as "web
 	   card"; a dossier sheet has no rounded corners. */
 	--radius-card-poster: 0;
@@ -125,7 +135,7 @@
 	/* Paper — the sheet the poster is printed on. A warm off-white
 	   with a soft wash and a fine grain, so the card reads as an
 	   archival document rather than as a white web card. */
-	--color-card-paper: #fbf9f6;
+	--color-card-paper: #fcfbf9;
 	--card-paper-wash:
 		radial-gradient(circle at 15% 8%, rgba(37, 100, 106, 0.05), transparent 45%),
 		radial-gradient(circle at 88% 92%, rgba(217, 22, 22, 0.035), transparent 45%);
@@ -134,6 +144,11 @@
 		rgba(26, 26, 26, 0.02) 0 1px,
 		transparent 1px 4px
 	);
+
+	/* The hairlines between the poster's field rows. Ink, not grey —
+	   a grey rule reads as an unstyled table; an ink rule reads as a
+	   ruled document. */
+	--color-card-rule: rgba(26, 26, 26, 0.18);
 
 	/* The reference bar and the date stamp on the poster. A system
 	   mono stack — the poster needs no webfont of its own. */

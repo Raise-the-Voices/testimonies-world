@@ -32,6 +32,18 @@ export default defineConfig({
 				secure: proxyIsHttps,
 rewrite: (path) => path.replace(/^\/testimonies\/accounts/, '/accounts'),
 			},
+			// Public media — the profile photographs. nginx serves these
+			// off disk in production and Django serves them in DEBUG, at
+			// the bare /public-media/ path. The dev server proxies them
+			// like the other app paths so the photograph is served from
+			// the app's own origin: the card's export reads the image
+			// into a canvas, and a cross-origin image taints it.
+			'/testimonies/public-media/': {
+				target: proxyTarget,
+				changeOrigin: true,
+				secure: proxyIsHttps,
+				rewrite: (path) => path.replace(/^\/testimonies\/public-media/, '/public-media'),
+			},
 		},
 	}
 });

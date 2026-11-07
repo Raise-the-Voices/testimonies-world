@@ -10,7 +10,7 @@
  * Why a separate module rather than logic inside the component:
  * the interesting decisions here (which report is the abduction event,
  * which relative is the father, which rows to drop when empty) are pure
- * functions, so they are unit-testable in the repo's existing
+ * functions, so they can be unit-tested in the repo's existing
  * `environment: 'node'` vitest setup, which cannot render components.
  * Component rendering is covered by Playwright instead.
  *
@@ -21,7 +21,8 @@
  * This is the case-file view of a case, for someone working the file.
  * The shareable, publication-facing projection of the same case is a
  * separate payload with its own masking rules
- * (`backend/cases/card/serializers.py`, `GET /api/persons/{id}/card/`).
+ * (`backend/cases/card/serializers.py`, `GET /api/persons/{id}/card/`),
+ * mapped by `caseCardPayload.ts`.
  */
 
 import { statusLabels } from './StatusBadge.svelte';
@@ -30,8 +31,8 @@ import type { FamilyRelationship, Person, PersonCategory, Report } from './types
 
 export interface CardPhoto {
 	src: string;
-	/** Empty by design — the person's name sits directly above the
-	 *  photograph, so a description would only repeat it. */
+	/** Empty by design — the person's name sits on the card, so a
+	 *  description would only repeat it. */
 	alt: string;
 }
 
@@ -58,12 +59,15 @@ export interface CardMetaRow {
 export interface CaseCardData {
 	/** Citable public reference, or null when the case has none yet. */
 	reference: string | null;
-	/** Header date — the day the case entered the platform. */
+	/** The date the sheet was produced. */
 	date: string | null;
-	/** The case category the poster leads with, or null when the case
-	 *  is filed under no category. */
-	category: string | null;
+	/** The headline. The case category — the kind of violation the file
+	 *  is about — or, for a case filed under no category, the person's
+	 *  name. */
 	title: string;
+	/** The person's name. Printed as a field row unless it is the
+	 *  headline. */
+	name: string;
 	statusLabel: string | null;
 	photo: CardPhoto | null;
 	/** Metadata rows in print order. Rows with no value are omitted
@@ -76,22 +80,38 @@ export interface CaseCardData {
 /**
  * Build the card's data from a person record.
  *
- * Row order is fixed by the poster layout, not by the data: Age,
- * Residence, Profession, Father, then the abduction block.
+ * Row order is fixed by the poster layout, not by the data: Name, Father
+ * name, Age, Residence, Profession, then the abduction block.
+ *
+ * `today` is the day the sheet is produced. It is a parameter so the
+ * unit tests can pin it instead of asserting against the clock.
  */
-export function buildCaseCardData(person: CaseCardPerson): CaseCardData {
+export function buildCaseCardData(
+	person: CaseCardPerson,
+	today: Date = new Date(),
+): CaseCardData {
 	const rows: CardMetaRow[] = [];
 	const add = (label: string, value: unknown) => {
 		const v = clean(value);
 		if (v) rows.push({ label, value: v });
 	};
 
-	add('Age', person.age_at_incident ?? '');
-	add('Residence', formatResidence(person));
-	add('Profession', person.occupation ?? '');
+	const name = clean(person.name);
+	const categories = categoryNames(person.categories);
+	const category = leadCategory(categories);
+
+	// The headline is the category: the poster is about the kind of
+	// violation the file records. A case filed under no category falls
+	// back to the person's name, and then the name is not repeated as a
+	// field row.
+	add('Name', category ? name : '');
 
 	const parent = resolveParent(person);
 	if (parent) add(parent.label, parent.name);
+
+	add('Age', person.age_at_incident ?? '');
+	add('Residence (R/O)', formatResidence(person));
+	add('Profession', person.occupation ?? '');
 
 	// The abduction event lives on a Report, not on the Person: one
 	// case file can carry several reports of the same incident. The
@@ -104,29 +124,22 @@ export function buildCaseCardData(person: CaseCardPerson): CaseCardData {
 	);
 	add('Time of abduction', abduction?.time_of_abduction ?? '');
 	add('Place of abduction', abduction?.place_of_abduction ?? '');
-	add('Perpetrators', abduction?.abductors ?? '');
-
-	const categories = categoryNames(person.categories);
+	add('Abductors', abduction?.abductors ?? '');
 
 	return {
 		reference: clean(person.public_reference) || null,
-		// The date the case file was received is the semantically right
-		// date but is rarely filled in, so the platform's own record of
-		// when the case was entered stands in for it.
-		date:
-			formatEditorialDate(person.case_received_date ?? '') ||
-			formatEditorialDate(person.created_at),
-		category: leadCategory(categories),
-		title: clean(person.name),
+		date: formatEditorialDate(today),
+		title: category ?? name,
+		name,
 		statusLabel: clean(statusLabels[person.current_status] ?? '') || null,
 		photo: person.profile_image_url ? { src: person.profile_image_url, alt: '' } : null,
 		rows,
-		hashtags: categories.map(toHashtag).filter(Boolean),
+		hashtags: categories.map(categoryHashtag).filter(Boolean),
 	};
 }
 
 /**
- * The order the poster's category line and hashtags follow.
+ * The order the poster's headline and hashtags follow.
  *
  * EDITORIAL: this is a judgement about which category is the most
  * serious, not a fact about the data, which is why it lives in code
@@ -174,7 +187,7 @@ export function leadCategory(names: string[]): string | null {
 	}
 
 	// A category the editorial list does not know about still leads,
-	// so the line is never empty when the case has one.
+	// so the headline is never empty when the case has one.
 	return titleCase(names[0]);
 }
 
@@ -196,7 +209,7 @@ function titleCase(text: string): string {
  * "#EnforcedDisappearance". Words that are not letters or digits
  * (a slash, a hyphen) are dropped rather than carried into the tag.
  */
-function toHashtag(name: string): string {
+export function categoryHashtag(name: string): string {
 	const words = name.split(/[^a-zA-Z0-9]+/).filter(Boolean);
 	if (words.length === 0) return '';
 	return `#${words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join('')}`;
@@ -215,7 +228,7 @@ function formatResidence(person: CaseCardPerson): string {
 }
 
 /**
- * Find the father for the "Father" row.
+ * Find the father for the "Father name" row.
  *
  * The relation only says "parent" — it is not gendered — so the
  * browser cannot tell a father from a mother on its own. The server
@@ -231,7 +244,7 @@ export function resolveParent(
 	person: CaseCardPerson,
 ): { label: string; name: string } | null {
 	const father = clean(person.father_name);
-	if (father) return { label: 'Father', name: father };
+	if (father) return { label: 'Father name', name: father };
 
 	const family: FamilyRelationship[] = person.family ?? [];
 	const parents = family.filter(
@@ -239,7 +252,7 @@ export function resolveParent(
 	);
 	if (parents.length === 0) return null;
 
-	return { label: 'Parent', name: clean(parents[0].person_name) };
+	return { label: 'Parent name', name: clean(parents[0].person_name) };
 }
 
 /**

@@ -3,37 +3,48 @@
 
 	Presentational only: it takes already-resolved data and renders it.
 	The mapping from a Person record to that data lives in
-	`caseCardData.ts` so it can be unit-tested without a DOM.
+	`caseCardData.ts` so it can be unit-tested without a DOM; the
+	mapping from the server's masked publication payload lives in
+	`caseCardPayload.ts`. Both produce the same shape, so this one
+	component draws both.
 
 	Layout (the editorial dossier):
 
-	  ┌────────────────────────────────────────┐
-	  │ REF: ED-2026-0042         2 FEB 2026   │  reference bar
-	  ├────────────────────────────────────────┤
-	  │ ENFORCED DISAPPEARANCE                  │  category line
-	  │ AHMED AL-HASSAN                        │  headline
-	  │ DISAPPEARED                             │  status
-	  ├──────────────────┬─────────────────────┤
-	  │  ┌────────────┐  │ AGE:        34      │
-	  │  │ photograph │  │ RESIDENCE:  Alex…  │
-	  │  └────────────┘  │ FATHER:     Yusuf   │
-	  ├──────────────────┴─────────────────────┤
-	  │ #EnforcedDisappearance   Testimonies…  │  footer
-	  └────────────────────────────────────────┘
+	  ┌──────────────────────────────────────────────┐
+	  │ REF: ED-2026-0042              7 NOV 2026   │  reference bar
+	  ├──────────────────────────────────────────────┤
+	  │ ENFORCED DISAPPEARANCE                        │  headline
+	  │ [ DISAPPEARED ]                               │  status badge
+	  ├───────────────────────┬──────────────────────┤
+	  │  ┌─────────────────┐  │ NAME:            A…  │
+	  │  │                 │  │ FATHER NAME:     Y…  │
+	  │  │   [ photograph] │  │ AGE:                │
+	  │  │                 │  │ RESIDENCE (R/O):    │
+	  │  └─────────────────┘  │ PROFESSION:         │
+	  ├───────────────────────┴──────────────────────┤
+	  │ #EnforcedDisappearance   Testimonies.world…  │  footer
+	  └──────────────────────────────────────────────┘
 
 	The card carries no close button, no download button and no other
-	control — it is the artefact, and the modal that frames it supplies
-	those. That keeps the card renderable on its own (an image export
-	would capture exactly this).
+	control — it is the artefact. The modal that frames it supplies
+	those, so the sheet can be captured as an image without any UI
+	chrome on it.
 
 	Scale: everything inside the card is sized in `em` against
-	`--card-base-font`, so the same markup renders at 14px on screen and
-	at 28px for an export without a second stylesheet.
+	`--card-base-font`, so the same markup renders at 16px on screen
+	(720px wide) and at 24px for the export (1080px wide) without a
+	second stylesheet.
 -->
 <script lang="ts">
+	import { base } from '$app/paths';
+	import Icon from './Icon.svelte';
+	import { sameOriginMediaUrl } from './caseCardExport';
 	import type { CaseCardData } from './caseCardData';
 
-	let { data }: { data: CaseCardData } = $props();
+	let {
+		data,
+		variant = 'screen',
+	}: { data: CaseCardData; variant?: 'screen' | 'export' } = $props();
 
 	// The photograph is the only element that can fail after the data
 	// has already loaded — a media URL that has since been removed, or
@@ -46,19 +57,28 @@
 		photoFailed = false;
 	});
 
-	// A case with no photograph gets no photograph column. An empty
-	// frame would be a large blank rectangle on a poster whose whole
-	// job is to state facts — the facts list reads better across the
-	// full width instead.
-	let showPhoto = $derived(!!data.photo && !photoFailed);
+	// The photograph is pulled onto the page's own origin: the export
+	// reads its pixels into a canvas, and a canvas that has drawn a
+	// cross-origin image cannot be written out. See caseCardExport.ts.
+	const photoSrc = $derived(
+		data.photo && typeof window !== 'undefined'
+			? sameOriginMediaUrl(data.photo.src, window.location.origin, base)
+			: (data.photo?.src ?? null),
+	);
 
 	// The footer signature. Text, not a logo: the project ships no
 	// logo asset, and the sheet is a document rather than a badge.
 	const SIGNATURE = 'Testimonies.world · cases.raisethevoices.org';
+
+	// Unique per instance: the export renders a second, off-screen copy
+	// of this card, and two elements with the same id would make the
+	// label point at the wrong one.
+	const uid = $props.id();
+	const titleId = `case-card-title-${uid}`;
 </script>
 
 <div class="case-card-wrap">
-	<article class="case-card" aria-labelledby="case-card-title">
+	<article class="case-card" class:case-card--export={variant === 'export'} aria-labelledby={titleId}>
 		<header class="case-card-header">
 			<span class="case-card-ref">
 				{#if data.reference}
@@ -73,28 +93,33 @@
 		</header>
 
 		<div class="case-card-title-block">
-			{#if data.category}
-				<p class="case-card-category">{data.category}</p>
-			{/if}
-			<h3 class="case-card-title" id="case-card-title">{data.title}</h3>
+			<h3 class="case-card-title" id={titleId}>{data.title}</h3>
 			{#if data.statusLabel}
 				<p class="case-card-status">{data.statusLabel}</p>
 			{/if}
 		</div>
 
-		<div class="case-card-body" class:case-card-body--full={!showPhoto}>
-			{#if showPhoto}
-				<div class="case-card-photo-column">
-					<div class="case-card-photo-frame">
+		<div class="case-card-body">
+			<div class="case-card-photo-column">
+				<div class="case-card-photo-frame">
+					{#if photoSrc && !photoFailed}
 						<img
 							class="case-card-photo"
-							src={data.photo!.src}
-							alt={data.photo!.alt}
+							src={photoSrc}
+							alt={data.photo?.alt ?? ''}
 							onerror={() => (photoFailed = true)}
 						/>
-					</div>
+					{:else}
+						<!-- No photograph on the case file, or one that will
+						     not load: a quiet block in the frame's place,
+						     not a broken image and not an empty gap. -->
+						<div class="case-card-photo-placeholder">
+							<Icon name="people" size={40} strokeWidth={1.5} />
+							<span>No photograph</span>
+						</div>
+					{/if}
 				</div>
-			{/if}
+			</div>
 
 			<dl class="case-card-meta">
 				{#each data.rows as row (row.label)}
@@ -121,7 +146,7 @@
 
 <style>
 	/* The wrap is the sizing container for the card. The card is a
-	   fixed 540px sheet on wide screens and shrinks to the container
+	   fixed 720px sheet on wide screens and shrinks to the container
 	   below that; the container query below collapses the two-column
 	   body when the card gets narrow — for a phone, or for the card
 	   moving into a sidebar later. */
@@ -149,6 +174,17 @@
 		overflow: hidden;
 	}
 
+	/* The export copy of the card: the same sheet at poster scale.
+	   Both the base font AND the width are overridden — a custom
+	   property is substituted where it is used, but it is resolved
+	   against the element that DECLARES it, so the width token has to
+	   be re-pointed at the export scale too, or the sheet would be
+	   exported at screen size. */
+	.case-card--export {
+		--card-base-font: var(--card-base-font-export);
+		--card-poster-width: var(--card-poster-width-export);
+	}
+
 	/* --- reference bar ---------------------------------------------- */
 	.case-card-header {
 		display: flex;
@@ -158,15 +194,18 @@
 		/* The top padding is generous so the close control that
 		   overlaps the card's top-right corner (in the modal) never
 		   reaches the header's text. */
-		padding: 0.7em 1.1em 0.55em;
+		padding: 0.75em 1.25em 0.6em;
 		border-bottom: 2px solid var(--color-text);
 		font-family: var(--font-mono);
-		font-size: 0.78em;
+		font-size: 0.8em;
 		letter-spacing: 0.14em;
 		text-transform: uppercase;
 	}
 	.case-card-ref {
 		font-weight: 700;
+		/* A reference is one string. It is never split across two
+		   lines in the middle of the number. */
+		white-space: nowrap;
 	}
 	.case-card-date {
 		font-weight: 700;
@@ -176,21 +215,12 @@
 
 	/* --- title ------------------------------------------------------ */
 	.case-card-title-block {
-		padding: 1.05em 1.1em 0.95em;
-	}
-	/* The case category the poster leads with. */
-	.case-card-category {
-		margin: 0 0 0.4em;
-		font-size: 0.78em;
-		font-weight: 700;
-		letter-spacing: 0.24em;
-		text-transform: uppercase;
-		color: var(--color-primary);
+		padding: 1.15em 1.25em 1.05em;
 	}
 	.case-card-title {
 		margin: 0;
-		font-size: 2.5em;
-		line-height: 1.05;
+		font-size: 2.6em;
+		line-height: 1.04;
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.01em;
@@ -198,47 +228,86 @@
 		   body text and comfortably for large text. */
 		color: var(--color-primary);
 		text-decoration: underline;
-		text-decoration-thickness: 0.09em;
-		text-underline-offset: 0.16em;
+		text-decoration-thickness: 0.08em;
+		text-underline-offset: 0.14em;
 		text-decoration-color: var(--color-primary);
-		overflow-wrap: anywhere;
+		/* A long heading breaks at a hyphen if the browser can find
+		   one, and at the last resort inside the word — but never
+		   past the edge of the sheet. */
+		hyphens: auto;
+		overflow-wrap: break-word;
 	}
+
+	/* The case's condition, as a stamp on the sheet. */
 	.case-card-status {
-		margin: 0.55em 0 0;
+		display: inline-block;
+		margin: 0.75em 0 0;
+		padding: 0.3em 0.75em;
 		font-size: 0.95em;
 		font-weight: 700;
-		letter-spacing: 0.2em;
+		letter-spacing: 0.18em;
 		text-transform: uppercase;
-		/* --color-danger on the paper tone is 4.9:1 — passes AA for
-		   body text. Red states the case's condition; everything else
-		   on the sheet stays on the brand teal or the ink. */
-		color: var(--color-danger);
+		color: var(--color-danger-text-strong);
+		background: var(--color-danger-bg);
+		border: 1px solid var(--color-danger-border);
+		border-radius: var(--radius-card-poster);
 	}
 
 	/* --- body ------------------------------------------------------- */
 	.case-card-body {
 		display: grid;
 		grid-template-columns: 38% 1fr;
-		gap: 1.2em;
-		padding: 0 1.1em 1.1em;
+		gap: 1.4em;
+		padding: 1.2em 1.25em 1.3em;
+		border-top: 2px solid var(--color-text);
 	}
 
-	/* No photograph: the facts take the whole sheet. */
-	.case-card-body--full {
-		grid-template-columns: 1fr;
+	/* The column is a flex container so the frame can take the full
+	   height of the row: the photograph stands as tall as the list of
+	   facts beside it, in portrait. */
+	.case-card-photo-column {
+		display: flex;
 	}
 
 	.case-card-photo-frame {
+		/* The frame fills the height of the facts column. The floor
+		   keeps it from collapsing to a sliver when a case has only
+		   one or two facts. */
+		flex: 1;
+		min-height: 12em;
 		border: 2px solid var(--color-primary);
-		padding: 0.4em;
+		padding: 0.45em;
 		background: var(--color-card-paper);
 	}
 	.case-card-photo {
 		display: block;
 		width: 100%;
-		aspect-ratio: 3 / 4;
+		height: 100%;
 		object-fit: cover;
 		object-position: center 20%;
+	}
+	.case-card-photo-placeholder {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.6em;
+		width: 100%;
+		height: 100%;
+		min-height: 11em;
+		color: var(--color-text-muted);
+		background: var(--color-surface);
+	}
+	/* The icon is a child component, so its <svg> carries no scope
+	   class of this component's own. */
+	.case-card-photo-placeholder :global(svg) {
+		width: 2.6em;
+		height: 2.6em;
+	}
+	.case-card-photo-placeholder span {
+		font-size: 0.75em;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
 	}
 
 	/* --- metadata ---------------------------------------------------
@@ -251,18 +320,20 @@
 	}
 	.case-card-meta-row {
 		display: grid;
-		grid-template-columns: 9.6em 1fr;
-		gap: 0.55em;
+		/* The label column is wide enough for the longest label on the
+		   poster ("PLACE OF ABDUCTION:") without wrapping. */
+		grid-template-columns: 11em 1fr;
+		gap: 0.6em;
 		align-items: baseline;
-		padding: 0.55em 0;
-		border-bottom: 1px solid var(--color-border-subtle);
+		padding: 0.5em 0;
+		border-bottom: 1px solid var(--color-card-rule);
 	}
 	.case-card-meta-row:last-child {
 		border-bottom: none;
 	}
 	.case-card-meta-label {
 		margin: 0;
-		font-size: 0.68em;
+		font-size: 0.78em;
 		font-weight: 700;
 		letter-spacing: 0.07em;
 		text-transform: uppercase;
@@ -275,14 +346,14 @@
 	}
 	.case-card-meta-value {
 		margin: 0;
-		font-size: 1em;
+		font-size: 1.1em;
 		overflow-wrap: anywhere;
 	}
 
 	/* --- footer ----------------------------------------------------- */
 	.case-card-footer {
 		border-top: 2px solid var(--color-text);
-		padding: 0.8em 1.1em 1em;
+		padding: 0.9em 1.25em 1.1em;
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
@@ -292,12 +363,19 @@
 	.case-card-tags {
 		display: flex;
 		flex-wrap: wrap;
+		/* The row takes the room the signature leaves, rather than
+		   claiming its own width and leaving the two to compete for
+		   the last pixel. Two flex items that exactly fill a row can
+		   land on either side of a line break in two copies of the
+		   same sheet — and the exported file is a copy. */
+		flex: 1 1 0;
+		min-width: 0;
 		gap: 0.45em;
 		margin: 0;
 		padding: 0;
 	}
 	.case-card-tag {
-		font-size: 0.78em;
+		font-size: 0.8em;
 		font-weight: 700;
 		letter-spacing: 0.05em;
 		text-transform: uppercase;
@@ -307,24 +385,65 @@
 		padding: 0.2em 0.55em;
 	}
 	.case-card-brand {
-		margin: 0 0 0 auto;
-		font-size: 0.75em;
+		flex: 0 0 auto;
+		margin: 0;
+		font-size: 0.8em;
 		letter-spacing: 0.06em;
 		color: var(--color-text-muted);
 		white-space: nowrap;
 	}
 
 	/* Narrow card (phone, or a sidebar later): the photograph moves
-	   above the list and the label column gets the full width. */
-	@container (max-width: 480px) {
+	   above the list, and each fact stacks its label over its value —
+	   two columns of type would leave neither of them room. The frame
+	   stays portrait, as it is on the wide sheet. */
+	@container (max-width: 560px) {
+		/* The heading comes down to the size the narrow sheet can
+		   hold: at the poster's scale the longest word runs past the
+		   edge and breaks in the wrong place. */
+		.case-card-title {
+			font-size: 2.1em;
+		}
+		/* The reference keeps its own line, the date takes the right
+		   of the one below it. */
+		.case-card-header {
+			flex-wrap: wrap;
+			row-gap: 0.25em;
+		}
+		.case-card-date {
+			margin-left: auto;
+		}
 		.case-card-body {
 			grid-template-columns: 1fr;
 		}
+		.case-card-photo-frame {
+			/* The frame is as tall as the photograph now, so the floor
+			   that keeps it from collapsing would leave a gap. */
+			min-height: 0;
+		}
 		.case-card-photo {
-			aspect-ratio: 16 / 9;
+			height: auto;
+			aspect-ratio: 3 / 4;
+		}
+		.case-card-photo-placeholder {
+			height: auto;
+			aspect-ratio: 3 / 4;
+			min-height: 0;
 		}
 		.case-card-meta-row {
-			grid-template-columns: 8.5em 1fr;
+			grid-template-columns: 1fr;
+			gap: 0.2em;
 		}
+	}
+
+	/* The export copy is laid out at a fixed width, so it never
+	   collapses: a clone inside an SVG foreignObject has no reliable
+	   container size for the query above to measure. */
+	.case-card--export .case-card-body {
+		grid-template-columns: 38% 1fr;
+	}
+	.case-card--export .case-card-photo {
+		height: 100%;
+		aspect-ratio: auto;
 	}
 </style>

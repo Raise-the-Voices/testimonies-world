@@ -3,17 +3,19 @@ import { test, expect, type Page } from '@playwright/test';
 /**
  * E2E: the interactive "Case Information Card" modal.
  *
- * The card is opened from a case file at /persons/<id>/. It is a
- * poster — a flat, ordered sheet of the core facts — so the things
- * worth pinning are:
+ * The card is a poster — a flat, ordered sheet of the core facts — so
+ * the things worth pinning are:
  *
  *   1. The card opens, is centred, and the backdrop behind it is
  *      blurred and dimmed (the requirement's "gorgeous, centred
  *      modal overlay").
- *   2. Every core fact lands on the card, in the poster's order.
+ *   2. Every core fact lands on the card, in the poster's order, and
+ *      the headline is the kind of violation the case records.
  *   3. A fact that is not recorded is left OFF the card entirely
  *      rather than rendered blank.
  *   4. The close control dismisses it, and Escape dismisses it.
+ *   5. The poster can only be downloaded when the server says the
+ *      case is cleared for publication — and then it downloads.
  *
  * The API is intercepted with page.route() rather than driven against
  * the live backend. Two reasons: the card's rows are only meaningful
@@ -46,12 +48,17 @@ const FULL_PERSON = {
 	// The father's name, resolved on the server: the relation row says
 	// "parent", so only the server can tell a father from a mother.
 	father_name: 'Yusuf Al-Hassan',
+	// Section K — the consent flags. Every case in the database today
+	// has them blank, which is why no case may be exported yet.
+	is_published: true,
+	consent_public_publication: '',
+	public_identity_level: '',
+	photograph_public: '',
 	// Envelope fields the detail page itself needs.
 	created_at: '2026-03-14T09:00:00Z',
 	updated_at: '2026-03-14T09:00:00Z',
 	created_by: null,
 	days_since_last_report: 12,
-	is_published: true,
 	profile_image_url: null,
 	categories: [{ id: 1, name: 'Enforced disappearance', description: '' }],
 	media_files: [],
@@ -98,16 +105,72 @@ const SPARSE_PERSON = {
 };
 
 /**
- * Intercept the three calls the detail page makes and serve the given
- * person payload. Everything else is left to the real dev server.
+ * The masked card payload the server answers with — the projection the
+ * poster is exported from. `exportable` is the server's verdict.
  */
-async function stubCase(page: Page, person: unknown) {
+function cardPayload(overrides: Record<string, unknown> = {}) {
+	return {
+		schema_version: 1,
+		reference: 'ED-2026-0042',
+		generated_date: '2026-02-02',
+		headline: 'Enforced Disappearance',
+		title: 'Ahmed Al-Hassan',
+		status: 'disappeared',
+		status_label: 'Disappeared',
+		identity: {
+			display_name: 'Ahmed Al-Hassan',
+			father_name: 'Yusuf Al-Hassan',
+			age: 34,
+			occupation: 'Teacher',
+		},
+		location: { country: 'Egypt', display: 'Alexandria', precision: 'city' },
+		incident: {
+			date: '2025-11-03',
+			time: '21:30',
+			place: 'Old City, Alexandria',
+			abductors: 'Security Service',
+			detail: null,
+		},
+		photo: { url: '/testimonies/public-media/profiles/face.png', alt: '' },
+		categories: ['Enforced disappearance'],
+		verification: { level: 'level_3_corroborated', label: 'Corroborated' },
+		source_label: 'Family',
+		exportable: false,
+		withheld: [],
+		...overrides,
+	};
+}
+
+/** A 1×1 PNG — enough for the browser to decode the photograph. */
+const PIXEL_PNG = Buffer.from(
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+	'base64',
+);
+
+/**
+ * Intercept the calls the detail page makes and serve the given person
+ * payload. Everything else is left to the real dev server.
+ */
+async function stubCase(page: Page, person: unknown, card: unknown = cardPayload()) {
 	await page.route(`**/api/persons/${(person as { id: number }).id}/`, (route) =>
 		route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify(person),
 		}),
+	);
+	await page.route(`**/api/persons/${(person as { id: number }).id}/card/`, (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify(card),
+		}),
+	);
+	// The photograph on the poster. It has to load for the export to
+	// work, and it has to be same-origin for the canvas not to be
+	// tainted — which is why the payload points at the app's own path.
+	await page.route('**/public-media/**', (route) =>
+		route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL_PNG }),
 	);
 	await page.route('**/api/media/**', (route) =>
 		route.fulfill({
@@ -148,6 +211,16 @@ async function openCard(page: Page, personId: number) {
 	return dialog;
 }
 
+/** The day the poster is dated — the day the sheet was produced. */
+function today(): string {
+	return new Date().toLocaleDateString('en-GB', {
+		day: 'numeric',
+		month: 'long',
+		year: 'numeric',
+		timeZone: 'UTC',
+	});
+}
+
 test.describe('Case information card', () => {
 	test(
 		'opens as a centred modal over a blurred backdrop',
@@ -185,6 +258,12 @@ test.describe('Case information card', () => {
 			);
 			expect(centreDelta).toBeLessThan(2);
 
+			// The sheet is a poster, not a panel: 720px wide, with room
+			// around it inside the dialog.
+			const cardBox = (await page.locator('.case-card').boundingBox())!;
+			expect(Math.round(cardBox.width)).toBe(720);
+			expect(box.width).toBeGreaterThanOrEqual(cardBox.width);
+
 			// The close control is in the card's top corner and is big
 			// enough to hit (WCAG 2.5.5 — 44px).
 			const close = dialog.getByRole('button', { name: 'Close case information card' });
@@ -192,7 +271,6 @@ test.describe('Case information card', () => {
 			const closeBox = (await close.boundingBox())!;
 			expect(closeBox.width).toBeGreaterThanOrEqual(44);
 			expect(closeBox.height).toBeGreaterThanOrEqual(44);
-			const cardBox = (await page.locator('.case-card').boundingBox())!;
 			expect(closeBox.x + closeBox.width).toBeGreaterThan(cardBox.x);
 			expect(closeBox.y).toBeLessThan(cardBox.y + cardBox.height);
 		},
@@ -208,36 +286,36 @@ test.describe('Case information card', () => {
 			await stubCase(page, FULL_PERSON);
 			const dialog = await openCard(page, PERSON_ID);
 
-			// Header: reference and the date the case was received.
+			// Header: the citable reference and the day the sheet was
+			// produced.
 			await expect(dialog.locator('.case-card-ref')).toHaveText('Ref: ED-2026-0042');
-			await expect(dialog.locator('.case-card-date')).toHaveText('2 February 2026');
+			await expect(dialog.locator('.case-card-date')).toHaveText(today());
 
-			// Title block: the case category, the person's name and the
-			// status.
-			await expect(dialog.locator('.case-card-category')).toHaveText(
-				'Enforced Disappearance',
-			);
-			await expect(dialog.getByRole('heading', { name: 'Ahmed Al-Hassan' })).toBeVisible();
+			// Title block: the kind of violation the file records, and
+			// the person's condition.
+			await expect(dialog.getByRole('heading', { name: 'Enforced Disappearance' })).toBeVisible();
 			await expect(dialog.locator('.case-card-status')).toHaveText('Disappeared');
 
 			// Metadata rows, in the order the poster prints them.
 			const rows = dialog.locator('.case-card-meta-row');
-			await expect(rows).toHaveCount(8);
+			await expect(rows).toHaveCount(9);
 			await expect(rows.locator('.case-card-meta-label')).toHaveText([
+				'Name',
+				'Father name',
 				'Age',
-				'Residence',
+				'Residence (R/O)',
 				'Profession',
-				'Father',
 				'Date of abduction',
 				'Time of abduction',
 				'Place of abduction',
-				'Perpetrators',
+				'Abductors',
 			]);
 			await expect(rows.locator('.case-card-meta-value')).toHaveText([
+				'Ahmed Al-Hassan',
+				'Yusuf Al-Hassan',
 				'34',
 				'Alexandria, Egypt',
 				'Teacher',
-				'Yusuf Al-Hassan',
 				'3 Nov 2025',
 				'21:30',
 				'Old City, Alexandria',
@@ -265,11 +343,18 @@ test.describe('Case information card', () => {
 			const dialog = await openCard(page, SPARSE_PERSON.id);
 
 			// A blank row reads as "we know this and it is empty", which
-			// is worse than saying nothing. Only Residence survives.
+			// is worse than saying nothing. Only the name and the
+			// country survive.
 			const rows = dialog.locator('.case-card-meta-row');
-			await expect(rows).toHaveCount(1);
-			await expect(rows.locator('.case-card-meta-label')).toHaveText(['Residence']);
-			await expect(rows.locator('.case-card-meta-value')).toHaveText(['Pakistan']);
+			await expect(rows).toHaveCount(2);
+			await expect(rows.locator('.case-card-meta-label')).toHaveText([
+				'Name',
+				'Residence (R/O)',
+			]);
+			await expect(rows.locator('.case-card-meta-value')).toHaveText([
+				'Layla Haddad',
+				'Pakistan',
+			]);
 
 			// No reference, so the header says so plainly rather than
 			// rendering an empty gap.
@@ -319,6 +404,63 @@ test.describe('Case information card', () => {
 				.locator('.case-card-body')
 				.evaluate((el) => getComputedStyle(el).gridTemplateColumns);
 			expect(bodyColumns.split(' ')).toHaveLength(1);
+		},
+	);
+
+	test(
+		'will not download a poster the server has not cleared',
+		{
+			tag: ['@critical'],
+			annotation: [{ type: 'ticket', description: 'case-info-card' }],
+		},
+		async ({ page }) => {
+			await stubCase(page, FULL_PERSON);
+			const dialog = await openCard(page, PERSON_ID);
+
+			const download = dialog.getByRole('button', { name: 'Download poster (PNG)' });
+			await expect(download).toBeDisabled();
+			// The reason says which field to go and set — the consent
+			// flags are blank on every case today.
+			await expect(dialog.locator('.case-card-export-note')).toHaveText(
+				'Publication not approved — consent fields not set.',
+			);
+		},
+	);
+
+	test(
+		'downloads the poster when the server has cleared the case',
+		{
+			tag: ['@critical'],
+			annotation: [{ type: 'ticket', description: 'case-info-card' }],
+		},
+		async ({ page }) => {
+			await stubCase(
+				page,
+				{ ...FULL_PERSON, consent_public_publication: 'yes', public_identity_level: 'full', photograph_public: 'yes' },
+				cardPayload({ exportable: true }),
+			);
+			const dialog = await openCard(page, PERSON_ID);
+
+			const download = dialog.getByRole('button', { name: 'Download poster (PNG)' });
+			await expect(download).toBeEnabled();
+
+			const [downloadEvent] = await Promise.all([
+				page.waitForEvent('download'),
+				download.click(),
+			]);
+			// The file is named after the case reference.
+			expect(downloadEvent.suggestedFilename()).toBe('case-ED-2026-0042.png');
+
+			// And it is a real PNG, not an empty file.
+			const path = await downloadEvent.path();
+			expect(path).toBeTruthy();
+			const bytes = await downloadEvent.createReadStream();
+			const chunks: Buffer[] = [];
+			for await (const chunk of bytes) chunks.push(Buffer.from(chunk));
+			const file = Buffer.concat(chunks);
+			expect(file.length).toBeGreaterThan(1000);
+			// PNG magic number.
+			expect(file.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
 		},
 	);
 });

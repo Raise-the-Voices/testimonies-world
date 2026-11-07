@@ -58,6 +58,12 @@ export const PersonDetailSchema = z.object({
 	authoritative_url: z.string().optional(),
 	quality_tier: z.union([z.number(), z.null()]).optional(),
 	is_published: z.boolean().optional(),
+	// Section K of the case form — the consent flags. The card's
+	// publication gate reads them to say WHY a poster cannot be
+	// downloaded yet, so they have to survive the parse.
+	consent_public_publication: z.string().optional(),
+	public_identity_level: z.string().optional(),
+	photograph_public: z.string().optional(),
 	// Zod strips keys the schema doesn't declare, so every field the
 	// API actually returns has to be listed here or it is dropped on
 	// the way in.
