@@ -104,7 +104,7 @@
 	   for a full-bleed poster card, which is bright white and needs
 	   more separation from the page behind it. */
 	--color-overlay: rgba(0, 0, 0, 0.45);
-	--color-overlay-deep: rgba(0, 0, 0, 0.62);
+	--color-overlay-deep: rgba(0, 0, 0, 0.6);
 
 	/* Case card (the interactive "Case Information Card" modal).
 	   The card is scaled in `em` against --card-base-font, so one set of
@@ -121,6 +121,24 @@
 	/* Poster frames are square. --radius-card (8px) reads as "web
 	   card"; a dossier sheet has no rounded corners. */
 	--radius-card-poster: 0;
+
+	/* Paper — the sheet the poster is printed on. A warm off-white
+	   with a soft wash and a fine grain, so the card reads as an
+	   archival document rather than as a white web card. */
+	--color-card-paper: #fbf9f6;
+	--card-paper-wash:
+		radial-gradient(circle at 15% 8%, rgba(37, 100, 106, 0.05), transparent 45%),
+		radial-gradient(circle at 88% 92%, rgba(217, 22, 22, 0.035), transparent 45%);
+	--card-paper-grain: repeating-linear-gradient(
+		0deg,
+		rgba(26, 26, 26, 0.02) 0 1px,
+		transparent 1px 4px
+	);
+
+	/* The reference bar and the date stamp on the poster. A system
+	   mono stack — the poster needs no webfont of its own. */
+	--font-mono: ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas,
+		'Liberation Mono', monospace;
 }
 
 /* normalize basics */

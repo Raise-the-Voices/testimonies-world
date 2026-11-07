@@ -50,6 +50,28 @@ export function formatFullDate(value: unknown): string {
 }
 
 /**
+ * Editorial date formatter — the date stamp on the case poster.
+ *
+ * Output is `2 February 2026`: day, full month name, year. The month
+ * is spelled out because the poster sets the date in an editorial
+ * line, where an abbreviated month reads as a form field rather than
+ * as a date on a document. The caller uppercases it.
+ *
+ * Accepts the same shapes as `formatFullDate` and returns an empty
+ * string for anything it cannot read.
+ */
+export function formatEditorialDate(value: unknown): string {
+	const d = toUtcDate(value);
+	if (!d) return '';
+	return d.toLocaleDateString('en-GB', {
+		day: 'numeric',
+		month: 'long',
+		year: 'numeric',
+		timeZone: 'UTC',
+	});
+}
+
+/**
  * Coerce a date-ish value to a UTC-midnight Date, or null if it cannot
  * be read. `YYYY-MM` is accepted and pinned to the 1st.
  */
