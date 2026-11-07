@@ -138,6 +138,19 @@ describe('the scroll reveal', () => {
 		expect(node.dataset.reveal).toBe('in');
 	});
 
+	it('carries its index even when it is already on screen', () => {
+		stubMatchMedia(false);
+		stubIntersectionObserver();
+		const node = document.createElement('div');
+		document.body.appendChild(node);
+
+		reveal(node, { index: 4 });
+
+		// The index has to be there before the first paint, whatever the
+		// viewport says — CSS reads it for the stagger delay.
+		expect(node.style.getPropertyValue('--reveal-index')).toBe('4');
+	});
+
 	it('waits for the viewport before hiding content that is below the fold', () => {
 		stubMatchMedia(false);
 		const observers = stubIntersectionObserver();

@@ -200,6 +200,26 @@ describe('stripBasePath', () => {
 	});
 });
 
+describe('the status history timeline', () => {
+	const source = readFileSync(join(srcDir, 'lib/StatusHistoryTimeline.svelte'), 'utf8');
+
+	it('reveals each event row as it reaches the viewport', () => {
+		expect(source).toContain('use:reveal={{ index }}');
+	});
+
+	it('draws the rule with a transform, never with a layout property', () => {
+		const keyframes = /@keyframes status-history-rule \{([\s\S]*?)\n\t\}/.exec(source)?.[1] ?? '';
+		expect(keyframes).toContain('transform: scaleY');
+		expect(keyframes).not.toMatch(/\b(?:height|width|top|margin)\s*:/);
+	});
+
+	it('sizes the rule from the same gap the rows are separated by', () => {
+		expect(source).toMatch(/--status-history-gap:\s*[\d.]+rem/);
+		expect(source).toMatch(/gap:\s*var\(--status-history-gap\)/);
+		expect(source).toMatch(/height:\s*var\(--status-history-gap\)/);
+	});
+});
+
 describe('the motion system holds site-wide', () => {
 	it('routes every Svelte transition through $lib/motion', () => {
 		const offenders = allSvelte.filter((file) => file.includes("from 'svelte/transition'"));

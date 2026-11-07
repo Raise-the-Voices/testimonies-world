@@ -351,6 +351,12 @@ export function reveal(node: HTMLElement, options: RevealOptions = {}): RevealHa
 	let observer: IntersectionObserver | null = null;
 	let revealed = false;
 
+	// The index is written before anything else, so an element that is
+	// already on screen still carries it. CSS that reads it — a stagger
+	// delay, a column cascade — then has the same answer in the very
+	// first style resolution, before the browser paints.
+	node.style.setProperty('--reveal-index', String(current.index ?? 0));
+
 	const markIn = () => {
 		revealed = true;
 		node.dataset.reveal = 'in';
@@ -370,7 +376,6 @@ export function reveal(node: HTMLElement, options: RevealOptions = {}): RevealHa
 		return;
 	}
 
-	node.style.setProperty('--reveal-index', String(current.index ?? 0));
 	node.dataset.reveal = 'pending';
 
 	const threshold = current.threshold ?? 0;

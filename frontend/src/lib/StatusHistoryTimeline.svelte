@@ -23,9 +23,18 @@
   Status labels come from `StatusBadge.statusLabels` — the canonical
   Person-status label map, reused for the old → new display so the
   timeline stays in sync with the badge on the same page.
+
+  Each row arrives by scrolling into view (the `reveal` action in
+  $lib/motion.ts), staggered by its position — the same way the report
+  list below it behaves, so the page reads as one surface. A rule links
+  one event to the next and draws down as the list arrives. The hidden
+  state is applied by JavaScript, never by CSS default: nothing is
+  hidden until the action says so, so a reader whose JavaScript never
+  runs sees the whole history at once.
 -->
 <script lang="ts">
 	import StatusBadge, { statusLabels } from '$lib/StatusBadge.svelte';
+	import { reveal } from '$lib/motion';
 
 	export interface StatusHistoryEntry {
 		id: number;
@@ -112,9 +121,9 @@
 		</p>
 	{:else}
 		<ol class="status-history-list">
-			{#each sortedEvents as event (event.id)}
+			{#each sortedEvents as event, index (event.id)}
 				{@const parsed = parseChange(event.description)}
-				<li class="status-history-row">
+				<li class="status-history-row" use:reveal={{ index }}>
 					<div class="status-history-row-meta">
 						<time class="status-history-date" datetime={event.event_date ?? ''}>
 							{formatEventDate(event.event_date)}
@@ -156,6 +165,9 @@
 
 <style>
 	.status-history {
+		/* The accent border on each row, and the rule that links one row
+		   to the next, are the same width. */
+		--status-history-spine: 3px;
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
@@ -183,17 +195,46 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.6rem;
+		/* The gap is also the height of the rule that links one event to
+		   the next, so the two can never drift apart. */
+		--status-history-gap: 0.6rem;
+		gap: var(--status-history-gap);
 	}
 	.status-history-row {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		gap: 0.4rem;
 		padding: 0.7rem 0.9rem;
 		background: var(--color-bg-white, #fff);
 		border: 1px solid var(--color-border-subtle, #eef2f5);
-		border-left: 3px solid var(--color-primary, #25646a);
+		border-left: var(--status-history-spine) solid var(--color-primary, #25646a);
 		border-radius: var(--radius-card, 8px);
+	}
+	/* The rule that links one event to the next. It sits in the gap below
+	   a row, aligned with that row's accent border, so the accent reads as
+	   one continuous line down the history. It draws downward, staggered by
+	   the row's position. The last row has no rule: there is nothing below
+	   it to connect to. */
+	.status-history-row:not(:last-child)::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		top: 100%;
+		width: var(--status-history-spine);
+		height: var(--status-history-gap);
+		background: var(--color-primary, #25646a);
+		transform-origin: top center;
+		animation: status-history-rule var(--motion-duration-enter) var(--motion-ease-editorial) both;
+		animation-delay: calc(var(--motion-stagger-step) * min(var(--reveal-index, 0), 8));
+	}
+	@keyframes status-history-rule {
+		from {
+			transform: scaleY(0);
+		}
+		to {
+			transform: scaleY(1);
+		}
 	}
 	.status-history-row-meta {
 		display: flex;
@@ -248,6 +289,14 @@
 			flex-direction: column;
 			align-items: flex-start;
 			gap: 0.15rem;
+		}
+	}
+
+	/* Respect the reader's reduced-motion setting: the rule is simply
+	   there, full height, from the first paint. */
+	@media (prefers-reduced-motion: reduce) {
+		.status-history-row:not(:last-child)::after {
+			animation: none;
 		}
 	}
 </style>
