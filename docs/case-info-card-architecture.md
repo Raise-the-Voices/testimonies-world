@@ -305,6 +305,7 @@ All sizing in `em`, all colour from `app.css` tokens. New tokens to add to the `
 | `--color-card-paper` | `#fcfbf9` (+ `--card-paper-wash`, `--card-paper-grain`) | the archival paper the sheet is printed on, not a white web card |
 | `--color-card-rule` | `rgba(26, 26, 26, 0.18)` | the hairline between the metadata rows |
 | `--radius-card-poster` | `0` | poster frames are square; `--radius-card` is 8px and reads "web card" |
+| `--color-danger-text-on-dark` | `#ffc9c9` | the export note sits on the modal's dark scrim; the app's other reds are unreadable there |
 
 The title is `var(--color-primary)` (deep teal, `#25646a`) — the brand accent, per the brief. The earlier plan's separate red token was dropped: the brief asks for the title in the brand accent, and the status badge already carries the red.
 
@@ -336,7 +337,8 @@ Selector plan (flat hyphenated, matching `.testimonial-card-*` / `.person-card`)
                      object-position: center 20%; }
 .case-card-photo-placeholder { display:flex; flex-direction:column; gap:.6em;
                      align-items:center; justify-content:center; min-height: 11em;
-                     color: var(--color-text-muted); background: var(--color-surface); }
+                     color: var(--color-text-muted); background: var(--color-card-paper);
+                     border: 1px solid var(--color-card-rule); }
 .case-card-meta     { margin:0; display:grid; align-content:start; }
 .case-card-meta-row { display:grid; grid-template-columns: 11em 1fr; gap: .6em;
                       align-items:baseline; padding: .5em 0;
@@ -409,13 +411,26 @@ Two placements, and they serve different jobs:
 
 Either way the card is **preview-only** by default; the Download action is a separate button beside it (see §3.7), not inside the card, so the exported image never contains the button.
 
+**The trigger.** Top-right of the main column, above the Summary section
+(`routes/persons/[id]/+page.svelte:705-714`). It is the app's own button
+component — `btn btn-primary`, the deep teal `#25646a` — with a document
+glyph (`file-text` in `src/lib/Icon.svelte`), not a second button style
+invented for it. The glyph that was there first (lucide's `cases`, a crate
+that reads as a trolley) is gone from this surface; it still marks the
+catalogue's empty state.
+
+The action opens the modal. The poster itself is never on the page — a
+720px sheet in the content column would push the case file down, and the
+sheet is a thing to be read in a modal and exported, not browsed.
+
 ### 2.7 Missing-data behaviour (this is the common case, not the edge case)
 
 45% of persons have no profile image and 65% have no occupation. Rules:
 
 | Missing | Behaviour |
 |---|---|
-| No photo | render `.case-card-photo-placeholder` — a neutral silhouette block, **not** a broken image and **not** a crop of the case categories card. `MediaImage.svelte` already has a fallback path (`src/lib/MediaImage.svelte:116-127`) but it renders a *link*; the poster needs a distinct placeholder. |
+| No photo | render `.case-card-photo-placeholder` — a silhouette on the **paper tone**, matted inside the frame's rule, **not** a broken image and **not** a grey box dropped on the sheet. `MediaImage.svelte` already has a fallback path (`src/lib/MediaImage.svelte:116-127`) but it renders a *link*; the poster needs a distinct placeholder. |
+| A photo that will not load | the same mat, but labelled `Photograph unavailable` rather than `No photograph`. The case file *has* a photograph and the sheet says so; a publication must not claim a photograph is missing when one is on file. |
 | No occupation / age / father | the row is omitted entirely — no empty label, no em dash. |
 | No `public_reference` yet | the header shows `Ref: Not assigned` in the preview and the card is marked not-exportable. |
 | No date | the header date slot is omitted; the header keeps its two-column alignment via `justify-content: space-between` with one child. |
@@ -428,6 +443,7 @@ Either way the card is **preview-only** by default; the Download action is a sep
 - `alt` on the photo: the photo is the person's face next to their name — the name is already in text, so `alt=""` is correct (decorative, per `SYSTEM_RULES §4`: "alt text on `<img>` only when not redundant").
 - The title is `var(--color-primary)` `#25646a` on the paper tone `#fcfbf9` → contrast ratio **6.4:1**, passes WCAG AA for body text and comfortably for large text. The status badge is the only red on the sheet (`--color-danger-text-strong` on `--color-danger-bg`).
 - The Download button needs a disabled state with a reason, not a silent hide: "Publication not approved — consent fields not set". The reason names the field to go and set; the server still decides whether the case may be exported.
+- The button and its note sit **below the sheet, on the modal's dark scrim** — not on the sheet. Muted grey text (`--color-text-muted` `#666`) is unreadable against that scrim, so the note uses `--color-text-light`; the error note uses `--color-danger-text-on-dark`, a token added for exactly this surface (the app's other reds are too dark to read on a scrim that is only 65% black over a light page).
 - The card must render with `prefers-reduced-motion: reduce` honoured (add it to the `app.css:250-269` block).
 
 ---
@@ -455,16 +471,24 @@ The client-side approach also matches the deployment reality: the app is SSR'd S
    off-screen container:
        position: fixed; left: -20000px; top: 0; width: 1080px;
    → one component, one data source, no second layout.
-5. const { toPng } = await import('html-to-image');   // dynamic — keeps the dep out of the main bundle
-   const dataUrl = await toPng(node, {
+5. Wait for the sheet's images to settle — the photograph is the one element
+   the poster cannot be missing, and the off-screen copy starts loading it
+   only when it mounts.
+6. const { toBlob } = await import('html-to-image');   // dynamic — keeps the dep out of the main bundle
+   const blob = await toBlob(node, {
      pixelRatio: 2,          // 1080 → 2160px
-     backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--color-bg-white'),
+     backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--color-card-paper'),
      cacheBust: true,
-     filter: (el) => !el.hasAttribute('data-html2canvas-ignore'),   // skip any controls
+     fetchRequestInit: { credentials: 'include' },
    });
-6. Trigger download via an <a download="case-ED-2024-0042.png"> + object URL.
-7. Revoke the object URL; unmount the off-screen container.
+7. Trigger download via an <a download="case-ED-2024-0042.png"> + object URL.
+8. Revoke the object URL; unmount the off-screen container.
 ```
+
+`toBlob`, not `toPng`: the blob comes straight off the canvas and never
+touches the network. `toPng` returns a `data:` URL, and turning that into
+a blob means `fetch()`-ing a `data:` URL — which the production CSP
+refuses. See §3.4.
 
 `html-to-image` is the right library here rather than `html2canvas`: it clones the node into an SVG `foreignObject` and inlines computed styles, so the `em`-based scale, the `var()` tokens and the PT Sans webfont all survive — `html2canvas` re-implements layout and historically breaks on modern CSS (`:is()`, `oklch()`, container queries, `aspect-ratio`).
 
@@ -504,7 +528,29 @@ Content-Security-Policy: default-src 'self'; img-src 'self' data: blob: https:;
 - `img-src` allows `data:` and `blob:` → the resulting data URL renders.
 - `script-src 'self'` → the library is bundled, not loaded from a CDN. **Do not** load `html-to-image` from a CDN.
 
+**The `data:` URL trap — the bug that made the download fail in production.**
+`connect-src` governs `fetch()` on *any* URL, `data:` included. The first
+implementation rendered the poster with `toPng()` (which returns a `data:`
+URL) and then turned that URL into a blob with
+`await fetch(dataUrl).blob()`. Under the dev server — which sends no CSP —
+that worked. Under nginx it is refused:
+
+```
+Refused to connect to 'data:image/png;base64,…' because it violates the
+following Content Security Policy directive: "connect-src 'self' …".
+TypeError: Failed to fetch
+```
+
+The poster rendered perfectly and the download still failed, with the
+modal's red error note — the exact symptom reported. The fix is in the
+code, not the header: `toBlob()` hands back the PNG's bytes directly, so
+nothing is ever fetched. **Do not widen `connect-src` for this.**
+
 No CSP change is required.
+
+`frontend/tests/case-card.spec.ts` serves the document with this exact
+header and asserts the download still lands, so the dev-only path cannot
+come back.
 
 ### 3.5 Output size
 
@@ -518,9 +564,10 @@ For the link to be meaningful, the case needs a **public URL**. `/persons/<id>` 
 
 ### 3.7 The export button
 
-- Not inside the card (it would be captured in the export).
+- Not inside the card (it would be captured in the export). It lives **below the sheet, inside the modal**, so it is reachable without scrolling a 720px artefact out of the dialog.
 - Rendered **only** when the server says `exportable: true`. Otherwise render a disabled button carrying the reason.
 - The server is the only authority on `exportable` — the client must not compute it, or a user could patch the client and export an unapproved card.
+- The file is a **blob**, never a `data:` URL fetched at the last moment — see §3.4.
 
 ---
 

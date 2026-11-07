@@ -24,7 +24,7 @@
 	import Icon from './Icon.svelte';
 	import { getCaseCard } from './api';
 	import { buildCaseCardData, type CaseCardPerson } from './caseCardData';
-	import { downloadPoster, posterFilename, renderPosterPng } from './caseCardExport';
+	import { downloadPoster, posterFilename, renderPosterBlob } from './caseCardExport';
 	import { buildCardDataFromPayload } from './caseCardPayload';
 	import { publicationBlocker } from './caseCardPublication';
 	import type { CaseCardPayload } from './api/generated/endpoints.schemas';
@@ -109,12 +109,11 @@
 			// the same component at poster scale.
 			const sheet = exportHost?.querySelector('.case-card');
 			if (!sheet) throw new Error('The poster was not rendered.');
-			const dataUrl = await renderPosterPng(sheet as HTMLElement);
-			await downloadPoster(dataUrl, posterFilename(payload.reference));
+			const blob = await renderPosterBlob(sheet as HTMLElement);
+			downloadPoster(blob, posterFilename(payload.reference));
 		} catch (error) {
 			console.error('Case poster export failed', error);
-			exportError =
-				'The poster could not be exported. Try again, or ask the documentation officer to check the case file.';
+			exportError = 'The poster could not be exported. Try again.';
 		} finally {
 			exporting = false;
 		}
@@ -242,10 +241,12 @@
 	.case-card-export-note {
 		margin: 0;
 		font-size: 0.85rem;
-		color: var(--color-text-muted);
+		/* The note sits on the modal's dark scrim, not on the sheet —
+		   a muted grey is unreadable there. */
+		color: var(--color-text-light);
 	}
 	.case-card-export-note--error {
-		color: var(--color-danger-text-strong);
+		color: var(--color-danger-text-on-dark);
 	}
 
 	/* The off-screen poster. Fixed so it never affects the layout of

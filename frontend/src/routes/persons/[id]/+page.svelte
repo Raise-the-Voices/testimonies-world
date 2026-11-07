@@ -705,10 +705,10 @@
 			<div class="case-card-trigger">
 				<button
 					type="button"
-					class="btn btn-secondary case-card-trigger-btn"
+					class="btn btn-primary case-card-trigger-btn"
 					onclick={() => (caseCardOpen = true)}
 				>
-					<Icon name="cases" size={16} />
+					<Icon name="file-text" size={16} />
 					<span>Case card</span>
 				</button>
 			</div>

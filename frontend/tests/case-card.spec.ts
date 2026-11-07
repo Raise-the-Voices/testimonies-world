@@ -148,6 +148,53 @@ const PIXEL_PNG = Buffer.from(
 );
 
 /**
+ * The content security policy nginx sends in production.
+ *
+ * The dev server sends none, so a spec that runs against the dev
+ * server alone cannot see the environment the app actually ships in.
+ * The poster's download is the case in point: it once fetched the
+ * rendered PNG as a `data:` URL, which `connect-src 'self'` refuses —
+ * the poster rendered perfectly and still failed to download.
+ */
+const PRODUCTION_CSP = [
+	"default-src 'self'",
+	"img-src 'self' data: blob: https:",
+	"script-src 'self' 'unsafe-inline' https://accounts.google.com",
+	"style-src 'self' 'unsafe-inline'",
+	"font-src 'self' data:",
+	"connect-src 'self' https://accounts.google.com",
+	"frame-src https://accounts.google.com",
+	"frame-ancestors 'none'",
+	"form-action 'self' https://accounts.google.com",
+	"base-uri 'self'",
+	"object-src 'none'",
+].join('; ');
+
+/**
+ * Serve the person page with the production CSP header.
+ */
+async function withProductionCsp(page: Page, personId: number) {
+	await page.route(
+		(url) => url.pathname === `/testimonies/persons/${personId}`,
+		async (route) => {
+			const response = await route.fetch();
+			const body = await response.body();
+			const headers = { ...response.headers() };
+			// The body handed back is already decoded; a stale
+			// content-encoding would make the browser try to unpack it
+			// again.
+			delete headers['content-encoding'];
+			delete headers['content-length'];
+			await route.fulfill({
+				response,
+				body,
+				headers: { ...headers, 'content-security-policy': PRODUCTION_CSP },
+			});
+		},
+	);
+}
+
+/**
  * Intercept the calls the detail page makes and serve the given person
  * payload. Everything else is left to the real dev server.
  */
@@ -245,7 +292,7 @@ test.describe('Case information card', () => {
 					position: cs.position,
 				};
 			});
-			expect(overlayStyle.backdropFilter).toContain('blur(10px)');
+			expect(overlayStyle.backdropFilter).toContain('blur(8px)');
 			expect(overlayStyle.position).toBe('fixed');
 			// A semi-transparent dark scrim — not an opaque one.
 			expect(overlayStyle.background).toMatch(/rgba\(0, 0, 0, 0\.\d+\)/);
@@ -461,6 +508,38 @@ test.describe('Case information card', () => {
 			expect(file.length).toBeGreaterThan(1000);
 			// PNG magic number.
 			expect(file.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+		},
+	);
+
+	test(
+		'downloads the poster under the production content security policy',
+		{
+			tag: ['@critical'],
+			annotation: [{ type: 'ticket', description: 'case-info-card' }],
+		},
+		async ({ page }) => {
+			await withProductionCsp(page, PERSON_ID);
+			await stubCase(
+				page,
+				{ ...FULL_PERSON, consent_public_publication: 'yes', public_identity_level: 'full', photograph_public: 'yes' },
+				cardPayload({ exportable: true }),
+			);
+			const dialog = await openCard(page, PERSON_ID);
+
+			const download = dialog.getByRole('button', { name: 'Download poster (PNG)' });
+			await expect(download).toBeEnabled();
+
+			const [downloadEvent] = await Promise.all([
+				page.waitForEvent('download'),
+				download.click(),
+			]);
+			expect(downloadEvent.suggestedFilename()).toBe('case-ED-2026-0042.png');
+
+			// The poster rendered; the download was not refused by the
+			// browser's policy. The note stays the quiet one.
+			await expect(dialog.locator('.case-card-export-note')).toHaveText(
+				'The poster carries only the fields cleared for publication.',
+			);
 		},
 	);
 });
