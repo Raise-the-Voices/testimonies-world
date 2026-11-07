@@ -51,9 +51,12 @@ Read-only counts against the live DB (`testimonies_world`, 218 persons, 208 publ
 
 ### 0.4 There is no publication-consent gate on the data
 
-`consent_public_publication`, `photograph_public`, `public_identity_level`, `public_location_level`, `information_restricted_from_publication` exist on the model (`backend/cases/models.py:447-476`) and are **0% populated**. `is_published` (100%/95%) controls *catalog listing*, not *publication of a shareable image*.
+`consent_public_publication`, `photograph_public`, `public_identity_level`, `public_location_level`, `information_restricted_from_publication` exist on the model (`backend/cases/models.py:447-476`) and are **0% populated**. `is_published` (100%/95%) controls *catalog listing*.
 
-**Consequence:** a "Download poster" feature has nothing to check today. Building it without a consent gate would let an advocate generate and publish a shareable image containing a disappeared person's name, photograph and location — the exact harm `cases/storage.py` was written to prevent ("the protected tree is the default; publishing is the explicit act, not protecting"). §1.4 specifies the gate.
+**The decision (2026-11-07).** A poster is a picture of a case the public can already read: the name, the coarse place, the photograph (served from the public media tree) and the abduction facts from the public reports are all on the public case page already. So the poster publishes **what the public case page publishes**, and a blank flag is not a block — it is the absence of a decision. The fields that HAVE been filled in are honoured as written: an explicit `no`, `anonymous` or `do not disclose` withholds what it names, and publication consent recorded as `no` blocks the export outright. §1.4 is the gate as built.
+
+**What that replaced.** The first version of this plan made every blank flag the most restrictive option — "the protected tree is the default; publishing is the explicit act, not protecting" (`cases/storage.py`). With the Section K fields at 0%, that gate meant no case in the database could ever be exported, and no interface existed to fill the fields in. The default-deny posture is right for storage; for a poster of a published case it produced a feature that could not be used by anyone.
+
 
 ### 0.5 No export, print, preview or share infrastructure exists
 
@@ -161,27 +164,31 @@ Payload shape (v1):
 
 **Version pinning.** Mirror the testimonial contract exactly: `schema_version` on the row/response, a JSON Schema with a matching `$id` (`https://testimonies.world/schemas/case-card-v1.json`), and the documented bump protocol (update `CaseCardExportSerializer.Meta.fields` + the JSON Schema + a changelog entry **atomically**). `backend/cases/testimonials/tests.py::SchemaVersionPinTests` is the test to copy.
 
-### 1.4 The publication gate (server-side, default-deny)
+### 1.4 The publication gate (server-side)
 
-`exportable` is computed on the server. Rules, all from `Person` fields:
+`exportable` is computed on the server, from the `Person` fields. **The rule: the card publishes what the public case page publishes.** A flag that has been filled in is honoured as written; a blank flag is the absence of a decision, so the card follows the page.
 
 | Condition | Effect |
 |---|---|
 | `is_published` is false | `exportable: false`; for anonymous callers the endpoint returns **404** (matches `PersonViewSet.get_queryset`, `views.py:267+`, which filters unpublished rows out of the anonymous queryset) |
-| `consent_public_publication != 'yes'` | `exportable: false` |
-| `public_identity_level` blank | treated as `anonymous` → `display_name` = "Identity withheld"; `exportable: false` |
-| `public_identity_level == 'partial'` | first name + initial, or `aliases` if present |
+| `consent_public_publication == 'no'` | `exportable: false` — an explicit refusal is a human decision, and the poster is a publication |
+| `consent_public_publication` blank / `pending` | not a refusal: the case being published is the operative fact, so the export goes ahead |
+| `public_identity_level` blank | the full name, as on the public page |
+| `public_identity_level == 'partial'` | first name + initial |
 | `public_identity_level == 'anonymous'` | no name, no age, no occupation, no father, no photo |
-| `photograph_public != 'yes'` | `photo` omitted entirely from the payload (not just from the export) |
-| `public_location_level` blank | treat as `province` — country only, no district/city |
+| `photograph_public` blank | the photograph, as on the public page — `Person.profile_image` is served from the public media tree |
+| `photograph_public == 'no'` or `'pending'` | `photo` omitted entirely from the payload (not just from the export) |
+| `public_location_level` blank | the district and the coarse place, as on the public page |
+| `public_location_level == 'province'` | country only, no district/city |
 | `public_location_level == 'do_not_disclose'` | location omitted; `withheld` records it |
 | `information_restricted_from_publication` non-empty | free-text list of withheld items; parse and re-check each against the payload (it is documented as "Free-text list of items withheld from publication" — `models.py:473-476`) |
 | any source `Report.is_private == true` | that report is excluded from the payload entirely |
 | any `Media.visibility != 'public'` | excluded from the payload |
 
-**Default when a field is blank = most restrictive.** This is the repository's own stated posture in `cases/storage.py`: *"the protected tree is the default: anything written without a deliberate choice of storage lands behind the gate. Publishing is the explicit act, not protecting."*
+**A withheld item is not a blocked export.** The identity level and the photograph clearance decide what the poster SHOWS. A poster that leaves the photograph out is still a poster, and `withheld` says what was left out.
 
-**Practical effect today:** with the 0% fill rates in §0.3, every existing case returns `exportable: false`. That is the correct outcome, and §4.2 adds a publication checklist so an advocate can see exactly which fields are blocking a case.
+**Practical effect today:** with the 0% fill rates in §0.3, every published case returns `exportable: true` and a poster carrying the same facts as its public case page. The ten unpublished cases return 404 for anonymous callers and `exportable: false` for staff.
+
 
 ### 1.5 The "Ref" needs a new field
 
@@ -201,10 +208,10 @@ Five candidates, four empty. The recommendation depends on what the date *means*
 |---|---|---|
 | `Person.public_reference` | migration + field | low — nullable, unique |
 | `CaseCardPayloadSerializer` + `EXPORT_SCHEMA` v1 | new package | low — read-only |
-| `GET /api/persons/{id}/card/` | new action | low — read-only, default-deny |
+| `GET /api/persons/{id}/card/` | new action | low — read-only, publishes the public projection |
 | `Person.public_reference` in write serializer + form | field + validation | medium — uniqueness UX |
 | `CardViewSet` audit log (`VIEWED`) | required by `SYSTEM_RULES §5` | — |
-| Backfill `public_*` / `consent_*` fields | **data entry, not code** | the real blocker |
+| Backfill `public_*` / `consent_*` fields | **data entry, not code** | not a blocker for the export; it is what a case needs before its poster can carry MORE than the public page does |
 
 **No change to `PersonDetailSerializer` is needed** for the on-screen preview — it already returns every field the preview uses.
 
@@ -432,7 +439,7 @@ sheet is a thing to be read in a modal and exported, not browsed.
 | No photo | render `.case-card-photo-placeholder` — a silhouette on the **paper tone**, matted inside the frame's rule, **not** a broken image and **not** a grey box dropped on the sheet. `MediaImage.svelte` already has a fallback path (`src/lib/MediaImage.svelte:116-127`) but it renders a *link*; the poster needs a distinct placeholder. |
 | A photo that will not load | the same mat, but labelled `Photograph unavailable` rather than `No photograph`. The case file *has* a photograph and the sheet says so; a publication must not claim a photograph is missing when one is on file. |
 | No occupation / age / father | the row is omitted entirely — no empty label, no em dash. |
-| No `public_reference` yet | the header shows `Ref: Not assigned` in the preview and the card is marked not-exportable. |
+| No `public_reference` yet | the header shows `Ref: Not assigned` and the downloaded file is named `case-card.png`. The export is not blocked — a case without a citable reference can still be shared, it just cannot be cited. |
 | No date | the header date slot is omitted; the header keeps its two-column alignment via `justify-content: space-between` with one child. |
 | No categories | the hashtag strip is omitted, keeping its top border (the poster's frame stays intact). |
 | Long text | `summary_narrative` is **not** on the card (it is case narrative, not poster metadata). Any value that could run long (occupation, location, source label) gets `overflow-wrap: anywhere`; the heading gets `hyphens: auto` and `overflow-wrap: break-word`, so it breaks at a hyphen rather than past the edge of the sheet. The card's height is content-driven; at export it is measured, not fixed at 1350px. |
@@ -442,7 +449,7 @@ sheet is a thing to be read in a modal and exported, not browsed.
 - The card is a `<article>` with `aria-labelledby` pointing at the title element; the metadata column is a real `<dl>`.
 - `alt` on the photo: the photo is the person's face next to their name — the name is already in text, so `alt=""` is correct (decorative, per `SYSTEM_RULES §4`: "alt text on `<img>` only when not redundant").
 - The title is `var(--color-primary)` `#25646a` on the paper tone `#fcfbf9` → contrast ratio **6.4:1**, passes WCAG AA for body text and comfortably for large text. The status badge is the only red on the sheet (`--color-danger-text-strong` on `--color-danger-bg`).
-- The Download button needs a disabled state with a reason, not a silent hide: "Publication not approved — consent fields not set". The reason names the field to go and set; the server still decides whether the case may be exported.
+- The Download button needs a disabled state with a reason, not a silent hide: "Publication not approved — publication consent is declined". The reason names the field to go and set; the server still decides whether the case may be exported.
 - The button and its note sit **below the sheet, on the modal's dark scrim** — not on the sheet. Muted grey text (`--color-text-muted` `#666`) is unreadable against that scrim, so the note uses `--color-text-light`; the error note uses `--color-danger-text-on-dark`, a token added for exactly this surface (the app's other reds are too dark to read on a scrim that is only 65% black over a light page).
 - The card must render with `prefers-reduced-motion: reduce` honoured (add it to the `app.css:250-269` block).
 
@@ -466,7 +473,7 @@ The client-side approach also matches the deployment reality: the app is SSR'd S
 ```
 1. User clicks "Download poster" on /persons/[id]
 2. GET /api/persons/{id}/card/  →  CaseCardPayload (masked, exportable: true|false)
-3. If !exportable → show the reason + link to the publication checklist. Stop.
+3. If !exportable → show the reason. Stop.
 4. Build the poster DOM: render <CaseInfoCard> with variant="export" into an
    off-screen container:
        position: fixed; left: -20000px; top: 0; width: 1080px;
@@ -565,8 +572,8 @@ For the link to be meaningful, the case needs a **public URL**. `/persons/<id>` 
 ### 3.7 The export button
 
 - Not inside the card (it would be captured in the export). It lives **below the sheet, inside the modal**, so it is reachable without scrolling a 720px artefact out of the dialog.
-- Rendered **only** when the server says `exportable: true`. Otherwise render a disabled button carrying the reason.
-- The server is the only authority on `exportable` — the client must not compute it, or a user could patch the client and export an unapproved card.
+- Live when the server says `exportable: true` — which, for a published case, is every visitor, signed in or not. Otherwise a disabled button carrying the reason.
+- The server is the only authority on `exportable` — the client must not compute it, or a user could patch the client and export an unapproved card. The client's own copy of the rule (`caseCardPublication.ts`) exists only to NAME the reason.
 - The file is a **blob**, never a `data:` URL fetched at the last moment — see §3.4.
 
 ---
@@ -583,7 +590,7 @@ Each step leaves the tree working (tests pass, migrations apply) — `SYSTEM_RUL
 | 1 | `Person.public_reference` field + migration + unique validator + write-serializer entry | backend | 0 |
 | 2 | `public_reference` in the person edit form + Zod form schema (`frontend/src/lib/schemas/personForm.ts`) + unit test | frontend | 1 |
 | 3 | `backend/cases/card/` package: `CaseCardPayloadSerializer`, `EXPORT_SCHEMA` v1 + `export_schema.json` | backend | 1 |
-| 4 | `GET /api/persons/{id}/card/` action on `PersonViewSet`, default-deny gate, `VIEWED` audit log | backend | 3 |
+| 4 | `GET /api/persons/{id}/card/` action on `PersonViewSet`, publication gate (§1.4), `VIEWED` audit log | backend | 3 |
 | 5 | Backend tests: masking matrix (one test per row of §1.4), anonymous 404 on unpublished, private report/media exclusion, schema-version pin (copy `SchemaVersionPinTests`) | backend | 4 |
 | 6 | `src/lib/caseCardData.ts` — types + `buildCaseCardData` + `PERSON_STATUS_LABEL` + father/parent logic | frontend | 0, 2 |
 | 7 | `src/lib/caseCardData.test.ts` — vitest, node env: earliest-report selection, empty-value row omission, missing photo, missing reference | frontend | 6 |
@@ -593,7 +600,7 @@ Each step leaves the tree working (tests pass, migrations apply) — `SYSTEM_RUL
 | 11 | `src/lib/caseCardExport.ts` + `html-to-image` dependency + off-screen poster instance + same-origin photo URL | frontend | 10 |
 | 12 | Download button gated on `exportable`; disabled state shows the missing-field reason | frontend | 11 |
 | 13 | Playwright spec: export produces a PNG file (`page.waitForEvent('download')`) for an exportable fixture | frontend | 12 |
-| 14 | Publication checklist panel listing the blank consent fields blocking a case | frontend | 5 |
+| 14 | *(dropped 2026-11-07)* Publication checklist panel — the gate no longer blocks on fields nobody fills in, so there is nothing to check off | frontend | 5 |
 | 15 | *(optional, later)* server-rendered OG image for the public case page; `(optional)` print stylesheet for A4/PDF | — | 12 |
 
 ### 4.2 Edge cases
@@ -602,13 +609,13 @@ Each step leaves the tree working (tests pass, migrations apply) — `SYSTEM_RUL
 |---|---|
 | Missing profile image (45%) | `.case-card-photo-placeholder`; photo row still occupies the grid cell so the two-column rhythm holds |
 | Missing occupation (65%) / age (61%) / father (97%) | row omitted entirely |
-| No `public_reference` | header shows "Ref: Not assigned"; export disabled |
+| No `public_reference` | header shows "Ref: Not assigned"; the file is named `case-card.png`; the export is not blocked |
 | `reports[]` empty or all `date_start` null | abduction date row omitted |
 | `date_start` after `last_known_date` | both rendered as stored; the card does not reorder or "correct" the data |
 | Very long occupation / location / source label | `overflow-wrap: anywhere`, 2-line clamp; card height is content-driven, so the export is 1080px wide × measured height |
 | Arabic or RTL content | **The app has no RTL support at all** — `dir="rtl"`, `:dir()` and RTL-aware CSS: 0 hits across `frontend/src`; `app.html` is `<html lang="en">`; physical properties (`left`/`right`) are used in places. Only 3 of 46 testimonials are non-English (`ar` ×2, `fr` ×1). A poster with `dir="rtl"` needs: `dir` on the card root, logical properties in the card CSS, and an Arabic-capable font (PT Sans has no Arabic coverage — `@fontsource/pt-sans` only). **Blocking for an Arabic poster.** |
-| `public_identity_level == 'anonymous'` | name, age, occupation, father, photo all suppressed; "Identity withheld" replaces the title |
-| `photograph_public == 'no'` | photo omitted from the **payload**, not just hidden in the UI |
+| `public_identity_level == 'anonymous'` | name, age, occupation, father, photo all suppressed; "Identity withheld" replaces the title. The poster still downloads — the sheet says the identity is withheld, which is a fact about the case |
+| `photograph_public == 'no'` or `'pending'` | photo omitted from the **payload**, not just hidden in the UI; the poster still downloads |
 | A private report (`is_private=True`) | excluded from the payload before any date/place is read from it |
 | `Media.visibility != 'public'` | excluded from the payload |
 | Browser blocks the download (Safari) | `a.download` + object URL; fall back to opening the data URL in a new tab |
@@ -620,9 +627,9 @@ Each step leaves the tree working (tests pass, migrations apply) — `SYSTEM_RUL
 
 | # | Risk | Severity | Mitigation |
 |---|---|---|---|
-| 1 | **The consent/publication fields are 0% populated.** The export button never appears until data entry happens. | **High** — blocks the feature's purpose | Step 14's checklist; surface the fill-rate gap to the humans before committing to the build; consider a backfill from `authoritative_source` rows (146 persons carry an external source + URL) |
-| 2 | A shareable image of a disappeared person is generated without consent | **Critical** | Server-side default-deny gate (§1.4); `exportable` computed server-side only; the client never decides |
-| 3 | The poster is a **new public surface** for data that was never meant to leave the casework UI | High | The card payload is a separate, masked projection — not a new serializer over the same model; every field in it is opted in explicitly |
+| 1 | **The consent/publication fields are 0% populated.** A poster therefore carries exactly what the public case page carries, and nothing more, until a human fills them in. | Medium | The export is no longer blocked by the empty fields (§1.4); the fields are the way to make a poster say LESS than the page, and to make a case say more later |
+| 2 | A shareable image of a disappeared person is generated without consent | **Critical** | The poster publishes only what the public page publishes — the same name, place, photograph and abduction facts an anonymous visitor already reads; `exportable` is computed server-side only, an explicit refusal blocks it, and the client never decides |
+| 3 | The poster is a **new public surface** for data that was never meant to leave the casework UI | High | The card payload is a separate, masked projection — not a new serializer over the same model; private reports, private fields and non-public media never contribute |
 | 4 | An Arabic reference poster cannot be built on this frontend today | High | §4.2 RTL row; decide the language in step 0 before any CSS is written |
 | 5 | Dev-time canvas taint breaks the export during development | Medium | §3.3 same-origin URL resolution |
 | 6 | `html-to-image` adds a runtime dependency to a dependency-light frontend | Low | Dynamic `import()` so it is a separate chunk, loaded only on click; `package.json` gains one dependency |
@@ -651,9 +658,9 @@ Per the project rule *"Never design UX without human input"*, these need a human
 4. **The header date's meaning** — date the case was received, date entered into the platform, date of publication, or date of the incident? The four candidate Person fields are 0% populated; `created_at` is the only 100% one.
 5. **The "Ref" format and who assigns it** — `ED-2024-0042` (prefix per category + year + sequence)? Human-assigned or auto-generated? §1.5 proposes a new `Person.public_reference` field.
 6. **Footer branding** — organisation name, logo file, and link target. There is **no logo asset** in the repo (only `frontend/src/lib/assets/favicon.svg`), so a logo must be supplied.
-7. **Whether the poster shows the person's full name by default**, and what happens when `public_identity_level` is blank — recommended: "Identity withheld", export disabled, until someone explicitly sets the level.
+7. ~~**Whether the poster shows the person's full name by default**, and what happens when `public_identity_level` is blank~~ — **decided 2026-11-07:** the poster shows the full name, because the public case page shows it. A blank level follows the page; `anonymous` withholds.
 8. **Export dimensions and format** — 1080×1350 PNG at `pixelRatio: 2` recommended; JPEG as an option.
-9. **Whether an advocate-facing "publication checklist" (step 14) is in scope** — with the consent fields at 0%, this is the only way a human learns what is blocking a case.
+9. ~~**Whether an advocate-facing "publication checklist" (step 14) is in scope**~~ — **decided 2026-11-07:** dropped. The gate no longer blocks on fields nobody fills in, so there is nothing for a checklist to check off.
 
 ---
 

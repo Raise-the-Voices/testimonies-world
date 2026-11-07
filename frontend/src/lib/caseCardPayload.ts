@@ -2,10 +2,10 @@
  * Case card payload — the resolver for the masked, publication-facing
  * card.
  *
- * `GET /api/persons/{id}/card/` answers with what the server has
- * cleared for publication: the headline, the identity fields, the
- * incident, the photograph and the hashtags, plus the `exportable`
- * verdict and the list of what was withheld
+ * `GET /api/persons/{id}/card/` answers with what the public case
+ * page publishes: the headline, the identity fields, the incident,
+ * the photograph and the hashtags, plus the `exportable` verdict and
+ * the list of what was withheld
  * (`backend/cases/card/serializers.py`).
  *
  * This module maps that payload onto the same `CaseCardData` the
@@ -15,8 +15,8 @@
  * only lays it out.
  *
  * The two never disagree about style — they can disagree about
- * content, and that is the point: the publication poster carries only
- * the fields the server cleared.
+ * content, and that is the point: the publication poster carries the
+ * public projection, and names whatever the server took out.
  */
 
 import {
