@@ -1,7 +1,7 @@
 # Motion report — testimonies.world
 
 **Date:** 2026-11-07 · **Scope:** `frontend/` (SvelteKit 2 / Svelte 5.57.1) · 21 pages, 61 components
-**Status:** the finding stands as written; the work is now partly built. Phases 0–2 and the status timeline are on `feat/motion-system` (PR #196). Every "current state" line cites a file and line as it was on 2026-11-07; every "proposal" line is mine, not the repo's. Character and scope confirmed 2026-11-07 (§8).
+**Status:** the finding stands as written; the work is now partly built. Phases 0–2, the status timeline, the token layer and the nav drawer are on `feat/motion-system` (PR #196). Every "current state" line cites a file and line as it was on 2026-11-07; every "proposal" line is mine, not the repo's. Character and scope confirmed 2026-11-07 (§8).
 
 ---
 
@@ -28,6 +28,9 @@ The project already has motion — but it is **ad-hoc, not a system**. There is 
 Everything is hand-rolled and built on Svelte's built-ins. Nothing to uninstall, nothing to license.
 
 ### 2.2 The token layer is one line deep
+
+> This section is a snapshot of the code before the motion system landed on
+> this branch. Every literal listed here is now a token — see §4.1 and §9.
 
 `src/app.css:102`
 
@@ -152,7 +155,9 @@ Today the poster classes (`.case-card*`) are not in the global entrance list, so
 
 Replace the single token with a small, named set in `app.css`. Durations on a 60/120/200/320 ladder; one easing per intent.
 
-> The token names below are the proposal as written. What shipped is `--motion-duration-enter` / `-overlay` / `-accordion` / `-reveal` / `-count` / `-grow` / `-ambient` / `-fast` / `-press` and `--motion-ease-editorial` / `-overlay` / `-count`, with the JS constants in `$lib/motion.ts` pinned to them by `motion.test.ts`. Same shape, one extra ladder step, and a `--motion-stagger-step` of 90ms instead of 40ms.
+> The token names below are the proposal as written. What shipped is `--motion-duration-enter` / `-drawer` / `-overlay` / `-accordion` / `-reveal` / `-count` / `-grow` / `-ambient` / `-fast` / `-press` / `-spin` / `-shimmer` and `--motion-ease-editorial` / `-overlay` / `-count` / `-loop` / `-spin`, with the JS constants in `$lib/motion.ts` pinned to them by `motion.test.ts`. Same shape, one extra ladder step, and a `--motion-stagger-step` of 90ms instead of 40ms.
+>
+> The layer is now **closed**: every duration and every easing in the stylesheets is a token, and `motion.test.ts` fails if one is spelled out at a call site. The two loop easings (`-loop`, `-spin`) are CSS-only, because no JS transition loops.
 
 ```css
 :root {
@@ -229,6 +234,8 @@ The second is the better default for anything that enters a region of the screen
 | Skeleton shimmer | shimmer only while the load is genuinely pending | `--motion-slow` loop | static block (already correct, `Skeleton.svelte:371`) |
 | View toggle | pill slides between segments (FLIP) + content cross-fade | `--motion-base` / `--ease-standard` | instant swap |
 
+The drawer row shipped as `--motion-duration-drawer` (320ms) with `--motion-ease-editorial`, and the scrim fades through `$lib/motion` so it fades **out** as well as in — the old CSS keyframe could only fade in, so the scrim vanished the instant the drawer closed. The page does not shift aside (G7): an off-canvas panel over the page is the intended mobile behaviour. The links inside the panel do not shift either; the panel's arrival is the motion, and a second movement inside a control the reader is already using would be decoration.
+
 ### 4.4 Stagger without CSS `nth-child` (fixes G5)
 
 Replace the eight hardcoded rules with a CSS custom property set per item:
@@ -293,7 +300,7 @@ The plan is written as five phases. What shipped is one branch and one PR, `feat
 | 3 | `feat/motion-data-surfaces` | Chart bar growth, timeline reveal, view-toggle FLIP | medium | medium |
 | 4 | `test/motion-a11y` | Playwright spec: with `prefers-reduced-motion: reduce`, no element changes position between two frames; poster export PNG is byte-stable across two runs | none | low |
 
-Phases 0–2 and the timeline half of Phase 3 are in #196. The chart (Phase 3, §8.3), the nav-drawer content shift, the view-toggle FLIP and all of Phase 4 are not.
+Phases 0–2 and the timeline half of Phase 3 are in #196, together with the token layer (Phase 0's "replace the 15 literals" is finished and enforced by a test) and the nav drawer (§4.3). The chart (Phase 3, §8.3), the view-toggle FLIP and all of Phase 4 are not.
 
 Phase 4's poster test is the one worth writing regardless: it pins G8 shut.
 
@@ -328,11 +335,11 @@ Phase 4's poster test is the one worth writing regardless: it pins G8 shut.
 
 **Verified in this repo, by reading the files:** every file and line reference in §2 and §3. Svelte's `linear` default easing and its WAAPI-based transitions (`node_modules/svelte/src/internal/client/dom/elements/transitions.js:382,476`); the existence of `prefersReducedMotion` in the installed Svelte (`node_modules/svelte/src/motion/index.js:31`, version 5.57.1); the absence of `svelte/easing`, `svelte/motion` and any animation dependency in `src/` and `package.json`; the CI Lighthouse thresholds in `.lighthouserc.json`; that `html-to-image` receives the always-mounted off-screen export copy.
 
-**Verified by running it:** `npm run check` (0 errors, 0 warnings over 649 files), `npm run test` (246 tests, 14 files), `npm run build` (clean). The reduced-motion contract, the reveal contract and the counter are pinned in `motion.dom.test.ts`; the status timeline is pinned end to end — wire payload, parse, rows, badges, and the guarantee that no row of case history is left hidden — in `statusHistory.test.ts`.
+**Verified by running it:** `npm run check` (0 errors, 0 warnings over 649 files), `npm run test` (255 tests, 14 files), `npm run build` (clean). The reduced-motion contract, the reveal contract and the counter are pinned in `motion.dom.test.ts`; the status timeline is pinned end to end — wire payload, parse, rows, badges, and the guarantee that no row of case history is left hidden — in `statusHistory.test.ts`; the token layer is pinned in `motion.test.ts` — every duration in `app.css` has a key in `$lib/motion.ts`, and the test fails if a stylesheet spells out a duration or an easing at a call site.
 
 **Not verified, and stated as belief:** that `html-to-image` inlines *animated* computed values into the clone (the basis of G8's severity). This is the standard behaviour of the library, but it has not been reproduced in this repo. The Phase 4 poster-determinism test is what would settle it — and it is cheap.
 
 **Not verified: the motion itself.** Playwright's browser binary is not installed on this machine and the download is blocked, so nothing has been *seen* moving. The DOM tests cover the contract; the register of the movement is still a judgement that needs a human eye in a browser. The dev server for this branch is at `http://127.0.0.1:3141/testimonies`.
 
-**Not done:** the status chart (§8.3), the nav-drawer content shift, the view-toggle FLIP, the poster capture guard, and the Phase 4 Playwright spec — reduced motion end to end, and poster determinism. The public pages are untouched, as §8.2 says.
+**Not done:** the status chart (§8.3), the view-toggle FLIP, the poster capture guard, and the Phase 4 Playwright spec — reduced motion end to end, and poster determinism. The public pages are untouched, as §8.2 says.
 

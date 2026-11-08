@@ -141,7 +141,7 @@
 		border: 2px solid currentColor;
 		border-top-color: transparent;
 		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
+		animation: spin var(--motion-duration-spin) var(--motion-ease-spin) infinite;
 		margin-right: 0.4rem;
 		vertical-align: -2px;
 	}

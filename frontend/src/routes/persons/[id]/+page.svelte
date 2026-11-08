@@ -1663,7 +1663,7 @@
 		background: var(--color-bg);
 		border: 1px solid var(--color-border-light);
 		border-radius: 999px;
-		transition: background 0.15s ease;
+		transition: background var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.media-item-tile:hover {
 		background: var(--color-border-light);
@@ -1721,8 +1721,8 @@
 		text-decoration: none;
 		align-self: flex-start;
 		transition:
-			background 0.15s ease,
-			border-color 0.15s ease;
+			background var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.media-item-action:hover {
 		background: var(--color-primary-light);
@@ -2012,10 +2012,10 @@
 		align-items: center;
 		gap: 0.4rem;
 		transition:
-			transform 0.15s ease,
-			box-shadow 0.15s ease,
-			background 0.15s ease,
-			border-color 0.15s ease;
+			transform var(--motion-duration-fast) var(--motion-ease-overlay),
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay),
+			background var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.media-add-btn:hover {
 		transform: translateY(-1px);
@@ -2025,7 +2025,7 @@
 		transform: translateY(0);
 	}
 	.media-add-btn-icon {
-		transition: transform 0.15s ease;
+		transition: transform var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.media-add-btn:hover .media-add-btn-icon {
 		transform: scale(1.15);
@@ -2097,8 +2097,8 @@
 	/* Card hover — subtle lift to invite interaction */
 	.media-item-card {
 		transition:
-			box-shadow 0.15s ease,
-			border-color 0.15s ease;
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.media-item-card:hover {
 		box-shadow: var(--shadow-card-hover);
@@ -2131,10 +2131,10 @@
 		cursor: pointer;
 		padding: 0;
 		transition:
-			background 0.15s ease,
-			color 0.15s ease,
-			border-color 0.15s ease,
-			box-shadow 0.15s ease;
+			background var(--motion-duration-fast) var(--motion-ease-overlay),
+			color var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay),
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.row-action:hover {
 		background: var(--color-primary-tint);

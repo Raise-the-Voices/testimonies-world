@@ -15,7 +15,7 @@
               page-px (1.5rem)
    SURFACE    radius-card (8px), radius-card-lg (16px), radius-input (10px),
               shadow-card, shadow-card-hover, shadow-toolbar, shadow-card-lg,
-              focus-ring, transition-card (0.2s ease)
+              focus-ring, transition-card (motion tokens)
    TYPE       font stack: 'PT Sans', system-ui fallbacks (set on body).
               Font CSS itself is loaded from app.html with preconnect
               to fonts.googleapis.com / fonts.gstatic.com so DNS/TLS
@@ -74,12 +74,16 @@
 	     - nothing bounces, nothing springs, nothing scales.
 	     - durations / easings / travel are named; components never
 	       hardcode a duration or an easing.
-	     - every value below has a matching key in $lib/motion.ts
+	     - every duration below has a matching key in $lib/motion.ts
 	       (see src/lib/motion.test.ts — the parity test enforces it).
+	     - the two named easings the JS transitions use have JS twins in
+	       the same module; the loop easings are CSS-only, because no JS
+	       transition loops.
 	   =================================================================== */
 
 	/* Durations */
 	--motion-duration-enter: 400ms;    /* above-the-fold settle on load    */
+	--motion-duration-drawer: 320ms;  /* off-canvas nav drawer panel      */
 	--motion-duration-overlay: 240ms;  /* dropdown, modal, toast, banner   */
 	--motion-duration-accordion: 280ms;/* report accordion height          */
 	--motion-duration-reveal: 700ms;   /* scroll reveal                    */
@@ -100,10 +104,13 @@
 	/* Rhythm */
 	--motion-stagger-step: 90ms;
 
-	/* Easings — decelerating only. */
+	/* Easings — decelerating for one-shot motion. The two loops keep
+	   their own curve: a skeleton sweep breathes, a spinner turns. */
 	--motion-ease-editorial: cubic-bezier(0.16, 1, 0.3, 1);
 	--motion-ease-overlay: cubic-bezier(0.2, 0, 0, 1);
 	--motion-ease-count: cubic-bezier(0, 0, 0.58, 1); /* == CSS ease-out */
+	--motion-ease-loop: ease-in-out;  /* the continuous skeleton sweep      */
+	--motion-ease-spin: linear;       /* the spinner — a constant rotation */
 
 	/* Ambient wash — derived from the brand teal, never a raw hex
 	   outside this token block. */

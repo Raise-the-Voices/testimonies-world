@@ -270,7 +270,7 @@ import ErrorCard from '$lib/ErrorCard.svelte';
 		font-variant-numeric: tabular-nums;
 	}
 	tbody tr {
-		transition: background 0.15s ease;
+		transition: background var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	tbody tr:hover {
 		background: var(--color-surface);

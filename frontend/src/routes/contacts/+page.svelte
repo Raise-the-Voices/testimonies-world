@@ -462,7 +462,7 @@
 		text-align: right;
 	}
 	.contacts-table tbody tr {
-		transition: background 0.15s ease;
+		transition: background var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.contacts-table tbody tr:hover {
 		background: var(--color-surface);
@@ -503,7 +503,10 @@
 		color: var(--color-text-muted);
 		cursor: pointer;
 		text-decoration: none;
-		transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+		transition:
+			background var(--motion-duration-fast) var(--motion-ease-overlay),
+			color var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay);
 		padding: 0;
 	}
 	.row-action:hover {

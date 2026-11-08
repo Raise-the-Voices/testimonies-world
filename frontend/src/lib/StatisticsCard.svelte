@@ -240,7 +240,7 @@
 		height: 1.75rem;
 		background: var(--skeleton-bg);
 		border-radius: 4px;
-		animation: skeleton-shimmer 1.4s ease-in-out infinite;
+		animation: skeleton-shimmer var(--motion-duration-shimmer) var(--motion-ease-loop) infinite;
 	}
 
 	/* === Skeleton variant ===

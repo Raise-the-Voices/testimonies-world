@@ -767,7 +767,7 @@
 		text-decoration: none;
 		color: var(--color-text);
 		font-size: 0.88rem;
-		transition: background 0.15s ease;
+		transition: background var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	@media (max-width: 600px) {
 		.person-row a {
@@ -824,7 +824,7 @@
 		text-decoration: none;
 		color: var(--color-text);
 		font-size: 0.88rem;
-		transition: background 0.15s ease;
+		transition: background var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	@media (max-width: 600px) {
 		.casework-row a {

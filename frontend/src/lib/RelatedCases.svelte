@@ -221,7 +221,7 @@
 		height: 56px;
 		border-radius: var(--radius-input);
 		background: var(--skeleton-bg);
-		animation: skeleton-shimmer 1.4s ease-in-out infinite;
+		animation: skeleton-shimmer var(--motion-duration-shimmer) var(--motion-ease-loop) infinite;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.related-card,

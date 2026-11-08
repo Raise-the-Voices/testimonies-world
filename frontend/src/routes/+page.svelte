@@ -181,7 +181,7 @@
 		padding: 2.25rem 2rem;
 		text-align: center;
 		animation: fadeSlideUp var(--motion-duration-enter) var(--motion-ease-editorial) both;
-		animation-delay: 0.05s;
+		animation-delay: var(--motion-stagger-step);
 	}
 	.hero-text {
 		max-width: var(--max-w-prose);

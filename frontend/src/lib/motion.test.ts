@@ -56,19 +56,24 @@ function parseBezier(raw: string): [number, number, number, number] {
 	return parts as [number, number, number, number];
 }
 
-describe('motion tokens', () => {
-	const durationTokens: Array<[keyof typeof MOTION_TOKEN_FALLBACKS, string]> = [
-		['enter', '--motion-duration-enter'],
-		['overlay', '--motion-duration-overlay'],
-		['accordion', '--motion-duration-accordion'],
-		['reveal', '--motion-duration-reveal'],
-		['count', '--motion-duration-count'],
-		['grow', '--motion-duration-grow'],
-		['ambient', '--motion-duration-ambient'],
-		['fast', '--motion-duration-fast'],
-		['stagger', '--motion-stagger-step']
-	];
+/** Every duration, and the CSS token that carries it. */
+const durationTokens: Array<[keyof typeof MOTION_TOKEN_FALLBACKS, string]> = [
+	['enter', '--motion-duration-enter'],
+	['drawer', '--motion-duration-drawer'],
+	['overlay', '--motion-duration-overlay'],
+	['accordion', '--motion-duration-accordion'],
+	['reveal', '--motion-duration-reveal'],
+	['count', '--motion-duration-count'],
+	['grow', '--motion-duration-grow'],
+	['ambient', '--motion-duration-ambient'],
+	['fast', '--motion-duration-fast'],
+	['press', '--motion-duration-press'],
+	['spin', '--motion-duration-spin'],
+	['shimmer', '--motion-duration-shimmer'],
+	['stagger', '--motion-stagger-step']
+];
 
+describe('motion tokens', () => {
 	it.each(durationTokens)('%s matches the %s token in app.css', (key, cssName) => {
 		const raw = cssToken(cssName);
 		expect(raw, `${cssName} is missing from app.css`).toBeDefined();
@@ -92,6 +97,81 @@ describe('motion tokens', () => {
 		expect(cssToken('--motion-ambient-stop-1')).toContain('color-mix');
 		expect(cssToken('--motion-ambient-stop-2')).toContain('color-mix');
 		expect(appCss).toContain('@supports not (color: color-mix(in srgb, red, blue))');
+	});
+});
+
+/**
+ * The vocabulary is closed.
+ *
+ * A duration or an easing is named in app.css and used by name. A
+ * component that spells one out has opted out of the system by accident,
+ * and the accident is invisible until two surfaces disagree about how
+ * long a thing takes.
+ */
+describe('the token layer is closed', () => {
+	/** Every stylesheet in the app: the global one and each component's. */
+	function stylesheets(): Array<[string, string]> {
+		const files: Array<[string, string]> = [['app.css', appCss]];
+		for (const file of allSvelte) {
+			const style = /<style[^>]*>([\s\S]*?)<\/style>/.exec(readFileSync(file, 'utf8'));
+			if (style) files.push([file, style[1]]);
+		}
+		return files;
+	}
+
+	/**
+	 * The durations and easings typed in at a call site, with the token
+	 * references removed. What is left is a literal.
+	 */
+	function literals(css: string): string[] {
+		const found: string[] = [];
+		const declarations = css.matchAll(
+			/(?:^|[;{])\s*(transition|animation)(?:-[a-z-]+)?\s*:\s*([^;}]+)/g
+		);
+		for (const [, property, raw] of declarations) {
+			const value = raw.replace(/var\(\s*--[a-z-]+(?:\s*,\s*[^()]*)?\s*\)/g, '');
+			const duration = /(?<![-\w.])\d*\.?\d+(?:ms|s)(?![-\w])/.exec(value);
+			const easing =
+				/(?<![-\w-])(?:ease-in-out|ease-in|ease-out|ease|linear)(?![-\w-])/.exec(value);
+			if (duration) {
+				// `0s` is a deliberate "no motion" — the reduced-motion
+				// kill switch, not a duration.
+				if (!/^0(?:\.0+)?(?:ms|s)$/.test(duration[0])) {
+					found.push(`${property}: ${raw.trim()}`);
+				}
+			} else if (easing) {
+				found.push(`${property}: ${raw.trim()}`);
+			}
+		}
+		return found;
+	}
+
+	it('names every duration and easing at the call site', () => {
+		const offenders: string[] = [];
+		for (const [file, css] of stylesheets()) {
+			for (const literal of literals(css)) offenders.push(`${file}: ${literal}`);
+		}
+		expect(offenders).toEqual([]);
+	});
+
+	it('gives every duration token in app.css a key in motion.ts', () => {
+		const declared = [...appCss.matchAll(/(--motion-duration-[a-z-]+)\s*:/g)].map((m) => m[1]);
+		const known = durationTokens
+			.map(([, name]) => name)
+			.filter((name) => name.startsWith('--motion-duration-'));
+		expect([...new Set(declared)].sort()).toEqual([...new Set(known)].sort());
+	});
+
+	it('closes the easing vocabulary', () => {
+		const declared = [...appCss.matchAll(/(--motion-ease-[a-z-]+)\s*:/g)].map((m) => m[1]);
+		// The three the JS transitions use have JS twins; the two loops
+		// are CSS-only, because no JS transition loops.
+		const cssOnly = ['--motion-ease-loop', '--motion-ease-spin'];
+		expect(declared.filter((name) => !cssOnly.includes(name)).sort()).toEqual([
+			'--motion-ease-count',
+			'--motion-ease-editorial',
+			'--motion-ease-overlay'
+		]);
 	});
 });
 
@@ -217,6 +297,23 @@ describe('the status history timeline', () => {
 		expect(source).toMatch(/--status-history-gap:\s*[\d.]+rem/);
 		expect(source).toMatch(/gap:\s*var\(--status-history-gap\)/);
 		expect(source).toMatch(/height:\s*var\(--status-history-gap\)/);
+	});
+});
+
+describe('the nav drawer', () => {
+	const source = readFileSync(join(srcDir, 'routes/+layout.svelte'), 'utf8');
+
+	it('slides on the drawer duration, decelerating into place', () => {
+		expect(source).toContain(
+			'transition: transform var(--motion-duration-drawer) var(--motion-ease-editorial);'
+		);
+	});
+
+	it('fades the scrim through the motion system, so it fades out too', () => {
+		expect(source).toContain('transition:fade');
+		// The old CSS keyframe could only fade in — the scrim vanished
+		// the moment the drawer closed.
+		expect(source).not.toContain('scrim-fade-in');
 	});
 });
 

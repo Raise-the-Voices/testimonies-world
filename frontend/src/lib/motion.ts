@@ -55,6 +55,8 @@ export function onReducedMotionChange(callback: (reduced: boolean) => void): () 
 export interface MotionTokens {
 	/** Above-the-fold settle on load. */
 	enter: number;
+	/** Off-canvas drawer panel. */
+	drawer: number;
 	/** Dropdown, modal, toast, banner. */
 	overlay: number;
 	/** Accordion height. */
@@ -69,6 +71,12 @@ export interface MotionTokens {
 	ambient: number;
 	/** Small UI feedback (toggle thumb, button press). */
 	fast: number;
+	/** Button press feedback. */
+	press: number;
+	/** Loading spinner. */
+	spin: number;
+	/** Skeleton shimmer. */
+	shimmer: number;
 	/** Delay between consecutive reveals. */
 	stagger: number;
 	/** Travel distance for entrances. */
@@ -87,6 +95,7 @@ export interface MotionTokens {
  */
 export const MOTION_TOKEN_FALLBACKS: MotionTokens = {
 	enter: 400,
+	drawer: 320,
 	overlay: 240,
 	accordion: 280,
 	reveal: 700,
@@ -94,6 +103,9 @@ export const MOTION_TOKEN_FALLBACKS: MotionTokens = {
 	grow: 700,
 	ambient: 46_000,
 	fast: 180,
+	press: 120,
+	spin: 800,
+	shimmer: 1400,
 	stagger: 90,
 	riseEnter: 8,
 	riseOverlay: 8,
@@ -126,6 +138,7 @@ export function motionTokens(): MotionTokens {
 
 	tokenCache = {
 		enter: duration('--motion-duration-enter', MOTION_TOKEN_FALLBACKS.enter),
+		drawer: duration('--motion-duration-drawer', MOTION_TOKEN_FALLBACKS.drawer),
 		overlay: duration('--motion-duration-overlay', MOTION_TOKEN_FALLBACKS.overlay),
 		accordion: duration('--motion-duration-accordion', MOTION_TOKEN_FALLBACKS.accordion),
 		reveal: duration('--motion-duration-reveal', MOTION_TOKEN_FALLBACKS.reveal),
@@ -133,6 +146,9 @@ export function motionTokens(): MotionTokens {
 		grow: duration('--motion-duration-grow', MOTION_TOKEN_FALLBACKS.grow),
 		ambient: duration('--motion-duration-ambient', MOTION_TOKEN_FALLBACKS.ambient),
 		fast: duration('--motion-duration-fast', MOTION_TOKEN_FALLBACKS.fast),
+		press: duration('--motion-duration-press', MOTION_TOKEN_FALLBACKS.press),
+		spin: duration('--motion-duration-spin', MOTION_TOKEN_FALLBACKS.spin),
+		shimmer: duration('--motion-duration-shimmer', MOTION_TOKEN_FALLBACKS.shimmer),
 		stagger: duration('--motion-stagger-step', MOTION_TOKEN_FALLBACKS.stagger),
 		riseEnter: length('--motion-rise-enter', MOTION_TOKEN_FALLBACKS.riseEnter),
 		riseOverlay: length('--motion-rise-overlay', MOTION_TOKEN_FALLBACKS.riseOverlay),

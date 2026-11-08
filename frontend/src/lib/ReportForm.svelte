@@ -809,7 +809,7 @@
 		height: 2.5rem;
 		background: var(--color-surface);
 		border-radius: var(--radius-card);
-		animation: rf-skeleton-pulse 1.4s ease-in-out infinite;
+		animation: rf-skeleton-pulse var(--motion-duration-shimmer) var(--motion-ease-loop) infinite;
 	}
 	.report-form-skeleton-row--wide {
 		height: 8rem;
@@ -1103,7 +1103,7 @@
 		border: 2px solid currentColor;
 		border-right-color: transparent;
 		border-radius: 50%;
-		animation: spin 0.7s linear infinite;
+		animation: spin var(--motion-duration-spin) var(--motion-ease-spin) infinite;
 		margin-right: 0.4rem;
 		vertical-align: -2px;
 	}

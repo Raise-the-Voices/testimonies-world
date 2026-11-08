@@ -544,7 +544,9 @@
 		background-repeat: no-repeat;
 		background-position: right 0.7rem center;
 		background-size: 11px 11px;
-		transition: border-color 0.15s ease, box-shadow 0.15s ease;
+		transition:
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay),
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.filter-group select:focus {
 		outline: none;
@@ -668,7 +670,7 @@
 		border: 2px solid currentColor;
 		border-right-color: transparent;
 		border-radius: 50%;
-		animation: spin 0.7s linear infinite;
+		animation: spin var(--motion-duration-spin) var(--motion-ease-spin) infinite;
 		vertical-align: middle;
 		margin-right: 0.2rem;
 	}

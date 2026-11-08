@@ -133,7 +133,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
-		animation: fadeSlideUp 0.4s ease both;
+		animation: fadeSlideUp var(--motion-duration-enter) var(--motion-ease-editorial) both;
 	}
 	.toolbar-row {
 		display: flex;
@@ -177,7 +177,9 @@
 		text-transform: uppercase;
 		letter-spacing: 0.06rem;
 		cursor: pointer;
-		transition: background 0.15s ease, box-shadow 0.15s ease;
+		transition:
+			background var(--motion-duration-fast) var(--motion-ease-overlay),
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.toolbar-submit:hover {
 		background: var(--color-primary-light);
@@ -196,7 +198,9 @@
 		font-weight: 600;
 		font-size: 0.8rem;
 		cursor: pointer;
-		transition: background 0.15s ease, border-color 0.15s ease;
+		transition:
+			background var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.toolbar-clear:hover {
 		background: var(--color-primary-tint);
