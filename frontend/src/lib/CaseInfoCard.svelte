@@ -57,6 +57,12 @@
 		photoFailed = false;
 	});
 
+	// What the frame says. A case file with no photograph and a
+	// photograph that will not load are different facts, and the sheet
+	// is a publication: it must not claim a photograph is missing when
+	// one is on file.
+	const photoNote = $derived(photoFailed ? 'Photograph unavailable' : 'No photograph');
+
 	// The photograph is pulled onto the page's own origin: the export
 	// reads its pixels into a canvas, and a canvas that has drawn a
 	// cross-origin image cannot be written out. See caseCardExport.ts.
@@ -115,7 +121,7 @@
 						     not a broken image and not an empty gap. -->
 						<div class="case-card-photo-placeholder">
 							<Icon name="people" size={40} strokeWidth={1.5} />
-							<span>No photograph</span>
+							<span>{photoNote}</span>
 						</div>
 					{/if}
 				</div>
@@ -296,7 +302,11 @@
 		height: 100%;
 		min-height: 11em;
 		color: var(--color-text-muted);
-		background: var(--color-surface);
+		/* An empty slot, matted on the sheet — not a grey box dropped
+		   onto it. The frame's own rule is the picture's edge; this is
+		   the mat inside it. */
+		background: var(--color-card-paper);
+		border: 1px solid var(--color-card-rule);
 	}
 	/* The icon is a child component, so its <svg> carries no scope
 	   class of this component's own. */

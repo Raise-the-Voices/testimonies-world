@@ -11,10 +11,16 @@ safe to show. Same posture as `cases/testimonials/serializers.py`:
 The masking contract, one rule per line, each pinned by a test in
 `tests.py`:
 
-  - A blank consent / visibility flag means the MOST RESTRICTIVE
-    option, never the permissive one. Same posture as
-    `cases/storage.py`: "the protected tree is the default … publishing
-    is the explicit act, not protecting."
+  - The card publishes WHAT THE PUBLIC CASE PAGE ALREADY PUBLISHES.
+    A poster of a published case is a picture of information the
+    public can already read, so it needs no second consent to exist.
+    The public page is the reference: the full name, the coarse
+    place, the photograph (it is served from the public media tree),
+    the abduction facts from the public reports.
+  - A flag that has been FILLED IN is honoured as written. A blank
+    flag is not a decision, it is the absence of one, so the card
+    follows the public page. An explicit 'no', 'anonymous' or 'do not
+    disclose' withholds what it names.
   - A private Report contributes nothing. It is dropped before any of
     its fields are read, not filtered afterwards.
   - Media that is not `public` is never part of a card.
@@ -246,30 +252,39 @@ def _headline(person):
 
 
 def _effective_identity_level(person):
-    """`public_identity_level`, with a blank treated as `anonymous`.
+    """`public_identity_level`, with a blank read as the public page.
 
-    Blank means the most restrictive option, never the permissive one.
+    The public case page shows the full name, so a blank level
+    publishes the full name: the flag is the absence of a decision,
+    and the page is the decision already in force.
+
+    An explicit level is honoured as written: 'partial' publishes the
+    first name and an initial, 'anonymous' withholds the identity —
+    and with it the age, the occupation and the father's name.
     """
     level = (person.public_identity_level or '').strip()
     if level == PublicIdentityLevel.PARTIAL:
         return PublicIdentityLevel.PARTIAL
-    if level == PublicIdentityLevel.FULL:
-        return PublicIdentityLevel.FULL
-    return PublicIdentityLevel.ANONYMOUS
+    if level == PublicIdentityLevel.ANONYMOUS:
+        return PublicIdentityLevel.ANONYMOUS
+    return PublicIdentityLevel.FULL
 
 
 def _effective_location_precision(person):
-    """`public_location_level`, with a blank treated as `province`.
+    """`public_location_level`, with a blank read as the public page.
 
-    A blank disclosure level grants the coarsest thing it can grant:
-    the country, which is already public on the case page.
+    The public case page shows the district and the coarse place, so a
+    blank level publishes the same. An explicit level narrows it, and
+    'do not disclose' withholds the location entirely.
     """
     level = (person.public_location_level or '').strip()
     if level == PublicLocationLevel.DO_NOT_DISCLOSE:
         return 'withheld'
-    if level in LOCATION_DISCLOSURE:
-        return level
-    return 'province'
+    if level == PublicLocationLevel.PROVINCE:
+        return 'province'
+    if level == PublicLocationLevel.DISTRICT:
+        return 'district'
+    return 'city'
 
 
 def _parse_restrictions(person):
@@ -404,8 +419,13 @@ def build_card_payload(person, request=None):
     # publish.
     photo = None
     if person.profile_image:
+        # The profile image lives in the PUBLIC media tree, so the
+        # public case page already shows it. A blank flag follows the
+        # page; an explicit 'no' withholds it from the poster, and a
+        # decision that is still pending withholds it too — the
+        # poster never runs ahead of the decision.
         photo_allowed = (
-            person.photograph_public == 'yes'
+            person.photograph_public not in ('no', 'pending')
             and WITHHELD_PHOTO not in blocked
             and identity_level != PublicIdentityLevel.ANONYMOUS
         )
@@ -432,23 +452,19 @@ def build_card_payload(person, request=None):
     source_label = source_label or _clean(person.authoritative_source)
 
     # --- Exportable ------------------------------------------------------
-    # Computed on the server, from the consent flags only. The client
-    # cannot influence it, and the conditions are the ones the
-    # documentation form (Section K) collects:
-    #   - the case is published;
-    #   - consent for public publication is on file;
-    #   - the identity is published at full or partial level;
-    #   - the photograph is cleared for publication. A case with no
-    #     photograph at all still needs the flag cleared, because the
-    #     flag is the record of the decision, not a description of
-    #     what happens to be attached.
+    # Computed on the server. The client cannot influence it.
+    #
+    # The poster publishes what the public case page publishes, so the
+    # case being PUBLISHED is the operative fact: a published case is
+    # already out there, and a picture of it adds nothing. A blank
+    # consent flag is not a refusal, so it does not block.
+    #
+    # An explicit refusal does block: consent for public publication
+    # recorded as 'no' is a human decision, and the poster is a
+    # publication.
     exportable = bool(
         person.is_published
-        and person.consent_public_publication == 'yes'
-        and identity_level in (
-            PublicIdentityLevel.FULL, PublicIdentityLevel.PARTIAL,
-        )
-        and person.photograph_public == 'yes'
+        and person.consent_public_publication != 'no'
     )
 
     status_label = PERSON_STATUS_LABELS.get(person.current_status, person.current_status)

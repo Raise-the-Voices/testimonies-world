@@ -187,8 +187,8 @@
 	   as another panel on the page. */
 	.modal-overlay--poster {
 		background: var(--color-overlay-deep);
-		backdrop-filter: blur(10px);
-		-webkit-backdrop-filter: blur(10px);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
 	}
 
 	.modal {

@@ -43,6 +43,7 @@
 		| 'pencil-fill'
 		| 'trash-fill'
 		| 'lock-fill'
+		| 'file-text'
 		| 'download';
 
 	interface IconPath {
@@ -95,6 +96,9 @@
 		// is hand-tuned to that canvas and would visibly shrink if we
 		// forced it into 24×24.
 		'lock-fill': { path: `<path fill="currentColor" d="M4 7V5a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h1zm2 0h4V5a2 2 0 1 0-4 0v2z"/>`, viewBox: '0 0 16 16' },
+		// Lucide `file-text` — a sheet of paper with lines on it. The
+		// case card is a document, and this is the glyph that says so.
+		'file-text': { path: `<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>` },
 		// Lucide `download` — an arrow into a tray. Stroke family, 24×24.
 		'download': { path: `<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>` },
 	};

@@ -54,6 +54,10 @@
 	--color-danger-text: #742a2a;
 	--color-danger-text-strong: #c53030;
 	--color-danger-icon-bg: rgba(116, 42, 42, 0.2);
+	/* A red that reads on the modal's dark scrim. --color-danger and
+	   --color-danger-text-strong are both too dark against a scrim
+	   that is only 65% black over a light page. */
+	--color-danger-text-on-dark: #ffc9c9;
 
 	/* Skeleton — base color + shimmer highlight + reduced-motion static.
 	   Keep the static tone darker than the base so it still reads as

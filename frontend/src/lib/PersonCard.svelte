@@ -69,7 +69,7 @@
 			/>
 		{:else}
 			<div class="card-media-placeholder" aria-hidden="true">
-				<Icon name="cases" size={36} />
+				<Icon name="people" size={36} />
 			</div>
 		{/if}
 		{#if person.current_status}

@@ -5,9 +5,9 @@ import type { CaseCardPayload } from './api/generated/endpoints.schemas';
 /**
  * Tests for the masked-payload resolver.
  *
- * The payload is what the server has cleared for publication. The
- * browser's only job is to lay it out, so these tests pin two things:
- * the poster prints what the payload carries, and it never prints
+ * The payload is what the public case page publishes. The browser's
+ * only job is to lay it out, so these tests pin two things: the
+ * poster prints what the payload carries, and it never prints
  * anything the payload did not carry. A resolver that reached past the
  * payload — back to the case file, say — would put unapproved facts
  * into a file meant to be shared, which is the one thing the masking
