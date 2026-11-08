@@ -14,7 +14,12 @@ name: Deploy to production
 #      `success` for this deploy to run. Without this trigger, a direct
 #      push to main with red CI would silently deploy.
 #
-# The two triggers share the same concurrency group, so a push-to-main
+#   3. `workflow_dispatch`       — a manual deploy, for when the site is
+#      down and the fix is already on main. It skips the CI gate; both
+#      jobs still declare the `production` environment, so whatever
+#      protection rules that environment carries apply to it as well.
+#
+# The triggers share the same concurrency group, so a push-to-main
 # event and a `workflow_run` event arriving back-to-back collapse into
 # one in-flight deploy rather than racing each other.
 on:
@@ -24,6 +29,7 @@ on:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
 
 # Two deploys to prod must NEVER run in parallel. `cancel-in-progress:
 # false` means a second deploy waits for the first to finish — safer than
@@ -33,9 +39,8 @@ concurrency:
   group: deploy-prod-${{ github.workflow }}
   cancel-in-progress: false
 
-# Permissions: minimal — only what `appleboy/scp-action` +
-# `appleboy/ssh-action` need (which is nothing, they use secrets via
-# `with:`). No token, no contents write.
+# Permissions: minimal — the deploy reads the repo and talks to the VM
+# over SSH with a deploy key. No token, no contents write.
 permissions:
   contents: read
 
@@ -48,6 +53,7 @@ jobs:
   build:
     if: >-
       github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
 
     # The `production` GitHub Environment (configured in repo Settings →
@@ -119,6 +125,7 @@ jobs:
     needs: build
     if: >-
       github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
 
     environment:
@@ -133,41 +140,72 @@ jobs:
           name: frontend-build
           path: frontend-build
 
-      - name: Push build to VM via SCP
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_KEY }}
-          port: ${{ secrets.DEPLOY_PORT }}
-          # /tmp/<dir> instead of /opt/<dir>: the SSH user (DEPLOY_USER)
-          # can't `mkdir -p` under /opt/ on prod without sudo, and the
-          # scp-action attempts `create folder` on the target BEFORE the
-          # SSH step that could sudo. /tmp is world-writable so the dir
-          # is created cleanly with zero per-machine setup. The artifact
-          # only needs to live for the duration of one SSH step (sub-
-          # second), so /tmp's volatility is a non-issue.
-          #
-          # drone-scp (the scp-action backend) tars with
-          # `tar -zcf out.tar.gz <source>` — the archive contains a
-          # top-level directory matching the source path. We download
-          # the artifact into `frontend-build/` (single level) and use
-          # that as the source, so the archive contains only one leading
-          # dir. `strip_components: 1` then drops it, leaving files at
-          # /tmp/frontend-build-incoming/client/... — the layout
-          # deploy.sh's INCOMING_FRONTEND check expects.
-          source: "frontend-build"
-          target: "/tmp/frontend-build-incoming/"
-          strip_components: 1
+      - name: Push build to VM over SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+        # Plain ssh/scp, not appleboy/scp-action + appleboy/ssh-action.
+        # Those actions download a helper binary (drone-scp, drone-ssh)
+        # from a GitHub release on every run; when that release CDN
+        # answers 504 the deploy fails before it reaches the VM — which
+        # is what happened on 2026-11-08, twice, with the site already
+        # down. The runner has OpenSSH built in, so the deploy depends
+        # on nothing but the runner image.
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f /tmp/deploy_key /tmp/frontend-build.tar.gz' EXIT
+          printf '%s' "$DEPLOY_KEY" | tr -d '\r' > /tmp/deploy_key
+
+          # One tarball instead of a tree of scp calls: the client
+          # bundle is hundreds of small files and scp opens a
+          # connection per file. The archive is unpacked into the path
+          # deploy.sh reads — /tmp/frontend-build-incoming/client/... —
+          # so the layout is the one deploy.sh's INCOMING_FRONTEND
+          # check expects.
+          tar -czf /tmp/frontend-build.tar.gz -C frontend-build .
+
+          # /tmp instead of /opt: the SSH user (DEPLOY_USER) can't
+          # mkdir -p under /opt/ on prod without sudo, and this step
+          # runs before the one that can sudo. /tmp is world-writable,
+          # so the directory is created with zero per-machine setup,
+          # and it only has to live for the length of this step.
+          ssh -i /tmp/deploy_key -p "${DEPLOY_PORT:-22}" \
+            -o StrictHostKeyChecking=accept-new \
+            -o IdentitiesOnly=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            'rm -rf /tmp/frontend-build-incoming && mkdir -p /tmp/frontend-build-incoming'
+          scp -i /tmp/deploy_key -P "${DEPLOY_PORT:-22}" \
+            -o StrictHostKeyChecking=accept-new \
+            -o IdentitiesOnly=yes \
+            /tmp/frontend-build.tar.gz \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/frontend-build.tar.gz"
+          ssh -i /tmp/deploy_key -p "${DEPLOY_PORT:-22}" \
+            -o StrictHostKeyChecking=accept-new \
+            -o IdentitiesOnly=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            'tar -xzf /tmp/frontend-build.tar.gz -C /tmp/frontend-build-incoming && rm -f /tmp/frontend-build.tar.gz'
 
       - name: Run deploy.sh on VM
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_KEY }}
-          port: ${{ secrets.DEPLOY_PORT }}
-          script: |
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f /tmp/deploy_key' EXIT
+          printf '%s' "$DEPLOY_KEY" | tr -d '\r' > /tmp/deploy_key
+          # The script below runs on the VM, not here: the heredoc is
+          # quoted, so nothing in it is expanded by this shell — `$` and
+          # `$(...)` are the VM's to evaluate.
+          ssh -i /tmp/deploy_key -p "${DEPLOY_PORT:-22}" \
+            -o StrictHostKeyChecking=accept-new \
+            -o IdentitiesOnly=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" 'bash -s' <<'REMOTE'
             set -e
 
             cd /opt/rtv-cases
@@ -207,3 +245,4 @@ jobs:
               scripts/systemd/
 
             bash scripts/deploy.sh
+          REMOTE
