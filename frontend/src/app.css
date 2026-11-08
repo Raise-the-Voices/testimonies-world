@@ -69,8 +69,8 @@
 	/* === Motion ==========================================================
 	   One vocabulary for every animation on the site.
 
-	     editorial  — public pages: scroll reveals, count-ups, the
-	                  ambient wash. Long-ish, decelerating, quiet.
+	     editorial  — public pages: scroll reveals, count-ups.
+	                  Long-ish, decelerating, quiet.
 	     functional — internal tools: dropdowns, crossfades, accordions.
 	                  Short, mechanical, travel capped at 8px.
 
@@ -93,7 +93,6 @@
 	--motion-duration-reveal: 700ms;   /* scroll reveal                    */
 	--motion-duration-count: 900ms;    /* count-up                         */
 	--motion-duration-grow: 700ms;     /* stat bar grow                    */
-	--motion-duration-ambient: 46s;    /* ambient wash cycle               */
 	--motion-duration-fast: 180ms;     /* colour / border / focus changes  */
 	--motion-duration-press: 120ms;    /* button press feedback           */
 	--motion-duration-spin: 800ms;     /* loading spinner                 */
@@ -115,11 +114,6 @@
 	--motion-ease-count: cubic-bezier(0, 0, 0.58, 1); /* == CSS ease-out */
 	--motion-ease-loop: ease-in-out;  /* the continuous skeleton sweep      */
 	--motion-ease-spin: linear;       /* the spinner — a constant rotation */
-
-	/* Ambient wash — derived from the brand teal, never a raw hex
-	   outside this token block. */
-	--motion-ambient-stop-1: color-mix(in srgb, var(--color-primary) 6%, transparent);
-	--motion-ambient-stop-2: color-mix(in srgb, var(--color-sidebar-header) 5%, transparent);
 
 	/* Layout */
 	--max-width: 1140px; /* legacy layout wrapper */
@@ -213,16 +207,6 @@
 	   mono stack — the poster needs no webfont of its own. */
 	--font-mono: ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas,
 		'Liberation Mono', monospace;
-}
-
-/* Fallback for the ambient wash stops on browsers without `color-mix`
-   (Chrome < 111 / Safari < 16.2 / Firefox < 113). The values mirror
-   the mix percentages above, written out as rgba. */
-@supports not (color: color-mix(in srgb, red, blue)) {
-	:root {
-		--motion-ambient-stop-1: rgba(37, 100, 106, 0.06);
-		--motion-ambient-stop-2: rgba(95, 158, 160, 0.05);
-	}
 }
 
 /* normalize basics */
@@ -337,13 +321,6 @@ h3 { font-size: 1.15rem; }
 @keyframes bar-grow {
 	from { transform: scaleX(0); }
 	to { transform: scaleX(1); }
-}
-
-/* Ambient wash drift — transform-only, so the layer is composited once
-   and never repainted while it drifts. */
-@keyframes ambient-drift {
-	from { transform: translate3d(-2%, -1%, 0) scale(1); }
-	to { transform: translate3d(2%, 1.5%, 0) scale(1.04); }
 }
 
 /* Global spinner — one definition for the whole site. The five
@@ -493,39 +470,6 @@ h3 { font-size: 1.15rem; }
 	}
 }
 
-/* ============================================================================
-   Ambient wash — public pages only (mounted by +layout.svelte).
-   A single fixed layer of two soft brand-teal gradients that drifts
-   slowly. It is decoration, so it never intercepts pointer events and
-   never sits over text.
-
-   `z-index: -1` is what keeps it behind the content. A negative
-   z-index paints the layer in step 2 of the root stacking context —
-   below every in-flow block, every line of text, and every positioned
-   element (modals, toasts, the nav drawer). The alternative, giving
-   `main.page` `position: relative; z-index: 1`, also lifts the
-   content, but it turns `main.page` into a stacking context — which
-   traps the modal overlay (z-index 80, rendered inside the page)
-   beneath the nav drawer and scrim (z-index 60 / 55, rendered
-   outside it). The negative z-index has no such side effect: nothing
-   on the site changes its own stacking context because of it.
-
-   The wash is visible through the transparent page background. `html`
-   has no background, so `body`'s background propagates to the canvas
-   and is painted underneath the wash.
-   ========================================================================== */
-.ambient-wash {
-	position: fixed;
-	inset: -4%;
-	z-index: -1;
-	pointer-events: none;
-	background:
-		radial-gradient(48% 42% at 22% 18%, var(--motion-ambient-stop-1) 0%, transparent 68%),
-		radial-gradient(52% 46% at 78% 74%, var(--motion-ambient-stop-2) 0%, transparent 70%);
-	animation: ambient-drift var(--motion-duration-ambient) var(--motion-ease-editorial) infinite alternate;
-	will-change: transform;
-}
-
 /* Respect user's reduced-motion preference */
 @media (prefers-reduced-motion: reduce) {
 	.fade-in-stagger > * {
@@ -544,9 +488,6 @@ h3 { font-size: 1.15rem; }
 	   without one of its own. */
 	[data-reveal] {
 		transition: none !important;
-	}
-	.ambient-wash {
-		display: none !important;
 	}
 	.skeleton,
 	.skeleton-stat-card-title,

@@ -2,7 +2,6 @@
 	import { base } from '$app/paths';
 	import { user, ready, loadSession, isVolunteer, isAdvocate } from '$lib/session';
 	import { clearDraft } from '$lib/submitDraft';
-	import { isPublicRoute, stripBasePath } from '$lib/publicRoutes';
 	import { fade } from '$lib/motion';
 	import Bell from '$lib/Bell.svelte';
 	import Toast from '$lib/Toast.svelte';
@@ -33,12 +32,6 @@
 	// cross-tab session expiry, etc.) where the store changes without
 	// a fresh +layout.ts run.
 	let currentUser = $derived(data.user ?? $user);
-
-	// Ambient wash — public pages only. The allowlist lives in
-	// $lib/publicRoutes.ts so a new internal route can never inherit it
-	// by accident. The base path is stripped first: the allowlist is
-	// written in terms of the route, not the deployment prefix.
-	let showAmbient = $derived(isPublicRoute(stripBasePath($page.url.pathname, base)));
 
 	// Seed the global session store from the SSR data on the client.
 	// `$effect.pre` is client-only — it runs before child `$effect`s
@@ -142,12 +135,6 @@
      tabs to it; jumps focus past the header / nav drawer to the
      main content. -->
 <a href="#main-content" class="skip-link">Skip to main content</a>
-
-<!-- Ambient wash — a slow, low-contrast brand-teal drift. Public pages
-     only, painted behind everything (see .ambient-wash in app.css). -->
-{#if showAmbient}
-	<div class="ambient-wash" aria-hidden="true"></div>
-{/if}
 
 <header class="header-container">
 	<div class="main-header container-app">

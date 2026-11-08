@@ -11,7 +11,6 @@ import {
 	motionTokens,
 	prefersReducedMotion
 } from './motion';
-import { isPublicRoute, stripBasePath } from './publicRoutes';
 
 const srcDir = fileURLToPath(new URL('..', import.meta.url));
 const appCss = readFileSync(join(srcDir, 'app.css'), 'utf8');
@@ -65,7 +64,6 @@ const durationTokens: Array<[keyof typeof MOTION_TOKEN_FALLBACKS, string]> = [
 	['reveal', '--motion-duration-reveal'],
 	['count', '--motion-duration-count'],
 	['grow', '--motion-duration-grow'],
-	['ambient', '--motion-duration-ambient'],
 	['fast', '--motion-duration-fast'],
 	['press', '--motion-duration-press'],
 	['spin', '--motion-duration-spin'],
@@ -91,12 +89,6 @@ describe('motion tokens', () => {
 		const raw = cssToken(cssName);
 		expect(raw, `${cssName} is missing from app.css`).toBeDefined();
 		expect(toPixels(raw as string)).toBe(MOTION_TOKEN_FALLBACKS[key]);
-	});
-
-	it('keeps the ambient stops in color-mix, with a plain fallback', () => {
-		expect(cssToken('--motion-ambient-stop-1')).toContain('color-mix');
-		expect(cssToken('--motion-ambient-stop-2')).toContain('color-mix');
-		expect(appCss).toContain('@supports not (color: color-mix(in srgb, red, blue))');
 	});
 });
 
@@ -216,67 +208,6 @@ describe('prefersReducedMotion', () => {
 
 	it('falls back to the token values where there is no document', () => {
 		expect(motionTokens()).toEqual(MOTION_TOKEN_FALLBACKS);
-	});
-});
-
-describe('isPublicRoute', () => {
-	const publicPaths = [
-		'/',
-		'/persons',
-		'/persons/12',
-		'/testimonials',
-		'/testimonials/7'
-	];
-	it.each(publicPaths)('treats %s as public', (path) => {
-		expect(isPublicRoute(path)).toBe(true);
-	});
-
-	const internalPaths = [
-		'/persons/12/edit',
-		'/persons/12/report',
-		'/testimonials/new',
-		'/testimonials/7/edit',
-		'/dashboard',
-		'/dashboard/audit-logs',
-		'/casework',
-		'/casework/new',
-		'/contacts',
-		'/contacts/new',
-		'/reports',
-		'/submit',
-		'/settings',
-		'/notifications',
-		'/statistics/extra',
-		'/watchdog/extra',
-		'/unknown'
-	];
-	it.each(internalPaths)('treats %s as internal', (path) => {
-		expect(isPublicRoute(path)).toBe(false);
-	});
-
-	it('ignores a trailing slash', () => {
-		expect(isPublicRoute('/persons/')).toBe(true);
-		expect(isPublicRoute('/testimonials/7/')).toBe(true);
-	});
-});
-
-describe('stripBasePath', () => {
-	it('removes the deployment base path', () => {
-		expect(stripBasePath('/testimonies/persons', '/testimonies')).toBe('/persons');
-		expect(stripBasePath('/testimonies', '/testimonies')).toBe('/');
-		expect(stripBasePath('/testimonies/', '/testimonies')).toBe('/');
-		expect(stripBasePath('/persons', '/testimonies')).toBe('/persons');
-	});
-
-	it('leaves the path alone when there is no base path', () => {
-		expect(stripBasePath('/persons', '')).toBe('/persons');
-		expect(stripBasePath('/persons', '/')).toBe('/persons');
-	});
-
-	it('does not strip a partial match', () => {
-		expect(stripBasePath('/testimonies-extra/persons', '/testimonies')).toBe(
-			'/testimonies-extra/persons'
-		);
 	});
 });
 

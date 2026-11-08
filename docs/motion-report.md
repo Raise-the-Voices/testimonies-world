@@ -155,7 +155,7 @@ Today the poster classes (`.case-card*`) are not in the global entrance list, so
 
 Replace the single token with a small, named set in `app.css`. Durations on a 60/120/200/320 ladder; one easing per intent.
 
-> The token names below are the proposal as written. What shipped is `--motion-duration-enter` / `-drawer` / `-overlay` / `-accordion` / `-reveal` / `-count` / `-grow` / `-ambient` / `-fast` / `-press` / `-spin` / `-shimmer` and `--motion-ease-editorial` / `-overlay` / `-count` / `-loop` / `-spin`, with the JS constants in `$lib/motion.ts` pinned to them by `motion.test.ts`. Same shape, one extra ladder step, and a `--motion-stagger-step` of 90ms instead of 40ms.
+> The token names below are the proposal as written. What shipped is `--motion-duration-enter` / `-drawer` / `-overlay` / `-accordion` / `-reveal` / `-count` / `-grow` / `-fast` / `-press` / `-spin` / `-shimmer` and `--motion-ease-editorial` / `-overlay` / `-count` / `-loop` / `-spin`, with the JS constants in `$lib/motion.ts` pinned to them by `motion.test.ts`. Same shape, one extra ladder step, and a `--motion-stagger-step` of 90ms instead of 40ms.
 >
 > The layer is now **closed**: every duration and every easing in the stylesheets is a token, and `motion.test.ts` fails if one is spelled out at a call site. The two loop easings (`-loop`, `-spin`) are CSS-only, because no JS transition loops.
 
@@ -363,11 +363,12 @@ Phase 4's poster test is the one worth writing regardless: it pins G8 shut.
 **Taken (2026-11-08, Aya):**
 
 5. **The view toggle's pill: equal segments, pure slide.** Cards and List are the same width; the pill moves with a transform only, and CSS places it from the first paint. The cost is a control about 40px wider than the one that shipped before.
+6. **The ambient backdrop is out.** An earlier build of this branch added a fixed layer of soft teal gradients to the public pages, drifting on a 46-second cycle forever. It is not in §4, it is not something the plan asked for, and it breaks §5's own rule that nothing loops forever. It is removed: `app.css` loses the keyframes, the tokens and the layer, `+layout.svelte` loses the element, and `$lib/publicRoutes.ts` — which existed only to keep the wash off internal routes — goes with it. The pages look exactly as they did on `main`.
 
 **Still open — neither blocks the work that is done:**
 
-6. **Print.** The poster and the browser print stylesheet must stay static. Assumed out of scope for all motion work; §4.5 makes it a rule rather than a hope.
-7. **Fidelity.** No reference product named. The token set in §4.1 is the proposal to react to.
+7. **Print.** The poster and the browser print stylesheet must stay static. Assumed out of scope for all motion work; §4.5 makes it a rule rather than a hope.
+8. **Fidelity.** No reference product named. The token set in §4.1 is the proposal to react to.
 
 ---
 
@@ -375,7 +376,7 @@ Phase 4's poster test is the one worth writing regardless: it pins G8 shut.
 
 **Verified in this repo, by reading the files:** every file and line reference in §2 and §3. Svelte's `linear` default easing and its WAAPI-based transitions (`node_modules/svelte/src/internal/client/dom/elements/transitions.js:382,476`); the existence of `prefersReducedMotion` in the installed Svelte (`node_modules/svelte/src/motion/index.js:31`, version 5.57.1); the absence of `svelte/easing`, `svelte/motion` and any animation dependency in `src/` and `package.json`; the CI Lighthouse thresholds in `.lighthouserc.json`; that `html-to-image` receives the always-mounted off-screen export copy.
 
-**Verified by running it:** `npm run check` (0 errors, 0 warnings over 650 files), `npm run test` (266 tests, 15 files), `npm run build` (clean). The reduced-motion contract, the reveal contract and the counter are pinned in `motion.dom.test.ts`; the status timeline is pinned end to end — wire payload, parse, rows, badges, and the guarantee that no row of case history is left hidden — in `statusHistory.test.ts`; the token layer is pinned in `motion.test.ts` — every duration in `app.css` has a key in `$lib/motion.ts`, and the test fails if a stylesheet spells out a duration or an easing at a call site; the view toggle is pinned in `viewToggle.test.ts` — the pill exists, the two segments are the same width, the pill moves by a transform on a token, and the selection is on the container as `data-mode`; the poster guard is pinned in `caseCardExport.test.ts` — the export subtree carries no motion, the card carries no transition of its own, and the capture-time freeze finishes every animation inside the sheet.
+**Verified by running it:** `npm run check` (0 errors, 0 warnings over 650 files), `npm run test` (238 tests, 15 files), `npm run build` (clean). The reduced-motion contract, the reveal contract and the counter are pinned in `motion.dom.test.ts`; the status timeline is pinned end to end — wire payload, parse, rows, badges, and the guarantee that no row of case history is left hidden — in `statusHistory.test.ts`; the token layer is pinned in `motion.test.ts` — every duration in `app.css` has a key in `$lib/motion.ts`, and the test fails if a stylesheet spells out a duration or an easing at a call site; the view toggle is pinned in `viewToggle.test.ts` — the pill exists, the two segments are the same width, the pill moves by a transform on a token, and the selection is on the container as `data-mode`; the poster guard is pinned in `caseCardExport.test.ts` — the export subtree carries no motion, the card carries no transition of its own, and the capture-time freeze finishes every animation inside the sheet.
 
 **Not verified, and stated as belief:** that `html-to-image` inlines *animated* computed values into the clone (the basis of G8's severity). This is the standard behaviour of the library, but it has not been reproduced in this repo. The Phase 4 poster-determinism test is what would settle it — and it is cheap.
 

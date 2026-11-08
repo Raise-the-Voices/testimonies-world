@@ -2,8 +2,8 @@
  * The motion system.
  *
  * One vocabulary for every animation on the site. Public pages use the
- * editorial register (scroll reveals, count-ups, the ambient wash); internal
- * tools use the functional register (dropdowns, crossfades, accordions).
+ * editorial register (scroll reveals, count-ups); internal tools use the
+ * functional register (dropdowns, crossfades, accordions).
  *
  * House rules: nothing bounces, nothing springs, nothing scales. Motion is
  * movement and opacity only.
@@ -67,8 +67,6 @@ export interface MotionTokens {
 	count: number;
 	/** Stat bar grow. */
 	grow: number;
-	/** Ambient wash cycle. */
-	ambient: number;
 	/** Small UI feedback (toggle thumb, button press). */
 	fast: number;
 	/** Button press feedback. */
@@ -101,7 +99,6 @@ export const MOTION_TOKEN_FALLBACKS: MotionTokens = {
 	reveal: 700,
 	count: 900,
 	grow: 700,
-	ambient: 46_000,
 	fast: 180,
 	press: 120,
 	spin: 800,
@@ -144,7 +141,6 @@ export function motionTokens(): MotionTokens {
 		reveal: duration('--motion-duration-reveal', MOTION_TOKEN_FALLBACKS.reveal),
 		count: duration('--motion-duration-count', MOTION_TOKEN_FALLBACKS.count),
 		grow: duration('--motion-duration-grow', MOTION_TOKEN_FALLBACKS.grow),
-		ambient: duration('--motion-duration-ambient', MOTION_TOKEN_FALLBACKS.ambient),
 		fast: duration('--motion-duration-fast', MOTION_TOKEN_FALLBACKS.fast),
 		press: duration('--motion-duration-press', MOTION_TOKEN_FALLBACKS.press),
 		spin: duration('--motion-duration-spin', MOTION_TOKEN_FALLBACKS.spin),
