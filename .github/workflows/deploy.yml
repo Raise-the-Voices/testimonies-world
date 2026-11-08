@@ -64,7 +64,7 @@ jobs:
     # jobs.
     environment:
       name: production
-      url: https://demos.linkedtrust.us/testimonies/
+      url: https://cases.raisethevoices.org/testimonies/
 
     runs-on: ubuntu-latest
     steps:
@@ -130,7 +130,7 @@ jobs:
 
     environment:
       name: production
-      url: https://demos.linkedtrust.us/testimonies/
+      url: https://cases.raisethevoices.org/testimonies/
 
     runs-on: ubuntu-latest
     steps:

@@ -9,7 +9,7 @@
 # Usage:
 #   scripts/audit-lighthouse.sh                                         # dev server :3040
 #   scripts/audit-lighthouse.sh http://localhost:4173/testimonies/      # vite preview
-#   scripts/audit-lighthouse.sh https://demos.linkedtrust.us/testimonies/   # staging
+#   scripts/audit-lighthouse.sh https://cases.raisethevoices.org/testimonies/   # production
 #   scripts/audit-lighthouse.sh <url> 90 95 95 95                       # custom thresholds
 #
 # Defaults (override via positional args 2..5):

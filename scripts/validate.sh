@@ -13,7 +13,7 @@
 # Usage:
 #     scripts/validate.sh                                       # http://localhost:3040/testimonies/
 #     scripts/validate.sh http://localhost:4173/testimonies/    # vite preview
-#     scripts/validate.sh https://demos.linkedtrust.us/testimonies/   # staging
+#     scripts/validate.sh https://cases.raisethevoices.org/testimonies/   # production
 #     LAYER=1|2|3 scripts/validate.sh [url]                     # run a single layer
 #     SKIP_L1=1 SKIP_L2=1 SKIP_L3=1 scripts/validate.sh …       # opt out
 #

@@ -248,7 +248,7 @@ def site_base_url() -> str:
     # Use configured SITE_URL if set, else fall back to a sensible default.
     # We do NOT trust request.scheme here — emails are generated after the
     # request cycle ends (on_commit) and we don't have it.
-    return getattr(settings, 'SITE_URL', 'https://demos.linkedtrust.us/testimonies')
+    return getattr(settings, 'SITE_URL', 'https://cases.raisethevoices.org/testimonies')
 
 
 def emit_event(event: NotificationEvent) -> list[Notification]:
