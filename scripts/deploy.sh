@@ -5,9 +5,8 @@ set -eo pipefail
 #
 # Architecture:
 #   - The frontend SvelteKit build runs in GitHub Actions (Node 22) and
-#     arrives at $INCOMING_FRONTEND via `appleboy/scp-action@v0.1.4`
-#     before this script runs. We do NOT run `npm ci` or `npm run build`
-#     here.
+#     arrives at $INCOMING_FRONTEND over plain scp before this script
+#     runs. We do NOT run `npm ci` or `npm run build` here.
 #   - The source refresh below is a NARROW `git checkout origin/main
 #     -- <paths>` — never `git reset --hard`. Untracked host files
 #     (backend/.env, vetted per-host tweaks) survive.
@@ -17,9 +16,10 @@ set -eo pipefail
 #     checkout will refuse to overwrite a tracked-modified
 #     settings.py without `-f` — that refusal is the operator's
 #     signal to move any hand-edit into .env and re-run.
-#   - The 6-attempt smoke test at the end (entry-asset hash on disk
-#     must match what's served) catches the half-deployed class of
-#     failures that were the recurring cause of recent 500/502s.
+#   - The 10-attempt smoke test at the end (entry-asset hash on disk
+#     must match what's served, and the public API must answer 200)
+#     catches the half-deployed class of failures that were the
+#     recurring cause of recent 500/502s.
 
 cd /opt/rtv-cases
 PROJECT_ROOT="$(pwd)"
@@ -346,7 +346,7 @@ if ! grep -qE 'location[[:space:]]+/(accounts|admin|api)/[[:space:]]' /etc/nginx
     exit 1
 fi
 
-# --- Smoke test. Verifies five things atomically — each catches a
+# --- Smoke test. Verifies, atomically — each check catches a
 # different failure mode we hit on 2026-09-21:
 #
 #   1. node is bound on :3000 (not the OLD node from a previous deploy)
@@ -358,8 +358,15 @@ fi
 #   5. the asset actually returns 200
 #   6. bare-host root redirects (302) — proves fix/nginx-root-redirect
 #      is in the deployed nginx config
+#   7. the HTML is not cached (no-cache / no-store)
+#   8. the public API answers 200 — every other check reads only the
+#      frontend, so a site whose pages render while Django 500s behind
+#      them passes all of them. /api/persons/ is the endpoint the
+#      backend probe above already uses; it is readable by anonymous
+#      visitors, so a 200 means Django is serving rows, not just
+#      answering.
 #
-# All six must pass on the same attempt, otherwise the deploy is
+# All eight must pass on the same attempt, otherwise the deploy is
 # rejected.
 
 echo 'Verifying deploy...'
@@ -436,24 +443,44 @@ for attempt in 1 2 3 4 5 6 7 8 9 10; do
             ;;
     esac
 
-    if [ "$code" = 200 ] && [ "$root" = 302 ]; then
+    # 8. the public API must answer 200 through nginx. The frontend can
+    #    serve its HTML while Django 500s behind it — every check above
+    #    reads the frontend only. One request: the status code rides
+    #    along on the last line, the body is kept for the log.
+    api_response=$(curl -s -w '\n%{http_code}' --max-time 15 "$SITE/testimonies/api/persons/" || true)
+    api_code=$(printf '%s' "$api_response" | tail -n 1)
+    api_body=$(printf '%s' "$api_response" | sed '$d')
+
+    if [ "$code" = 200 ] && [ "$root" = 302 ] && [ "$api_code" = 200 ]; then
         echo "  entry asset OK: $asset_url"
         echo "  HTML/disk hash match: $entry"
         echo "  bare-host redirects: $root"
         echo "  HTML Cache-Control: $html_cache"
+        echo "  public API: $api_code"
         ok=1
         break
     fi
-    echo "  attempt $attempt: asset=$code root=$root"
+    echo "  attempt $attempt: asset=$code root=$root api=$api_code"
+    if [ "$api_code" != 200 ]; then
+        echo "  API response (first 300 bytes):"
+        printf '%s' "$api_body" | head -c 300
+        echo
+    fi
     sleep 3
 done
 
 if [ "$ok" != 1 ]; then
-    echo "DEPLOY FAILED: the site is serving pages but its assets do not resolve." >&2
+    echo "DEPLOY FAILED: the site is serving pages but its assets or its API do not resolve." >&2
     echo "Check:  systemctl status rtv-cases-frontend" >&2
     echo "        ls -la /opt/rtv-cases/frontend/build/server/chunks/client" >&2
     echo "        ls /var/www/cases/_app/immutable/entry/" >&2
     echo "        sudo journalctl -u rtv-cases-frontend -n 30" >&2
+    echo "        systemctl status rtv-cases-backend" >&2
+    echo "        sudo journalctl -u rtv-cases-backend -n 30" >&2
+    # The backend's own log goes into the deploy log, so a failed API
+    # check carries its traceback instead of only its status code.
+    echo "--- rtv-cases-backend, last 30 log lines ---" >&2
+    sudo journalctl -u rtv-cases-backend -n 30 --no-pager >&2 2>/dev/null || true
     exit 1
 fi
 
