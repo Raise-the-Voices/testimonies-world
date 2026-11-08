@@ -233,9 +233,10 @@
 			align-items: stretch;
 			gap: 0.25rem;
 		}
+		/* The two segments fill the row, so the control is a full-width
+		   segmented bar on a phone. */
 		:global(.toolbar-card .view-toggle) {
 			align-self: stretch;
-			justify-content: center;
 		}
 	}
 

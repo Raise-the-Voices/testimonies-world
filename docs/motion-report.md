@@ -1,7 +1,7 @@
 # Motion report — testimonies.world
 
-**Date:** 2026-11-07 · **Scope:** `frontend/` (SvelteKit 2 / Svelte 5.57.1) · 21 pages, 61 components
-**Status:** the finding stands as written; the work is now partly built. Phases 0–2, the status timeline, the token layer and the nav drawer are on `feat/motion-system` (PR #196). Every "current state" line cites a file and line as it was on 2026-11-07; every "proposal" line is mine, not the repo's. Character and scope confirmed 2026-11-07 (§8).
+**Date:** 2026-11-08 · **Scope:** `frontend/` (SvelteKit 2 / Svelte 5.57.1) · 21 pages, 61 components
+**Status:** the finding stands as written; the work is now partly built. Phases 0–2, the status timeline, the token layer, the nav drawer and the view toggle are on `feat/motion-system` (PR #196). Every "current state" line cites a file and line as it was on 2026-11-07; every "proposal" line is mine, not the repo's. Character and scope confirmed 2026-11-07 (§8).
 
 ---
 
@@ -232,9 +232,11 @@ The second is the better default for anything that enters a region of the screen
 | **Status breakdown chart** | bar segments grow from 0 to their width, left to right, once on mount | `--motion-slow` / `--ease-entrance` | bars render at final width |
 | **Status history timeline** | each event row fades in as it enters the viewport; a vertical rule draws down between events | `--motion-base` / `--ease-entrance` | rows render static, rule full height |
 | Skeleton shimmer | shimmer only while the load is genuinely pending | `--motion-slow` loop | static block (already correct, `Skeleton.svelte:371`) |
-| View toggle | pill slides between segments (FLIP) + content cross-fade | `--motion-base` / `--ease-standard` | instant swap |
+| View toggle | pill slides between segments + content cross-fade | `--motion-base` / `--ease-standard` | instant swap |
 
 The drawer row shipped as `--motion-duration-drawer` (320ms) with `--motion-ease-editorial`, and the scrim fades through `$lib/motion` so it fades **out** as well as in — the old CSS keyframe could only fade in, so the scrim vanished the instant the drawer closed. The page does not shift aside (G7): an off-canvas panel over the page is the intended mobile behaviour. The links inside the panel do not shift either; the panel's arrival is the motion, and a second movement inside a control the reader is already using would be decoration.
+
+**The view toggle shipped without a FLIP.** A FLIP exists to move a pill between segments of unequal width: measure, invert, play. Equal segments remove the need for it. The two buttons are the same width (`flex: 1 1 0`, `min-width: 92px`), the pill is exactly one of them (`width: calc(50% - 0.25rem)`, `left: 0.25rem`), and it moves with `transform: translateX(100%)` on `--motion-duration-overlay` / `--motion-ease-overlay`. The selection lives on the container as `data-mode`, so CSS owns the position: nothing is measured, nothing re-lays out, and the pill is in place from the first paint. Under reduced motion the transition is off and the pill jumps. The content cross-fade was already there (`in:fade` through `$lib/motion`). The control is about 40px wider than before, because both segments are the same width.
 
 ### 4.4 Stagger without CSS `nth-child` (fixes G5)
 
@@ -318,7 +320,7 @@ The plan is written as five phases. What shipped is one branch and one PR, `feat
 | 3 | `feat/motion-data-surfaces` | Chart bar growth, timeline reveal, view-toggle FLIP | medium | medium |
 | 4 | `test/motion-a11y` | Playwright spec: with `prefers-reduced-motion: reduce`, no element changes position between two frames; poster export PNG is byte-stable across two runs | none | low |
 
-Phases 0–2 and the timeline half of Phase 3 are in #196, together with the token layer (Phase 0's "replace the 15 literals" is finished and enforced by a test) and the nav drawer (§4.3). The chart (Phase 3, §8.3), the view-toggle FLIP and all of Phase 4 are not.
+Phases 0–2 and the timeline half of Phase 3 are in #196, together with the token layer (Phase 0's "replace the 15 literals" is finished and enforced by a test), the nav drawer and the view toggle (§4.3). The chart (Phase 3, §8.3) and all of Phase 4 are not.
 
 Phase 4's poster test is the one worth writing regardless: it pins G8 shut.
 
@@ -342,10 +344,14 @@ Phase 4's poster test is the one worth writing regardless: it pins G8 shut.
 3. **The chart stays still.** `StatusBreakdownChart.svelte` is left exactly as it is. Its own header records a "human-first & practical" decision against animating it, and that decision stands.
 4. **One branch, one PR.** `feat/motion-system` → PR #196. The draft's own test suite makes the migration one atomic unit — "no component imports from `svelte/transition`" only passes when every component has moved — so it is one feature commit rather than one commit per phase.
 
+**Taken (2026-11-08, Aya):**
+
+5. **The view toggle's pill: equal segments, pure slide.** Cards and List are the same width; the pill moves with a transform only, and CSS places it from the first paint. The cost is a control about 40px wider than the one that shipped before.
+
 **Still open — neither blocks the work that is done:**
 
-5. **Print.** The poster and the browser print stylesheet must stay static. Assumed out of scope for all motion work; §4.5 makes it a rule rather than a hope.
-6. **Fidelity.** No reference product named. The token set in §4.1 is the proposal to react to.
+6. **Print.** The poster and the browser print stylesheet must stay static. Assumed out of scope for all motion work; §4.5 makes it a rule rather than a hope.
+7. **Fidelity.** No reference product named. The token set in §4.1 is the proposal to react to.
 
 ---
 
@@ -353,11 +359,11 @@ Phase 4's poster test is the one worth writing regardless: it pins G8 shut.
 
 **Verified in this repo, by reading the files:** every file and line reference in §2 and §3. Svelte's `linear` default easing and its WAAPI-based transitions (`node_modules/svelte/src/internal/client/dom/elements/transitions.js:382,476`); the existence of `prefersReducedMotion` in the installed Svelte (`node_modules/svelte/src/motion/index.js:31`, version 5.57.1); the absence of `svelte/easing`, `svelte/motion` and any animation dependency in `src/` and `package.json`; the CI Lighthouse thresholds in `.lighthouserc.json`; that `html-to-image` receives the always-mounted off-screen export copy.
 
-**Verified by running it:** `npm run check` (0 errors, 0 warnings over 649 files), `npm run test` (255 tests, 14 files), `npm run build` (clean). The reduced-motion contract, the reveal contract and the counter are pinned in `motion.dom.test.ts`; the status timeline is pinned end to end — wire payload, parse, rows, badges, and the guarantee that no row of case history is left hidden — in `statusHistory.test.ts`; the token layer is pinned in `motion.test.ts` — every duration in `app.css` has a key in `$lib/motion.ts`, and the test fails if a stylesheet spells out a duration or an easing at a call site.
+**Verified by running it:** `npm run check` (0 errors, 0 warnings over 650 files), `npm run test` (264 tests, 15 files), `npm run build` (clean). The reduced-motion contract, the reveal contract and the counter are pinned in `motion.dom.test.ts`; the status timeline is pinned end to end — wire payload, parse, rows, badges, and the guarantee that no row of case history is left hidden — in `statusHistory.test.ts`; the token layer is pinned in `motion.test.ts` — every duration in `app.css` has a key in `$lib/motion.ts`, and the test fails if a stylesheet spells out a duration or an easing at a call site; the view toggle is pinned in `viewToggle.test.ts` — the pill exists, the two segments are the same width, the pill moves by a transform on a token, and the selection is on the container as `data-mode`.
 
 **Not verified, and stated as belief:** that `html-to-image` inlines *animated* computed values into the clone (the basis of G8's severity). This is the standard behaviour of the library, but it has not been reproduced in this repo. The Phase 4 poster-determinism test is what would settle it — and it is cheap.
 
 **Not verified: the motion itself.** Playwright's browser binary is not installed on this machine and the download is blocked, so nothing has been *seen* moving. The DOM tests cover the contract; the register of the movement is still a judgement that needs a human eye in a browser. The dev server for this branch is at `http://127.0.0.1:3141/testimonies`.
 
-**Not done:** the status chart (§8.3), the view-toggle FLIP, the capture-time freeze inside `caseCardExport.ts` (§4.5), and the Phase 4 Playwright spec — reduced motion end to end, and poster determinism. The public pages are untouched, as §8.2 says.
+**Not done:** the status chart (§8.3), the capture-time freeze inside `caseCardExport.ts` (§4.5), and the Phase 4 Playwright spec — reduced motion end to end, and poster determinism. The public pages are untouched, as §8.2 says.
 
