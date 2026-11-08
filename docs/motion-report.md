@@ -1,7 +1,7 @@
 # Motion report — testimonies.world
 
 **Date:** 2026-11-08 · **Scope:** `frontend/` (SvelteKit 2 / Svelte 5.57.1) · 21 pages, 61 components
-**Status:** the finding stands as written; the work is now partly built. Phases 0–2, the status timeline, the token layer, the nav drawer, the view toggle and the poster guard are on `feat/motion-system` (PR #196). Every "current state" line cites a file and line as it was on 2026-11-07; every "proposal" line is mine, not the repo's. Character and scope confirmed 2026-11-07 (§8).
+**Status:** the finding stands as written; the work is now partly built. Phases 0–2, the status timeline, the token layer, the nav drawer, the view toggle, the poster guard and the two E2E specs are on `feat/motion-system` (PR #196). Every "current state" line cites a file and line as it was on 2026-11-07; every "proposal" line is mine, not the repo's. Character and scope confirmed 2026-11-07 (§8).
 
 ---
 
@@ -336,7 +336,7 @@ The plan is written as five phases. What shipped is one branch and one PR, `feat
 | 3 | `feat/motion-data-surfaces` | Chart bar growth, timeline reveal, view-toggle FLIP | medium | medium |
 | 4 | `test/motion-a11y` | Playwright spec: with `prefers-reduced-motion: reduce`, no element changes position between two frames; poster export PNG is byte-stable across two runs | none | low |
 
-Phases 0–2 and the timeline half of Phase 3 are in #196, together with the token layer (Phase 0's "replace the 15 literals" is finished and enforced by a test), the nav drawer and the view toggle (§4.3). The chart (Phase 3, §8.3) and all of Phase 4 are not.
+Phases 0–2 and the timeline half of Phase 3 are in #196, together with the token layer (Phase 0's "replace the 15 literals" is finished and enforced by a test), the nav drawer and the view toggle (§4.3). Phase 4's two specs are written (`frontend/tests/motion.spec.ts`, and the poster determinism test in `frontend/tests/case-card.spec.ts`). The chart (Phase 3, §8.3) is not, and is not to be done — §8.3.
 
 Phase 4's poster test is the one worth writing regardless: it pins G8 shut.
 
@@ -344,10 +344,10 @@ Phase 4's poster test is the one worth writing regardless: it pins G8 shut.
 
 ## 7. Tests worth adding
 
-- **Reduced motion is honoured** — Playwright with `reducedMotion: 'reduce'`; sample the bounding box of the modal before and after it opens; assert it did not translate.
-- **Content is readable without motion** — with JS disabled, assert the primary heading and first paragraph of each key page are in the DOM.
-- **Poster determinism** — export the same card twice; assert the PNG bytes are identical. Catches any motion that leaked into the capture.
-- **Stagger order** — assert item *n* starts after item *n-1* on a 12-item list (this is what G5 breaks).
+- **Reduced motion is honoured** — Playwright with `reducedMotion: 'reduce'`; sample the bounding box of the modal before and after it opens; assert it did not translate. — **written**: `frontend/tests/motion.spec.ts`. The nav drawer is the surface, because it is where a CSS transition (the panel slides) and a Svelte transition (the scrim fades) meet: the first is stopped by a media query, the second only by the JavaScript guard. A second test asserts the drawer *does* move when motion is allowed, so the first cannot pass for the wrong reason.
+- **Content is readable without motion** — with JS disabled, assert the primary heading and first paragraph of each key page are in the DOM. — **not written**.
+- **Poster determinism** — export the same card twice; assert the PNG bytes are identical. Catches any motion that leaked into the capture. — **written**: `frontend/tests/case-card.spec.ts`.
+- **Stagger order** — assert item *n* starts after item *n-1* on a 12-item list (this is what G5 breaks). — **written** in `src/lib/statusHistory.test.ts`, at the DOM level.
 
 ---
 
@@ -379,7 +379,7 @@ Phase 4's poster test is the one worth writing regardless: it pins G8 shut.
 
 **Not verified, and stated as belief:** that `html-to-image` inlines *animated* computed values into the clone (the basis of G8's severity). This is the standard behaviour of the library, but it has not been reproduced in this repo. The Phase 4 poster-determinism test is what would settle it — and it is cheap.
 
-**Not verified: the motion itself.** Playwright's browser binary is not installed on this machine and the download is blocked, so nothing has been *seen* moving. The DOM tests cover the contract; the register of the movement is still a judgement that needs a human eye in a browser. The dev server for this branch is at `http://127.0.0.1:3141/testimonies`.
+**Not verified: the motion itself.** Playwright's browser binary is not installed on this machine and the download is blocked, so nothing has been *seen* moving. The two Phase 4 specs are written and are collected by Playwright (`npx playwright test --list` shows 79 tests in 6 files, including both), but they have never been executed — there is no browser here to execute them. The DOM tests cover the contract; the register of the movement is still a judgement that needs a human eye in a browser. The dev server for this branch is at `http://127.0.0.1:3141/testimonies`.
 
-**Not done:** the status chart (§8.3) and the Phase 4 Playwright spec — reduced motion end to end, and poster determinism. The public pages are untouched, as §8.2 says.
+**Not done:** the status chart (§8.3), and running the two Phase 4 specs somewhere that has a browser. The public pages are untouched, as §8.2 says.
 

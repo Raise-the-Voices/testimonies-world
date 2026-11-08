@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Locator } from '@playwright/test';
 
 /**
  * E2E: the interactive "Case Information Card" modal.
@@ -256,6 +256,18 @@ async function openCard(page: Page, personId: number) {
 	const dialog = page.getByRole('dialog', { name: 'Case information card' });
 	await expect(dialog).toBeVisible();
 	return dialog;
+}
+
+/** Click the download button and read back the file it produced. */
+async function capturePoster(page: Page, download: Locator): Promise<Buffer> {
+	const [downloadEvent] = await Promise.all([
+		page.waitForEvent('download'),
+		download.click(),
+	]);
+	const stream = await downloadEvent.createReadStream();
+	const chunks: Buffer[] = [];
+	for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+	return Buffer.concat(chunks);
 }
 
 /** The day the poster is dated — the day the sheet was produced. */
@@ -537,6 +549,35 @@ test.describe('Case information card', () => {
 			await expect(dialog.locator('.case-card-export-note')).toHaveText(
 				'The poster carries the same details as the public case page.',
 			);
+		},
+	);
+
+	test(
+		'exports the same poster twice, byte for byte',
+		{
+			tag: ['@critical'],
+			annotation: [{ type: 'ticket', description: 'case-info-card' }],
+		},
+		async ({ page }) => {
+			await stubCase(page, FULL_PERSON, cardPayload({ exportable: true }));
+			const dialog = await openCard(page, PERSON_ID);
+
+			// The fonts have to be in before the first export: the
+			// sheet is laid out with whatever the browser has at that
+			// moment, and a poster drawn in a fallback font is a
+			// different file.
+			await page.evaluate(() => document.fonts.ready);
+
+			const download = dialog.getByRole('button', { name: 'Download poster (PNG)' });
+			const first = await capturePoster(page, download);
+			const second = await capturePoster(page, download);
+
+			expect(first.length).toBeGreaterThan(1000);
+			// The poster is a published file. Anything moving when it
+			// was captured — a reveal caught half-way, a transition
+			// still running — would make the two exports differ, and
+			// the same case would publish two different posters.
+			expect(second.equals(first)).toBe(true);
 		},
 	);
 });
