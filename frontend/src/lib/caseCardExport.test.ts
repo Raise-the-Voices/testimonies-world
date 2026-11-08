@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { posterFilename, sameOriginMediaUrl } from './caseCardExport';
 
 /**
@@ -12,6 +15,10 @@ import { posterFilename, sameOriginMediaUrl } from './caseCardExport';
 
 const ORIGIN = 'https://cases.raisethevoices.org';
 const BASE = '/testimonies';
+
+const srcDir = fileURLToPath(new URL('..', import.meta.url));
+const appCss = readFileSync(join(srcDir, 'app.css'), 'utf8');
+const cardSource = readFileSync(join(srcDir, 'lib/CaseInfoCard.svelte'), 'utf8');
 
 describe('posterFilename', () => {
 	it('names the file after the case reference', () => {
@@ -73,5 +80,38 @@ describe('sameOriginMediaUrl', () => {
 
 	it('leaves an empty URL alone', () => {
 		expect(sameOriginMediaUrl('', ORIGIN, BASE)).toBe('');
+	});
+});
+
+/**
+ * The poster guard.
+ *
+ * The poster is captured from the off-screen export copy of the card,
+ * and `html-to-image` inlines the computed styles of whatever it finds
+ * — so anything moving at that moment ships inside the file. The guard
+ * is in the stylesheet because that is where the motion lives.
+ */
+describe('the poster guard', () => {
+	const guard =
+		/\.case-card--export,\s*\.case-card--export \* \{([^}]*)\}/.exec(appCss)?.[1] ?? '';
+
+	it('switches off every animation and transition inside the export copy', () => {
+		expect(guard).toMatch(/animation:\s*none\s*!important/);
+		expect(guard).toMatch(/transition:\s*none\s*!important/);
+	});
+
+	it('never captures the card in its hidden reveal state', () => {
+		// The export copy sits 20 000px off-screen: a revealed element
+		// inside it would never reach the viewport, and the file would
+		// be a blank sheet.
+		expect(appCss).toContain(".case-card--export [data-reveal='pending']");
+	});
+
+	it('gives the card itself nothing that could be caught mid-flight', () => {
+		// A Svelte transition is a Web Animations animation, and no CSS
+		// rule can switch one off — so the card must not carry one.
+		expect(cardSource).not.toMatch(/(?:^|[\s;{])transition:/);
+		expect(cardSource).not.toMatch(/(?:^|[\s;{])animation:/);
+		expect(cardSource).not.toContain('use:reveal');
 	});
 });

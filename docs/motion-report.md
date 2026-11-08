@@ -143,7 +143,7 @@ Today the poster classes (`.case-card*`) are not in the global entrance list, so
 | **G5** | Stagger is hardcoded to 8 children in CSS | `app.css:281-290` | Item 9+ animates out of order; cannot extend without editing CSS |
 | **G6** | Three modal behaviours | `Modal` / `MediaUploadModal` / `ConfirmModal` / `CaseInfoCardModal` | Same action, different physical response depending on which modal |
 | **G7** | ~~Nav drawer does not move the page~~ | `+layout.svelte:459-473` | **Not a gap** — the drawer is the mobile off-canvas mirror; overlaying the page there is correct |
-| **G8** | Poster capture has no motion guard | `caseCardExport.ts:96`; `CaseInfoCard.svelte:87` | A future card animation silently corrupts downloaded posters |
+| **G8** | Poster capture has no motion guard | `caseCardExport.ts:96`; `CaseInfoCard.svelte:87` | A future card animation silently corrupts downloaded posters — **closed**: the export subtree is pinned still in `app.css`, and `caseCardExport.test.ts` fails if the card grows a transition |
 | **G9** | No motion tests | `frontend/tests/` has no animation spec | G1–G8 can regress silently |
 | **G10** | The status history never reached the page — `PersonDetailSchema` stripped `status_history` | `schemas/overlays.ts` (the key is not declared); `api.ts:230-237` (Zod strips undeclared keys) | The timeline and the transition banner have never been visible on any case |
 
@@ -276,6 +276,24 @@ Two lines, both in the exporter's path:
 
 Rule for anything added later: **no motion inside the poster subtree, ever.** The poster is a file that gets printed, pasted, and published; it must be identical every time.
 
+**What shipped.** The guard is in the stylesheet, where the motion lives:
+
+```css
+.case-card--export,
+.case-card--export * {
+	animation: none !important;
+	transition: none !important;
+}
+.case-card--export [data-reveal='pending'] {
+	opacity: 1 !important;
+	transform: none !important;
+}
+```
+
+The second rule is not decoration: the export copy sits 20 000px off-screen, so a revealed element inside it would never reach the viewport and the captured file would be a blank sheet. `caseCardExport.test.ts` pins both rules, and fails if the card component grows a transition — a Svelte transition is a Web Animations animation, which no CSS rule can switch off.
+
+One piece is still open: cancelling whatever is still running at the moment of capture, inside `caseCardExport.ts`. That file is being rewritten on `fix/case-card-poster-csp`, so the call goes in when that branch lands.
+
 ---
 
 ## 5. Guardrails
@@ -341,5 +359,5 @@ Phase 4's poster test is the one worth writing regardless: it pins G8 shut.
 
 **Not verified: the motion itself.** Playwright's browser binary is not installed on this machine and the download is blocked, so nothing has been *seen* moving. The DOM tests cover the contract; the register of the movement is still a judgement that needs a human eye in a browser. The dev server for this branch is at `http://127.0.0.1:3141/testimonies`.
 
-**Not done:** the status chart (§8.3), the view-toggle FLIP, the poster capture guard, and the Phase 4 Playwright spec — reduced motion end to end, and poster determinism. The public pages are untouched, as §8.2 says.
+**Not done:** the status chart (§8.3), the view-toggle FLIP, the capture-time freeze inside `caseCardExport.ts` (§4.5), and the Phase 4 Playwright spec — reduced motion end to end, and poster determinism. The public pages are untouched, as §8.2 says.
 

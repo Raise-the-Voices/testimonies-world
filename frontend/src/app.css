@@ -438,6 +438,29 @@ h3 { font-size: 1.15rem; }
 	transform: none;
 }
 
+/* ============================================================================
+   The poster guard
+   --------------------------------------------------------------------------
+   The poster is a FILE. It is captured from the off-screen export copy
+   of the case card, and `html-to-image` inlines the computed styles of
+   whatever it finds — so a single frame of a running animation ships
+   inside the PNG, and the file is no longer the poster the screen
+   showed. Nothing inside the export copy may move, and nothing inside
+   it may be caught in a hidden state.
+   ========================================================================== */
+.case-card--export,
+.case-card--export * {
+	animation: none !important;
+	transition: none !important;
+}
+/* The export copy sits 20 000px off-screen, so a revealed element
+   inside it would never reach the viewport and would stay hidden —
+   the file would be a blank sheet. */
+.case-card--export [data-reveal='pending'] {
+	opacity: 1 !important;
+	transform: none !important;
+}
+
 /* Grid cascade — the delay follows the card's COLUMN, so a row unfurls
    left to right instead of the whole grid arriving at once. `mod()`
    gives the column index from the card's index. */
