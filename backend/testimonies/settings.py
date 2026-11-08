@@ -367,8 +367,9 @@ DEFAULT_FROM_EMAIL = config(
 )
 
 # Public base URL used in notification email bodies. Honored by the
-# casework notifications module — keep this in sync with the deploy target.
-SITE_URL = config('SITE_URL', default='https://demos.linkedtrust.us/testimonies')
+# casework notifications module — keep this in sync with the deploy target
+# (VM 511, cases.raisethevoices.org, app under the /testimonies base path).
+SITE_URL = config('SITE_URL', default='https://cases.raisethevoices.org/testimonies')
 
 # DRF
 REST_FRAMEWORK = {

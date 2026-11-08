@@ -16,9 +16,9 @@ Person-centered casework platform for people facing oppression — enforced disa
 - **Audit**: the script logs every run to journald via `StandardOutput=journal` on the unit. Check `journalctl -u rtv-cases-db-backup.service --since='-7 days'`.
 
 ## Dev access
-- URL: `demos.linkedtrust.us/testimonies/`
-- Django admin: `demos.linkedtrust.us/testimonies/admin/` — credentials in the operator onboarding doc (1Password / sealed gist). Do not commit credentials to this repo.
-- API root: `demos.linkedtrust.us/testimonies/api/`
+- URL: `cases.raisethevoices.org/testimonies/`
+- Django admin: `cases.raisethevoices.org/testimonies/admin/` — credentials in the operator onboarding doc (1Password / sealed gist). Do not commit credentials to this repo.
+- API root: `cases.raisethevoices.org/testimonies/api/`
 
 ## Project structure
 ```
