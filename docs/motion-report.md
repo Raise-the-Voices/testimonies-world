@@ -1,7 +1,7 @@
 # Motion report — testimonies.world
 
 **Date:** 2026-11-08 · **Scope:** `frontend/` (SvelteKit 2 / Svelte 5.57.1) · 21 pages, 61 components
-**Status:** the finding stands as written; the work is now partly built. Phases 0–2, the status timeline, the token layer, the nav drawer and the view toggle are on `feat/motion-system` (PR #196). Every "current state" line cites a file and line as it was on 2026-11-07; every "proposal" line is mine, not the repo's. Character and scope confirmed 2026-11-07 (§8).
+**Status:** the finding stands as written; the work is now partly built. Phases 0–2, the status timeline, the token layer, the nav drawer, the view toggle and the poster guard are on `feat/motion-system` (PR #196). Every "current state" line cites a file and line as it was on 2026-11-07; every "proposal" line is mine, not the repo's. Character and scope confirmed 2026-11-07 (§8).
 
 ---
 
@@ -294,7 +294,23 @@ Rule for anything added later: **no motion inside the poster subtree, ever.** Th
 
 The second rule is not decoration: the export copy sits 20 000px off-screen, so a revealed element inside it would never reach the viewport and the captured file would be a blank sheet. `caseCardExport.test.ts` pins both rules, and fails if the card component grows a transition — a Svelte transition is a Web Animations animation, which no CSS rule can switch off.
 
-One piece is still open: cancelling whatever is still running at the moment of capture, inside `caseCardExport.ts`. That file is being rewritten on `fix/case-card-poster-csp`, so the call goes in when that branch lands.
+One piece was still open and is now closed: cancelling whatever is still running at the moment of capture, inside `caseCardExport.ts`. The stylesheet can only stop CSS motion; a Svelte transition is a Web Animations animation, and no CSS rule can touch it. `renderPosterBlob` now calls `freezeMotion(node)` on the sheet before the clone is taken:
+
+```ts
+for (let pass = 0; pass < 3; pass += 1) {
+	const running = node.getAnimations({ subtree: true });
+	if (running.length === 0) return;
+	for (const animation of running) {
+		try {
+			animation.finish();
+		} catch {
+			// An animation with no effect left cannot be finished.
+		}
+	}
+}
+```
+
+`finish()`, not `cancel()`: finishing resolves the animation, so a Svelte transition ends the way it was meant to and the element is left in its settled state — the state a poster wants. Cancelling would drop the animation's promise and leave the element wherever the transition had put it. The sweep repeats because a transition in its delay phase is a dummy animation, and finishing that is what starts the real one. `caseCardExport.test.ts` pins all three cases.
 
 ---
 
@@ -359,11 +375,11 @@ Phase 4's poster test is the one worth writing regardless: it pins G8 shut.
 
 **Verified in this repo, by reading the files:** every file and line reference in §2 and §3. Svelte's `linear` default easing and its WAAPI-based transitions (`node_modules/svelte/src/internal/client/dom/elements/transitions.js:382,476`); the existence of `prefersReducedMotion` in the installed Svelte (`node_modules/svelte/src/motion/index.js:31`, version 5.57.1); the absence of `svelte/easing`, `svelte/motion` and any animation dependency in `src/` and `package.json`; the CI Lighthouse thresholds in `.lighthouserc.json`; that `html-to-image` receives the always-mounted off-screen export copy.
 
-**Verified by running it:** `npm run check` (0 errors, 0 warnings over 650 files), `npm run test` (264 tests, 15 files), `npm run build` (clean). The reduced-motion contract, the reveal contract and the counter are pinned in `motion.dom.test.ts`; the status timeline is pinned end to end — wire payload, parse, rows, badges, and the guarantee that no row of case history is left hidden — in `statusHistory.test.ts`; the token layer is pinned in `motion.test.ts` — every duration in `app.css` has a key in `$lib/motion.ts`, and the test fails if a stylesheet spells out a duration or an easing at a call site; the view toggle is pinned in `viewToggle.test.ts` — the pill exists, the two segments are the same width, the pill moves by a transform on a token, and the selection is on the container as `data-mode`.
+**Verified by running it:** `npm run check` (0 errors, 0 warnings over 650 files), `npm run test` (266 tests, 15 files), `npm run build` (clean). The reduced-motion contract, the reveal contract and the counter are pinned in `motion.dom.test.ts`; the status timeline is pinned end to end — wire payload, parse, rows, badges, and the guarantee that no row of case history is left hidden — in `statusHistory.test.ts`; the token layer is pinned in `motion.test.ts` — every duration in `app.css` has a key in `$lib/motion.ts`, and the test fails if a stylesheet spells out a duration or an easing at a call site; the view toggle is pinned in `viewToggle.test.ts` — the pill exists, the two segments are the same width, the pill moves by a transform on a token, and the selection is on the container as `data-mode`; the poster guard is pinned in `caseCardExport.test.ts` — the export subtree carries no motion, the card carries no transition of its own, and the capture-time freeze finishes every animation inside the sheet.
 
 **Not verified, and stated as belief:** that `html-to-image` inlines *animated* computed values into the clone (the basis of G8's severity). This is the standard behaviour of the library, but it has not been reproduced in this repo. The Phase 4 poster-determinism test is what would settle it — and it is cheap.
 
 **Not verified: the motion itself.** Playwright's browser binary is not installed on this machine and the download is blocked, so nothing has been *seen* moving. The DOM tests cover the contract; the register of the movement is still a judgement that needs a human eye in a browser. The dev server for this branch is at `http://127.0.0.1:3141/testimonies`.
 
-**Not done:** the status chart (§8.3), the capture-time freeze inside `caseCardExport.ts` (§4.5), and the Phase 4 Playwright spec — reduced motion end to end, and poster determinism. The public pages are untouched, as §8.2 says.
+**Not done:** the status chart (§8.3) and the Phase 4 Playwright spec — reduced motion end to end, and poster determinism. The public pages are untouched, as §8.2 says.
 

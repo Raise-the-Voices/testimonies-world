@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { posterFilename, sameOriginMediaUrl } from './caseCardExport';
+import { posterFilename, sameOriginMediaUrl, freezeMotion } from './caseCardExport';
 
 /**
  * Tests for the export helpers.
@@ -80,6 +80,60 @@ describe('sameOriginMediaUrl', () => {
 
 	it('leaves an empty URL alone', () => {
 		expect(sameOriginMediaUrl('', ORIGIN, BASE)).toBe('');
+	});
+});
+
+/**
+ * The capture-time freeze.
+ *
+ * `html-to-image` inlines the computed styles of what it clones, so
+ * anything moving at that moment ships inside the poster. The
+ * stylesheet kills the CSS motion; this kills the Web Animations
+ * motion, which no CSS rule can touch.
+ */
+describe('freezeMotion', () => {
+	/** A sheet whose `getAnimations()` hands back one round per call. */
+	function sheetWith(rounds: { name: string; fails?: boolean }[][]) {
+		const finished: string[] = [];
+		let call = 0;
+		const node = {
+			getAnimations: () =>
+				(rounds[call++] ?? []).map((spec) => ({
+					finish: () => {
+						if (spec.fails) throw new Error('This animation has no effect left.');
+						finished.push(spec.name);
+					},
+				})),
+		} as unknown as HTMLElement;
+		return { node, finished };
+	}
+
+	it('finishes every animation running inside the sheet', () => {
+		const { node, finished } = sheetWith([[{ name: 'fade' }, { name: 'slide' }]]);
+
+		freezeMotion(node);
+
+		expect(finished).toEqual(['fade', 'slide']);
+	});
+
+	it('follows an animation that a delay phase starts', () => {
+		// Svelte runs a dummy animation through the delay, and finishing
+		// that is what starts the real one.
+		const { node, finished } = sheetWith([[{ name: 'delay' }], [{ name: 'fade' }]]);
+
+		freezeMotion(node);
+
+		expect(finished).toEqual(['delay', 'fade']);
+	});
+
+	it('keeps going when one animation cannot be finished', () => {
+		const { node, finished } = sheetWith([
+			[{ name: 'broken', fails: true }, { name: 'fade' }],
+		]);
+
+		freezeMotion(node);
+
+		expect(finished).toEqual(['fade']);
 	});
 });
 
