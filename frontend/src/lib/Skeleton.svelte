@@ -165,17 +165,8 @@
 		);
 		background-size: 200% 100%;
 		background-repeat: no-repeat;
-		animation: skeleton-shimmer 1.4s ease-in-out infinite;
+		animation: skeleton-shimmer var(--motion-duration-shimmer) var(--motion-ease-loop) infinite;
 		border-radius: 4px;
-	}
-
-	@keyframes skeleton-shimmer {
-		0% {
-			background-position: 200% 0;
-		}
-		100% {
-			background-position: -200% 0;
-		}
 	}
 
 	/* === text === */
@@ -271,7 +262,7 @@
 		);
 		background-size: 200% 100%;
 		background-repeat: no-repeat;
-		animation: skeleton-shimmer 1.4s ease-in-out infinite;
+		animation: skeleton-shimmer var(--motion-duration-shimmer) var(--motion-ease-loop) infinite;
 	}
 	.skeleton-stat-card-body {
 		padding: 0.6rem 0;

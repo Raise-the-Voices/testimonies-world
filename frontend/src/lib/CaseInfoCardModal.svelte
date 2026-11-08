@@ -262,4 +262,11 @@
 		width: var(--card-poster-width-export);
 		pointer-events: none;
 	}
+
+	/* Respect the reader's reduced-motion setting. */
+	@media (prefers-reduced-motion: reduce) {
+		.case-card-modal-close {
+			transition: none;
+		}
+	}
 </style>

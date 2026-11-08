@@ -1095,9 +1095,9 @@ import Skeleton from '$lib/Skeleton.svelte';
 		font-size: 0.95rem;
 		line-height: 1.45;
 		transition:
-			border-color 0.15s ease,
-			box-shadow 0.15s ease,
-			background 0.15s ease;
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay),
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay),
+			background var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.field textarea {
 		min-height: 5rem;
@@ -1255,10 +1255,10 @@ import Skeleton from '$lib/Skeleton.svelte';
 		cursor: pointer;
 		user-select: none;
 		transition:
-			background 0.15s ease,
-			border-color 0.15s ease,
-			color 0.15s ease,
-			box-shadow 0.15s ease;
+			background var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay),
+			color var(--motion-duration-fast) var(--motion-ease-overlay),
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.category-pill:hover {
 		border-color: var(--color-primary-light);
@@ -1320,10 +1320,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 		border: 2px solid currentColor;
 		border-right-color: transparent;
 		border-radius: 50%;
-		animation: spin 0.7s linear infinite;
-	}
-	@keyframes spin {
-		to { transform: rotate(360deg); }
+		animation: spin var(--motion-duration-spin) var(--motion-ease-spin) infinite;
 	}
 
 	@media (max-width: 720px) {

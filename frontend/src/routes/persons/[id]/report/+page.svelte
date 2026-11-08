@@ -19,7 +19,7 @@
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { fly } from 'svelte/transition';
+	import { drop } from '$lib/motion';
 	import { onMount, untrack } from 'svelte';
 	import { user, isVolunteer } from '$lib/session';
 	import { getPerson, ApiError } from '$lib/api';
@@ -124,7 +124,7 @@
 		</div>
 	</div>
 {:else if personError}
-	<div class="form-error form-error-server" role="alert" transition:fly={{ y: -8, duration: 200 }}>
+	<div class="form-error form-error-server" role="alert" transition:drop>
 		<span class="form-error-icon" aria-hidden="true">!</span>
 		<span>{personError}</span>
 	</div>

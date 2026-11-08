@@ -11,7 +11,7 @@
 	  - Optional × button when `dismissable={true}`.
 -->
 <script lang="ts">
-	import { fly } from 'svelte/transition';
+	import { drop } from '$lib/motion';
 
 	interface Props {
 		kind: 'success' | 'error' | 'info';
@@ -54,7 +54,7 @@
 		class="banner banner-{kind}"
 		role={kind === 'error' ? 'alert' : 'status'}
 		aria-live={kind === 'error' ? 'assertive' : 'polite'}
-		transition:fly={{ y: -8, duration: 220, opacity: 0 }}
+		transition:drop
 	>
 		<span class="banner-icon" aria-hidden="true">{icon}</span>
 		<span class="banner-text">{message}</span>

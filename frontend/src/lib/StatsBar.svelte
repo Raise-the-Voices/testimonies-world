@@ -18,6 +18,7 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
 	import StatisticsCard from './StatisticsCard.svelte';
+	import { countUp } from './motion';
 
 	export type StatItem = {
 		label: string;
@@ -58,7 +59,20 @@
 		{#each items as it, i (it.label)}
 			{#if i > 0}<span class="stat-divider" aria-hidden="true"></span>{/if}
 			<div class="stat-item">
-				<span class="stat-number">{it.value()}</span>
+				<!-- The count-up writes into .stat-number-digits. The static
+				     fallback carries the number for readers without
+				     scripting; .sr-only carries it for screen readers, so
+				     the value is announced once either way. -->
+				<span class="stat-number">
+					<span
+						class="stat-number-digits"
+						aria-hidden="true"
+						style="min-width: {String(it.value()).length}ch"
+						use:countUp={{ value: it.value(), when: 'visible' }}
+					></span>
+					<span class="stat-number-fallback" aria-hidden="true">{it.value()}</span>
+					<span class="sr-only">{it.value()}</span>
+				</span>
 				<span class="stat-label">{it.label}</span>
 			</div>
 		{/each}
@@ -77,7 +91,7 @@
 		justify-content: space-around;
 		gap: 1rem;
 		flex-wrap: wrap;
-		animation: fadeSlideUp 0.4s ease both;
+		animation: fadeSlideUp var(--motion-duration-enter) var(--motion-ease-editorial) both;
 	}
 	.stat-item {
 		display: flex;
@@ -92,6 +106,25 @@
 		color: var(--color-primary);
 		line-height: 1.1;
 		font-variant-numeric: tabular-nums;
+	}
+	/* The count-up writes into .stat-number-digits. Until scripting runs,
+	   the static fallback shows the number; with scripting the fallback is
+	   hidden and the animated slot takes over. The slot reserves the final
+	   width (min-width, set inline from the value) so the count causes no
+	   layout shift. */
+	.stat-number-fallback {
+		display: inline;
+	}
+	.stat-number-digits {
+		display: none;
+	}
+	@media (scripting: enabled) {
+		.stat-number-fallback {
+			display: none;
+		}
+		.stat-number-digits {
+			display: inline-block;
+		}
 	}
 	.stat-label {
 		font-size: 0.78rem;

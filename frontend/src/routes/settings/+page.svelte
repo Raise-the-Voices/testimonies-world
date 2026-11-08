@@ -181,7 +181,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 		background: var(--color-border-light);
 		border-radius: 11px;
 		position: relative;
-		transition: background 0.15s ease;
+		transition: background var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.switch-thumb {
 		position: absolute;
@@ -192,7 +192,7 @@ import Skeleton from '$lib/Skeleton.svelte';
 		background: white;
 		border-radius: 50%;
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
-		transition: transform 0.15s ease;
+		transition: transform var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.switch input:checked + .switch-track {
 		background: var(--color-primary);
@@ -222,5 +222,12 @@ import Skeleton from '$lib/Skeleton.svelte';
 		color: var(--color-text-light);
 		border-radius: var(--radius-input);
 		font-size: 0.88rem;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.switch-track,
+		.switch-thumb {
+			transition: none;
+		}
 	}
 </style>

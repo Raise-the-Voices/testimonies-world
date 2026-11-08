@@ -16,7 +16,7 @@
   independently on long payloads.
 -->
 <script lang="ts">
-	import { fly, fade } from 'svelte/transition';
+	import { lift, rise } from '$lib/motion';
 	import { toast, dismissToast, type Toast } from '$lib/toast';
 
 	let current: Toast | null = $state(null);
@@ -100,7 +100,7 @@
 		role="status"
 		aria-live="polite"
 		aria-atomic="true"
-		transition:fly={{ y: 16, duration: 200 }}
+		transition:lift
 	>
 		<div class="toast toast-{current.variant}">
 			<div class="toast-main">
@@ -130,7 +130,7 @@
 			</div>
 
 			{#if current.details && detailsOpen}
-				<div class="toast-details" transition:fly={{ y: 4, duration: 160 }}>
+				<div class="toast-details" transition:rise>
 					<div class="toast-details-header">
 						<span class="toast-details-label">JSON response</span>
 						<button
@@ -154,7 +154,7 @@
 		z-index: 200;
 		max-width: min(420px, calc(100vw - 2.5rem));
 		pointer-events: none;
-		transition: max-width 0.15s ease;
+		transition: max-width var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	/* When details are open, give the toast more room so the JSON
 	   block reads comfortably. */

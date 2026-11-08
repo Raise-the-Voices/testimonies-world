@@ -5,6 +5,7 @@
 	import { handleApiError } from '$lib/api/handleError';
 	import Icon from '$lib/Icon.svelte';
 	import StatsBar from '$lib/StatsBar.svelte';
+	import { reveal } from '$lib/motion';
 	import type { PageData } from './$types';
 	import type { Statistics } from '$lib/types';
 
@@ -140,7 +141,7 @@
 		</div>
 	</section>
 
-	<section class="help-section">
+	<section class="help-section" use:reveal>
 		<header class="section-header">
 			<h2 class="section-title">How to help</h2>
 			<p class="section-subtitle">
@@ -179,8 +180,8 @@
 		box-shadow: var(--shadow-card);
 		padding: 2.25rem 2rem;
 		text-align: center;
-		animation: fadeSlideUp 0.4s ease both;
-		animation-delay: 0.05s;
+		animation: fadeSlideUp var(--motion-duration-enter) var(--motion-ease-editorial) both;
+		animation-delay: var(--motion-stagger-step);
 	}
 	.hero-text {
 		max-width: var(--max-w-prose);
@@ -265,9 +266,6 @@
 		border-top: 1px solid var(--color-border-light);
 		margin: 1.1rem 0;
 	}
-	.help-item {
-		animation: fadeSlideUp 0.4s ease both;
-	}
 	.help-item h3 {
 		font-size: 1.05rem;
 		font-weight: 700;
@@ -292,8 +290,7 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.hero-card,
-		.help-item {
+		.hero-card {
 			animation: none;
 		}
 		.btn-lg:hover {

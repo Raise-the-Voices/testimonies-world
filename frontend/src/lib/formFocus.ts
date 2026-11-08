@@ -43,6 +43,8 @@
  * follows it.
  */
 
+import { prefersReducedMotion } from '$lib/motion';
+
 export interface FocusFirstErrorOptions {
 	/** Error keys in visual top-to-bottom order on the form. The first
 	 *  key that appears in `errs` wins. */
@@ -83,7 +85,10 @@ export function focusFirstFormError(
 		} catch {
 			/* element not focusable — still scroll to it. */
 		}
-		target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		target.scrollIntoView({
+			behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+			block: 'center'
+		});
 		return;
 	}
 }

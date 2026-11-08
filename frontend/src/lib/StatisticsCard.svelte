@@ -8,11 +8,16 @@
     variant="skeleton"  no chrome — centered two-line skeleton for the
                         inline stats-bar loading state
 
-  Chrome (border, shadow, radius, padding, fadeSlideUp animation,
+  Chrome (border, shadow, radius, padding, entrance animation,
   hover/focus, reduced-motion fallback) lives once on the `.card`
   class. Section and KPI both compose off it; skeleton does not, by
   design — it has to fit inside a divider-separated inline stats-bar
   on the home page, where card chrome would be wrong.
+
+  The section variant animates in one of two ways, chosen by the
+  caller: a load-time fade by default, or the scroll reveal when
+  `revealIndex` is passed. The dashboard uses the default; the public
+  statistics page opts in.
 
   All visuals are tokens: --color-*, --radius-card, --shadow-card,
   --transition-card, --skeleton-bg, --skeleton-bg-static. No raw
@@ -25,7 +30,13 @@
 		variant: 'section';
 		title: string;
 		meta?: string;
-		delayMs?: number;
+		/**
+		 * Opt in to the scroll-reveal entrance (the editorial register).
+		 * The value is the card's position in the grid and drives the
+		 * stagger delay. Leave it undefined and the card keeps the
+		 * load-time fade instead — that is what the dashboard wants.
+		 */
+		revealIndex?: number;
 		children?: import('svelte').Snippet;
 	}
 
@@ -56,6 +67,7 @@
 
 <script lang="ts">
 	import Skeleton from './Skeleton.svelte';
+	import { reveal } from './motion';
 
 	let props: StatisticsCardProps = $props();
 
@@ -69,14 +81,32 @@
 	});
 </script>
 
+{#snippet sectionBody(
+	title: string,
+	meta: string | undefined,
+	children: import('svelte').Snippet | undefined
+)}
+	<header class="section-header">
+		<h2>{title}</h2>
+		{#if meta}<span class="section-meta">{meta}</span>{/if}
+	</header>
+	{@render children?.()}
+{/snippet}
+
 {#if props.variant === 'section'}
-	<article class="card section" style="animation-delay: {props.delayMs ?? 0}ms">
-		<header class="section-header">
-			<h2>{props.title}</h2>
-			{#if props.meta}<span class="section-meta">{props.meta}</span>{/if}
-		</header>
-		{@render props.children?.()}
-	</article>
+	{#if props.revealIndex !== undefined}
+		<!-- The reveal owns the entrance here, so the load-time fade is
+		     switched off (`.section-reveal`): a CSS animation outranks
+		     the `[data-reveal]` opacity/transform rules and would pin
+		     the card visible while it is still meant to be hidden. -->
+		<article class="card section section-reveal" use:reveal={{ index: props.revealIndex }}>
+			{@render sectionBody(props.title, props.meta, props.children)}
+		</article>
+	{:else}
+		<article class="card section">
+			{@render sectionBody(props.title, props.meta, props.children)}
+		</article>
+	{/if}
 {:else if props.variant === 'kpi'}
 	{#if props.href}
 		<a
@@ -135,7 +165,11 @@
 
 	/* Section-only entrance animation (matches prior StatCard). */
 	.section {
-		animation: fadeSlideUp 0.4s ease both;
+		animation: fadeSlideUp var(--motion-duration-enter) var(--motion-ease-editorial) both;
+	}
+	/* The scroll reveal replaces the load-time fade — see the template. */
+	.section-reveal {
+		animation: none;
 	}
 
 	/* === Section variant === */
@@ -206,7 +240,7 @@
 		height: 1.75rem;
 		background: var(--skeleton-bg);
 		border-radius: 4px;
-		animation: skeleton-shimmer 1.4s ease-in-out infinite;
+		animation: skeleton-shimmer var(--motion-duration-shimmer) var(--motion-ease-loop) infinite;
 	}
 
 	/* === Skeleton variant ===

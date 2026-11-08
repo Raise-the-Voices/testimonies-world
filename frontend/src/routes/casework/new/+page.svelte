@@ -826,9 +826,9 @@
 		font-size: 0.95rem;
 		line-height: 1.45;
 		transition:
-			border-color 0.15s ease,
-			box-shadow 0.15s ease,
-			background 0.15s ease;
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay),
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay),
+			background var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.field textarea {
 		min-height: 5rem;
@@ -918,12 +918,7 @@
 		border: 2px solid currentColor;
 		border-right-color: transparent;
 		border-radius: 50%;
-		animation: spin 0.7s linear infinite;
-	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
+		animation: spin var(--motion-duration-spin) var(--motion-ease-spin) infinite;
 	}
 
 	/* === Responsive === */
@@ -959,8 +954,6 @@
 		.field input,
 		.field select,
 		.field textarea,
-		.person-pill,
-		.person-check,
 		.spinner {
 			transition: none;
 			animation: none;

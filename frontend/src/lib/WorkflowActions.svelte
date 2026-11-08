@@ -488,7 +488,7 @@
 		font-size: 0.9rem;
 		text-decoration: none;
 		cursor: pointer;
-		transition: background-color 0.15s ease;
+		transition: background-color var(--motion-duration-fast) var(--motion-ease-overlay);
 		border: 1px solid transparent;
 	}
 
@@ -647,7 +647,9 @@
 		box-sizing: border-box;
 		line-height: 1.55;
 		font-size: 0.92rem;
-		transition: border-color 0.15s ease, box-shadow 0.15s ease;
+		transition:
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay),
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.reject-modal-textarea:hover:not(:disabled) {
 		border-color: var(--color-text-muted);
@@ -682,8 +684,11 @@
 		font-size: 0.92rem;
 		line-height: 1.2;
 		cursor: pointer;
-		transition: background-color 0.15s ease, border-color 0.15s ease,
-			color 0.15s ease, box-shadow 0.15s ease;
+		transition:
+			background-color var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay),
+			color var(--motion-duration-fast) var(--motion-ease-overlay),
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay);
 		border: 1px solid transparent;
 		min-width: 6.5rem;
 	}
@@ -804,5 +809,13 @@
 	.btn:disabled {
 		opacity: 0.55;
 		cursor: not-allowed;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.action-btn,
+		.reject-modal-textarea,
+		.reject-btn {
+			transition: none;
+		}
 	}
 </style>

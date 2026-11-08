@@ -2,6 +2,7 @@
 	import { base } from '$app/paths';
 	import { user, ready, loadSession, isVolunteer, isAdvocate } from '$lib/session';
 	import { clearDraft } from '$lib/submitDraft';
+	import { fade } from '$lib/motion';
 	import Bell from '$lib/Bell.svelte';
 	import Toast from '$lib/Toast.svelte';
 	import '../app.css';
@@ -206,6 +207,7 @@
 		class="nav-scrim"
 		aria-label="Close navigation"
 		onclick={closeDrawer}
+		transition:fade
 	></button>
 {/if}
 <nav
@@ -348,7 +350,9 @@
 		height: 3px;
 		background: var(--color-text-light);
 		border-radius: 2px;
-		transition: transform 0.2s ease, opacity 0.2s ease;
+		transition:
+			transform var(--motion-duration-fast) var(--motion-ease-overlay),
+			opacity var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.nav-toggle[aria-expanded='true'] .nav-toggle-bar:nth-child(1) {
 		transform: translateY(7px) rotate(45deg);
@@ -425,7 +429,7 @@
 		color: var(--color-text-light);
 		border-radius: 4px;
 		white-space: nowrap;
-		transition: background 0.15s ease;
+		transition: background var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.main-navigation a:hover {
 		background: rgba(0, 0, 0, 0.16);
@@ -463,7 +467,9 @@
 		color: var(--color-text-light);
 		padding: 1.25rem 0;
 		transform: translateX(100%);
-		transition: transform 0.25s ease;
+		/* The drawer panel is the one slow surface: 320ms, decelerating
+		   into place. The scrim it sits over fades in the same beat. */
+		transition: transform var(--motion-duration-drawer) var(--motion-ease-editorial);
 		z-index: 60;
 		box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
 		overflow-y: auto;
@@ -513,7 +519,9 @@
 	}
 
 	/* Scrim — covers the rest of the viewport while the drawer is
-	   open. Tapping the scrim closes the drawer (it's a button). */
+	   open. Tapping the scrim closes the drawer (it's a button).
+	   The fade is a Svelte transition (`transition:fade` in the markup),
+	   so it fades out as the drawer closes instead of vanishing. */
 	.nav-scrim {
 		position: fixed;
 		inset: 0;
@@ -522,11 +530,6 @@
 		border: 0;
 		padding: 0;
 		cursor: pointer;
-		animation: scrim-fade-in 0.2s ease;
-	}
-	@keyframes scrim-fade-in {
-		from { opacity: 0; }
-		to { opacity: 1; }
 	}
 	@media (min-width: 768px) {
 		.nav-scrim {

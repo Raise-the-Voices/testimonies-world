@@ -3,7 +3,7 @@
  *
  * The poster is a DOM node. `html-to-image` clones it into an SVG
  * `foreignObject`, inlines the computed styles, the webfont and the
- * photograph, and hands back a PNG data URL. The library is ~20 KB, so
+ * photograph, and hands back a PNG blob. The library is ~20 KB, so
  * it is loaded through a dynamic `import()`: it never enters the main
  * bundle and is only fetched when someone actually downloads a poster.
  *
@@ -96,6 +96,8 @@ export function sameOriginMediaUrl(url: string, origin: string, basePath: string
 export async function renderPosterBlob(node: HTMLElement): Promise<Blob> {
 	await imagesSettled(node);
 	const { toBlob } = await import('html-to-image');
+	// Nothing inside the sheet may be moving when it is cloned.
+	freezeMotion(node);
 	const blob = await toBlob(node, {
 		pixelRatio: 2,
 		backgroundColor: paperColour(),
@@ -110,6 +112,41 @@ export async function renderPosterBlob(node: HTMLElement): Promise<Blob> {
 		throw new Error('The poster could not be rendered.');
 	}
 	return blob;
+}
+
+/**
+ * Finish every animation that is running inside the sheet.
+ *
+ * `html-to-image` inlines the *computed* style of everything it
+ * clones, so an animation caught mid-flight ships inside the poster:
+ * the same case exported twice can produce two different files. The
+ * stylesheet already switches CSS motion off inside the export copy
+ * (`.case-card--export`), but a Svelte transition is a Web Animations
+ * animation and no CSS rule can stop it.
+ *
+ * `finish()` is the right verb, not `cancel()`. It resolves the
+ * animation, so a Svelte transition ends the way it was meant to and
+ * the element is left in its settled state — the state a poster wants.
+ * `cancel()` would drop the animation's promise and leave the element
+ * wherever the transition had put it.
+ *
+ * The sweep repeats: a transition in its delay phase is a dummy
+ * animation, and finishing that is what starts the real one.
+ */
+export function freezeMotion(node: HTMLElement): void {
+	for (let pass = 0; pass < 3; pass += 1) {
+		const running = node.getAnimations({ subtree: true });
+		if (running.length === 0) return;
+		for (const animation of running) {
+			try {
+				animation.finish();
+			} catch {
+				// An animation with no effect left, a zero playback rate
+				// or an already-detached node cannot be finished. There
+				// is nothing left to freeze.
+			}
+		}
+	}
 }
 
 /**

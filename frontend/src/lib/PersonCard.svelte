@@ -17,20 +17,25 @@
 	 * "AI-template"). No hover-lift, no image scale-on-hover. The card
 	 * itself still has its border + shadow, but the interaction is just
 	 * a color change on the title.
+	 *
+	 * The card arrives by scrolling into view (the `reveal` action), not
+	 * by a load-time animation — see $lib/motion.ts.
 	 */
 	import { base } from '$app/paths';
 	import Icon from './Icon.svelte';
 	import StatusBadge from './StatusBadge.svelte';
 	import MediaImage from './MediaImage.svelte';
 	import { formatMonthYear } from './dateFormat';
+	import { reveal } from './motion';
 	import type { Person } from '$lib/types';
 
 	let {
 		person,
-		delayMs = 0,
+		index = 0,
 	}: {
 		person: Person;
-		delayMs?: number;
+		/** Position in the grid. Drives the reveal stagger. */
+		index?: number;
 	} = $props();
 
 	let href = $derived(`${base}/persons/${person.id}`);
@@ -51,7 +56,7 @@
 	});
 </script>
 
-<article class="person-card" style="animation-delay: {delayMs}ms">
+<article class="person-card" use:reveal={{ index }}>
 	<a class="card-media" {href} aria-label="View details for {person.name}">
 		{#if person.profile_image_url}
 			<MediaImage
@@ -97,7 +102,6 @@
 		overflow: hidden;
 		display: flex;
 		flex-direction: column;
-		animation: fadeSlideUp 0.4s ease both;
 		/* Perf: scope layout, style, and paint invalidation to this
 		   card. Without `contain`, an image decode, hover, or
 		   animation frame inside ONE card invalidates the entire
@@ -203,10 +207,5 @@
 	.card-cta:hover {
 		color: var(--color-text);
 	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.person-card {
-			animation: none;
-		}
-	}
 </style>
+

@@ -27,6 +27,7 @@
 	import Icon from '$lib/Icon.svelte';
 	import RelatedCases from '$lib/RelatedCases.svelte';
 	import { formatMonthYear } from '$lib/dateFormat';
+	import { expand, reveal } from '$lib/motion';
 	import { sanitizeText } from '$lib/sanitize';
 	import type { FamilyRelationshipRow, Media, Paginated, Person, Report } from '$lib/types';
 	import type { PageData } from './$types';
@@ -716,7 +717,7 @@
 				<div class="view-title">
 					<span class="view-item-title">Summary</span>
 				</div>
-				<div class="summary-card">
+				<div class="summary-card" use:reveal>
 					<div class="summary-card-body">
 						<div class="summary-narrative">
 							{#each paragraphs(person.summary_narrative) as para, i (i)}
@@ -764,10 +765,10 @@
 				{/if}
 			</div>
 			{#if person.reports && person.reports.length > 0}
-				{#each person.reports as report (report.id)}
+				{#each person.reports as report, reportIndex (report.id)}
 					{@const open = expandedId === report.id}
 					{@const title = report.source_attribution || sourceTypeLabels[report.source_type] || 'Report'}
-					<div class="incident-container">
+					<div class="incident-container" use:reveal={{ index: reportIndex }}>
 						<div class="report-card-header">
 							<button
 								type="button"
@@ -812,7 +813,7 @@
 							{/if}
 						</div>
 						{#if open}
-							<div id="report-body-{report.id}" class="report-card-body">
+							<div id="report-body-{report.id}" class="report-card-body" transition:expand>
 								{#if report.rough_location}
 									<p class="small muted">Location: {sanitizeText(report.rough_location)}</p>
 								{/if}
@@ -969,7 +970,7 @@
 					>Delete Case</button>
 				</div>
 			{/if}
-			<div class="sidebar-top">
+			<div class="sidebar-top" use:reveal>
 				<div class="sidebar-header-2">
 					<p><strong>{person.name}</strong></p>
 				</div>
@@ -1079,7 +1080,7 @@
 			</div>
 
 			{#if person.categories && person.categories.length > 0}
-				<div class="meta-card">
+				<div class="meta-card" use:reveal={{ index: 1 }}>
 					<div class="meta-card-body">
 						<h3 class="meta-section-title">Categories</h3>
 						<ul class="meta-list">
@@ -1092,7 +1093,7 @@
 			{/if}
 
 			{#if person.quality_tier}
-				<div class="meta-card">
+				<div class="meta-card" use:reveal={{ index: 2 }}>
 					<div class="meta-card-body">
 						<h3 class="meta-section-title">Evidence Tier</h3>
 						<p class="meta-tier">{person.quality_tier}</p>
@@ -1101,7 +1102,7 @@
 			{/if}
 
 			{#if loadingRelationships || relationships.length > 0 || isVolunteer(currentUser)}
-				<div class="meta-card">
+				<div class="meta-card" use:reveal={{ index: 3 }}>
 					<div class="meta-card-body">
 						<div class="family-header">
 							<h3 class="meta-section-title">Family</h3>
@@ -1171,7 +1172,7 @@
 				</div>
 			{/if}
 
-			<div class="meta-card">
+			<div class="meta-card" use:reveal={{ index: 4 }}>
 				<div class="meta-card-body">
 					<div class="meta-row">
 						<span class="meta-label">Created</span>
@@ -1662,7 +1663,7 @@
 		background: var(--color-bg);
 		border: 1px solid var(--color-border-light);
 		border-radius: 999px;
-		transition: background 0.15s ease;
+		transition: background var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.media-item-tile:hover {
 		background: var(--color-border-light);
@@ -1720,8 +1721,8 @@
 		text-decoration: none;
 		align-self: flex-start;
 		transition:
-			background 0.15s ease,
-			border-color 0.15s ease;
+			background var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.media-item-action:hover {
 		background: var(--color-primary-light);
@@ -1959,7 +1960,9 @@
 		display: inline-block;
 		font-size: 0.85rem;
 		color: var(--color-text-muted);
-		transition: transform 0.15s ease;
+		/* Matches the accordion's own duration so the chevron and the
+		   panel it opens move as one gesture. */
+		transition: transform var(--motion-duration-accordion) var(--motion-ease-editorial);
 	}
 	.report-card-chevron.open {
 		transform: rotate(90deg);
@@ -2009,10 +2012,10 @@
 		align-items: center;
 		gap: 0.4rem;
 		transition:
-			transform 0.15s ease,
-			box-shadow 0.15s ease,
-			background 0.15s ease,
-			border-color 0.15s ease;
+			transform var(--motion-duration-fast) var(--motion-ease-overlay),
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay),
+			background var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.media-add-btn:hover {
 		transform: translateY(-1px);
@@ -2022,7 +2025,7 @@
 		transform: translateY(0);
 	}
 	.media-add-btn-icon {
-		transition: transform 0.15s ease;
+		transition: transform var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.media-add-btn:hover .media-add-btn-icon {
 		transform: scale(1.15);
@@ -2094,8 +2097,8 @@
 	/* Card hover — subtle lift to invite interaction */
 	.media-item-card {
 		transition:
-			box-shadow 0.15s ease,
-			border-color 0.15s ease;
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.media-item-card:hover {
 		box-shadow: var(--shadow-card-hover);
@@ -2128,10 +2131,10 @@
 		cursor: pointer;
 		padding: 0;
 		transition:
-			background 0.15s ease,
-			color 0.15s ease,
-			border-color 0.15s ease,
-			box-shadow 0.15s ease;
+			background var(--motion-duration-fast) var(--motion-ease-overlay),
+			color var(--motion-duration-fast) var(--motion-ease-overlay),
+			border-color var(--motion-duration-fast) var(--motion-ease-overlay),
+			box-shadow var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.row-action:hover {
 		background: var(--color-primary-tint);
@@ -2157,7 +2160,8 @@
 		.media-item-card,
 		.media-add-btn,
 		.row-action,
-		.media-add-btn-icon {
+		.media-add-btn-icon,
+		.report-card-chevron {
 			transition: none;
 		}
 	}

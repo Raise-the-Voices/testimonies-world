@@ -47,7 +47,10 @@
 	}
 </script>
 
-<div class="view-toggle" role="tablist" aria-label="View mode">
+<div class="view-toggle" role="tablist" aria-label="View mode" data-mode={value}>
+	<!-- The pill: one segment's worth of background, slid to the
+	     selected segment. Decorative — the buttons carry the state. -->
+	<span class="view-toggle-pill" aria-hidden="true"></span>
 	<button
 		type="button"
 		role="tab"
@@ -72,15 +75,40 @@
 
 <style>
 	.view-toggle {
+		position: relative;
 		display: inline-flex;
 		padding: 0.25rem;
 		background: var(--color-section-bg);
 		border-radius: 999px;
-		gap: 0.25rem;
+	}
+	/* The pill slides; it never changes size. The two segments are the
+	   same width, so the pill is exactly one of them and a transform
+	   moves it from one to the other — no measurement, no re-layout,
+	   and it is in place from the first paint. */
+	.view-toggle-pill {
+		position: absolute;
+		top: 0.25rem;
+		bottom: 0.25rem;
+		left: 0.25rem;
+		width: calc(50% - 0.25rem);
+		background: var(--color-primary);
+		border-radius: 999px;
+		box-shadow: var(--shadow-card);
+		pointer-events: none;
+		transition: transform var(--motion-duration-overlay) var(--motion-ease-overlay);
+	}
+	.view-toggle[data-mode='list'] .view-toggle-pill {
+		transform: translateX(100%);
 	}
 	.view-toggle-btn {
+		/* Positioned so the pill — which comes first in the DOM —
+		   paints underneath the labels. */
+		position: relative;
+		flex: 1 1 0;
+		min-width: 92px;
 		display: inline-flex;
 		align-items: center;
+		justify-content: center;
 		gap: 0.4rem;
 		padding: 0.45rem 0.9rem;
 		border: none;
@@ -90,21 +118,20 @@
 		font-weight: 600;
 		border-radius: 999px;
 		cursor: pointer;
-		transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+		transition: color var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	.view-toggle-btn:hover:not(.active) {
 		color: var(--color-text);
 	}
 	.view-toggle-btn.active {
-		background: var(--color-primary);
 		color: var(--color-text-light);
-		box-shadow: var(--shadow-card);
 	}
 	.view-toggle-btn:focus-visible {
 		outline: 2px solid var(--color-primary);
 		outline-offset: 2px;
 	}
 	@media (prefers-reduced-motion: reduce) {
+		.view-toggle-pill,
 		.view-toggle-btn { transition: none; }
 	}
 </style>

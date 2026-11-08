@@ -23,6 +23,7 @@
 	import FilterToolbar from '$lib/FilterToolbar.svelte';
 	import PersonCard from '$lib/PersonCard.svelte';
 	import { formatMonthYear } from '$lib/dateFormat';
+	import { prefersReducedMotion, fade } from '$lib/motion';
 	import Icon from '$lib/Icon.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 	import ErrorCard from '$lib/ErrorCard.svelte';
@@ -219,7 +220,9 @@
 			persons = data.results;
 			totalCount = data.count;
 			currentPage = page;
-			if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+			if (typeof window !== 'undefined') {
+				window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+			}
 		} catch (e: unknown) {
 			// AbortError is the expected outcome of cancellation; the caller
 			// (and the user) treat it the same as a dropped result so we
@@ -472,7 +475,7 @@
 			dead button. role="status" + aria-live="polite" so screen
 			readers announce the transition once the search settles.
 		-->
-		<div class="empty-state" role="status" aria-live="polite">
+		<div class="empty-state" role="status" aria-live="polite" in:fade>
 			<Icon name="cases" size={48} />
 			<p>No cases found matching your criteria.</p>
 			{#if hasActiveFilters}
@@ -482,7 +485,7 @@
 			{/if}
 		</div>
 	{:else if viewMode === 'list'}
-		<div class="cases-table-wrap">
+		<div class="cases-table-wrap" in:fade>
 			<table class="cases-table">
 				<thead>
 					<tr>
@@ -517,9 +520,9 @@
 			</table>
 		</div>
 	{:else}
-		<div class="cases-grid">
+		<div class="cases-grid" in:fade>
 			{#each persons as person, i (person.id)}
-				<PersonCard {person} delayMs={(i % 8) * 40} />
+				<PersonCard {person} index={i} />
 			{/each}
 		</div>
 	{/if}

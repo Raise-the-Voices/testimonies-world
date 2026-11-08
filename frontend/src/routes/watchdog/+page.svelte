@@ -5,6 +5,7 @@
 	import StatusBadge from '$lib/StatusBadge.svelte';
 	import Skeleton from '$lib/Skeleton.svelte';
 import ErrorCard from '$lib/ErrorCard.svelte';
+	import { reveal } from '$lib/motion';
 	import type { PageData } from './$types';
 	import type { Person } from '$lib/types';
 
@@ -108,7 +109,7 @@ import ErrorCard from '$lib/ErrorCard.svelte';
 					<span class="legend-dot legend-dot-urgent" aria-hidden="true"></span> Urgent (90+ days)
 				</span>
 			</header>
-			<div class="watchdog-table-wrap">
+			<div class="watchdog-table-wrap" use:reveal>
 				<table class="watchdog-table">
 					<thead>
 						<tr>
@@ -269,7 +270,7 @@ import ErrorCard from '$lib/ErrorCard.svelte';
 		font-variant-numeric: tabular-nums;
 	}
 	tbody tr {
-		transition: background 0.15s ease;
+		transition: background var(--motion-duration-fast) var(--motion-ease-overlay);
 	}
 	tbody tr:hover {
 		background: var(--color-surface);

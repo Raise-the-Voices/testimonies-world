@@ -321,7 +321,4 @@
 		font-size: 0.95rem;
 		line-height: 1.55;
 	}
-	@media (prefers-reduced-motion: reduce) {
-		.row-body { transition: none; }
-	}
 </style>

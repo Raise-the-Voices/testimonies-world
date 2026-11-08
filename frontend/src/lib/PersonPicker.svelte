@@ -51,6 +51,7 @@
 -->
 <script lang="ts">
 	import { base } from '$app/paths';
+	import { drop } from '$lib/motion';
 
 	interface Person {
 		id: number;
@@ -332,6 +333,7 @@
 				role="listbox"
 				class="options"
 				bind:this={listEl}
+				transition:drop
 			>
 				{#if loading && options.length === 0}
 					<li class="loading" aria-busy="true">Loading…</li>
