@@ -17,6 +17,10 @@ describe('dateFormat', () => {
 			expect(formatMonthYear('2024-03')).toBe('Mar 2024');
 		});
 
+		it('accepts a Date — the shape the Zod boundary produces', () => {
+			expect(formatMonthYear(new Date('2026-01-15T00:00:00Z'))).toBe('Jan 2026');
+		});
+
 		it('returns empty string for nullish input', () => {
 			expect(formatMonthYear(null)).toBe('');
 			expect(formatMonthYear(undefined)).toBe('');
@@ -33,6 +37,10 @@ describe('dateFormat', () => {
 	describe('isoToMonthYear', () => {
 		it('truncates wire YYYY-MM-DD to form YYYY-MM', () => {
 			expect(isoToMonthYear('2024-03-14')).toBe('2024-03');
+		});
+
+		it('accepts a Date — the shape the Zod boundary produces', () => {
+			expect(isoToMonthYear(new Date('2026-01-15T00:00:00Z'))).toBe('2026-01');
 		});
 
 		it('returns empty string for nullish input', () => {

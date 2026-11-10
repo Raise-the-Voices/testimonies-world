@@ -33,7 +33,7 @@ import ErrorCard from '$lib/ErrorCard.svelte';
 	// Returns a relative-time string. Older entries read as more urgent
 	// so the watchdog column has natural visual weight — newer entries
 	// are quieter, older ones louder.
-	function daysSince(dateStr: string | null | undefined): string {
+	function daysSince(dateStr: string | Date | null | undefined): string {
 		if (!dateStr) return 'never';
 		const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
 		if (days === 0) return 'today';
@@ -45,7 +45,7 @@ import ErrorCard from '$lib/ErrorCard.svelte';
 	// 90+ = urgent (danger). Returns a CSS class so the cell can
 	// pick up the visual weight without the script leaking
 	// inline styles.
-	function recencyClass(dateStr: string | null | undefined): 'fresh' | 'stale' | 'urgent' | 'never' {
+	function recencyClass(dateStr: string | Date | null | undefined): 'fresh' | 'stale' | 'urgent' | 'never' {
 		if (!dateStr) return 'never';
 		const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
 		if (days >= 90) return 'urgent';
