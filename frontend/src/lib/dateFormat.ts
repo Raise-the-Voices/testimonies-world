@@ -10,8 +10,11 @@
  *     the form holds `YYYY-MM`.
  *
  * Conventions:
- *   - Input: ISO `YYYY-MM-DD` from the API (legacy day-precision rows
- *     and new month-only submissions, both stored on the 1st).
+ *   - Input: a `Date` (what the Zod boundary produces — see `isoDate`
+ *     in `schemas/wire.ts`) or an ISO `YYYY-MM-DD` / `YYYY-MM` string
+ *     (the raw payload on the list and watchdog pages, which don't run
+ *     the parse). Legacy day-precision rows and new month-only
+ *     submissions are both stored on the 1st.
  *   - Output: `Mon YYYY` for display, `YYYY-MM` for the form input,
  *     `YYYY-MM-DD` for the API.
  */
@@ -88,31 +91,54 @@ function toUtcDate(value: unknown): Date | null {
 }
 
 /**
- * Display formatter — `YYYY-MM-DD` → `Mon YYYY`.
- * Returns an empty string for nullish/empty input so callers can drop
- * the result straight into a template without a guard.
+ * Split a date-ish value into its UTC year and month.
+ *
+ * Accepts the shapes a date arrives in:
+ *   - a `Date`, for fields the Zod boundary converts (`last_known_date`
+ *     — see `isoDateNullable` in `schemas/wire.ts`);
+ *   - an ISO `YYYY-MM-DD` / `YYYY-MM` string, for fields the boundary
+ *     leaves alone (the list and watchdog pages read the raw payload).
+ *
+ * Returns null when the value cannot be read.
  */
-export function formatMonthYear(iso: unknown): string {
-	if (typeof iso !== 'string' || !iso) return '';
-	const m = iso.match(MONTH_YEAR_RE);
-	if (m) {
-		// Already month-precision (e.g. raw form state) — format directly.
-		return formatYearMonth(iso.slice(0, 4), iso.slice(5, 7));
-	}
-	const d = matchIsoDate(iso);
-	if (!d) return iso;
-	return formatYearMonth(d[1], d[2]);
+function toYearMonth(value: unknown): { year: string; month: string } | null {
+	const d = toUtcDate(value);
+	if (!d) return null;
+	return {
+		year: String(d.getUTCFullYear()).padStart(4, '0'),
+		month: String(d.getUTCMonth() + 1).padStart(2, '0'),
+	};
 }
 
 /**
- * `YYYY-MM-DD` (wire) → `YYYY-MM` (form input value).
- * Defensive — if the input isn't a full ISO date, returns it unchanged
- * so the caller sees a sensible value rather than `undefined`.
+ * Display formatter — a date → `Mon YYYY`.
+ *
+ * Accepts both shapes a date arrives in: a `Date` (what the Zod
+ * boundary produces for `last_known_date`) or an ISO `YYYY-MM-DD` /
+ * `YYYY-MM` string.
+ *
+ * Returns an empty string for nullish/empty input so callers can drop
+ * the result straight into a template without a guard. An unreadable
+ * string is passed through unchanged — a single bad row should not
+ * blank a list.
  */
-export function isoToMonthYear(iso: unknown): string {
-	if (typeof iso !== 'string' || !iso) return '';
-	const d = matchIsoDate(iso);
-	return d ? `${d[1]}-${d[2]}` : iso;
+export function formatMonthYear(value: unknown): string {
+	const ym = toYearMonth(value);
+	if (ym) return formatYearMonth(ym.year, ym.month);
+	return typeof value === 'string' ? value : '';
+}
+
+/**
+ * A date → `YYYY-MM` (form input value).
+ *
+ * Accepts the same shapes as `formatMonthYear`. Defensive — if the
+ * input isn't readable, returns it unchanged so the caller sees a
+ * sensible value rather than `undefined`.
+ */
+export function isoToMonthYear(value: unknown): string {
+	const ym = toYearMonth(value);
+	if (ym) return `${ym.year}-${ym.month}`;
+	return typeof value === 'string' ? value : '';
 }
 
 /**
@@ -136,13 +162,6 @@ export function isValidMonthYear(value: unknown): boolean {
 	if (!value) return true;
 	if (typeof value !== 'string') return false;
 	return MONTH_YEAR_RE.test(value);
-}
-
-function matchIsoDate(s: unknown): RegExpMatchArray | null {
-	// Defensive: `.match` on null throws, and on any truthy non-string
-	// (e.g. a stray number from a misconfigured serializer) crashes too.
-	if (typeof s !== 'string' || !s) return null;
-	return s.match(/^(\d{4})-(\d{2})-\d{2}$/);
 }
 
 function formatYearMonth(year: string, month: string): string {

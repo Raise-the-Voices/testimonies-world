@@ -211,7 +211,12 @@ export interface Person {
 	    a year-of-incident age). Backend field: ``age_at_incident``. */
 	age_at_incident?: number | null;
 	occupation?: string;
-	last_known_date?: string | null;
+	/** Month the person was last known to be alive. The wire format is
+	    `YYYY-MM-DD`; the Zod boundary converts it to a `Date` for the
+	    detail page and the edit form (see `isoDateNullable` in
+	    `schemas/wire.ts`). The list and watchdog pages read the raw
+	    payload, so a string is still possible here. */
+	last_known_date?: string | Date | null;
 	summary_narrative?: string;
 	authoritative_source?: string;
 	authoritative_url?: string;

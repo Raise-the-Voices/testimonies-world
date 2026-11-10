@@ -16,7 +16,13 @@ export default defineConfig({
 			// so the `$lib` alias has to be spelled out. Without it a
 			// component that imports a sibling through `$lib` cannot be
 			// rendered in a test.
-			$lib: fileURLToPath(new URL('./src/lib', import.meta.url))
+			$lib: fileURLToPath(new URL('./src/lib', import.meta.url)),
+			// SvelteKit's runtime modules don't exist outside
+			// `svelteKit()`. A route component under test still imports
+			// them, so the three the app uses point at stubs.
+			'$app/paths': fileURLToPath(new URL('./src/test-stubs/app-paths.ts', import.meta.url)),
+			'$app/navigation': fileURLToPath(new URL('./src/test-stubs/app-navigation.ts', import.meta.url)),
+			'$app/state': fileURLToPath(new URL('./src/test-stubs/app-state.ts', import.meta.url))
 		},
 		// A file that asks for the jsdom environment (`// @vitest-environment
 		// jsdom`) is transformed for the browser, so `svelte` has to resolve
